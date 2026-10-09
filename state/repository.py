@@ -1,0 +1,391 @@
+"""
+All database read/write operations.
+
+Every function accepts a sqlite3.Connection. No global state.
+Datetimes are serialised as ISO 8601 UTC strings and deserialised back to
+naive datetime objects (all UTC by convention).
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+from data.models import (
+    AlertRecord,
+    BreakoutClassification,
+    Candle,
+    DailyBreakout,
+    Direction,
+    Formation,
+    FormationType,
+    H4BreakoutEvent,
+    ReactionSource,
+    ReactionSourceType,
+    Timeframe,
+)
+
+
+# ── Datetime helpers ──────────────────────────────────────────────────────────
+
+def _dt_str(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _str_dt(s: str) -> datetime:
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
+
+
+# ── Instrument state ──────────────────────────────────────────────────────────
+
+@dataclass
+class InstrumentStateRow:
+    instrument: str
+    last_daily_candle_ts: Optional[datetime]
+    last_h4_candle_ts: Optional[datetime]
+    active_breakout_id: Optional[int]
+    retest_in_progress: bool
+    active_reaction_src_id: Optional[int]
+    updated_at: datetime
+
+
+def get_instrument_state(conn: sqlite3.Connection, instrument: str) -> Optional[InstrumentStateRow]:
+    row = conn.execute(
+        "SELECT * FROM instrument_state WHERE instrument = ?", (instrument,)
+    ).fetchone()
+    if row is None:
+        return None
+    return InstrumentStateRow(
+        instrument=row["instrument"],
+        last_daily_candle_ts=_str_dt(row["last_daily_candle_ts"]) if row["last_daily_candle_ts"] else None,
+        last_h4_candle_ts=_str_dt(row["last_h4_candle_ts"]) if row["last_h4_candle_ts"] else None,
+        active_breakout_id=row["active_breakout_id"],
+        retest_in_progress=bool(row["retest_in_progress"]),
+        active_reaction_src_id=row["active_reaction_src_id"],
+        updated_at=_str_dt(row["updated_at"]),
+    )
+
+
+def upsert_instrument_state(conn: sqlite3.Connection, state: InstrumentStateRow) -> None:
+    conn.execute(
+        """
+        INSERT INTO instrument_state
+            (instrument, last_daily_candle_ts, last_h4_candle_ts,
+             active_breakout_id, retest_in_progress, active_reaction_src_id, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(instrument) DO UPDATE SET
+            last_daily_candle_ts   = excluded.last_daily_candle_ts,
+            last_h4_candle_ts      = excluded.last_h4_candle_ts,
+            active_breakout_id     = excluded.active_breakout_id,
+            retest_in_progress     = excluded.retest_in_progress,
+            active_reaction_src_id = excluded.active_reaction_src_id,
+            updated_at             = excluded.updated_at
+        """,
+        (
+            state.instrument,
+            _dt_str(state.last_daily_candle_ts) if state.last_daily_candle_ts else None,
+            _dt_str(state.last_h4_candle_ts) if state.last_h4_candle_ts else None,
+            state.active_breakout_id,
+            int(state.retest_in_progress),
+            state.active_reaction_src_id,
+            _dt_str(state.updated_at),
+        ),
+    )
+    conn.commit()
+
+
+# ── Daily breakouts ───────────────────────────────────────────────────────────
+
+def get_active_breakout(conn: sqlite3.Connection, instrument: str) -> Optional[DailyBreakout]:
+    row = conn.execute(
+        "SELECT * FROM daily_breakouts WHERE instrument = ? AND is_active = 1",
+        (instrument,),
+    ).fetchone()
+    if row is None:
+        return None
+    b = DailyBreakout(
+        instrument=row["instrument"],
+        direction=Direction(row["direction"]),
+        broken_level=row["broken_level"],
+        broken_type=FormationType(row["broken_type"]),
+        breakout_ts=_str_dt(row["breakout_ts"]),
+        is_active=bool(row["is_active"]),
+    )
+    b.db_id = row["id"]
+    return b
+
+
+def insert_breakout(conn: sqlite3.Connection, breakout: DailyBreakout) -> int:
+    cur = conn.execute(
+        """
+        INSERT INTO daily_breakouts (instrument, direction, broken_level, broken_type, breakout_ts)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            breakout.instrument,
+            breakout.direction.value,
+            breakout.broken_level,
+            breakout.broken_type.value,
+            _dt_str(breakout.breakout_ts),
+        ),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def deactivate_breakout(conn: sqlite3.Connection, breakout_id: int) -> None:
+    conn.execute(
+        "UPDATE daily_breakouts SET is_active = 0 WHERE id = ?", (breakout_id,)
+    )
+    conn.commit()
+
+
+def deactivate_all_breakouts(conn: sqlite3.Connection, instrument: str) -> None:
+    conn.execute(
+        "UPDATE daily_breakouts SET is_active = 0 WHERE instrument = ?", (instrument,)
+    )
+    conn.commit()
+
+
+# ── Reaction sources ──────────────────────────────────────────────────────────
+
+def get_active_reaction_sources(
+    conn: sqlite3.Connection, instrument: str
+) -> list[ReactionSource]:
+    rows = conn.execute(
+        """
+        SELECT rs.*, db.breakout_ts
+        FROM reaction_sources rs
+        JOIN daily_breakouts db ON rs.daily_breakout_id = db.id
+        WHERE rs.instrument = ? AND rs.is_active = 1
+        """,
+        (instrument,),
+    ).fetchall()
+    results = []
+    for row in rows:
+        src = ReactionSource(
+            instrument=row["instrument"],
+            source_type=ReactionSourceType(row["source_type"]),
+            direction=Direction(row["direction"]),
+            level=row["level"],
+            level_band_low=row["level_band_low"],
+            level_band_high=row["level_band_high"],
+            daily_breakout_ts=_str_dt(row["breakout_ts"]),
+            is_active=bool(row["is_active"]),
+        )
+        src.db_id = row["id"]
+        results.append(src)
+    return results
+
+
+def insert_reaction_sources(
+    conn: sqlite3.Connection,
+    sources: list[ReactionSource],
+    daily_breakout_id: int,
+) -> list[int]:
+    ids = []
+    for src in sources:
+        cur = conn.execute(
+            """
+            INSERT INTO reaction_sources
+                (instrument, source_type, direction, level,
+                 level_band_low, level_band_high, daily_breakout_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                src.instrument,
+                src.source_type.value,
+                src.direction.value,
+                src.level,
+                src.level_band_low,
+                src.level_band_high,
+                daily_breakout_id,
+            ),
+        )
+        ids.append(cur.lastrowid)
+    conn.commit()
+    return ids
+
+
+def deactivate_reaction_sources_for_breakout(
+    conn: sqlite3.Connection, breakout_id: int
+) -> None:
+    conn.execute(
+        "UPDATE reaction_sources SET is_active = 0 WHERE daily_breakout_id = ?",
+        (breakout_id,),
+    )
+    conn.commit()
+
+
+def deactivate_reaction_source(conn: sqlite3.Connection, source_id: int) -> None:
+    conn.execute(
+        "UPDATE reaction_sources SET is_active = 0 WHERE id = ?", (source_id,)
+    )
+    conn.commit()
+
+
+# ── Formations ────────────────────────────────────────────────────────────────
+
+def insert_formation(conn: sqlite3.Connection, formation: Formation) -> int:
+    cur = conn.execute(
+        """
+        INSERT INTO formations
+            (instrument, timeframe, formation_type, direction, level,
+             established_at, candle_1_ts, candle_2_ts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            formation.instrument,
+            formation.timeframe.value,
+            formation.formation_type.value,
+            formation.direction.value,
+            formation.level,
+            _dt_str(formation.established_at),
+            _dt_str(formation.candle_1_ts),
+            _dt_str(formation.candle_2_ts),
+        ),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_formation_by_id(conn: sqlite3.Connection, formation_id: int) -> Optional[Formation]:
+    row = conn.execute(
+        "SELECT * FROM formations WHERE id = ?", (formation_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    f = Formation(
+        instrument=row["instrument"],
+        timeframe=Timeframe(row["timeframe"]),
+        formation_type=FormationType(row["formation_type"]),
+        direction=Direction(row["direction"]),
+        level=row["level"],
+        established_at=_str_dt(row["established_at"]),
+        candle_1_ts=_str_dt(row["candle_1_ts"]),
+        candle_2_ts=_str_dt(row["candle_2_ts"]),
+        is_active=bool(row["is_active"]),
+    )
+    f.db_id = row["id"]
+    return f
+
+
+# ── Alerts ────────────────────────────────────────────────────────────────────
+
+def insert_alert(
+    conn: sqlite3.Connection,
+    alert: AlertRecord,
+    daily_breakout_id: int,
+    reaction_source_id: int,
+    h4_formation_id: int,
+    alert_text: str,
+) -> int:
+    cur = conn.execute(
+        """
+        INSERT INTO alerts
+            (instrument, direction, daily_breakout_id, reaction_source_id,
+             h4_formation_id, h4_classification, alert_text, fired_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            alert.instrument,
+            alert.direction.value,
+            daily_breakout_id,
+            reaction_source_id,
+            h4_formation_id,
+            alert.h4_event.classification.value,
+            alert_text,
+            _dt_str(alert.fired_at),
+        ),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_recent_alerts(
+    conn: sqlite3.Connection, instrument: str, limit: int = 20
+) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT instrument, direction, h4_classification, alert_text, fired_at
+        FROM alerts
+        WHERE instrument = ?
+        ORDER BY fired_at DESC
+        LIMIT ?
+        """,
+        (instrument, limit),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_all_recent_alerts(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT instrument, direction, h4_classification, alert_text, fired_at
+        FROM alerts
+        ORDER BY fired_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+# ── Raw candle cache ──────────────────────────────────────────────────────────
+
+def upsert_raw_candles(conn: sqlite3.Connection, candles: list[Candle]) -> None:
+    conn.executemany(
+        """
+        INSERT INTO raw_candles (instrument, timeframe, ts, open, high, low, close, volume)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(instrument, timeframe, ts) DO NOTHING
+        """,
+        [
+            (
+                c.instrument,
+                c.timeframe.value,
+                _dt_str(c.timestamp),
+                c.open,
+                c.high,
+                c.low,
+                c.close,
+                c.volume,
+            )
+            for c in candles
+        ],
+    )
+    conn.commit()
+
+
+def get_cached_candles(
+    conn: sqlite3.Connection,
+    instrument: str,
+    timeframe: Timeframe,
+    limit: int = 500,
+) -> list[Candle]:
+    rows = conn.execute(
+        """
+        SELECT * FROM raw_candles
+        WHERE instrument = ? AND timeframe = ?
+        ORDER BY ts DESC
+        LIMIT ?
+        """,
+        (instrument, timeframe.value, limit),
+    ).fetchall()
+    candles = [
+        Candle(
+            instrument=row["instrument"],
+            timeframe=Timeframe(row["timeframe"]),
+            timestamp=_str_dt(row["ts"]),
+            open=row["open"],
+            high=row["high"],
+            low=row["low"],
+            close=row["close"],
+            volume=row["volume"],
+        )
+        for row in rows
+    ]
+    candles.reverse()  # oldest → newest
+    return candles
