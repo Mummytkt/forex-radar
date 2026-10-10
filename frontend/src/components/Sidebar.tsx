@@ -3,10 +3,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Bell, BarChart2, BookOpen, Settings,
-  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2
+  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2, X
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme'
 import { useAuth } from '@/lib/auth'
+import { useSidebar } from './LayoutShell'
 
 const SECTIONS = [
   {
@@ -42,12 +43,14 @@ export default function Sidebar() {
   const path = usePathname()
   const { theme, toggle } = useTheme()
   const { user, authEnabled, logout } = useAuth()
+  const { open, close } = useSidebar()
 
   return (
     <aside
+      className={`sidebar-mobile${open ? ' sidebar-open' : ''}`}
       style={{
         position: 'fixed', top: 0, left: 0, bottom: 0,
-        width: 'var(--sidebar-w)',
+        width: 220,
         background: 'var(--surface)',
         borderRight: '1px solid var(--border)',
         display: 'flex', flexDirection: 'column',
@@ -78,6 +81,18 @@ export default function Sidebar() {
             Bias Pointer
           </div>
         </div>
+        <button
+          onClick={close}
+          className="mobile-only"
+          style={{
+            marginLeft: 'auto', width: 28, height: 28, borderRadius: 7,
+            border: '1px solid var(--border)', background: 'var(--card-hover)',
+            color: 'var(--text-secondary)', cursor: 'pointer',
+            alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}
+        >
+          <X size={14} />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -94,7 +109,7 @@ export default function Sidebar() {
             {section.links.map(({ href, icon: Icon, label }) => {
               const active = href === '/' ? path === '/' : path.startsWith(href)
               return (
-                <Link key={href} href={href}
+                <Link key={href} href={href} onClick={close}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 9,
                     padding: '8px 10px', borderRadius: 8,

@@ -58,7 +58,7 @@ export default function OverviewPage() {
   return (
     <>
       <TopBar title="Overview" subtitle={today} />
-      <main style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
         {/* Profile status banner */}
         <div style={{
@@ -135,14 +135,14 @@ export default function OverviewPage() {
         </div>
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+        <div className="grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
           <StatCard label="Instruments" value={stats?.total_instruments ?? '—'} icon={BarChart2} iconColor="var(--info)" sub="Under surveillance" />
           <StatCard label="Active Breakouts" value={stats?.active_breakouts ?? '—'} icon={Activity} iconColor="var(--accent)" sub="Live bias setups" />
           <StatCard label="Retests In Progress" value={stats?.retests_in_progress ?? '—'} icon={Zap} iconColor="var(--warning)" sub="Awaiting H4 confirm" />
           <StatCard label="Alerts Fired" value={stats?.total_alerts ?? '—'} icon={Bell} iconColor="var(--bullish)" sub={stats ? `${stats.alerts_today} today` : undefined} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
           {/* Active setups */}
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>

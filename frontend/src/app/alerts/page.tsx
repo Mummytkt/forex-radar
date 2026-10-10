@@ -105,7 +105,7 @@ export default function HistoryPage() {
   return (
     <>
       <TopBar title="Alert History" subtitle="Every notification delivered to your Telegram" />
-      <main style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
         {/* Filter bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -143,7 +143,7 @@ export default function HistoryPage() {
             </div>
           )}
           {data && data.items.length > 0 && (
-            <table className="data-table">
+            <div className="table-wrap"><table className="data-table">
               <thead>
                 <tr>
                   <th>Market</th>
@@ -158,7 +158,7 @@ export default function HistoryPage() {
                   <AlertRow key={a.id} a={a} isLast={i === data.items.length - 1} />
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
 

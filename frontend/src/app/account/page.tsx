@@ -391,10 +391,10 @@ export default function AccountPage() {
   return (
     <>
       <TopBar title="Account" subtitle="Your sign-in details and current access" />
-      <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main className="page-padded" style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Account details + Plan */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+        <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
           {/* Details */}
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
@@ -461,7 +461,7 @@ export default function AccountPage() {
             <h2 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Change password</h2>
           </div>
           <div style={{ padding: 20 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, maxWidth: 600 }}>
+            <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, maxWidth: 600 }}>
               <PasswordInput label="Current password" value={curPw} onChange={setCurPw} show={showPw} onToggle={() => setShowPw(v => !v)} />
               <PasswordInput label="New password" value={newPw} onChange={setNewPw} show={showPw} onToggle={() => setShowPw(v => !v)} />
               <PasswordInput label="Confirm new" value={confirmPw} onChange={setConfirmPw} show={showPw} onToggle={() => setShowPw(v => !v)} />
