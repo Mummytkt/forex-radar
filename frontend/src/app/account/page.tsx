@@ -220,7 +220,13 @@ function SubscribersSection() {
             {invitePlan !== 'LIFETIME' && (
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Days</label>
-                <input type="number" min={1} max={365} value={inviteDays} onChange={e => setInviteDays(+e.target.value)}
+                <input
+                  type="text" inputMode="numeric" pattern="[0-9]*"
+                  value={inviteDays}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, '')
+                    setInviteDays(v === '' ? 1 : Math.min(365, Math.max(1, parseInt(v, 10))))
+                  }}
                   style={{ width: 80, padding: '9px 12px', borderRadius: 8, fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }} />
               </div>
             )}

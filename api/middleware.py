@@ -5,8 +5,14 @@ from fastapi.responses import JSONResponse
 
 from api.auth import decode_token
 
-_ALWAYS_PUBLIC = {"/api/health"}
-_PUBLIC_PREFIXES = ("/api/auth/", "/api/videos/", "/api/videos")
+_ALWAYS_PUBLIC = {
+    "/api/health",
+    "/api/auth/status",
+    "/api/auth/setup",
+    "/api/auth/login",
+    "/api/auth/register",
+}
+_PUBLIC_PREFIXES = ("/api/videos/",)
 
 
 async def auth_middleware(request: Request, call_next):
