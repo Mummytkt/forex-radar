@@ -6,9 +6,9 @@ import Link from 'next/link'
 import TopBar from '@/components/TopBar'
 import StatCard from '@/components/StatCard'
 import { fetcher } from '@/lib/api'
-import { loadUserName } from '@/lib/preferences'
 import { timeAgo } from '@/lib/utils'
 import { useTimezone } from '@/lib/timezone'
+import { useAuth } from '@/lib/auth'
 import type { InstrumentOverview, Stats, AlertsPage } from '@/lib/types'
 
 interface Profile {
@@ -25,22 +25,30 @@ function fmtMemberSince(iso: string | null): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+function planLabel(plan?: string) {
+  if (plan === 'LIFETIME') return 'Lifetime Access'
+  if (plan === '30DAY') return '30-day Access'
+  if (plan === 'TRIAL') return 'Trial Access'
+  return plan ?? '—'
+}
+
 export default function OverviewPage() {
-  const [name, setName] = useState('')
   const [greeting, setGreeting] = useState('')
   const [today, setToday] = useState('')
   const { fmtDate } = useTimezone()
+  const { user } = useAuth()
   const { data: instruments } = useSWR<InstrumentOverview[]>('/api/overview', fetcher, { refreshInterval: 30000 })
   const { data: stats } = useSWR<Stats>('/api/stats', fetcher, { refreshInterval: 30000 })
   const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=5', fetcher, { refreshInterval: 30000 })
   const { data: profile } = useSWR<Profile>('/api/profile', fetcher, { refreshInterval: 60000 })
 
   useEffect(() => {
-    setName(loadUserName())
     const h = new Date().getHours()
     setGreeting(h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening')
     setToday(new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
   }, [])
+
+  const firstName = user?.name?.split(' ')[0] || user?.name || ''
 
   const activeSetups = (instruments ?? []).filter(i => i.state !== 'IDLE')
     .sort((a, b) => {
@@ -48,10 +56,11 @@ export default function OverviewPage() {
       return o[a.state] - o[b.state]
     })
 
+  const isOwner = user?.role === 'OWNER'
   const steps = [
     { label: 'Engine running', done: true },
     { label: 'Instruments loaded', done: (stats?.total_instruments ?? 0) > 0 },
-    { label: 'Telegram linked', done: profile?.telegram_configured ?? false },
+    { label: isOwner ? 'Telegram linked' : 'Alerts active', done: profile?.telegram_configured ?? false },
     { label: 'First alert fired', done: (profile?.first_alert_at ?? null) !== null },
   ]
 
@@ -72,7 +81,7 @@ export default function OverviewPage() {
           <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
             <div>
               <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
-                {greeting}{name ? `, ${name}` : ''}.
+                {greeting}{firstName ? `, ${firstName}` : ''}.
               </h2>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
                 {stats
@@ -93,26 +102,39 @@ export default function OverviewPage() {
           <div style={{ padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
             {/* Identity chips */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {/* Role */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: 'var(--accent-bg)', border: '1px solid var(--accent)30' }}>
-                <Shield size={12} color="var(--accent-hover)" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-hover)' }}>Owner</span>
+                {isOwner && <Shield size={12} color="var(--accent-hover)" />}
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-hover)' }}>
+                  {isOwner ? 'Owner' : 'Subscriber'}
+                </span>
               </div>
+              {/* Plan */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: 'var(--bullish-bg)', border: '1px solid var(--bullish)30' }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--bullish)' }}>Lifetime Access</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--bullish)' }}>
+                  {planLabel(user?.plan)}
+                </span>
               </div>
+              {/* Telegram / Alerts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: profile?.telegram_configured ? 'var(--bullish-bg)' : 'var(--card-hover)', border: `1px solid ${profile?.telegram_configured ? 'var(--bullish)30' : 'var(--border)'}` }}>
                 {profile?.telegram_configured
                   ? <Wifi size={12} color="var(--bullish)" />
                   : <WifiOff size={12} color="var(--text-muted)" />}
                 <span style={{ fontSize: 12, fontWeight: 600, color: profile?.telegram_configured ? 'var(--bullish)' : 'var(--text-muted)' }}>
-                  {profile?.telegram_configured ? 'Telegram linked' : 'Telegram not set'}
+                  {profile?.telegram_configured
+                    ? (isOwner ? 'Telegram linked' : 'Alerts active')
+                    : (isOwner ? 'Telegram not set' : 'Alerts not configured')}
                 </span>
               </div>
-              {profile?.member_since && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Since {fmtMemberSince(profile.member_since)}
-                </span>
-              )}
+              {/* Member since */}
+              {(() => {
+                const since = isOwner ? profile?.member_since : user?.created_at
+                return since ? (
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Since {fmtMemberSince(since)}
+                  </span>
+                ) : null
+              })()}
             </div>
 
             {/* Progress tracker */}
