@@ -118,7 +118,8 @@ export function TimezoneProvider({ children }: { children: React.ReactNode }) {
     } catch { return '—' }
   }, [timezone])
 
-  const abbr = getAbbrStr(timezone)
+  const [abbr, setAbbr] = useState('UTC')
+  useEffect(() => { setAbbr(getAbbrStr(timezone)) }, [timezone])
 
   return (
     <Ctx.Provider value={{ timezone, setTimezone, fmtDate, abbr }}>
