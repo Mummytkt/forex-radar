@@ -1,0 +1,11 @@
+[build]
+
+[env]
+  DB_PATH = "/data/forex_radar.db"
+
+[[mounts]]
+  source = "forex_radar_data"
+  destination = "/data"
+
+[deploy]
+  strategy = "immediate"
