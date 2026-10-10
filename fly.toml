@@ -1,11 +1,27 @@
+# fly.toml for forex-radar — scheduler + API server
+app = 'forex-radar'
+primary_region = 'lhr'
+
 [build]
 
+[deploy]
+  strategy = 'immediate'
+
 [env]
-  DB_PATH = "/data/forex_radar.db"
+  DB_PATH = '/data/forex_radar.db'
 
 [[mounts]]
-  source = "forex_radar_data"
-  destination = "/data"
+  source = 'forex_radar_data'
+  destination = '/data'
 
-[deploy]
-  strategy = "immediate"
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1

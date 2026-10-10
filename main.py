@@ -2,7 +2,7 @@
 Entry point for the Forex Radar analysis engine.
 
 Usage:
-  python main.py                     # Start live scheduler
+  python main.py                     # Start live scheduler + API server
   python main.py --backfill-only     # Fetch historical data then exit
   python main.py --dry-run           # Disable Telegram, log alerts to console
 """
@@ -14,10 +14,13 @@ import asyncio
 import logging
 import sys
 
+import uvicorn
+
 from config import load_config
 from data.client import TwelveDataClient
 from state.db import get_connection, bootstrap_schema
 from scheduler.jobs import create_scheduler, run_backfill
+from api.app import app as fastapi_app
 
 
 def setup_logging(level: str) -> None:
@@ -42,7 +45,6 @@ async def main(backfill_only: bool = False, dry_run: bool = False) -> None:
 
     td_client = TwelveDataClient(api_key=config.twelve_data_api_key)
 
-    # Always run a backfill on startup to seed or refresh historical state
     await run_backfill(config, conn, td_client)
 
     if backfill_only:
@@ -50,15 +52,23 @@ async def main(backfill_only: bool = False, dry_run: bool = False) -> None:
         conn.close()
         return
 
+    # Attach shared state for the API
+    fastapi_app.state.conn = conn
+    fastapi_app.state.config = config
+
     scheduler = create_scheduler(config, conn, td_client)
     scheduler.start()
     logger.info(
-        "Scheduler started. Monitoring %d instruments. Press Ctrl+C to stop.",
-        len(config.instruments),
+        "Scheduler started. Monitoring %d instruments.", len(config.instruments)
     )
 
+    # Run API server — keeps the process alive and serves the dashboard
+    server = uvicorn.Server(
+        uvicorn.Config(fastapi_app, host="0.0.0.0", port=8080,
+                       log_level="warning", loop="asyncio")
+    )
     try:
-        await asyncio.Event().wait()  # run forever
+        await server.serve()
     except (KeyboardInterrupt, SystemExit):
         logger.info("Shutting down…")
     finally:
@@ -68,8 +78,7 @@ async def main(backfill_only: bool = False, dry_run: bool = False) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Forex Radar — bias analysis engine")
-    parser.add_argument("--backfill-only", action="store_true", help="Fetch history then exit")
-    parser.add_argument("--dry-run", action="store_true", help="Disable Telegram delivery")
+    parser.add_argument("--backfill-only", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-
     asyncio.run(main(backfill_only=args.backfill_only, dry_run=args.dry_run))
