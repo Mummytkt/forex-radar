@@ -39,8 +39,9 @@ function SetupForm({ onDone }: { onDone: () => void }) {
         body: JSON.stringify({ email, name, password }),
       })
       if (!r.ok) {
-        const err = await r.json()
-        throw new Error(err.detail || 'Setup failed')
+        let msg = 'Setup failed'
+        try { const err = await r.json(); msg = err.detail || msg } catch {}
+        throw new Error(msg)
       }
       const { token } = await r.json()
       localStorage.setItem('mbp_token', token)
