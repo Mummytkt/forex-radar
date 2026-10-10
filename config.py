@@ -67,6 +67,23 @@ def pip_size_for(instrument: str) -> float:
         return 0.10
     if clean in {"XAGUSD"}:
         return 0.01
+    # Crypto pairs
+    if clean == "BTCUSD":
+        return 10.0    # $50 tolerance band at 5 pips
+    if clean == "ETHUSD":
+        return 1.0     # $5 tolerance band
+    if clean == "SOLUSD":
+        return 0.05    # $0.25 tolerance band
+    if clean == "BNBUSD":
+        return 0.10    # $0.50 tolerance band
+    if clean == "XRPUSD":
+        return 0.0002  # $0.001 tolerance band
+    if clean == "ADAUSD":
+        return 0.00005 # $0.00025 tolerance band
+    if clean == "DOGEUSD":
+        return 0.00002 # $0.0001 tolerance band
+    if clean == "LTCUSD":
+        return 0.02    # $0.10 tolerance band
     return 0.0001
 
 
@@ -88,4 +105,6 @@ DEFAULT_INSTRUMENTS: list[str] = [
     "CAD/JPY", "CAD/CHF", "CHF/JPY",
     # Metals
     "XAU/USD",
+    # Crypto (24/7)
+    "BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD", "ADA/USD", "DOGE/USD", "LTC/USD",
 ]
