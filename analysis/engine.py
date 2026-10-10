@@ -72,6 +72,26 @@ class EngineOutput:
     active_reaction_src: Optional[ReactionSource] = None
 
 
+def _price_established_beyond_zone(h4_candles: list[Candle], source: ReactionSource) -> bool:
+    """
+    A genuine retest requires price to have first MOVED AWAY from the reaction
+    zone on the breakout side before returning to touch it.
+
+    For a bullish source (support): at least one prior H4 candle must have
+    closed ABOVE the band high (price established above the zone).
+    For a bearish source (resistance): at least one prior H4 candle must have
+    closed BELOW the band low (price established below the zone).
+
+    Without this check the engine would falsely detect a "retest" when price is
+    still hovering right at the breakout level immediately after the daily close.
+    """
+    from data.models import Direction
+    if source.direction == Direction.BULLISH:
+        return any(c.close > source.level_band_high for c in h4_candles)
+    else:
+        return any(c.close < source.level_band_low for c in h4_candles)
+
+
 def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     """
     Full analysis cycle for one instrument at one candle-close event.
@@ -131,14 +151,22 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
 
     active_sources = [s for s in updated_srcs if s.is_active]
 
+    # Narrow H4 history to candles that formed AFTER the active daily breakout.
+    # Using the full multi-hundred-candle history would expose pre-breakout A/V
+    # formations at wrong levels that are trivially "broken" by current price.
+    breakout_ts = active_breakout.breakout_ts
+    post_breakout_h4 = [c for c in h4_history if c.timestamp >= breakout_ts]
+
     # ── STEP 2: Check for retest ───────────────────────────────────────────────
     retest_in_progress = inp.retest_in_progress
     active_reaction_src = inp.active_reaction_src
 
     if not retest_in_progress:
-        # Check if the latest H4 candle is touching any reaction source zone
+        # Check if the latest H4 candle is touching any reaction source zone,
+        # AND that price has first established itself beyond the zone (genuine retest).
         for src in active_sources:
-            if is_price_retesting_source(latest_h4, src):
+            if (is_price_retesting_source(latest_h4, src)
+                    and _price_established_beyond_zone(post_breakout_h4, src)):
                 retest_in_progress = True
                 active_reaction_src = src
                 break
@@ -150,12 +178,12 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
         return out
 
     # ── STEP 3: Check for qualifying H4 breakout ──────────────────────────────
-    # Pass h4_history (candles before the confirmation candle) so formation
-    # detection reflects what existed before this candle closed.
+    # Use only post-breakout H4 candles so that formation detection reflects
+    # structure built SINCE the daily breakout, not ancient pre-breakout history.
     h4_event = check_h4_breakout(
         latest_h4,
         active_breakout.direction,
-        h4_history,
+        post_breakout_h4,
     )
 
     if h4_event is None:

@@ -33,6 +33,29 @@ from state.repository import InstrumentStateRow
 
 logger = logging.getLogger(__name__)
 
+# Crypto pairs trade 24/7; all other instruments follow forex/metals market hours.
+_CRYPTO_INSTRUMENTS = frozenset([
+    "BTCUSD", "ETHUSD", "SOLUSD", "BNBUSD", "XRPUSD", "ADAUSD", "DOGEUSD", "LTCUSD",
+])
+
+
+def _is_market_open(instrument: str) -> bool:
+    """
+    Returns False for forex/metals instruments when the market is closed:
+    Saturday (all day UTC) and Sunday before 21:00 UTC.
+
+    Crypto instruments are always open.
+    """
+    if instrument.replace("/", "").upper() in _CRYPTO_INSTRUMENTS:
+        return True
+    now = datetime.now(timezone.utc)
+    wd = now.weekday()          # 0=Mon … 5=Sat, 6=Sun
+    if wd == 5:                  # Saturday — always closed
+        return False
+    if wd == 6 and now.hour < 21:  # Sunday before NY open
+        return False
+    return True
+
 
 # ── Candle-close job handlers ─────────────────────────────────────────────────
 
@@ -43,6 +66,9 @@ async def h4_candle_close_job(
 ) -> None:
     logger.info("H4 candle close job triggered at %s UTC", datetime.now(timezone.utc).isoformat())
     for instrument in config.instruments:
+        if not _is_market_open(instrument):
+            logger.debug("Skipping %s — market closed (weekend)", instrument)
+            continue
         try:
             await process_instrument_cycle(instrument, Timeframe.H4, config, conn, td_client)
         except Exception as e:
@@ -57,6 +83,9 @@ async def daily_candle_close_job(
 ) -> None:
     logger.info("Daily candle close job triggered at %s UTC", datetime.now(timezone.utc).isoformat())
     for instrument in config.instruments:
+        if not _is_market_open(instrument):
+            logger.debug("Skipping %s — market closed (weekend)", instrument)
+            continue
         try:
             await process_instrument_cycle(instrument, Timeframe.DAILY, config, conn, td_client)
         except Exception as e:
