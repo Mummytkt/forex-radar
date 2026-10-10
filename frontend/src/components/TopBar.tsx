@@ -1,39 +1,63 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { isForexOpen } from '@/lib/utils'
+import { useTimezone, getAbbrStr } from '@/lib/timezone'
 
-export default function TopBar({ title }: { title: string }) {
-  const [utc, setUtc] = useState('')
+interface Props {
+  title: string
+  subtitle?: string
+}
+
+export default function TopBar({ title, subtitle }: Props) {
+  const [timeStr, setTimeStr] = useState('')
   const [forexOpen, setForexOpen] = useState(false)
+  const { timezone } = useTimezone()
 
   useEffect(() => {
     const tick = () => {
-      setUtc(new Date().toUTCString().slice(17, 25) + ' UTC')
+      const now = new Date()
+      const local = now.toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        timeZone: timezone,
+      })
+      setTimeStr(`${local} ${getAbbrStr(timezone)}`)
       setForexOpen(isForexOpen())
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [timezone])
 
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b"
-      style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-      <h1 className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{title}</h1>
-      <div className="flex items-center gap-4">
-        {/* Market status */}
-        <div className="flex items-center gap-3 text-xs">
-          <span className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${forexOpen ? 'bg-green-400 pulse' : 'bg-red-500'}`} />
+    <header style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '14px 24px',
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--surface)',
+      position: 'sticky', top: 0, zIndex: 20,
+      transition: 'background 0.25s, border-color 0.25s',
+    }}>
+      <div>
+        <h1 style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', lineHeight: 1.2 }}>{title}</h1>
+        {subtitle && <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{subtitle}</p>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className={forexOpen ? 'pulse' : ''} style={{ width: 7, height: 7, borderRadius: '50%', background: forexOpen ? 'var(--bullish)' : 'var(--bearish)', display: 'inline-block' }} />
             <span style={{ color: 'var(--text-secondary)' }}>Forex {forexOpen ? 'Open' : 'Closed'}</span>
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 pulse" />
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--bullish)', display: 'inline-block' }} />
             <span style={{ color: 'var(--text-secondary)' }}>Crypto Open</span>
           </span>
         </div>
-        <span className="text-xs font-mono px-2 py-1 rounded"
-          style={{ background: 'var(--card)', color: 'var(--text-secondary)' }}>{utc}</span>
+        <span style={{
+          fontSize: 12, fontFamily: 'monospace',
+          padding: '4px 10px', borderRadius: 6,
+          background: 'var(--card)', color: 'var(--text-secondary)',
+          border: '1px solid var(--border)',
+        }}>{timeStr}</span>
       </div>
     </header>
   )

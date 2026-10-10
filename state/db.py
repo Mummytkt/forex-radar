@@ -100,6 +100,27 @@ CREATE TABLE IF NOT EXISTS raw_candles (
 );
 CREATE INDEX IF NOT EXISTS idx_raw_candles_inst_tf
     ON raw_candles (instrument, timeframe, ts);
+
+CREATE TABLE IF NOT EXISTS user_config (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    email            TEXT    NOT NULL UNIQUE,
+    name             TEXT,
+    password_hash    TEXT,
+    role             TEXT    NOT NULL DEFAULT 'SUBSCRIBER',
+    plan             TEXT    NOT NULL DEFAULT 'TRIAL',
+    plan_expires_at  TEXT,
+    telegram_chat_id TEXT,
+    invite_token     TEXT    UNIQUE,
+    invite_used      INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_login_at    TEXT
+);
 """
 
 

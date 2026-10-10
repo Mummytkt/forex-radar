@@ -1,12 +1,52 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
+from fastapi.responses import FileResponse
 
-from api.schemas import InstrumentOverview, Stats, AlertItem, AlertsPage, InstrumentDetail
+from api.schemas import (
+    InstrumentOverview, Stats, AlertItem, AlertsPage,
+    InstrumentDetail, InstrumentsUpdate,
+)
+
+VIDEOS_DIR = Path(__file__).parent.parent / "videos"
+_VIDEO_EXTS = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
+
+
+@contextmanager
+def _db(request: Request):
+    """Open a fresh read connection per request to avoid thread conflicts."""
+    path = request.app.state.config.db_path
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+@contextmanager
+def _db_write(request: Request):
+    """Open a fresh write connection per request."""
+    path = request.app.state.config.db_path
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 router = APIRouter()
 
@@ -72,6 +112,9 @@ def _build_overview(conn: sqlite3.Connection, instrument: str) -> InstrumentOver
         ).fetchone()
         if bk:
             direction, breakout_level, breakout_ts = bk
+            # Normalize to uppercase regardless of how the engine stored it
+            if direction:
+                direction = direction.upper()
 
     active_sources_count = 0
     if active_breakout_id:
@@ -82,14 +125,19 @@ def _build_overview(conn: sqlite3.Connection, instrument: str) -> InstrumentOver
         active_sources_count = src[0] if src else 0
 
     last_alert = conn.execute(
-        "SELECT fired_at FROM alerts WHERE instrument = ? ORDER BY fired_at DESC LIMIT 1",
+        "SELECT fired_at, direction FROM alerts WHERE instrument = ? ORDER BY fired_at DESC LIMIT 1",
         (instrument,),
     ).fetchone()
+
+    last_alert_direction = None
+    if last_alert and last_alert[1]:
+        last_alert_direction = last_alert[1].upper()
 
     return InstrumentOverview(
         instrument=instrument,
         state=state,
         direction=direction,
+        last_alert_direction=last_alert_direction,
         breakout_level=breakout_level,
         breakout_ts=breakout_ts,
         last_alert_at=last_alert[0] if last_alert else None,
@@ -106,30 +154,29 @@ def health():
 
 @router.get("/overview", response_model=list[InstrumentOverview])
 def get_overview(request: Request):
-    conn: sqlite3.Connection = request.app.state.conn
     config = request.app.state.config
-    return [_build_overview(conn, inst) for inst in config.instruments]
+    with _db(request) as conn:
+        return [_build_overview(conn, inst) for inst in config.instruments]
 
 
 @router.get("/stats", response_model=Stats)
 def get_stats(request: Request):
-    conn: sqlite3.Connection = request.app.state.conn
     config = request.app.state.config
+    with _db(request) as conn:
+        active_breakouts = conn.execute(
+            "SELECT COUNT(*) FROM instrument_state WHERE active_breakout_id IS NOT NULL"
+        ).fetchone()[0]
 
-    active_breakouts = conn.execute(
-        "SELECT COUNT(*) FROM instrument_state WHERE active_breakout_id IS NOT NULL"
-    ).fetchone()[0]
+        retests = conn.execute(
+            "SELECT COUNT(*) FROM instrument_state WHERE retest_in_progress = 1"
+        ).fetchone()[0]
 
-    retests = conn.execute(
-        "SELECT COUNT(*) FROM instrument_state WHERE retest_in_progress = 1"
-    ).fetchone()[0]
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        alerts_today = conn.execute(
+            "SELECT COUNT(*) FROM alerts WHERE fired_at >= ?", (today,)
+        ).fetchone()[0]
 
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    alerts_today = conn.execute(
-        "SELECT COUNT(*) FROM alerts WHERE fired_at >= ?", (today,)
-    ).fetchone()[0]
-
-    total_alerts = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+        total_alerts = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
 
     return Stats(
         total_instruments=len(config.instruments),
@@ -148,32 +195,35 @@ def get_alerts(
     instrument: Optional[str] = None,
     direction: Optional[str] = None,
 ):
-    conn: sqlite3.Connection = request.app.state.conn
     where, params = [], []
     if instrument:
         where.append("a.instrument = ?")
         params.append(instrument)
     if direction:
-        where.append("a.direction = ?")
+        where.append("UPPER(a.direction) = ?")
         params.append(direction.upper())
 
     w = ("WHERE " + " AND ".join(where)) if where else ""
-    total = conn.execute(f"SELECT COUNT(*) FROM alerts a {w}", params).fetchone()[0]
-    rows = conn.execute(
-        f"""SELECT a.id, a.instrument, a.direction,
-                   COALESCE(rs.source_type, 'UNKNOWN'), a.h4_classification,
-                   a.alert_text, a.fired_at
-            FROM alerts a
-            LEFT JOIN reaction_sources rs ON rs.id = a.reaction_source_id
-            {w}
-            ORDER BY a.fired_at DESC LIMIT ? OFFSET ?""",
-        params + [limit, offset],
-    ).fetchall()
+    with _db(request) as conn:
+        total = conn.execute(f"SELECT COUNT(*) FROM alerts a {w}", params).fetchone()[0]
+        rows = conn.execute(
+            f"""SELECT a.id, a.instrument, a.direction,
+                       COALESCE(rs.source_type, 'UNKNOWN'), a.h4_classification,
+                       a.alert_text, a.fired_at
+                FROM alerts a
+                LEFT JOIN reaction_sources rs ON rs.id = a.reaction_source_id
+                {w}
+                ORDER BY a.fired_at DESC LIMIT ? OFFSET ?""",
+            params + [limit, offset],
+        ).fetchall()
 
     return AlertsPage(
-        items=[AlertItem(id=r[0], instrument=r[1], direction=r[2], source_type=r[3],
-                         h4_classification=r[4], alert_text=r[5], fired_at=r[6])
-               for r in rows],
+        items=[AlertItem(
+            id=r[0], instrument=r[1],
+            direction=r[2].upper() if r[2] else r[2],
+            source_type=r[3], h4_classification=r[4],
+            alert_text=r[5], fired_at=r[6],
+        ) for r in rows],
         total=total,
     )
 
@@ -195,48 +245,144 @@ async def telegram_test(request: Request):
         return {"ok": False, "detail": str(e)}
 
 
+@router.get("/config/instruments")
+def get_config_instruments(request: Request):
+    """Return the current monitored instrument list."""
+    return {"instruments": request.app.state.config.instruments}
+
+
+@router.put("/config/instruments")
+def update_config_instruments(request: Request, body: InstrumentsUpdate):
+    """Update the monitored instrument list. Takes effect on the next scheduler cycle."""
+    instruments = [i.strip().upper() for i in body.instruments if i.strip()]
+    if not instruments:
+        raise HTTPException(status_code=400, detail="Must specify at least one instrument.")
+
+    # Persist to DB
+    with _db_write(request) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('instruments', ?, datetime('now'))",
+            (json.dumps(instruments),),
+        )
+
+    # Update in-memory config so the NEXT scheduler cycle picks it up immediately
+    request.app.state.config.instruments = instruments
+
+    return {"ok": True, "count": len(instruments), "instruments": instruments}
+
+
+@router.get("/profile")
+def get_profile(request: Request):
+    config = request.app.state.config
+    with _db(request) as conn:
+        row = conn.execute("SELECT MIN(updated_at) FROM user_config").fetchone()
+        member_since = row[0] if row and row[0] else None
+
+        first_alert = conn.execute("SELECT MIN(fired_at) FROM alerts").fetchone()
+        first_alert_at = first_alert[0] if first_alert and first_alert[0] else None
+
+        total_alerts = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+
+    telegram_ok = bool(
+        config.telegram_enabled
+        and config.telegram_bot_token
+        and config.telegram_chat_id
+    )
+    return {
+        "telegram_configured": telegram_ok,
+        "member_since": member_since,
+        "first_alert_at": first_alert_at,
+        "total_alerts": total_alerts,
+        "instruments_count": len(config.instruments),
+    }
+
+
+@router.get("/videos")
+def list_videos():
+    if not VIDEOS_DIR.exists():
+        return {"videos": []}
+    videos = sorted(
+        f.name for f in VIDEOS_DIR.iterdir()
+        if f.is_file() and f.suffix.lower() in _VIDEO_EXTS
+    )
+    return {"videos": videos}
+
+
+@router.post("/videos")
+async def upload_video(file: UploadFile = File(...)):
+    VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
+    safe = Path(file.filename or "upload").name
+    safe = "".join(c for c in safe if c.isalnum() or c in "._- ")
+    if not safe:
+        safe = "video"
+    dest = VIDEOS_DIR / safe
+    dest.write_bytes(await file.read())
+    return {"ok": True, "filename": safe}
+
+
+@router.delete("/videos/{filename}")
+def delete_video(filename: str):
+    safe = Path(filename).name
+    path = VIDEOS_DIR / safe
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    path.unlink()
+    return {"ok": True}
+
+
+@router.get("/videos/{filename}")
+def serve_video(filename: str):
+    safe = Path(filename).name
+    path = VIDEOS_DIR / safe
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(str(path), media_type="video/mp4")
+
+
 @router.get("/instrument/{slug}", response_model=InstrumentDetail)
 def get_instrument(slug: str, request: Request):
-    conn: sqlite3.Connection = request.app.state.conn
     config = request.app.state.config
     instrument = slug.replace("-", "/").upper()
     if instrument not in config.instruments:
         raise HTTPException(status_code=404, detail="Instrument not found")
 
-    overview = _build_overview(conn, instrument)
+    with _db(request) as conn:
+        overview = _build_overview(conn, instrument)
 
-    # Active sources
-    active_sources: list[dict] = []
-    row = conn.execute(
-        "SELECT active_breakout_id FROM instrument_state WHERE instrument = ?", (instrument,)
-    ).fetchone()
-    if row and row[0]:
-        srcs = conn.execute(
-            """SELECT source_type, direction, level, level_band_low, level_band_high, created_at
-               FROM reaction_sources WHERE daily_breakout_id = ? AND is_active = 1""",
-            (row[0],),
+        active_sources: list[dict] = []
+        row = conn.execute(
+            "SELECT active_breakout_id FROM instrument_state WHERE instrument = ?", (instrument,)
+        ).fetchone()
+        if row and row[0]:
+            srcs = conn.execute(
+                """SELECT source_type, direction, level, level_band_low, level_band_high, created_at
+                   FROM reaction_sources WHERE daily_breakout_id = ? AND is_active = 1""",
+                (row[0],),
+            ).fetchall()
+            active_sources = [
+                {"source_type": s[0], "direction": s[1].upper() if s[1] else s[1],
+                 "level": s[2], "band_low": s[3], "band_high": s[4], "created_at": s[5]}
+                for s in srcs
+            ]
+
+        rows = conn.execute(
+            """SELECT a.id, a.instrument, a.direction,
+                      COALESCE(rs.source_type, 'UNKNOWN'), a.h4_classification,
+                      a.alert_text, a.fired_at
+               FROM alerts a
+               LEFT JOIN reaction_sources rs ON rs.id = a.reaction_source_id
+               WHERE a.instrument = ?
+               ORDER BY a.fired_at DESC LIMIT 10""",
+            (instrument,),
         ).fetchall()
-        active_sources = [
-            {"source_type": s[0], "direction": s[1], "level": s[2],
-             "band_low": s[3], "band_high": s[4], "created_at": s[5]}
-            for s in srcs
+        recent_alerts = [
+            AlertItem(
+                id=r[0], instrument=r[1],
+                direction=r[2].upper() if r[2] else r[2],
+                source_type=r[3], h4_classification=r[4],
+                alert_text=r[5], fired_at=r[6],
+            )
+            for r in rows
         ]
-
-    # Recent alerts
-    rows = conn.execute(
-        """SELECT a.id, a.instrument, a.direction,
-                  COALESCE(rs.source_type, 'UNKNOWN'), a.h4_classification,
-                  a.alert_text, a.fired_at
-           FROM alerts a
-           LEFT JOIN reaction_sources rs ON rs.id = a.reaction_source_id
-           WHERE a.instrument = ?
-           ORDER BY a.fired_at DESC LIMIT 10""",
-        (instrument,),
-    ).fetchall()
-    recent_alerts = [
-        AlertItem(id=r[0], instrument=r[1], direction=r[2], source_type=r[3],
-                  h4_classification=r[4], alert_text=r[5], fired_at=r[6])
-        for r in rows
-    ]
 
     return InstrumentDetail(overview=overview, active_sources=active_sources, recent_alerts=recent_alerts)

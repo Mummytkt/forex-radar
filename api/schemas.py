@@ -6,7 +6,8 @@ from typing import Optional
 class InstrumentOverview(BaseModel):
     instrument: str
     state: str  # IDLE | BREAKOUT_ACTIVE | RETEST_IN_PROGRESS
-    direction: Optional[str] = None  # BULLISH | BEARISH
+    direction: Optional[str] = None        # Daily breakout direction (setup, not confirmed)
+    last_alert_direction: Optional[str] = None  # Confirmed bias — only set when alert has fired
     breakout_level: Optional[float] = None
     breakout_ts: Optional[str] = None
     last_alert_at: Optional[str] = None
@@ -42,3 +43,7 @@ class InstrumentDetail(BaseModel):
     overview: InstrumentOverview
     active_sources: list[dict]
     recent_alerts: list[AlertItem]
+
+
+class InstrumentsUpdate(BaseModel):
+    instruments: list[str]

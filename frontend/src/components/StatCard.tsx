@@ -4,22 +4,37 @@ interface Props {
   label: string
   value: number | string
   icon: LucideIcon
-  accent?: string
+  iconColor?: string
   sub?: string
+  trend?: string
 }
 
-export default function StatCard({ label, value, icon: Icon, accent = 'var(--accent)', sub }: Props) {
+export default function StatCard({ label, value, icon: Icon, iconColor = 'var(--accent)', sub, trend }: Props) {
   return (
-    <div className="rounded-xl p-5 flex items-start justify-between"
-      style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-      <div>
-        <p className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>{label}</p>
-        <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{value}</p>
-        {sub && <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{sub}</p>}
+    <div style={{
+      background: 'var(--card)',
+      border: '1px solid var(--border)',
+      borderRadius: 12,
+      padding: '18px 20px',
+      display: 'flex', flexDirection: 'column', gap: 12,
+      boxShadow: 'var(--shadow)',
+      transition: 'background 0.15s, border-color 0.15s',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
+        <div style={{
+          width: 34, height: 34, borderRadius: 9,
+          background: `color-mix(in srgb, ${iconColor} 15%, transparent)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <Icon size={16} color={iconColor} />
+        </div>
       </div>
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ background: `${accent}22` }}>
-        <Icon size={18} style={{ color: accent }} />
+      <div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
+        {sub && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>{sub}</div>}
+        {trend && <div style={{ fontSize: 11, color: 'var(--bullish)', marginTop: 4, fontWeight: 500 }}>{trend}</div>}
       </div>
     </div>
   )

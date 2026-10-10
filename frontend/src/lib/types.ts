@@ -4,7 +4,8 @@ export type Direction = 'BULLISH' | 'BEARISH'
 export interface InstrumentOverview {
   instrument: string
   state: State
-  direction: Direction | null
+  direction: Direction | null           // Daily breakout direction — setup in progress
+  last_alert_direction: Direction | null // Confirmed bias — only present after alert fires
   breakout_level: number | null
   breakout_ts: string | null
   last_alert_at: string | null

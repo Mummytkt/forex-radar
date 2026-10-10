@@ -1,20 +1,20 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Sidebar from '@/components/Sidebar'
+import LayoutShell from '@/components/LayoutShell'
 
 export const metadata: Metadata = {
-  title: 'Bias Radar — Forex Analysis Engine',
-  description: 'Rules-based forex and crypto bias alerts',
+  title: "MummyTKT's Bias Pointer",
+  description: 'Rules-based forex and crypto directional bias alerts',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full">
-      <body className="h-full flex" style={{ background: 'var(--bg)' }}>
-        <Sidebar />
-        <div className="flex-1 ml-56 flex flex-col min-h-screen overflow-auto">
-          {children}
-        </div>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');document.documentElement.setAttribute('data-theme',t||'dark')}catch(e){}` }} />
+      </head>
+      <body>
+        <LayoutShell>{children}</LayoutShell>
       </body>
     </html>
   )

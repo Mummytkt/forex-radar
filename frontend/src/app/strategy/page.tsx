@@ -1,38 +1,147 @@
+'use client'
+import { useState, useEffect, useRef } from 'react'
+import { Upload, Play, Trash2, Film } from 'lucide-react'
 import TopBar from '@/components/TopBar'
+import { API_BASE } from '@/lib/api'
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl p-6" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-      <h2 className="font-bold text-base mb-4" style={{ color: 'var(--text-primary)' }}>{title}</h2>
-      {children}
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{title}</h2>
+      </div>
+      <div style={{ padding: '20px' }}>{children}</div>
     </div>
   )
 }
 
-function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+function Step({ n, title, body }: { n: number; title: string; body: string }) {
   return (
-    <div className="flex gap-4">
-      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white mt-0.5"
-        style={{ background: 'var(--accent)' }}>{n}</div>
+    <div style={{ display: 'flex', gap: 14, marginBottom: 18 }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+        background: 'var(--accent-bg)', color: 'var(--accent-hover)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 700, fontSize: 12,
+      }}>{n}</div>
       <div>
-        <p className="font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>{title}</p>
-        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{children}</p>
+        <p style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{title}</p>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.7 }}>{body}</p>
       </div>
     </div>
   )
 }
 
-function Formation({ name, color, desc, rule }: { name: string; color: string; desc: string; rule: string }) {
+function Def({ term, def }: { term: string; def: string }) {
   return (
-    <div className="rounded-lg p-4" style={{ background: 'var(--surface)', border: `1px solid ${color}44` }}>
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-        <span className="font-bold text-sm" style={{ color }}>{name}</span>
+    <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+      <p style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{term}</p>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.7 }}>{def}</p>
+    </div>
+  )
+}
+
+function VideoSection() {
+  const [videos, setVideos] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [playing, setPlaying] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const load = () => {
+    fetch(`${API_BASE}/api/videos`)
+      .then(r => r.json())
+      .then(d => setVideos(d.videos ?? []))
+      .catch(() => {})
+  }
+
+  useEffect(load, [])
+
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`${API_BASE}/api/videos`, { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('Upload failed')
+      load()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  const remove = async (name: string) => {
+    await fetch(`${API_BASE}/api/videos/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    setVideos(v => v.filter(f => f !== name))
+    if (playing === name) setPlaying(null)
+  }
+
+  return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Film size={15} color="var(--accent-hover)" />
+          <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Tutorial Videos</h2>
+        </div>
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+          background: 'var(--accent)', color: 'white', cursor: 'pointer',
+          opacity: uploading ? 0.6 : 1,
+        }}>
+          <Upload size={12} />
+          {uploading ? 'Uploading…' : 'Upload video'}
+          <input ref={inputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={upload} disabled={uploading} />
+        </label>
       </div>
-      <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>{desc}</p>
-      <p className="text-xs px-2 py-1 rounded font-mono" style={{ background: 'var(--card)', color: 'var(--text-primary)' }}>
-        {rule}
-      </p>
+      <div style={{ padding: '20px' }}>
+        {error && (
+          <p style={{ fontSize: 12, color: 'var(--bearish)', marginBottom: 12 }}>{error}</p>
+        )}
+        {videos.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <Film size={32} color="var(--text-muted)" style={{ margin: '0 auto 10px' }} />
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>No tutorial videos yet.</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Upload MP4, WebM or MOV files to build your tutorial library.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {videos.map(name => (
+              <div key={name} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: playing === name ? '1px solid var(--border)' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Film size={13} color="var(--text-secondary)" />
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{name}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setPlaying(p => p === name ? null : name)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, background: playing === name ? 'var(--card-hover)' : 'var(--accent-bg)', color: playing === name ? 'var(--text-secondary)' : 'var(--accent-hover)', fontWeight: 500 }}>
+                      <Play size={11} />
+                      {playing === name ? 'Minimise' : 'Play'}
+                    </button>
+                    <button onClick={() => remove(name)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', background: 'var(--bearish-bg)', color: 'var(--bearish)' }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+                {playing === name && (
+                  <video controls style={{ width: '100%', display: 'block', maxHeight: 400 }}>
+                    <source src={`${API_BASE}/api/videos/${encodeURIComponent(name)}`} />
+                    Your browser does not support the video tag.
+                  </video>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -40,116 +149,63 @@ function Formation({ name, color, desc, rule }: { name: string; color: string; d
 export default function StrategyPage() {
   return (
     <>
-      <TopBar title="Strategy Guide" />
-      <main className="flex-1 p-6 space-y-5 max-w-3xl">
+      <TopBar title="Strategy" subtitle="How the engine detects and confirms directional bias" />
+      <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        <Section title="How Bias Radar Works">
-          <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text-secondary)' }}>
-            Bias Radar monitors 37 forex and crypto instruments 24/7. It detects specific candle formations on the
-            Daily chart, tracks when price breaks key structural levels, and confirms the move with an H4 breakout
-            in the same direction. Only when all four conditions align does an alert fire.
-          </p>
-          <div className="space-y-4">
-            <Step n={1} title="Daily Formation Detected">
-              The engine scans every Daily candle for A-shapes (resistance) and V-shapes (support). These formations
-              define the key structural levels the market respects.
-            </Step>
-            <Step n={2} title="Daily Breakout Confirmed">
-              When a Daily candle closes strictly beyond the body level of the most recent formation, a breakout is
-              recorded. Wick-only moves never qualify — only body closes count.
-            </Step>
-            <Step n={3} title="Reaction Source Retested">
-              After a breakout, the engine identifies eligible reaction sources: the broken level (now role-reversed),
-              OC levels inside the range, A/V levels inside the range, and post-breakout OC levels. When price retraces
-              into any source's tolerance band, retest monitoring begins.
-            </Step>
-            <Step n={4} title="H4 Breakout Confirms">
-              During retest, every H4 candle close is checked. If an H4 candle closes beyond the body level of an H4
-              A-shape (bullish) or V-shape (bearish) in the same direction as the Daily breakout, the alert fires.
-            </Step>
-          </div>
-        </Section>
+        <VideoSection />
 
-        <Section title="Candle Formations">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Formation
-              name="A-Shape (Resistance)"
-              color="#EF4444"
-              desc="A bullish candle followed immediately by a bearish candle. The body_high of the bullish candle becomes the resistance level."
-              rule="candle[i] bullish → candle[i+1] bearish  |  level = body_high[i]"
-            />
-            <Formation
-              name="V-Shape (Support)"
-              color="#10B981"
-              desc="A bearish candle followed immediately by a bullish candle. The body_low of the bearish candle becomes the support level."
-              rule="candle[i] bearish → candle[i+1] bullish  |  level = body_low[i]"
-            />
-            <Formation
-              name="OC Level (Order Close)"
-              color="#6366F1"
-              desc="Two consecutive same-direction candles. Their closing price midpoint becomes a reaction level. A run of 3 candles produces 2 OC levels."
-              rule="level = (close[i] + close[i+1]) / 2"
-            />
-            <Formation
-              name="Post-Breakout OC"
-              color="#F59E0B"
-              desc="Two consecutive same-direction Daily candles after the breakout, moving in the breakout direction. Their OC midpoint is an eligible reaction source."
-              rule="Forms after breakout candle, direction must match breakout"
-            />
-          </div>
-        </Section>
+        <Card title="The 4-Step Confirmation Chain">
+          <Step n={1} title="Daily Breakout" body="The engine identifies A-shapes (bearish resistance) and V-shapes (bullish support) on the Daily chart using body-only levels — never wicks. A breakout occurs when a Daily candle closes beyond the most recent A or V body level." />
+          <Step n={2} title="Reaction Source Identification" body="After a breakout, the engine identifies up to 4 types of reaction sources: the Daily Breaker level, OC levels inside the pre-breakout range, A/V levels inside the range, and post-breakout OC levels. These become the zones price must retest." />
+          <Step n={3} title="Retest Detection" body="When an H4 candle's high or low (including wicks) touches any active reaction source band, the engine flags a retest in progress. The band is the source level ± the configured tolerance (default 5 pips)." />
+          <Step n={4} title="H4 Confirmation" body="With a retest in progress, the engine checks subsequent H4 candles for a qualifying H4 A-shape or V-shape breakout that closes beyond the body level. This confirms directional alignment between the Daily and H4 timeframes, triggering the alert." />
+        </Card>
 
-        <Section title="Reaction Sources">
-          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-            After every Daily breakout, four types of reaction sources are computed:
-          </p>
-          <div className="space-y-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        <Card title="Formation Types">
+          <Def term="A-Shape (Bearish resistance)"
+            def="Two consecutive Daily candles where candle 1 is bullish and candle 2 is bearish. The level is candle 1's body high (max of open/close, never the wick)." />
+          <Def term="V-Shape (Bullish support)"
+            def="Two consecutive Daily candles where candle 1 is bearish and candle 2 is bullish. The level is candle 1's body low (min of open/close, never the wick)." />
+          <Def term="OC (Open-Close level)"
+            def="Formed when 2+ consecutive same-direction candles run. Each consecutive pair produces an OC level at the midpoint of their two closes. A run of 3 candles produces exactly 2 independent OC levels." />
+        </Card>
+
+        <Card title="H4 Breakout Classification">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {[
-              ['Daily Breaker', 'The original A-shape or V-shape level that was broken. Role-reversed — former resistance becomes support and vice versa.'],
-              ['OC Inside Range', 'OC levels that formed before the breakout candle, between the broken level and the swing extreme. Direction must match the breakout.'],
-              ['A/V Inside Range', 'A-shapes (bearish breakout) or V-shapes (bullish breakout) inside the pre-breakout range.'],
-              ['Post-Breakout OC', 'Two consecutive same-direction Daily candles after the breakout, moving in the breakout direction.'],
-            ].map(([name, desc]) => (
-              <div key={name} className="flex gap-3">
-                <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: 'var(--accent)' }} />
-                <div><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{name} — </span>{desc}</div>
+              { label: 'External', color: 'var(--accent)', bg: 'var(--accent-bg)', desc: 'The H4 candle closes beyond the outermost H4 formation — the swing boundary. This is the conservative confirmation.' },
+              { label: 'Internal', color: 'var(--warning)', bg: 'var(--warning-bg)', desc: 'The H4 candle closes beyond an inner H4 formation that formed after the outer swing. This is an earlier, more aggressive confirmation.' },
+            ].map(({ label, color, bg, desc }) => (
+              <div key={label} style={{ background: bg, border: `1px solid ${color}30`, borderRadius: 10, padding: 16 }}>
+                <p style={{ fontWeight: 700, fontSize: 14, color, marginBottom: 8 }}>{label}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{desc}</p>
               </div>
             ))}
           </div>
-        </Section>
+        </Card>
 
-        <Section title="H4 Confirmation: External vs Internal">
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            Every qualifying H4 breakout is classified as either <strong style={{ color: 'var(--text-primary)' }}>External</strong> or <strong style={{ color: 'var(--text-primary)' }}>Internal</strong>:
-          </p>
-          <div className="grid sm:grid-cols-2 gap-4 mt-4">
-            <div className="rounded-lg p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <p className="font-semibold text-sm mb-2" style={{ color: '#818CF8' }}>External</p>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                The H4 candle breaks the first (oldest) structural H4 formation in the current leg. This is the
-                strongest confirmation — it breaks the outer swing boundary.
-              </p>
-            </div>
-            <div className="rounded-lg p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <p className="font-semibold text-sm mb-2" style={{ color: '#FCD34D' }}>Internal</p>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                The H4 candle breaks a smaller formation that developed after the outer boundary — internal to the
-                current move. Still valid, but signals a shorter-range structure break.
-              </p>
-            </div>
-          </div>
-        </Section>
+        <Card title="Reaction Source Types">
+          {[
+            { label: 'Daily Breaker', desc: 'The original A or V body level that was broken. Price often returns to test it from the other side (role reversal).' },
+            { label: 'OC Inside Range', desc: 'An OC level that formed inside the pre-breakout range, in the direction of the breakout. Filtered to those between the broken level and the nearest swing extreme.' },
+            { label: 'A/V Inside Range', desc: 'After a bearish breakout: A-shapes inside the range. After a bullish breakout: V-shapes inside the range.' },
+            { label: 'Post-Breakout OC', desc: 'Two consecutive same-direction Daily candles after the breakout candle, in the breakout direction. The midpoint of their closes becomes a reaction zone.' },
+          ].map(({ label, desc }) => (
+            <Def key={label} term={label} def={desc} />
+          ))}
+        </Card>
 
-        <Section title="Important Disclaimer">
-          <div className="rounded-lg p-4" style={{ background: '#F59E0B11', border: '1px solid #F59E0B44' }}>
-            <p className="text-sm leading-relaxed" style={{ color: '#FCD34D' }}>
-              Bias Radar provides <strong>directional bias only</strong> — not entry signals. A confirmed alert
-              tells you the Daily and H4 are aligned in a direction. It does not tell you where to enter, stop,
-              or target. Always apply your own entry model and risk management. Past alerts are not indicative
-              of future performance.
-            </p>
-          </div>
-        </Section>
+        <div style={{
+          display: 'flex', gap: 10, padding: '14px 18px', borderRadius: 10,
+          background: 'var(--warning-bg)', border: '1px solid var(--warning-bg)',
+          fontSize: 12, color: 'var(--text-secondary)', alignItems: 'flex-start',
+        }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+          <span style={{ lineHeight: 1.7 }}>
+            <strong style={{ color: 'var(--text-primary)' }}>Directional bias only — not an entry signal.</strong>
+            {' '}Alerts confirm Daily + H4 alignment. Entry timing, risk management, and position sizing remain your responsibility.
+          </span>
+        </div>
 
       </main>
     </>
