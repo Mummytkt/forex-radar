@@ -1,277 +1,251 @@
 'use client'
 import { useState, useEffect } from 'react'
-import useSWR from 'swr'
-import { Activity, Zap, Bell, BarChart2, TrendingUp, TrendingDown, ArrowRight, Shield, CheckCircle2, Circle, Wifi, WifiOff } from 'lucide-react'
 import Link from 'next/link'
-import TopBar from '@/components/TopBar'
-import StatCard from '@/components/StatCard'
-import { fetcher } from '@/lib/api'
-import { timeAgo } from '@/lib/utils'
-import { useTimezone } from '@/lib/timezone'
-import { useAuth } from '@/lib/auth'
-import type { InstrumentOverview, Stats, AlertsPage } from '@/lib/types'
+import {
+  Radio, TrendingUp, Bell, BarChart2, Shield,
+  ArrowRight, CheckCircle2, Moon, Sun,
+} from 'lucide-react'
+import { useTheme } from '@/lib/theme'
 
-interface Profile {
-  telegram_configured: boolean
-  member_since: string | null
-  first_alert_at: string | null
-  total_alerts: number
-  instruments_count: number
-}
+const PLANS = [
+  { id: '30DAY',   label: '30 Days',   price: 10, monthly: 10, save: null, badge: null,           highlight: false },
+  { id: '6MONTH',  label: '6 Months',  price: 48, monthly: 8,  save: 20,   badge: 'Save 20%',     highlight: false },
+  { id: '9MONTH',  label: '9 Months',  price: 63, monthly: 7,  save: 30,   badge: 'Most Popular', highlight: true  },
+  { id: '12MONTH', label: '12 Months', price: 72, monthly: 6,  save: 40,   badge: 'Best Value',   highlight: false },
+]
 
-function fmtMemberSince(iso: string | null): string {
-  if (!iso) return 'Early access'
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-}
+const FEATURES = [
+  { icon: TrendingUp, title: 'Daily + H4 Alignment',  body: 'Bias is only confirmed when the Daily and H4 timeframes agree — reducing noise and keeping you on the right side of the market.' },
+  { icon: Bell,       title: 'Telegram Alerts',        body: 'Receive a structured alert the moment all 4 confirmation conditions are met. No app required — just your phone.' },
+  { icon: BarChart2,  title: '30+ Instruments',        body: 'All major forex pairs, minors, crosses, gold, and select crypto monitored continuously — 24 hours a day.' },
+  { icon: Shield,     title: 'Rules-Based Engine',     body: 'No discretion, no emotion. Every signal follows a strict 4-step confirmation chain built on A-shape, V-shape, and OC formations.' },
+]
 
-function planLabel(plan?: string) {
-  if (plan === 'LIFETIME') return 'Lifetime Access'
-  if (plan === '30DAY') return '30-day Access'
-  if (plan === 'TRIAL') return 'Trial Access'
-  return plan ?? '—'
-}
+const INCLUDES = [
+  'Daily + H4 bias confirmation alerts',
+  'All 30+ forex majors, minors & metals',
+  'Telegram delivery — instant, no app needed',
+  'Full strategy & tutorial video library',
+  'Live instrument monitoring dashboard',
+]
 
-export default function OverviewPage() {
-  const [greeting, setGreeting] = useState('')
-  const [today, setToday] = useState('')
-  const { fmtDate } = useTimezone()
-  const { user } = useAuth()
-  const { data: instruments } = useSWR<InstrumentOverview[]>('/api/overview', fetcher, { refreshInterval: 30000 })
-  const { data: stats } = useSWR<Stats>('/api/stats', fetcher, { refreshInterval: 30000 })
-  const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=5', fetcher, { refreshInterval: 30000 })
-  const { data: profile } = useSWR<Profile>('/api/profile', fetcher, { refreshInterval: 60000 })
-
-  useEffect(() => {
-    const h = new Date().getHours()
-    setGreeting(h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening')
-    setToday(new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
-  }, [])
-
-  const firstName = user?.name?.split(' ')[0] || user?.name || ''
-
-  const activeSetups = (instruments ?? []).filter(i => i.state !== 'IDLE')
-    .sort((a, b) => {
-      const o = { RETEST_IN_PROGRESS: 0, BREAKOUT_ACTIVE: 1, IDLE: 2 }
-      return o[a.state] - o[b.state]
-    })
-
-  const isOwner = user?.role === 'OWNER'
-  const steps = [
-    { label: 'Engine running', done: true },
-    { label: 'Instruments loaded', done: (stats?.total_instruments ?? 0) > 0 },
-    { label: isOwner ? 'Telegram linked' : 'Alerts active', done: profile?.telegram_configured ?? false },
-    { label: 'First alert fired', done: (profile?.first_alert_at ?? null) !== null },
-  ]
+export default function LandingPage() {
+  const { theme, toggle } = useTheme()
+  const [year, setYear] = useState(2026)
+  useEffect(() => { setYear(new Date().getFullYear()) }, [])
 
   return (
-    <>
-      <TopBar title="Overview" subtitle={today} />
-      <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text-primary)' }}>
 
-        {/* Profile status banner */}
+      {/* Nav */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 40,
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--surface)',
+        padding: '0 32px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        height: 58,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 9,
+            background: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 12px rgba(99,102,241,0.4)',
+          }}>
+            <Radio size={15} color="white" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.2 }}>MummyTKT&apos;s</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginTop: 1 }}>Bias Pointer</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={toggle} style={{
+            width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--card)', color: 'var(--text-secondary)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+          <Link href="/login" style={{
+            padding: '8px 20px', borderRadius: 9,
+            background: 'var(--accent)', color: 'white',
+            fontSize: 13, fontWeight: 600, textDecoration: 'none',
+            display: 'inline-block',
+          }}>
+            Sign In
+          </Link>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section style={{ textAlign: 'center', padding: '80px 24px 64px', maxWidth: 680, margin: '0 auto' }}>
         <div style={{
-          background: 'var(--card)',
-          border: '1px solid var(--border)',
-          borderRadius: 12,
-          boxShadow: 'var(--shadow)',
-          overflow: 'hidden',
+          display: 'inline-flex', alignItems: 'center', gap: 7,
+          padding: '6px 14px', borderRadius: 99,
+          background: 'var(--accent-bg)', border: '1px solid rgba(99,102,241,0.3)',
+          fontSize: 12, fontWeight: 600, color: 'var(--accent-hover)',
+          marginBottom: 28,
         }}>
-          {/* Top row: greeting + engine pulse */}
-          <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
-                {greeting}{firstName ? `, ${firstName}` : ''}.
-              </h2>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-                {stats
-                  ? `${stats.active_breakouts} active setup${stats.active_breakouts !== 1 ? 's' : ''} across ${stats.total_instruments} instruments.`
-                  : 'Loading engine state…'}
-              </p>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--bullish)', display: 'inline-block' }} />
-                <span style={{ color: 'var(--bullish)', fontWeight: 600 }}>Engine active</span>
+          <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--bullish)', display: 'inline-block' }} />
+          Engine monitoring 24/7
+        </div>
+        <h1 style={{
+          fontSize: 'clamp(36px, 6vw, 54px)', fontWeight: 800, lineHeight: 1.1,
+          color: 'var(--text-primary)', marginBottom: 20, letterSpacing: '-0.02em',
+        }}>
+          Know the bias.<br />
+          <span style={{ color: 'var(--accent)' }}>Trade with confidence.</span>
+        </h1>
+        <p style={{
+          fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.7,
+          maxWidth: 520, margin: '0 auto 36px',
+        }}>
+          MummyTKT&apos;s Bias Pointer is a rules-based forex analysis engine that confirms
+          Daily + H4 directional alignment and delivers structured bias alerts straight
+          to your Telegram.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <a href="#pricing" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            padding: '12px 28px', borderRadius: 10,
+            background: 'var(--accent)', color: 'white',
+            fontSize: 14, fontWeight: 700, textDecoration: 'none',
+            boxShadow: '0 4px 20px rgba(99,102,241,0.35)',
+          }}>
+            Get Started <ArrowRight size={15} />
+          </a>
+          <Link href="/login" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            padding: '12px 28px', borderRadius: 10,
+            border: '1px solid var(--border)',
+            background: 'var(--card)', color: 'var(--text-primary)',
+            fontSize: 14, fontWeight: 600, textDecoration: 'none',
+          }}>
+            Sign In
+          </Link>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section style={{ maxWidth: 940, margin: '0 auto', padding: '0 24px 72px' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16,
+        }}>
+          {FEATURES.map(({ icon: Icon, title, body }) => (
+            <div key={title} style={{
+              background: 'var(--card)', border: '1px solid var(--border)',
+              borderRadius: 14, padding: '24px 20px',
+            }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: 10,
+                background: 'var(--accent-bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 14,
+              }}>
+                <Icon size={18} color="var(--accent-hover)" />
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Monitoring 24/7</span>
+              <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 8 }}>{title}</p>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{body}</p>
             </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" style={{ maxWidth: 940, margin: '0 auto', padding: '0 24px 80px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <h2 style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }}>
+            Simple, transparent pricing
+          </h2>
+          <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
+            Choose the plan that works for you. No auto-renew, no surprises.
+          </p>
+        </div>
+
+        {/* Includes */}
+        <div style={{
+          background: 'var(--card)', border: '1px solid var(--border)',
+          borderRadius: 14, padding: '20px 28px', marginBottom: 24,
+        }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+            Everything included in all plans
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 28px' }}>
+            {INCLUDES.map(item => (
+              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <CheckCircle2 size={13} color="var(--bullish)" />
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{item}</span>
+              </div>
+            ))}
           </div>
+        </div>
 
-          {/* Bottom row: status chips + progress */}
-          <div style={{ padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
-            {/* Identity chips */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Role */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: 'var(--accent-bg)', border: '1px solid var(--accent)30' }}>
-                {isOwner && <Shield size={12} color="var(--accent-hover)" />}
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-hover)' }}>
-                  {isOwner ? 'Owner' : 'Subscriber'}
-                </span>
-              </div>
-              {/* Plan */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: 'var(--bullish-bg)', border: '1px solid var(--bullish)30' }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--bullish)' }}>
-                  {planLabel(user?.plan)}
-                </span>
-              </div>
-              {/* Telegram / Alerts */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: profile?.telegram_configured ? 'var(--bullish-bg)' : 'var(--card-hover)', border: `1px solid ${profile?.telegram_configured ? 'var(--bullish)30' : 'var(--border)'}` }}>
-                {profile?.telegram_configured
-                  ? <Wifi size={12} color="var(--bullish)" />
-                  : <WifiOff size={12} color="var(--text-muted)" />}
-                <span style={{ fontSize: 12, fontWeight: 600, color: profile?.telegram_configured ? 'var(--bullish)' : 'var(--text-muted)' }}>
-                  {profile?.telegram_configured
-                    ? (isOwner ? 'Telegram linked' : 'Alerts active')
-                    : (isOwner ? 'Telegram not set' : 'Alerts not configured')}
-                </span>
-              </div>
-              {/* Member since */}
-              {(() => {
-                const since = isOwner ? profile?.member_since : user?.created_at
-                return since ? (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Since {fmtMemberSince(since)}
-                  </span>
-                ) : null
-              })()}
-            </div>
-
-            {/* Progress tracker */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {steps.map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {i > 0 && <div style={{ width: 16, height: 1, background: 'var(--border)' }} />}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={s.label}>
-                    {s.done
-                      ? <CheckCircle2 size={14} color="var(--bullish)" />
-                      : <Circle size={14} color="var(--text-muted)" />}
-                    <span style={{ fontSize: 11, color: s.done ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: s.done ? 500 : 400 }}>
-                      {s.label}
-                    </span>
-                  </div>
+        {/* Plan cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
+          {PLANS.map(plan => (
+            <div key={plan.id} style={{
+              background: plan.highlight ? 'var(--accent)' : 'var(--card)',
+              border: `1px solid ${plan.highlight ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 14, padding: '24px 20px',
+              display: 'flex', flexDirection: 'column',
+              boxShadow: plan.highlight ? '0 8px 32px rgba(99,102,241,0.4)' : undefined,
+              position: 'relative',
+            }}>
+              {plan.badge && (
+                <div style={{
+                  position: 'absolute', top: 14, right: 14,
+                  padding: '3px 10px', borderRadius: 99,
+                  background: plan.highlight ? 'rgba(255,255,255,0.2)' : 'var(--accent-bg)',
+                  color: plan.highlight ? 'white' : 'var(--accent-hover)',
+                  fontSize: 11, fontWeight: 700,
+                }}>
+                  {plan.badge}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-          <StatCard label="Instruments" value={stats?.total_instruments ?? '—'} icon={BarChart2} iconColor="var(--info)" sub="Under surveillance" />
-          <StatCard label="Active Breakouts" value={stats?.active_breakouts ?? '—'} icon={Activity} iconColor="var(--accent)" sub="Live bias setups" />
-          <StatCard label="Retests In Progress" value={stats?.retests_in_progress ?? '—'} icon={Zap} iconColor="var(--warning)" sub="Awaiting H4 confirm" />
-          <StatCard label="Alerts Fired" value={stats?.total_alerts ?? '—'} icon={Bell} iconColor="var(--bullish)" sub={stats ? `${stats.alerts_today} today` : undefined} />
-        </div>
-
-        <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-          {/* Active setups */}
-          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Active Setups</h3>
-              <Link href="/instruments" style={{ fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-                View all <ArrowRight size={12} />
+              )}
+              <p style={{ fontSize: 14, fontWeight: 700, color: plan.highlight ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)', marginBottom: 12 }}>
+                {plan.label}
+              </p>
+              <div style={{ marginBottom: 4 }}>
+                <span style={{ fontSize: 38, fontWeight: 800, color: plan.highlight ? 'white' : 'var(--text-primary)' }}>
+                  ${plan.price}
+                </span>
+                <span style={{ fontSize: 13, color: plan.highlight ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', marginLeft: 5 }}>
+                  total
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: plan.highlight ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', marginBottom: 22 }}>
+                ${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}
+              </p>
+              <Link href={`/signup?plan=${plan.id}`} style={{
+                display: 'block', textAlign: 'center',
+                padding: '10px 16px', borderRadius: 9, marginTop: 'auto',
+                background: plan.highlight ? 'white' : 'var(--accent-bg)',
+                color: plan.highlight ? 'var(--accent)' : 'var(--accent-hover)',
+                fontSize: 13, fontWeight: 700, textDecoration: 'none',
+              }}>
+                Get started
               </Link>
             </div>
-            {activeSetups.length === 0 ? (
-              <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-                No active setups currently.<br />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Next H4 check fires at the top of each 4h candle.</span>
-              </div>
-            ) : (
-              <div>
-                {activeSetups.slice(0, 8).map((inst) => {
-                  const setupDir = inst.direction === 'BULLISH' ? '↑' : inst.direction === 'BEARISH' ? '↓' : ''
-                  const confirmed = inst.last_alert_direction
-                  return (
-                    <div key={inst.instrument} style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '11px 20px', borderBottom: '1px solid var(--border)',
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{inst.instrument}</span>
-                          {confirmed ? (
-                            <span style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
-                              color: confirmed === 'BULLISH' ? 'var(--bullish)' : 'var(--bearish)',
-                            }}>
-                              {confirmed === 'BULLISH' ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                              {confirmed === 'BULLISH' ? 'Buy confirmed' : 'Sell confirmed'}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {setupDir} Setup forming
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {inst.active_sources_count > 0 ? `${inst.active_sources_count} sources` : 'No sources'} · {timeAgo(inst.last_updated)}
-                        </div>
-                      </div>
-                      <span className="badge" style={{
-                        background: inst.state === 'RETEST_IN_PROGRESS' ? 'var(--warning-bg)' : 'var(--accent-bg)',
-                        color: inst.state === 'RETEST_IN_PROGRESS' ? 'var(--warning)' : 'var(--accent-hover)',
-                        fontSize: 10,
-                      }}>
-                        {inst.state === 'RETEST_IN_PROGRESS' && (
-                          <span className="pulse" style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }} />
-                        )}
-                        {inst.state === 'RETEST_IN_PROGRESS' ? `${setupDir} Retesting` : `${setupDir} Setup`}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Latest alerts */}
-          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Latest Notifications</h3>
-              <Link href="/alerts" style={{ fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-                View all <ArrowRight size={12} />
-              </Link>
-            </div>
-            {!alerts || alerts.items.length === 0 ? (
-              <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-                No alerts fired yet.<br />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Alerts fire when all 4 conditions are confirmed.</span>
-              </div>
-            ) : (
-              <div>
-                {alerts.items.map(a => (
-                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 20px', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{
-                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                      background: a.direction === 'BULLISH' ? 'var(--bullish-bg)' : 'var(--bearish-bg)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {a.direction === 'BULLISH'
-                        ? <TrendingUp size={14} color="var(--bullish)" />
-                        : <TrendingDown size={14} color="var(--bearish)" />}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{a.instrument}</span>
-                        <span style={{ fontSize: 11, color: a.direction === 'BULLISH' ? 'var(--bullish)' : 'var(--bearish)', fontWeight: 500 }}>
-                          {a.direction === 'BULLISH' ? 'Buy' : 'Sell'}
-                        </span>
-                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {a.h4_classification}</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{fmtDate(a.fired_at)}</div>
-                    </div>
-                    <span className="badge badge-delivered" style={{ fontSize: 10, flexShrink: 0 }}>Delivered</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
 
-      </main>
-    </>
+        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 24 }}>
+          Access is granted manually after payment. You&apos;ll receive login credentials via email once confirmed.
+        </p>
+      </section>
+
+      {/* Footer */}
+      <footer style={{
+        borderTop: '1px solid var(--border)',
+        padding: '24px',
+        textAlign: 'center',
+        fontSize: 12, color: 'var(--text-muted)',
+      }}>
+        © {year} MummyTKT&apos;s Bias Pointer · For educational purposes only · Not financial advice
+      </footer>
+
+    </div>
   )
 }

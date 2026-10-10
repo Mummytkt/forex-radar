@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from api.schemas import (
     InstrumentOverview, Stats, AlertItem, AlertsPage,
@@ -145,6 +146,52 @@ def _build_overview(conn: sqlite3.Connection, instrument: str) -> InstrumentOver
         last_updated=updated_at,
         category=CATEGORIES.get(instrument, "Other"),
     )
+
+
+class SignupRequestBody(BaseModel):
+    name: str
+    email: str
+    plan: str
+    telegram: str = ""
+
+
+@router.post("/public/signup-request")
+async def signup_request(body: SignupRequestBody, request: Request):
+    """Public endpoint — no auth required. Forwards signup interest to the owner via Telegram."""
+    name = body.name.strip()
+    email = body.email.strip()
+    plan = body.plan.strip()
+    telegram_handle = body.telegram.strip()
+
+    if not name or not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Name and valid email are required.")
+
+    plan_labels = {
+        "30DAY": "30 Days — $10",
+        "6MONTH": "6 Months — $48",
+        "9MONTH": "9 Months — $63",
+        "12MONTH": "12 Months — $72",
+    }
+    plan_str = plan_labels.get(plan, plan)
+
+    msg = (
+        f"📩 New sign-up request\n\n"
+        f"Name: {name}\n"
+        f"Email: {email}\n"
+        f"Plan: {plan_str}\n"
+        + (f"Telegram: {telegram_handle}\n" if telegram_handle else "")
+        + f"\nReply to this email to confirm payment and set up their account."
+    )
+
+    config = request.app.state.config
+    if config.telegram_enabled and config.telegram_bot_token and config.telegram_chat_id:
+        try:
+            from alerts.telegram import send_alert
+            await send_alert(config.telegram_bot_token, config.telegram_chat_id, msg)
+        except Exception:
+            pass
+
+    return {"ok": True}
 
 
 @router.get("/health")

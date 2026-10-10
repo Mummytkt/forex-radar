@@ -31,7 +31,7 @@ const Auth = createContext<AuthCtx>({
 })
 
 const TOKEN_KEY = 'mbp_token'
-const NO_AUTH_PATHS = ['/login', '/join']
+const NO_AUTH_PATHS = ['/login', '/join', '/', '/signup']
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_KEY, t)
     setToken(t)
     setUser(u)
-    router.replace('/')
+    router.replace('/dashboard')
   }
 
   const logout = () => {

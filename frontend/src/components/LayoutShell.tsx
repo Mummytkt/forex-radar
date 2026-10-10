@@ -10,7 +10,7 @@ interface SidebarCtx { open: boolean; toggle: () => void; close: () => void }
 const SidebarContext = createContext<SidebarCtx>({ open: false, toggle: () => {}, close: () => {} })
 export const useSidebar = () => useContext(SidebarContext)
 
-const FULL_PAGE_PATHS = ['/login', '/join']
+const FULL_PAGE_PATHS = ['/login', '/join', '/', '/signup']
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const path = usePathname()

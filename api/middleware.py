@@ -12,7 +12,7 @@ _ALWAYS_PUBLIC = {
     "/api/auth/login",
     "/api/auth/register",
 }
-_PUBLIC_PREFIXES = ("/api/videos/",)
+_PUBLIC_PREFIXES = ("/api/videos/", "/api/public/")
 
 
 async def auth_middleware(request: Request, call_next):

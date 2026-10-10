@@ -13,7 +13,7 @@ const SECTIONS = [
   {
     label: 'Workspace',
     links: [
-      { href: '/', icon: LayoutDashboard, label: 'Overview' },
+      { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
       { href: '/strategy', icon: BookOpen, label: 'Strategy' },
     ],
   },
@@ -107,7 +107,7 @@ export default function Sidebar() {
               {section.label}
             </div>
             {section.links.map(({ href, icon: Icon, label }) => {
-              const active = href === '/' ? path === '/' : path.startsWith(href)
+              const active = href === '/dashboard' ? path === '/dashboard' : path.startsWith(href)
               return (
                 <Link key={href} href={href} onClick={close}
                   style={{
