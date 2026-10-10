@@ -14,8 +14,8 @@ export default function LoginPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && user) router.replace('/')
-    if (!loading && !authEnabled) router.replace('/')
+    if (!loading && user) router.replace('/dashboard')
+    if (!loading && !authEnabled) router.replace('/dashboard')
   }, [loading, user, authEnabled, router])
 
   const submit = async (e: React.FormEvent) => {
