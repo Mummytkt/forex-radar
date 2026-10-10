@@ -84,7 +84,7 @@ export default function InstrumentCard({ d }: { d: InstrumentOverview }) {
               d.breakout_level ? ['Broken level', d.breakout_level.toFixed(5)] : null,
               d.breakout_ts ? ['Breakout candle', new Date(d.breakout_ts).toLocaleDateString('en-GB', { timeZone: 'UTC' })] : null,
               d.last_alert_at ? ['Last alert', timeAgo(d.last_alert_at)] : null,
-            ].filter(Boolean).map(([k, v]) => (
+            ].filter((x): x is [string, string] => x !== null).map(([k, v]) => (
               <div key={k as string} style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{k}</span>
                 <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{v}</span>
