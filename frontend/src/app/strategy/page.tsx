@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Upload, Play, Trash2, Film } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -42,6 +43,8 @@ function Def({ term, def }: { term: string; def: string }) {
 }
 
 function VideoSection() {
+  const { user } = useAuth()
+  const isOwner = user?.role === 'OWNER'
   const [videos, setVideos] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [playing, setPlaying] = useState<string | null>(null)
@@ -89,16 +92,18 @@ function VideoSection() {
           <Film size={15} color="var(--accent-hover)" />
           <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Tutorial Videos</h2>
         </div>
-        <label style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-          background: 'var(--accent)', color: 'white', cursor: 'pointer',
-          opacity: uploading ? 0.6 : 1,
-        }}>
-          <Upload size={12} />
-          {uploading ? 'Uploading…' : 'Upload video'}
-          <input ref={inputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={upload} disabled={uploading} />
-        </label>
+        {isOwner && (
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            background: 'var(--accent)', color: 'white', cursor: 'pointer',
+            opacity: uploading ? 0.6 : 1,
+          }}>
+            <Upload size={12} />
+            {uploading ? 'Uploading…' : 'Upload video'}
+            <input ref={inputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={upload} disabled={uploading} />
+          </label>
+        )}
       </div>
       <div style={{ padding: '20px' }}>
         {error && (
@@ -125,10 +130,12 @@ function VideoSection() {
                       <Play size={11} />
                       {playing === name ? 'Minimise' : 'Play'}
                     </button>
-                    <button onClick={() => remove(name)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', background: 'var(--bearish-bg)', color: 'var(--bearish)' }}>
-                      <Trash2 size={12} />
-                    </button>
+                    {isOwner && (
+                      <button onClick={() => remove(name)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', background: 'var(--bearish-bg)', color: 'var(--bearish)' }}>
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 {playing === name && (

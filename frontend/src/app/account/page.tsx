@@ -133,7 +133,7 @@ function SubscribersSection() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
   const [invitePlan, setInvitePlan] = useState('30DAY')
-  const [inviteDays, setInviteDays] = useState(30)
+  const [inviteDays, setInviteDays] = useState('30')
   const [inviteLink, setInviteLink] = useState('')
   const [copied, setCopied] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -156,7 +156,7 @@ function SubscribersSection() {
       const r = await authFetch('/api/auth/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, name: inviteName, plan: invitePlan, plan_days: inviteDays }),
+        body: JSON.stringify({ email: inviteEmail, name: inviteName, plan: invitePlan, plan_days: Math.min(365, Math.max(1, parseInt(inviteDays, 10) || 30)) }),
       })
       if (!r.ok) {
         const err = await r.json()
@@ -223,10 +223,7 @@ function SubscribersSection() {
                 <input
                   type="text" inputMode="numeric" pattern="[0-9]*"
                   value={inviteDays}
-                  onChange={e => {
-                    const v = e.target.value.replace(/\D/g, '')
-                    setInviteDays(v === '' ? 1 : Math.min(365, Math.max(1, parseInt(v, 10))))
-                  }}
+                  onChange={e => setInviteDays(e.target.value.replace(/\D/g, ''))}
                   style={{ width: 80, padding: '9px 12px', borderRadius: 8, fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }} />
               </div>
             )}
