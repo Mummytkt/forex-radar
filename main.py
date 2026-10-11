@@ -87,8 +87,11 @@ async def main(backfill_only: bool = False, dry_run: bool = False) -> None:
 
     # Run API server — keeps the process alive and serves the dashboard
     server = uvicorn.Server(
-        uvicorn.Config(fastapi_app, host="0.0.0.0", port=8080,
-                       log_level="warning", loop="asyncio")
+        uvicorn.Config(
+            fastapi_app, host="0.0.0.0", port=8080,
+            log_level="warning", loop="asyncio",
+            timeout_keep_alive=300,  # 5 min — allows large video uploads
+        )
     )
     try:
         await server.serve()

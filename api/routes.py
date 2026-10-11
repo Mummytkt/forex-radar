@@ -17,7 +17,7 @@ from api.schemas import (
     AlertPreferences, AlertPreferencesUpdate,
 )
 
-VIDEOS_DIR = Path(__file__).parent.parent / "videos"
+VIDEOS_DIR = Path("/data/videos")
 _VIDEO_EXTS = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
 
 
@@ -394,7 +394,13 @@ async def upload_video(file: UploadFile = File(...)):
     if not safe:
         safe = "video"
     dest = VIDEOS_DIR / safe
-    dest.write_bytes(await file.read())
+    # Stream to disk in 1 MB chunks — avoids loading the whole file into the 256 MB VM
+    with open(dest, "wb") as f:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
     return {"ok": True, "filename": safe}
 
 
