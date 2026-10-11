@@ -185,7 +185,7 @@ function EquityCurve({ entries }: { entries: Entry[] }) {
 // ── Default form ──────────────────────────────────────────────────────────────
 function blank() {
   return {
-    trade_date: new Date().toISOString().split('T')[0],
+    trade_date: '',
     instrument: '', direction: 'buy',
     entry_price: '', stop_loss: '', take_profit: '', exit_price: '',
     pips: '', rr_ratio: '', result: 'open', setup_type: 'other',
@@ -598,7 +598,9 @@ export default function JournalPage() {
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
   const openAdd = () => {
-    setEditEntry(null); setForm(blank()); setModalOpen(true)
+    setEditEntry(null)
+    setForm({ ...blank(), trade_date: new Date().toISOString().split('T')[0] })
+    setModalOpen(true)
   }
   const openEdit = (e: Entry) => {
     setEditEntry(e)
