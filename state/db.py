@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS instrument_state (
     active_reaction_src_id INTEGER REFERENCES reaction_sources(id),
     continuation_mode      INTEGER NOT NULL DEFAULT 0,
     last_alert_h4_ts       TEXT,
+    last_h4_breaker_level  REAL,
     updated_at             TEXT    NOT NULL
 );
 
@@ -157,6 +158,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     for col_def in [
         "continuation_mode INTEGER NOT NULL DEFAULT 0",
         "last_alert_h4_ts TEXT",
+        "last_h4_breaker_level REAL",
     ]:
         col_name = col_def.split()[0]
         existing = {row[1] for row in conn.execute("PRAGMA table_info(instrument_state)").fetchall()}

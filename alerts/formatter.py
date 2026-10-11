@@ -39,6 +39,8 @@ def format_alert(alert: AlertRecord) -> str:
         return _format_continuation_h4_oc(alert)
     if alert.classification == AlertClassification.CONTINUATION_ASHAPE:
         return _format_continuation_ashape(alert)
+    if alert.classification == AlertClassification.CONTINUATION_H4_BREAKER:
+        return _format_continuation_h4_breaker(alert)
     return _format_origin(alert)
 
 
@@ -157,6 +159,62 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
         f"Reason: A qualifying {classification_label.lower()} {direction_lower} H4 breakout "
         f"has occurred in line with the active Daily {direction_lower} breakout. "
         f"This is a continuation of the established bias.",
+        "",
+        "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+    ]
+    return "\n".join(lines)
+
+
+# ── Continuation H4 Breaker alert ────────────────────────────────────────────
+
+def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
+    direction = alert.direction
+    instrument = alert.instrument
+    level = alert.h4_breaker_level
+
+    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
+    direction_lower = direction_label.lower()
+
+    level_str = f"{level:.5f}" if level is not None else "—"
+
+    if direction == Direction.BEARISH:
+        desc = (
+            f"Price retraced into the H4 key level at {level_str} — "
+            f"either the H4 Breaker from the prior confirmation or an H4 A-shape "
+            f"resistance zone inside the daily range. "
+            f"The H4 candle wicked into the level and closed below it, "
+            f"confirming rejection and continuation of the bearish bias."
+        )
+        reason = (
+            f"An H4 candle wicked into the {level_str} key level from below and "
+            f"closed below it, confirming that the level is holding as resistance "
+            f"and the bearish bias remains intact."
+        )
+    else:
+        desc = (
+            f"Price retraced into the H4 key level at {level_str} — "
+            f"either the H4 Breaker from the prior confirmation or an H4 V-shape "
+            f"support zone inside the daily range. "
+            f"The H4 candle wicked into the level and closed above it, "
+            f"confirming rejection and continuation of the bullish bias."
+        )
+        reason = (
+            f"An H4 candle wicked into the {level_str} key level from above and "
+            f"closed above it, confirming that the level is holding as support "
+            f"and the bullish bias remains intact."
+        )
+
+    lines = [
+        f"{bias_label} — {instrument}",
+        f"Daily → H4 Breaker continuation",
+        "",
+        f"Daily breakout: {direction_label} (active)",
+        "",
+        f"H4 Breaker retest: {level_str}",
+        desc,
+        "",
+        f"Reason: {reason}",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
     ]

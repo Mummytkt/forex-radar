@@ -229,6 +229,9 @@ export default function StrategyPage() {
             term="Continuation — A/V Break"
             def="Fires after an Origin, when a subsequent H4 A-shape (bullish direction) or V-shape (bearish direction) formation is broken in the daily breakout direction — without needing a new Daily source retest. Each continuation extends the active bias confirmation. Active until a new opposing Daily breakout occurs." />
           <Def
+            term="Continuation — H4 Breaker Retest"
+            def="Fires when price retraces into an H4 key level — either the H4 Breaker (the body level of the H4 formation broken in the prior alert, now acting as role-reversed resistance or support) or an H4 A-shape (bearish) / V-shape (bullish) that formed inside the daily range during a retracement. Confirmed when the H4 candle wicks into the level and closes beyond it in the breakout direction. No new Daily retest required." />
+          <Def
             term="Continuation — H4 OC"
             def="Fires when two consecutive same-direction H4 candles form an OC level, and price returns to react from the OC midpoint: the H4 candle's range dips into the OC zone and the candle closes beyond the midpoint in the breakout direction. Confirms continuation of the established Daily bias without requiring a new A/V break." />
         </Card>

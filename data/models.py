@@ -34,6 +34,7 @@ class AlertClassification(str, Enum):
     ORIGIN = "origin"
     CONTINUATION_ASHAPE = "continuation_ashape"
     CONTINUATION_H4_OC = "continuation_h4oc"
+    CONTINUATION_H4_BREAKER = "continuation_h4breaker"
 
 
 class ReactionSourceType(str, Enum):
@@ -137,3 +138,4 @@ class AlertRecord:
     fired_at: datetime
     classification: AlertClassification = AlertClassification.ORIGIN
     h4_oc_level: Optional[float] = None         # set for CONTINUATION_H4_OC
+    h4_breaker_level: Optional[float] = None    # set for CONTINUATION_H4_BREAKER

@@ -38,7 +38,7 @@ from data.models import (
     ReactionSource,
     Timeframe,
 )
-from analysis.formations import get_most_recent_a_shape, get_most_recent_v_shape
+from analysis.formations import get_most_recent_a_shape, get_most_recent_v_shape, detect_a_shape, detect_v_shape
 from analysis.breakout import check_daily_breakout
 from analysis.reaction import (
     compute_reaction_sources,
@@ -62,6 +62,7 @@ class EngineInput:
     pip_size: float
     continuation_mode: bool = False               # True after first Origin alert fired
     last_alert_h4_ts: Optional[datetime] = None   # timestamp of confirming H4 candle from last alert
+    last_h4_breaker_level: Optional[float] = None # body level of the H4 formation broken in last alert
 
 
 @dataclass
@@ -81,6 +82,21 @@ class EngineOutput:
     # Continuation state (carried forward each cycle)
     continuation_mode: bool = False
     last_alert_h4_ts: Optional[datetime] = None
+    last_h4_breaker_level: Optional[float] = None
+
+
+def _h4_level_retested(candle: Candle, level: float, tolerance: float, direction: Direction) -> bool:
+    """
+    True when an H4 candle has wicked into a key level and CLOSED beyond it,
+    confirming a directional continuation from that level.
+
+    Bearish: wick reached up to the level (high ≥ level − tol) AND close is below it.
+    Bullish: wick reached down to the level (low ≤ level + tol) AND close is above it.
+    """
+    if direction == Direction.BEARISH:
+        return candle.high >= level - tolerance and candle.close < level
+    else:
+        return candle.low <= level + tolerance and candle.close > level
 
 
 def _price_established_beyond_zone(h4_candles: list[Candle], source: ReactionSource) -> bool:
@@ -142,6 +158,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
         out.active_reaction_src = None
         out.continuation_mode = False
         out.last_alert_h4_ts = None
+        out.last_h4_breaker_level = None
         return out
 
     # No new breakout this cycle — carry forward existing state
@@ -186,6 +203,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     # Carry forward continuation state (may be updated below)
     out.continuation_mode = inp.continuation_mode
     out.last_alert_h4_ts = inp.last_alert_h4_ts
+    out.last_h4_breaker_level = inp.last_h4_breaker_level
 
     # ── STEP 3: Check for qualifying H4 breakout (ORIGIN) ─────────────────────
     if retest_in_progress and active_reaction_src is not None:
@@ -212,6 +230,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             out.active_reaction_src = None
             out.continuation_mode = True
             out.last_alert_h4_ts = latest_h4.timestamp
+            out.last_h4_breaker_level = h4_event.formation_broken.level
 
             # Mark the used source as inactive in the updated list
             for src in out.updated_reaction_srcs:
@@ -238,7 +257,53 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             post_last_alert_h4 = post_breakout_h4
 
         if post_last_alert_h4:
-            # ── 4a: Continuation A/V formation break ──────────────────────────
+            tol = inp.tolerance_pips * inp.pip_size
+
+            # ── 4a: H4 Breaker retest ──────────────────────────────────────────
+            # Check the exact level from the last alert's broken H4 formation.
+            # Also check H4 A-shapes (bearish) or V-shapes (bullish) that formed
+            # inside the daily range during retracements — both use the same
+            # wick-touch + close-beyond logic.
+            breaker_fired = False
+            breaker_level_hit: Optional[float] = None
+
+            if inp.last_h4_breaker_level is not None:
+                if _h4_level_retested(latest_h4, inp.last_h4_breaker_level, tol, active_breakout.direction):
+                    breaker_fired = True
+                    breaker_level_hit = inp.last_h4_breaker_level
+
+            if not breaker_fired:
+                # Scan for opposing H4 formations inside the range (A-shapes for bearish,
+                # V-shapes for bullish) — they act as retracement resistance/support zones.
+                if active_breakout.direction == Direction.BEARISH:
+                    range_formations = detect_a_shape(post_last_alert_h4)
+                else:
+                    range_formations = detect_v_shape(post_last_alert_h4)
+                for rf in range_formations:
+                    if _h4_level_retested(latest_h4, rf.level, tol, active_breakout.direction):
+                        breaker_fired = True
+                        breaker_level_hit = rf.level
+                        break
+
+            if breaker_fired and breaker_level_hit is not None:
+                out.alert_to_send = AlertRecord(
+                    instrument=inp.instrument,
+                    direction=active_breakout.direction,
+                    daily_breakout=active_breakout,
+                    reaction_source=None,
+                    h4_event=None,
+                    fired_at=latest_h4.timestamp,
+                    classification=AlertClassification.CONTINUATION_H4_BREAKER,
+                    h4_breaker_level=breaker_level_hit,
+                )
+                out.retest_in_progress = False
+                out.active_reaction_src = None
+                out.continuation_mode = True
+                out.last_alert_h4_ts = latest_h4.timestamp
+                # Breaker level stays the same — the same level was retested and confirmed
+                return out
+
+            # ── 4b: Continuation A/V formation break ──────────────────────────
             h4_event_cont = check_h4_breakout(
                 latest_h4,
                 active_breakout.direction,
@@ -259,10 +324,10 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                 out.active_reaction_src = None
                 out.continuation_mode = True
                 out.last_alert_h4_ts = latest_h4.timestamp
+                out.last_h4_breaker_level = h4_event_cont.formation_broken.level
                 return out
 
-            # ── 4b: Continuation H4 OC reaction ───────────────────────────────
-            tol = inp.tolerance_pips * inp.pip_size
+            # ── 4c: Continuation H4 OC reaction ───────────────────────────────
             h4_oc_levels = detect_h4_oc_levels(post_last_alert_h4, active_breakout.direction)
             for oc_midpoint, _oc_ts in h4_oc_levels:
                 if is_h4_oc_triggered(latest_h4, oc_midpoint, tol, active_breakout.direction):
