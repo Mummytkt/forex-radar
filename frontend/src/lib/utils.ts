@@ -50,10 +50,10 @@ export function sourceTypeLabel(t: string): string {
 
 export function isForexOpen(): boolean {
   const now = new Date()
-  const wd = now.getUTCDay() // 0=Sun, 5=Fri, 6=Sat
+  const wd = now.getUTCDay() // 0=Sun, 1=Mon … 5=Fri, 6=Sat
   const h = now.getUTCHours()
-  if (wd === 6) return false
-  if (wd === 5 && h >= 22) return false
-  if (wd === 0 && h < 22) return false
+  if (wd === 6) return false                // Saturday: always closed
+  if (wd === 5 && h >= 21) return false     // Friday: close at 21:00 UTC (5pm EDT)
+  if (wd === 0 && h < 21) return false      // Sunday: open at 21:00 UTC (5pm EDT)
   return true
 }
