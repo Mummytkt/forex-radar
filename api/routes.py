@@ -4,21 +4,18 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel
 
 from api.schemas import (
     InstrumentOverview, Stats, AlertItem, AlertsPage,
     InstrumentDetail, InstrumentsUpdate,
     AlertPreferences, AlertPreferencesUpdate,
+    VideoEntry, VideoAdd,
 )
 
-VIDEOS_DIR = Path("/data/videos")
-_VIDEO_EXTS = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
 
 
 @contextmanager
@@ -375,52 +372,37 @@ def get_profile(request: Request):
     }
 
 
-@router.get("/videos")
-def list_videos():
-    if not VIDEOS_DIR.exists():
-        return {"videos": []}
-    videos = sorted(
-        f.name for f in VIDEOS_DIR.iterdir()
-        if f.is_file() and f.suffix.lower() in _VIDEO_EXTS
-    )
-    return {"videos": videos}
+@router.get("/videos", response_model=list[VideoEntry])
+def list_videos(request: Request):
+    with _db(request) as conn:
+        row = conn.execute("SELECT value FROM user_config WHERE key = 'tutorial_videos'").fetchone()
+    return json.loads(row[0]) if row else []
 
 
 @router.post("/videos")
-async def upload_video(file: UploadFile = File(...)):
-    VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
-    safe = Path(file.filename or "upload").name
-    safe = "".join(c for c in safe if c.isalnum() or c in "._- ")
-    if not safe:
-        safe = "video"
-    dest = VIDEOS_DIR / safe
-    # Stream to disk in 1 MB chunks — avoids loading the whole file into the 256 MB VM
-    with open(dest, "wb") as f:
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
-    return {"ok": True, "filename": safe}
-
-
-@router.delete("/videos/{filename}")
-def delete_video(filename: str):
-    safe = Path(filename).name
-    path = VIDEOS_DIR / safe
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Not found")
-    path.unlink()
+def add_video(request: Request, body: VideoAdd):
+    with _db_write(request) as conn:
+        row = conn.execute("SELECT value FROM user_config WHERE key = 'tutorial_videos'").fetchone()
+        videos = json.loads(row[0]) if row else []
+        videos.append({"title": body.title, "url": body.url})
+        conn.execute(
+            "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('tutorial_videos', ?, datetime('now'))",
+            (json.dumps(videos),),
+        )
     return {"ok": True}
 
 
-@router.get("/videos/{filename}")
-def serve_video(filename: str):
-    safe = Path(filename).name
-    path = VIDEOS_DIR / safe
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Not found")
-    return FileResponse(str(path), media_type="video/mp4")
+@router.delete("/videos")
+def remove_video(request: Request, url: str = Query(...)):
+    with _db_write(request) as conn:
+        row = conn.execute("SELECT value FROM user_config WHERE key = 'tutorial_videos'").fetchone()
+        videos = json.loads(row[0]) if row else []
+        videos = [v for v in videos if v["url"] != url]
+        conn.execute(
+            "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('tutorial_videos', ?, datetime('now'))",
+            (json.dumps(videos),),
+        )
+    return {"ok": True}
 
 
 @router.get("/instrument/{slug}", response_model=InstrumentDetail)

@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { Upload, Play, Trash2, Film } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Play, Trash2, Film, Plus, Link } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -42,47 +42,62 @@ function Def({ term, def }: { term: string; def: string }) {
   )
 }
 
+interface VideoEntry { title: string; url: string }
+
+function toEmbedUrl(url: string): string {
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?rel=0&modestbranding=1`
+  const vimeo = url.match(/vimeo\.com\/(\d+)/)
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`
+  return url
+}
+
+function authHdrs(): HeadersInit {
+  const t = typeof window !== 'undefined' ? localStorage.getItem('mbp_token') : null
+  return t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+}
+
 function VideoSection() {
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
-  const [videos, setVideos] = useState<string[]>([])
-  const [uploading, setUploading] = useState(false)
+  const [videos, setVideos] = useState<VideoEntry[]>([])
   const [playing, setPlaying] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [title, setTitle] = useState('')
+  const [url, setUrl] = useState('')
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const load = () => {
-    fetch(`${API_BASE}/api/videos`)
+    fetch(`${API_BASE}/api/videos`, { headers: authHdrs() })
       .then(r => r.json())
-      .then(d => setVideos(d.videos ?? []))
+      .then(d => setVideos(Array.isArray(d) ? d : []))
       .catch(() => {})
   }
 
   useEffect(load, [])
 
-  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    setError('')
+  const add = async () => {
+    if (!title.trim() || !url.trim()) return
+    setSaving(true); setError('')
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch(`${API_BASE}/api/videos`, { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Upload failed')
-      load()
+      const res = await fetch(`${API_BASE}/api/videos`, {
+        method: 'POST', headers: authHdrs(),
+        body: JSON.stringify({ title: title.trim(), url: url.trim() }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      setTitle(''); setUrl(''); setShowForm(false); load()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
-      setUploading(false)
-      if (inputRef.current) inputRef.current.value = ''
-    }
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally { setSaving(false) }
   }
 
-  const remove = async (name: string) => {
-    await fetch(`${API_BASE}/api/videos/${encodeURIComponent(name)}`, { method: 'DELETE' })
-    setVideos(v => v.filter(f => f !== name))
-    if (playing === name) setPlaying(null)
+  const remove = async (v: VideoEntry) => {
+    await fetch(`${API_BASE}/api/videos?url=${encodeURIComponent(v.url)}`, {
+      method: 'DELETE', headers: authHdrs(),
+    })
+    setVideos(vs => vs.filter(x => x.url !== v.url))
+    if (playing === v.url) setPlaying(null)
   }
 
   return (
@@ -93,56 +108,71 @@ function VideoSection() {
           <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Tutorial Videos</h2>
         </div>
         {isOwner && (
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-            background: 'var(--accent)', color: 'white', cursor: 'pointer',
-            opacity: uploading ? 0.6 : 1,
-          }}>
-            <Upload size={12} />
-            {uploading ? 'Uploading…' : 'Upload video'}
-            <input ref={inputRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={upload} disabled={uploading} />
-          </label>
+          <button onClick={() => setShowForm(f => !f)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: showForm ? 'var(--card-hover)' : 'var(--accent)', color: showForm ? 'var(--text-secondary)' : 'white', border: 'none', cursor: 'pointer' }}>
+            {showForm ? 'Cancel' : <><Plus size={12} /> Add video</>}
+          </button>
         )}
       </div>
+
+      {isOwner && showForm && (
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>Paste a YouTube or Vimeo link. The video is embedded directly — no files stored on the server.</p>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title (e.g. Origin trade walkthrough)"
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)' }}>
+              <Link size={13} color="var(--text-secondary)" />
+              <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://youtube.com/watch?v=... or https://youtu.be/..."
+                style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }} />
+            </div>
+            <button onClick={add} disabled={saving || !title.trim() || !url.trim()}
+              style={{ padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: 'var(--accent)', color: 'white', opacity: (saving || !title.trim() || !url.trim()) ? 0.5 : 1 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {error && <p style={{ fontSize: 12, color: 'var(--bearish)' }}>{error}</p>}
+        </div>
+      )}
+
       <div style={{ padding: '20px' }}>
-        {error && (
-          <p style={{ fontSize: 12, color: 'var(--bearish)', marginBottom: 12 }}>{error}</p>
-        )}
         {videos.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '32px 0' }}>
             <Film size={32} color="var(--text-muted)" style={{ margin: '0 auto 10px' }} />
             <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>No tutorial videos yet.</p>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Upload MP4, WebM or MOV files to build your tutorial library.</p>
+            {isOwner && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Add a YouTube or Vimeo link to build your tutorial library.</p>}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {videos.map(name => (
-              <div key={name} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: playing === name ? '1px solid var(--border)' : 'none' }}>
+            {videos.map(v => (
+              <div key={v.url} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: playing === v.url ? '1px solid var(--border)' : 'none' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Film size={13} color="var(--text-secondary)" />
-                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{v.title}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => setPlaying(p => p === name ? null : name)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, background: playing === name ? 'var(--card-hover)' : 'var(--accent-bg)', color: playing === name ? 'var(--text-secondary)' : 'var(--accent-hover)', fontWeight: 500 }}>
-                      <Play size={11} />
-                      {playing === name ? 'Minimise' : 'Play'}
+                    <button onClick={() => setPlaying(p => p === v.url ? null : v.url)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, background: playing === v.url ? 'var(--card-hover)' : 'var(--accent-bg)', color: playing === v.url ? 'var(--text-secondary)' : 'var(--accent-hover)', fontWeight: 500 }}>
+                      <Play size={11} />{playing === v.url ? 'Minimise' : 'Watch'}
                     </button>
                     {isOwner && (
-                      <button onClick={() => remove(name)}
+                      <button onClick={() => remove(v)}
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', background: 'var(--bearish-bg)', color: 'var(--bearish)' }}>
                         <Trash2 size={12} />
                       </button>
                     )}
                   </div>
                 </div>
-                {playing === name && (
-                  <video controls style={{ width: '100%', display: 'block', maxHeight: 400 }}>
-                    <source src={`${API_BASE}/api/videos/${encodeURIComponent(name)}`} />
-                    Your browser does not support the video tag.
-                  </video>
+                {playing === v.url && (
+                  <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+                    <iframe
+                      src={toEmbedUrl(v.url)}
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+                      allowFullScreen
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    />
+                  </div>
                 )}
               </div>
             ))}

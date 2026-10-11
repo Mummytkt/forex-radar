@@ -50,6 +50,16 @@ class AlertPreferencesUpdate(BaseModel):
     alertInternal: bool | None = None
 
 
+class VideoEntry(BaseModel):
+    title: str
+    url: str
+
+
+class VideoAdd(BaseModel):
+    title: str
+    url: str
+
+
 class InstrumentDetail(BaseModel):
     overview: InstrumentOverview
     active_sources: list[dict]
