@@ -2,13 +2,15 @@
 APScheduler job definitions and the per-instrument processing pipeline.
 
 Two job types:
-  h4_candle_close_job   — fires at 03:05, 07:05, 11:05, 15:05, 19:05, 23:05 UTC
-                          (5 min after each Twelve Data H4 candle closes at
-                          03:00, 07:00, 11:00, 15:00, 19:00, 23:00 UTC)
+  h4_candle_close_job   — fires at 01:05, 05:05, 09:05, 13:05, 17:05, 21:05 UTC
+                          (5 min after each NY-session H4 candle closes at
+                          01:00, 05:00, 09:00, 13:00, 17:00, 21:00 UTC in EDT)
+                          H4 candles are built in-house from Twelve Data 1h data,
+                          aligned to the NY session start (21:00 UTC in EDT,
+                          22:00 UTC in EST from November), matching TradingView exactly.
   daily_candle_close_job — fires at 21:05 AND 22:05 UTC (covers DST shift)
-
-Note: Twelve Data H4 candle boundaries are offset 2 hours from TradingView's
-session-aligned H4 candles. Cross-reference alerts by price level, not timestamp.
+                           The 21:05 H4 and Daily jobs overlap intentionally; the
+                           Daily job deduplication prevents double-processing.
 
 Both jobs iterate over all configured instruments, fetch the latest candles,
 run the engine, persist state, and send any confirmed alerts.
@@ -28,7 +30,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config import Config, pip_size_for
 from data.client import TwelveDataClient, TwelveDataError
-from data.normalizer import normalize_candles, symbol_to_instrument, instrument_to_symbol
+from data.normalizer import normalize_candles, aggregate_h4_from_1h, symbol_to_instrument, instrument_to_symbol
 from data.models import Timeframe
 from analysis.engine import EngineInput, run_engine_cycle
 from alerts.formatter import format_alert
@@ -37,6 +39,22 @@ from state import repository as repo
 from state.repository import InstrumentStateRow
 
 logger = logging.getLogger(__name__)
+
+
+def _ny_session_start_hour() -> int:
+    """
+    Return the UTC hour at which the NY trading session starts.
+    21 during EDT (UTC-4, roughly March–November),
+    22 during EST (UTC-5, roughly November–March).
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime, timezone
+        offset = datetime.now(ZoneInfo("America/New_York")).utcoffset().total_seconds() / 3600
+        return 22 if offset == -5 else 21
+    except Exception:
+        return 21  # safe fallback
+
 
 # Crypto pairs trade 24/7; all other instruments follow forex/metals market hours.
 _CRYPTO_INSTRUMENTS = frozenset([
@@ -122,15 +140,19 @@ async def process_instrument_cycle(
     symbol = instrument_to_symbol(instrument)
 
     # ── Fetch candles ─────────────────────────────────────────────────────────
+    # H4 candles are built from 1h data aligned to the NY session start so that
+    # candle boundaries match TradingView (closes at 01:00, 05:00, 09:00,
+    # 13:00, 17:00, 21:00 UTC in EDT). 600 × 1h ≈ 150 H4 periods.
     try:
         raw_daily = td_client.fetch_candles(symbol, "1day", outputsize=200)
-        raw_h4 = td_client.fetch_candles(symbol, "4h", outputsize=200)
+        raw_1h = td_client.fetch_candles(symbol, "1h", outputsize=600)
     except TwelveDataError as e:
         logger.warning("Skipping %s — API error: %s", instrument, e)
         return
 
     daily_candles = normalize_candles(raw_daily, instrument, Timeframe.DAILY)
-    h4_candles = normalize_candles(raw_h4, instrument, Timeframe.H4)
+    h1_candles = normalize_candles(raw_1h, instrument, Timeframe.H1)
+    h4_candles = aggregate_h4_from_1h(h1_candles, _ny_session_start_hour())
 
     if not daily_candles or not h4_candles:
         logger.warning("No candles for %s — skipping", instrument)
@@ -313,11 +335,13 @@ async def run_backfill(
             raw_daily = td_client.fetch_candles(
                 symbol, "1day", outputsize=config.poll_lookback_daily
             )
-            raw_h4 = td_client.fetch_candles(
-                symbol, "4h", outputsize=config.poll_lookback_h4
-            )
+            # Fetch 1h candles; free-tier max is 800 — multiply H4 lookback by 4
+            # but cap at 800 for the free tier limit
+            h1_outputsize = min(config.poll_lookback_h4 * 4, 800)
+            raw_1h = td_client.fetch_candles(symbol, "1h", outputsize=h1_outputsize)
             daily_candles = normalize_candles(raw_daily, instrument, Timeframe.DAILY)
-            h4_candles = normalize_candles(raw_h4, instrument, Timeframe.H4)
+            h1_candles = normalize_candles(raw_1h, instrument, Timeframe.H1)
+            h4_candles = aggregate_h4_from_1h(h1_candles, _ny_session_start_hour())
             repo.upsert_raw_candles(conn, daily_candles)
             repo.upsert_raw_candles(conn, h4_candles)
         except TwelveDataError as e:
@@ -336,15 +360,16 @@ def create_scheduler(
     """
     Build and return a configured AsyncIOScheduler (not yet started).
 
-    H4 jobs fire at 03:05, 07:05, 11:05, 15:05, 19:05, 23:05 UTC — 5 min after
-    each Twelve Data H4 candle closes (03:00, 07:00, 11:00, 15:00, 19:00, 23:00 UTC).
+    H4 jobs fire at 01:05, 05:05, 09:05, 13:05, 17:05, 21:05 UTC — 5 min after
+    each NY-session H4 candle closes (01:00, 05:00, 09:00, 13:00, 17:00, 21:00 UTC
+    in EDT), matching TradingView exactly.
     Daily jobs fire at 21:05 and 22:05 UTC to cover both EST and EDT close times.
     """
     scheduler = AsyncIOScheduler(timezone="UTC")
 
-    # H4 close jobs — fire 5 min after each Twelve Data H4 candle closes
-    # Twelve Data H4 boundaries: 03:00, 07:00, 11:00, 15:00, 19:00, 23:00 UTC
-    for hour in [3, 7, 11, 15, 19, 23]:
+    # H4 close jobs — fire 5 min after each NY-session H4 candle closes
+    # EDT closes: 01:00, 05:00, 09:00, 13:00, 17:00, 21:00 UTC (= TradingView times)
+    for hour in [1, 5, 9, 13, 17, 21]:
         scheduler.add_job(
             h4_candle_close_job,
             trigger="cron",

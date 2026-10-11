@@ -17,6 +17,7 @@ class Direction(str, Enum):
 class Timeframe(str, Enum):
     DAILY = "1day"
     H4 = "4h"
+    H1 = "1h"    # intermediate — used when building NY-session H4 from 1h candles
 
 
 class FormationType(str, Enum):
