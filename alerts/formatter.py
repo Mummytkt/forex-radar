@@ -2,13 +2,16 @@
 Alert message formatter.
 
 Builds the exact human-readable bias-confirmation alert from an AlertRecord.
-Handles three alert classifications:
-  ORIGIN             — first H4 confirmation from a Daily reaction source
-  CONTINUATION_ASHAPE — subsequent H4 A/V formation break in the daily direction
-  CONTINUATION_H4_OC  — H4 OC reaction (close beyond OC midpoint) in the daily direction
+Handles four alert classifications:
+  ORIGIN                  — first H4 confirmation from a Daily reaction source
+  CONTINUATION_ASHAPE     — subsequent H4 A/V formation break in the daily direction
+  CONTINUATION_H4_OC      — H4 OC reaction (close beyond OC midpoint)
+  CONTINUATION_H4_BREAKER — H4 Breaker or A/V inside range retested with wick+close
 """
 
 from __future__ import annotations
+
+from datetime import datetime
 
 from data.models import (
     AlertClassification,
@@ -34,6 +37,23 @@ _BROKEN_TYPE_NAMES: dict[FormationType, str] = {
 }
 
 
+# ── Price / timestamp helpers ─────────────────────────────────────────────────
+
+def _fmt_level(instrument: str, level: float) -> str:
+    instr = instrument.upper().replace("/", "")
+    if instr.endswith("JPY") or instr in {"XAUUSD", "XAGUSD"}:
+        return f"{level:.3f}"
+    return f"{level:.5f}"
+
+
+def _fmt_ts(dt: datetime | None) -> str:
+    if dt is None:
+        return "—"
+    return dt.strftime("%a %d %b '%y, %H:%M UTC")
+
+
+# ── Dispatcher ────────────────────────────────────────────────────────────────
+
 def format_alert(alert: AlertRecord) -> str:
     if alert.classification == AlertClassification.CONTINUATION_H4_OC:
         return _format_continuation_h4_oc(alert)
@@ -58,23 +78,25 @@ def _format_origin(alert: AlertRecord) -> str:
     direction_lower = direction_label.lower()
 
     broken_type_name = _BROKEN_TYPE_NAMES.get(breakout.broken_type, breakout.broken_type.value)
+    breakout_level_str = _fmt_level(instrument, breakout.broken_level)
 
     if direction == Direction.BEARISH:
         breakout_desc = (
             f"Price broke and closed below the body level of the most recent "
-            f"Daily {broken_type_name} key level. "
+            f"Daily {broken_type_name} key level @ {breakout_level_str}. "
             f"This is the most recent confirmed Daily breakout."
         )
     else:
         breakout_desc = (
             f"Price broke and closed above the body level of the most recent "
-            f"Daily {broken_type_name} key level. "
+            f"Daily {broken_type_name} key level @ {breakout_level_str}. "
             f"This is the most recent confirmed Daily breakout."
         )
 
     source_name = _SOURCE_NAMES[source.source_type]
     if source.source_type == ReactionSourceType.POST_BREAKOUT_DAILY_OC:
         source_name = source_name.format(direction=direction_label)
+    source_level_str = _fmt_level(instrument, source.level)
 
     source_desc = _source_description(source.source_type, direction_lower, source_name)
 
@@ -84,16 +106,19 @@ def _format_origin(alert: AlertRecord) -> str:
     h4_formation_name = _BROKEN_TYPE_NAMES.get(
         h4.formation_broken.formation_type, h4.formation_broken.formation_type.value
     )
+    h4_level_str = _fmt_level(instrument, h4.formation_broken.level)
+    h4_ts_str = _fmt_ts(h4.confirmation_ts)
+
     if direction == Direction.BEARISH:
         h4_desc = (
             f"An H4 {h4_formation_name} formation was broken, and an H4 candle "
-            f"closed below its body level. "
+            f"closed below its body level @ {h4_level_str}. "
             f"The H4 breakout aligns with the most recent Daily breakout."
         )
     else:
         h4_desc = (
             f"An H4 {h4_formation_name} formation was broken, and an H4 candle "
-            f"closed above its body level. "
+            f"closed above its body level @ {h4_level_str}. "
             f"The H4 breakout aligns with the most recent Daily breakout."
         )
 
@@ -103,13 +128,14 @@ def _format_origin(alert: AlertRecord) -> str:
         f"{bias_label} — {instrument}",
         "Daily → H4 aligned",
         "",
-        f"Daily breakout: {direction_label}",
+        f"Daily breakout: {direction_label} — broken level @ {breakout_level_str}",
         breakout_desc,
         "",
-        f"Daily reaction source: {source_name}",
+        f"Daily reaction source: {source_name} @ {source_level_str}",
         source_desc,
         "",
         f"H4 confirmation: {classification_label} {direction_lower} breakout",
+        f"Formation: H4 {h4_formation_name} @ {h4_level_str} · {h4_ts_str}",
         h4_desc,
         "",
         f"Reason: {reason}",
@@ -136,15 +162,18 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
     h4_formation_name = _BROKEN_TYPE_NAMES.get(
         h4.formation_broken.formation_type, h4.formation_broken.formation_type.value
     )
+    h4_level_str = _fmt_level(instrument, h4.formation_broken.level)
+    h4_ts_str = _fmt_ts(h4.confirmation_ts)
+
     if direction == Direction.BEARISH:
         h4_desc = (
             f"An H4 {h4_formation_name} formation was broken, and an H4 candle "
-            f"closed below its body level, continuing the established {direction_lower} bias."
+            f"closed below its body level @ {h4_level_str}, continuing the established {direction_lower} bias."
         )
     else:
         h4_desc = (
             f"An H4 {h4_formation_name} formation was broken, and an H4 candle "
-            f"closed above its body level, continuing the established {direction_lower} bias."
+            f"closed above its body level @ {h4_level_str}, continuing the established {direction_lower} bias."
         )
 
     lines = [
@@ -154,6 +183,7 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
         f"Daily breakout: {direction_label} (active)",
         "",
         f"H4 continuation: {classification_label} {direction_lower} breakout",
+        f"Formation: H4 {h4_formation_name} @ {h4_level_str} · {h4_ts_str}",
         h4_desc,
         "",
         f"Reason: A qualifying {classification_label.lower()} {direction_lower} H4 breakout "
@@ -165,7 +195,7 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
     return "\n".join(lines)
 
 
-# ── Continuation H4 Breaker alert ────────────────────────────────────────────
+# ── Continuation H4 Breaker alert ─────────────────────────────────────────────
 
 def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
     direction = alert.direction
@@ -176,7 +206,7 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
-    level_str = f"{level:.5f}" if level is not None else "—"
+    level_str = _fmt_level(instrument, level) if level is not None else "—"
 
     if direction == Direction.BEARISH:
         desc = (
@@ -232,7 +262,7 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
-    level_str = f"{oc_level:.5f}" if oc_level is not None else "—"
+    level_str = _fmt_level(instrument, oc_level) if oc_level is not None else "—"
 
     if direction == Direction.BULLISH:
         oc_desc = (
@@ -253,7 +283,7 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
         "",
         f"Daily breakout: {direction_label} (active)",
         "",
-        f"H4 OC reaction",
+        f"H4 OC reaction: midpoint @ {level_str}",
         oc_desc,
         "",
         f"Reason: Price rejected from an H4 {direction_lower} OC midpoint at {level_str}, "
