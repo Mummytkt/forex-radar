@@ -261,7 +261,14 @@ export default function OverviewPage() {
                         </span>
                         <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {a.h4_classification}</span>
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{fmtDate(a.fired_at)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {fmtDate(a.fired_at)}
+                        {a.alert_classification && a.alert_classification !== 'origin' && (
+                          <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>
+                            · continuation
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <span className="badge badge-delivered" style={{ fontSize: 10, flexShrink: 0 }}>Delivered</span>
                   </div>

@@ -30,6 +30,7 @@ class AlertItem(BaseModel):
     direction: str
     source_type: str
     h4_classification: str
+    alert_classification: str = "origin"
     alert_text: str
     fired_at: str
 
@@ -37,6 +38,16 @@ class AlertItem(BaseModel):
 class AlertsPage(BaseModel):
     items: list[AlertItem]
     total: int
+
+
+class AlertPreferences(BaseModel):
+    alertExternal: bool
+    alertInternal: bool
+
+
+class AlertPreferencesUpdate(BaseModel):
+    alertExternal: bool | None = None
+    alertInternal: bool | None = None
 
 
 class InstrumentDetail(BaseModel):

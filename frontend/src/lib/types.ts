@@ -28,6 +28,7 @@ export interface AlertItem {
   direction: Direction
   source_type: string
   h4_classification: string
+  alert_classification: string
   alert_text: string
   fired_at: string
 }

@@ -3,6 +3,13 @@ import { useState, useEffect } from 'react'
 import { Search, Check } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { loadPrefs, savePrefs, type UserPreferences } from '@/lib/preferences'
+import { API_BASE } from '@/lib/api'
+
+function authHeaders(): HeadersInit {
+  if (typeof window === 'undefined') return {}
+  const t = localStorage.getItem('mbp_token')
+  return t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+}
 
 const ALL_PAIRS: Record<string, string[]> = {
   'Majors': ['EUR/USD','GBP/USD','USD/JPY','USD/CHF','USD/CAD','AUD/USD','NZD/USD'],
@@ -29,11 +36,32 @@ export default function PreferencesPage() {
   const [search, setSearch] = useState('')
   const [saved, setSaved] = useState(false)
 
-  useEffect(() => { setPrefs(loadPrefs()) }, [])
+  useEffect(() => {
+    const local = loadPrefs()
+    setPrefs(local)
+    // Override alertExternal/alertInternal from backend (they control Telegram delivery)
+    fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && typeof d.alertExternal === 'boolean') {
+          setPrefs(prev => prev ? { ...prev, alertExternal: d.alertExternal, alertInternal: d.alertInternal } : prev)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
-  const save = () => {
+  const save = async () => {
     if (!prefs) return
+    // Save display-only prefs to localStorage
     savePrefs(prefs)
+    // Save alert-type delivery prefs to backend
+    try {
+      await fetch(`${API_BASE}/api/preferences`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ alertExternal: prefs.alertExternal, alertInternal: prefs.alertInternal }),
+      })
+    } catch { /* non-critical — localStorage already saved */ }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -104,8 +132,8 @@ export default function PreferencesPage() {
         {/* Alert types */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-            <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Alert Types</h2>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>Which confirmations reach your Telegram.</p>
+            <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Telegram Delivery</h2>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>Which confirmation types reach your Telegram. Saved to the engine — takes effect immediately.</p>
           </div>
           <div style={{ padding: '4px 0' }}>
             {[

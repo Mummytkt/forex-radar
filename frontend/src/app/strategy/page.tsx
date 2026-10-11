@@ -191,6 +191,18 @@ export default function StrategyPage() {
           </div>
         </Card>
 
+        <Card title="Alert Classifications">
+          <Def
+            term="Origin"
+            def="The first confirmed bias alert for a setup. Requires the complete 4-step chain: Daily breakout → eligible reaction source → retest of that source → qualifying H4 A/V breakout. After an Origin fires, the engine enters continuation mode for that instrument." />
+          <Def
+            term="Continuation — A/V Break"
+            def="Fires after an Origin, when a subsequent H4 A-shape (bullish direction) or V-shape (bearish direction) formation is broken in the daily breakout direction — without needing a new Daily source retest. Each continuation extends the active bias confirmation. Active until a new opposing Daily breakout occurs." />
+          <Def
+            term="Continuation — H4 OC"
+            def="Fires when two consecutive same-direction H4 candles form an OC level, and price returns to react from the OC midpoint: the H4 candle's range dips into the OC zone and the candle closes beyond the midpoint in the breakout direction. Confirms continuation of the established Daily bias without requiring a new A/V break." />
+        </Card>
+
         <Card title="Reaction Source Types">
           {[
             { label: 'Daily Breaker', desc: 'The original A or V body level that was broken. Price often returns to test it from the other side (role reversal).' },

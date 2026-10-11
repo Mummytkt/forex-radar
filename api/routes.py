@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from api.schemas import (
     InstrumentOverview, Stats, AlertItem, AlertsPage,
     InstrumentDetail, InstrumentsUpdate,
+    AlertPreferences, AlertPreferencesUpdate,
 )
 
 VIDEOS_DIR = Path(__file__).parent.parent / "videos"
@@ -256,7 +257,7 @@ def get_alerts(
         rows = conn.execute(
             f"""SELECT a.id, a.instrument, a.direction,
                        COALESCE(rs.source_type, 'UNKNOWN'), a.h4_classification,
-                       a.alert_text, a.fired_at
+                       a.alert_classification, a.alert_text, a.fired_at
                 FROM alerts a
                 LEFT JOIN reaction_sources rs ON rs.id = a.reaction_source_id
                 {w}
@@ -269,7 +270,8 @@ def get_alerts(
             id=r[0], instrument=r[1],
             direction=r[2].upper() if r[2] else r[2],
             source_type=r[3], h4_classification=r[4],
-            alert_text=r[5], fired_at=r[6],
+            alert_classification=r[5] or "origin",
+            alert_text=r[6], fired_at=r[7],
         ) for r in rows],
         total=total,
     )
@@ -316,6 +318,35 @@ def update_config_instruments(request: Request, body: InstrumentsUpdate):
     request.app.state.config.instruments = instruments
 
     return {"ok": True, "count": len(instruments), "instruments": instruments}
+
+
+@router.get("/preferences", response_model=AlertPreferences)
+def get_preferences(request: Request):
+    """Return the owner's alert-type delivery preferences."""
+    with _db(request) as conn:
+        ext = conn.execute("SELECT value FROM user_config WHERE key = 'pref_alert_external'").fetchone()
+        int_ = conn.execute("SELECT value FROM user_config WHERE key = 'pref_alert_internal'").fetchone()
+    return AlertPreferences(
+        alertExternal=(ext[0] if ext else "1") == "1",
+        alertInternal=(int_[0] if int_ else "0") == "1",
+    )
+
+
+@router.patch("/preferences")
+def update_preferences(request: Request, body: AlertPreferencesUpdate):
+    """Persist alert-type delivery preferences (controls what Telegram receives)."""
+    with _db_write(request) as conn:
+        if body.alertExternal is not None:
+            conn.execute(
+                "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('pref_alert_external', ?, datetime('now'))",
+                ("1" if body.alertExternal else "0",),
+            )
+        if body.alertInternal is not None:
+            conn.execute(
+                "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('pref_alert_internal', ?, datetime('now'))",
+                ("1" if body.alertInternal else "0",),
+            )
+    return {"ok": True}
 
 
 @router.get("/profile")

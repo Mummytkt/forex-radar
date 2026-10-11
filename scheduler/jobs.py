@@ -233,9 +233,28 @@ async def process_instrument_cycle(
         if src_id:
             repo.deactivate_reaction_source(conn, src_id)
 
-        # Send via Telegram
+        # Send via Telegram (respecting the owner's alert-type preferences)
         if config.telegram_enabled:
-            await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+            # Determine the H4 classification of this alert
+            if alert.h4_event is not None:
+                _cls = alert.h4_event.classification.value  # 'external' or 'internal'
+            else:
+                _cls = None  # OC continuation — not filtered by external/internal pref
+
+            _send = True
+            if _cls == "external":
+                row = conn.execute("SELECT value FROM user_config WHERE key = 'pref_alert_external'").fetchone()
+                if row and row[0] == "0":
+                    _send = False
+            elif _cls == "internal":
+                row = conn.execute("SELECT value FROM user_config WHERE key = 'pref_alert_internal'").fetchone()
+                if row and row[0] == "0":
+                    _send = False
+
+            if _send:
+                await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+            else:
+                logger.info("Alert suppressed by preference filter: %s %s breakout", alert.instrument, _cls)
         else:
             logger.info("ALERT (Telegram disabled):\n%s", alert_text)
 
