@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Bell, BarChart2, BookOpen, Settings,
-  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2, X
+  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2, X, BookMarked
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme'
 import { useAuth } from '@/lib/auth'
@@ -15,6 +15,7 @@ const SECTIONS = [
     links: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
       { href: '/strategy', icon: BookOpen, label: 'Strategy' },
+      { href: '/journal', icon: BookMarked, label: 'Journal' },
     ],
   },
   {

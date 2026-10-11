@@ -125,6 +125,26 @@ CREATE TABLE IF NOT EXISTS users (
     created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
     last_login_at    TEXT
 );
+
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_date  TEXT    NOT NULL,
+    instrument  TEXT    NOT NULL,
+    direction   TEXT    NOT NULL,
+    entry_price REAL,
+    stop_loss   REAL,
+    take_profit REAL,
+    exit_price  REAL,
+    pips        REAL,
+    rr_ratio    REAL,
+    result      TEXT    NOT NULL DEFAULT 'open',
+    setup_type  TEXT    NOT NULL DEFAULT 'other',
+    session     TEXT,
+    notes       TEXT,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_journal_date
+    ON journal_entries (trade_date DESC);
 """
 
 
@@ -195,5 +215,29 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             ALTER TABLE alerts_v2 RENAME TO alerts;
             CREATE INDEX IF NOT EXISTS idx_alerts_inst ON alerts (instrument, fired_at);
         """)
+
+    # Add journal_entries table if missing
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if "journal_entries" not in tables:
+        conn.execute("""
+            CREATE TABLE journal_entries (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date  TEXT    NOT NULL,
+                instrument  TEXT    NOT NULL,
+                direction   TEXT    NOT NULL,
+                entry_price REAL,
+                stop_loss   REAL,
+                take_profit REAL,
+                exit_price  REAL,
+                pips        REAL,
+                rr_ratio    REAL,
+                result      TEXT    NOT NULL DEFAULT 'open',
+                setup_type  TEXT    NOT NULL DEFAULT 'other',
+                session     TEXT,
+                notes       TEXT,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_journal_date ON journal_entries (trade_date DESC)")
 
     conn.commit()

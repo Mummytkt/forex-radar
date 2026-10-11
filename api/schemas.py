@@ -68,3 +68,40 @@ class InstrumentDetail(BaseModel):
 
 class InstrumentsUpdate(BaseModel):
     instruments: list[str]
+
+
+class JournalEntryCreate(BaseModel):
+    trade_date: str
+    instrument: str
+    direction: str
+    entry_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    exit_price: Optional[float] = None
+    pips: Optional[float] = None
+    rr_ratio: Optional[float] = None
+    result: str = "open"
+    setup_type: str = "other"
+    session: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class JournalEntry(JournalEntryCreate):
+    id: int
+    created_at: str
+
+
+class JournalEntryUpdate(BaseModel):
+    trade_date: Optional[str] = None
+    instrument: Optional[str] = None
+    direction: Optional[str] = None
+    entry_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    exit_price: Optional[float] = None
+    pips: Optional[float] = None
+    rr_ratio: Optional[float] = None
+    result: Optional[str] = None
+    setup_type: Optional[str] = None
+    session: Optional[str] = None
+    notes: Optional[str] = None

@@ -9,11 +9,17 @@ from typing import Optional
 from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel
 
+import csv
+import io
+
+from fastapi.responses import StreamingResponse
+
 from api.schemas import (
     InstrumentOverview, Stats, AlertItem, AlertsPage,
     InstrumentDetail, InstrumentsUpdate,
     AlertPreferences, AlertPreferencesUpdate,
     VideoEntry, VideoAdd,
+    JournalEntry, JournalEntryCreate, JournalEntryUpdate,
 )
 
 
@@ -403,6 +409,124 @@ def remove_video(request: Request, url: str = Query(...)):
             (json.dumps(videos),),
         )
     return {"ok": True}
+
+
+# ── Journal ───────────────────────────────────────────────────────────────────
+
+def _journal_period_clause(period: str) -> tuple[str, list]:
+    """Return (WHERE clause fragment, params) for the requested period."""
+    if period == "today":
+        return "WHERE date(trade_date) = date('now')", []
+    if period == "week":
+        return "WHERE trade_date >= date('now', '-6 days')", []
+    if period == "month":
+        return "WHERE strftime('%Y-%m', trade_date) = strftime('%Y-%m', 'now')", []
+    if period == "year":
+        return "WHERE strftime('%Y', trade_date) = strftime('%Y', 'now')", []
+    return "", []
+
+
+def _row_to_entry(row) -> JournalEntry:
+    return JournalEntry(
+        id=row["id"],
+        trade_date=row["trade_date"],
+        instrument=row["instrument"],
+        direction=row["direction"],
+        entry_price=row["entry_price"],
+        stop_loss=row["stop_loss"],
+        take_profit=row["take_profit"],
+        exit_price=row["exit_price"],
+        pips=row["pips"],
+        rr_ratio=row["rr_ratio"],
+        result=row["result"],
+        setup_type=row["setup_type"],
+        session=row["session"],
+        notes=row["notes"],
+        created_at=row["created_at"],
+    )
+
+
+@router.get("/journal", response_model=list[JournalEntry])
+def get_journal(request: Request, period: str = Query("all")):
+    where, params = _journal_period_clause(period)
+    with _db(request) as conn:
+        rows = conn.execute(
+            f"SELECT * FROM journal_entries {where} ORDER BY trade_date DESC, id DESC",
+            params,
+        ).fetchall()
+    return [_row_to_entry(r) for r in rows]
+
+
+@router.post("/journal", response_model=JournalEntry)
+def create_journal_entry(request: Request, body: JournalEntryCreate):
+    with _db_write(request) as conn:
+        cur = conn.execute(
+            """INSERT INTO journal_entries
+               (trade_date, instrument, direction, entry_price, stop_loss, take_profit,
+                exit_price, pips, rr_ratio, result, setup_type, session, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (body.trade_date, body.instrument, body.direction,
+             body.entry_price, body.stop_loss, body.take_profit,
+             body.exit_price, body.pips, body.rr_ratio,
+             body.result, body.setup_type, body.session, body.notes),
+        )
+        entry_id = cur.lastrowid
+        row = conn.execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
+    return _row_to_entry(row)
+
+
+@router.put("/journal/{entry_id}", response_model=JournalEntry)
+def update_journal_entry(entry_id: int, request: Request, body: JournalEntryUpdate):
+    with _db_write(request) as conn:
+        row = conn.execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        updates = {k: v for k, v in body.model_dump().items() if v is not None}
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            conn.execute(
+                f"UPDATE journal_entries SET {set_clause} WHERE id = ?",
+                list(updates.values()) + [entry_id],
+            )
+        row = conn.execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
+    return _row_to_entry(row)
+
+
+@router.delete("/journal/{entry_id}")
+def delete_journal_entry(entry_id: int, request: Request):
+    with _db_write(request) as conn:
+        conn.execute("DELETE FROM journal_entries WHERE id = ?", (entry_id,))
+    return {"ok": True}
+
+
+@router.get("/journal/export.csv")
+def export_journal_csv(request: Request, period: str = Query("all")):
+    where, params = _journal_period_clause(period)
+    with _db(request) as conn:
+        rows = conn.execute(
+            f"SELECT * FROM journal_entries {where} ORDER BY trade_date DESC, id DESC",
+            params,
+        ).fetchall()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Date", "Instrument", "Direction", "Result", "Entry", "SL", "TP",
+                     "Exit", "Pips", "R:R", "Setup", "Session", "Notes"])
+    for r in rows:
+        writer.writerow([
+            r["trade_date"], r["instrument"], r["direction"].upper(), r["result"].upper(),
+            r["entry_price"] or "", r["stop_loss"] or "", r["take_profit"] or "",
+            r["exit_price"] or "", r["pips"] or "", r["rr_ratio"] or "",
+            r["setup_type"], r["session"] or "", (r["notes"] or "").replace("\n", " "),
+        ])
+
+    buf.seek(0)
+    filename = f"journal-{period}-{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/instrument/{slug}", response_model=InstrumentDetail)
