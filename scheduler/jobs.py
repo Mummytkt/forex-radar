@@ -2,8 +2,13 @@
 APScheduler job definitions and the per-instrument processing pipeline.
 
 Two job types:
-  h4_candle_close_job   — fires at 00:05, 04:05, 08:05, 12:05, 16:05, 20:05 UTC
+  h4_candle_close_job   — fires at 03:05, 07:05, 11:05, 15:05, 19:05, 23:05 UTC
+                          (5 min after each Twelve Data H4 candle closes at
+                          03:00, 07:00, 11:00, 15:00, 19:00, 23:00 UTC)
   daily_candle_close_job — fires at 21:05 AND 22:05 UTC (covers DST shift)
+
+Note: Twelve Data H4 candle boundaries are offset 2 hours from TradingView's
+session-aligned H4 candles. Cross-reference alerts by price level, not timestamp.
 
 Both jobs iterate over all configured instruments, fetch the latest candles,
 run the engine, persist state, and send any confirmed alerts.
@@ -331,13 +336,15 @@ def create_scheduler(
     """
     Build and return a configured AsyncIOScheduler (not yet started).
 
-    H4 jobs fire at :05 past each 4-hour boundary (UTC).
+    H4 jobs fire at 03:05, 07:05, 11:05, 15:05, 19:05, 23:05 UTC — 5 min after
+    each Twelve Data H4 candle closes (03:00, 07:00, 11:00, 15:00, 19:00, 23:00 UTC).
     Daily jobs fire at 21:05 and 22:05 UTC to cover both EST and EDT close times.
     """
     scheduler = AsyncIOScheduler(timezone="UTC")
 
-    # H4 close jobs
-    for hour in [0, 4, 8, 12, 16, 20]:
+    # H4 close jobs — fire 5 min after each Twelve Data H4 candle closes
+    # Twelve Data H4 boundaries: 03:00, 07:00, 11:00, 15:00, 19:00, 23:00 UTC
+    for hour in [3, 7, 11, 15, 19, 23]:
         scheduler.add_job(
             h4_candle_close_job,
             trigger="cron",
