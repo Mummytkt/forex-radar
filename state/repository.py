@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Optional
 
 from data.models import (
+    AlertClassification,
     AlertRecord,
     BreakoutClassification,
     Candle,
@@ -49,6 +50,8 @@ class InstrumentStateRow:
     retest_in_progress: bool
     active_reaction_src_id: Optional[int]
     updated_at: datetime
+    continuation_mode: bool = False
+    last_alert_h4_ts: Optional[datetime] = None
 
 
 def get_instrument_state(conn: sqlite3.Connection, instrument: str) -> Optional[InstrumentStateRow]:
@@ -57,6 +60,7 @@ def get_instrument_state(conn: sqlite3.Connection, instrument: str) -> Optional[
     ).fetchone()
     if row is None:
         return None
+    keys = row.keys()
     return InstrumentStateRow(
         instrument=row["instrument"],
         last_daily_candle_ts=_str_dt(row["last_daily_candle_ts"]) if row["last_daily_candle_ts"] else None,
@@ -65,6 +69,8 @@ def get_instrument_state(conn: sqlite3.Connection, instrument: str) -> Optional[
         retest_in_progress=bool(row["retest_in_progress"]),
         active_reaction_src_id=row["active_reaction_src_id"],
         updated_at=_str_dt(row["updated_at"]),
+        continuation_mode=bool(row["continuation_mode"]) if "continuation_mode" in keys else False,
+        last_alert_h4_ts=_str_dt(row["last_alert_h4_ts"]) if ("last_alert_h4_ts" in keys and row["last_alert_h4_ts"]) else None,
     )
 
 
@@ -73,14 +79,17 @@ def upsert_instrument_state(conn: sqlite3.Connection, state: InstrumentStateRow)
         """
         INSERT INTO instrument_state
             (instrument, last_daily_candle_ts, last_h4_candle_ts,
-             active_breakout_id, retest_in_progress, active_reaction_src_id, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+             active_breakout_id, retest_in_progress, active_reaction_src_id,
+             continuation_mode, last_alert_h4_ts, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(instrument) DO UPDATE SET
             last_daily_candle_ts   = excluded.last_daily_candle_ts,
             last_h4_candle_ts      = excluded.last_h4_candle_ts,
             active_breakout_id     = excluded.active_breakout_id,
             retest_in_progress     = excluded.retest_in_progress,
             active_reaction_src_id = excluded.active_reaction_src_id,
+            continuation_mode      = excluded.continuation_mode,
+            last_alert_h4_ts       = excluded.last_alert_h4_ts,
             updated_at             = excluded.updated_at
         """,
         (
@@ -90,6 +99,8 @@ def upsert_instrument_state(conn: sqlite3.Connection, state: InstrumentStateRow)
             state.active_breakout_id,
             int(state.retest_in_progress),
             state.active_reaction_src_id,
+            int(state.continuation_mode),
+            _dt_str(state.last_alert_h4_ts) if state.last_alert_h4_ts else None,
             _dt_str(state.updated_at),
         ),
     )
@@ -278,24 +289,33 @@ def insert_alert(
     conn: sqlite3.Connection,
     alert: AlertRecord,
     daily_breakout_id: int,
-    reaction_source_id: int,
-    h4_formation_id: int,
+    reaction_source_id: Optional[int],
+    h4_formation_id: Optional[int],
     alert_text: str,
 ) -> int:
+    # h4_classification: use formation classification for A/V breaks, else label the type
+    if alert.h4_event is not None:
+        h4_cls = alert.h4_event.classification.value
+    elif alert.classification == AlertClassification.CONTINUATION_H4_OC:
+        h4_cls = "oc_reaction"
+    else:
+        h4_cls = "continuation"
+
     cur = conn.execute(
         """
         INSERT INTO alerts
-            (instrument, direction, daily_breakout_id, reaction_source_id,
-             h4_formation_id, h4_classification, alert_text, fired_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (instrument, direction, alert_classification, daily_breakout_id,
+             reaction_source_id, h4_formation_id, h4_classification, alert_text, fired_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             alert.instrument,
             alert.direction.value,
+            alert.classification.value,
             daily_breakout_id,
             reaction_source_id,
             h4_formation_id,
-            alert.h4_event.classification.value,
+            h4_cls,
             alert_text,
             _dt_str(alert.fired_at),
         ),

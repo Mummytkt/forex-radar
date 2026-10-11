@@ -30,6 +30,12 @@ class BreakoutClassification(str, Enum):
     INTERNAL = "internal"
 
 
+class AlertClassification(str, Enum):
+    ORIGIN = "origin"
+    CONTINUATION_ASHAPE = "continuation_ashape"
+    CONTINUATION_H4_OC = "continuation_h4oc"
+
+
 class ReactionSourceType(str, Enum):
     DAILY_BREAKER = "daily_breaker"
     OC_INSIDE_RANGE = "oc_inside_range"
@@ -126,6 +132,8 @@ class AlertRecord:
     instrument: str
     direction: Direction
     daily_breakout: DailyBreakout
-    reaction_source: ReactionSource
-    h4_event: H4BreakoutEvent
+    reaction_source: Optional[ReactionSource]   # None for continuation alerts
+    h4_event: Optional[H4BreakoutEvent]         # None for H4 OC continuation
     fired_at: datetime
+    classification: AlertClassification = AlertClassification.ORIGIN
+    h4_oc_level: Optional[float] = None         # set for CONTINUATION_H4_OC

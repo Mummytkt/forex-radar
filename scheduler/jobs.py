@@ -160,6 +160,9 @@ async def process_instrument_cycle(
                 active_reaction_src = src
                 break
 
+    continuation_mode = state.continuation_mode if state else False
+    last_alert_h4_ts = state.last_alert_h4_ts if state else None
+
     pip_size = pip_size_for(instrument)
 
     inp = EngineInput(
@@ -172,6 +175,8 @@ async def process_instrument_cycle(
         active_reaction_src=active_reaction_src,
         tolerance_pips=config.level_tolerance_pips,
         pip_size=pip_size,
+        continuation_mode=continuation_mode,
+        last_alert_h4_ts=last_alert_h4_ts,
     )
 
     # ── Run engine ────────────────────────────────────────────────────────────
@@ -209,19 +214,22 @@ async def process_instrument_cycle(
         alert = out.alert_to_send
         alert_text = format_alert(alert)
 
-        # Persist the H4 formation used for confirmation
-        h4_formation = alert.h4_event.formation_broken
-        h4_formation_id = repo.insert_formation(conn, h4_formation)
-        h4_formation.db_id = h4_formation_id
-
-        # Find IDs for the breakout and reaction source
         bo_id = active_breakout_id or (alert.daily_breakout.db_id)
-        src_id = alert.reaction_source.db_id
 
-        if bo_id and src_id:
+        # Persist H4 formation if present (origin and continuation A-shape have one)
+        h4_formation_id: int | None = None
+        if alert.h4_event is not None:
+            h4_formation = alert.h4_event.formation_broken
+            h4_formation_id = repo.insert_formation(conn, h4_formation)
+            h4_formation.db_id = h4_formation_id
+
+        # Reaction source ID (None for continuation alerts)
+        src_id: int | None = alert.reaction_source.db_id if alert.reaction_source else None
+
+        if bo_id:
             repo.insert_alert(conn, alert, bo_id, src_id, h4_formation_id, alert_text)
 
-        # Deactivate the consumed reaction source
+        # Deactivate the consumed daily reaction source (origin only)
         if src_id:
             repo.deactivate_reaction_source(conn, src_id)
 
@@ -246,6 +254,8 @@ async def process_instrument_cycle(
             retest_in_progress=out.retest_in_progress,
             active_reaction_src_id=active_src_id,
             updated_at=datetime.utcnow(),
+            continuation_mode=out.continuation_mode,
+            last_alert_h4_ts=out.last_alert_h4_ts,
         ),
     )
 

@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS instrument_state (
     active_breakout_id     INTEGER REFERENCES daily_breakouts(id),
     retest_in_progress     INTEGER NOT NULL DEFAULT 0,
     active_reaction_src_id INTEGER REFERENCES reaction_sources(id),
+    continuation_mode      INTEGER NOT NULL DEFAULT 0,
+    last_alert_h4_ts       TEXT,
     updated_at             TEXT    NOT NULL
 );
 
@@ -76,9 +78,10 @@ CREATE TABLE IF NOT EXISTS alerts (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
     instrument           TEXT    NOT NULL,
     direction            TEXT    NOT NULL,
+    alert_classification TEXT    NOT NULL DEFAULT 'origin',
     daily_breakout_id    INTEGER NOT NULL REFERENCES daily_breakouts(id),
-    reaction_source_id   INTEGER NOT NULL REFERENCES reaction_sources(id),
-    h4_formation_id      INTEGER NOT NULL REFERENCES formations(id),
+    reaction_source_id   INTEGER          REFERENCES reaction_sources(id),
+    h4_formation_id      INTEGER          REFERENCES formations(id),
     h4_classification    TEXT    NOT NULL,
     alert_text           TEXT    NOT NULL,
     fired_at             TEXT    NOT NULL
@@ -141,4 +144,54 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 def bootstrap_schema(conn: sqlite3.Connection) -> None:
     """Create all tables and indices if they do not already exist."""
     conn.executescript(_SCHEMA_SQL)
+    _migrate_schema(conn)
+    conn.commit()
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """
+    Apply incremental schema migrations to existing databases.
+    All operations are idempotent — safe to run on every startup.
+    """
+    # Add continuation columns to instrument_state (safe on existing DBs)
+    for col_def in [
+        "continuation_mode INTEGER NOT NULL DEFAULT 0",
+        "last_alert_h4_ts TEXT",
+    ]:
+        col_name = col_def.split()[0]
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(instrument_state)").fetchall()}
+        if col_name not in existing:
+            conn.execute(f"ALTER TABLE instrument_state ADD COLUMN {col_def}")
+
+    # Migrate alerts table: add alert_classification + nullable reaction/formation IDs
+    # Check by looking for alert_classification column
+    alert_cols = {row[1] for row in conn.execute("PRAGMA table_info(alerts)").fetchall()}
+    if "alert_classification" not in alert_cols:
+        conn.executescript("""
+            CREATE TABLE alerts_v2 (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument           TEXT    NOT NULL,
+                direction            TEXT    NOT NULL,
+                alert_classification TEXT    NOT NULL DEFAULT 'origin',
+                daily_breakout_id    INTEGER NOT NULL REFERENCES daily_breakouts(id),
+                reaction_source_id   INTEGER          REFERENCES reaction_sources(id),
+                h4_formation_id      INTEGER          REFERENCES formations(id),
+                h4_classification    TEXT    NOT NULL,
+                alert_text           TEXT    NOT NULL,
+                fired_at             TEXT    NOT NULL
+            );
+            INSERT INTO alerts_v2
+                (id, instrument, direction, alert_classification,
+                 daily_breakout_id, reaction_source_id, h4_formation_id,
+                 h4_classification, alert_text, fired_at)
+            SELECT
+                id, instrument, direction, 'origin',
+                daily_breakout_id, reaction_source_id, h4_formation_id,
+                h4_classification, alert_text, fired_at
+            FROM alerts;
+            DROP TABLE alerts;
+            ALTER TABLE alerts_v2 RENAME TO alerts;
+            CREATE INDEX IF NOT EXISTS idx_alerts_inst ON alerts (instrument, fired_at);
+        """)
+
     conn.commit()

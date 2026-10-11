@@ -5,17 +5,21 @@ This module has NO I/O. It receives pre-fetched candles and pre-loaded state,
 runs the analysis, and returns structured results. The caller (scheduler) is
 responsible for persisting state and sending alerts.
 
-The confirmation chain (all 4 steps required):
+The confirmation chain (all steps required for ORIGIN):
   1. Daily breakout: a Daily candle closes beyond the body level of a qualifying
      A or V formation. The most recent breakout supersedes all prior ones.
   2. Eligible Daily reaction: price returns to a valid reaction source (breaker,
      internal OC, internal A/V, or post-breakout OC).
   3. H4 breakout: the reaction produces a qualifying H4 A/V breakout that closes
      beyond its body level in the same direction as the most recent Daily breakout.
-  4. Alert: only then is directional bias confirmed and an alert fired.
+  4. ORIGIN alert: only then is directional bias confirmed and an alert fired.
 
-Timing rule: retest_in_progress persists until either the H4 confirms or a new
-Daily breakout supersedes. There is no candle-count timeout.
+After an ORIGIN alert, CONTINUATION alerts fire without needing a new Daily retest:
+  • CONTINUATION_ASHAPE: any subsequent H4 A/V formation broken in the daily direction.
+  • CONTINUATION_H4_OC: price reacts from a bullish/bearish H4 OC (two consecutive
+    same-direction H4 candles), closing beyond the OC midpoint.
+
+A new opposing Daily breakout resets everything and starts a fresh origin cycle.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from datetime import datetime
 from typing import Optional
 
 from data.models import (
+    AlertClassification,
     AlertRecord,
     Candle,
     DailyBreakout,
@@ -41,6 +46,7 @@ from analysis.reaction import (
     update_post_breakout_sources,
 )
 from analysis.h4_confirmation import check_h4_breakout
+from analysis.h4_oc import detect_h4_oc_levels, is_h4_oc_triggered
 
 
 @dataclass
@@ -54,6 +60,8 @@ class EngineInput:
     active_reaction_src: Optional[ReactionSource]  # the source currently being retested
     tolerance_pips: float
     pip_size: float
+    continuation_mode: bool = False               # True after first Origin alert fired
+    last_alert_h4_ts: Optional[datetime] = None   # timestamp of confirming H4 candle from last alert
 
 
 @dataclass
@@ -70,6 +78,9 @@ class EngineOutput:
     # Updated retest state
     retest_in_progress: bool = False
     active_reaction_src: Optional[ReactionSource] = None
+    # Continuation state (carried forward each cycle)
+    continuation_mode: bool = False
+    last_alert_h4_ts: Optional[datetime] = None
 
 
 def _price_established_beyond_zone(h4_candles: list[Candle], source: ReactionSource) -> bool:
@@ -85,7 +96,6 @@ def _price_established_beyond_zone(h4_candles: list[Candle], source: ReactionSou
     Without this check the engine would falsely detect a "retest" when price is
     still hovering right at the breakout level immediately after the daily close.
     """
-    from data.models import Direction
     if source.direction == Direction.BULLISH:
         return any(c.close > source.level_band_high for c in h4_candles)
     else:
@@ -127,16 +137,17 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             inp.tolerance_pips,
             inp.pip_size,
         )
-        # Reset retest state — the new breakout invalidates any in-progress retest
+        # Reset all state — the new breakout invalidates any in-progress retest and continuation
         out.retest_in_progress = False
         out.active_reaction_src = None
+        out.continuation_mode = False
+        out.last_alert_h4_ts = None
         return out
 
     # No new breakout this cycle — carry forward existing state
     active_breakout = inp.active_breakout
 
     if active_breakout is None:
-        # No active breakout, nothing to monitor
         return out
 
     # ── STEP 1b: Update post-breakout OC sources after new Daily candle ───────
@@ -162,8 +173,6 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     active_reaction_src = inp.active_reaction_src
 
     if not retest_in_progress:
-        # Check if the latest H4 candle is touching any reaction source zone,
-        # AND that price has first established itself beyond the zone (genuine retest).
         for src in active_sources:
             if (is_price_retesting_source(latest_h4, src)
                     and _price_established_beyond_zone(post_breakout_h4, src)):
@@ -174,45 +183,103 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     out.retest_in_progress = retest_in_progress
     out.active_reaction_src = active_reaction_src
 
-    if not retest_in_progress or active_reaction_src is None:
-        return out
+    # Carry forward continuation state (may be updated below)
+    out.continuation_mode = inp.continuation_mode
+    out.last_alert_h4_ts = inp.last_alert_h4_ts
 
-    # ── STEP 3: Check for qualifying H4 breakout ──────────────────────────────
-    # Use only post-breakout H4 candles so that formation detection reflects
-    # structure built SINCE the daily breakout, not ancient pre-breakout history.
-    h4_event = check_h4_breakout(
-        latest_h4,
-        active_breakout.direction,
-        post_breakout_h4,
-    )
+    # ── STEP 3: Check for qualifying H4 breakout (ORIGIN) ─────────────────────
+    if retest_in_progress and active_reaction_src is not None:
+        h4_event = check_h4_breakout(
+            latest_h4,
+            active_breakout.direction,
+            post_breakout_h4,
+        )
 
-    if h4_event is None:
-        # Retest in progress but no H4 confirmation yet — keep watching
-        return out
+        if h4_event is not None:
+            out.h4_event = h4_event
+            out.alert_to_send = AlertRecord(
+                instrument=inp.instrument,
+                direction=active_breakout.direction,
+                daily_breakout=active_breakout,
+                reaction_source=active_reaction_src,
+                h4_event=h4_event,
+                fired_at=latest_h4.timestamp,
+                classification=AlertClassification.ORIGIN,
+            )
 
-    # ── STEP 4: Bias confirmed — build alert ──────────────────────────────────
-    out.h4_event = h4_event
-    out.alert_to_send = AlertRecord(
-        instrument=inp.instrument,
-        direction=active_breakout.direction,
-        daily_breakout=active_breakout,
-        reaction_source=active_reaction_src,
-        h4_event=h4_event,
-        fired_at=latest_h4.timestamp,
-    )
+            # Source consumed; clear retest state; enable continuation mode
+            out.retest_in_progress = False
+            out.active_reaction_src = None
+            out.continuation_mode = True
+            out.last_alert_h4_ts = latest_h4.timestamp
 
-    # The source is consumed; clear retest state.
-    # The breakout stays active — other sources remain valid for further confirmations.
-    out.retest_in_progress = False
-    out.active_reaction_src = None
+            # Mark the used source as inactive in the updated list
+            for src in out.updated_reaction_srcs:
+                if src is active_reaction_src or (
+                    src.source_type == active_reaction_src.source_type
+                    and src.level == active_reaction_src.level
+                ):
+                    src.is_active = False
+                    break
 
-    # Mark the used source as inactive in the updated list
-    for src in out.updated_reaction_srcs:
-        if src is active_reaction_src or (
-            src.source_type == active_reaction_src.source_type
-            and src.level == active_reaction_src.level
-        ):
-            src.is_active = False
-            break
+            return out
+
+    # ── STEP 4: Check for CONTINUATION alerts ─────────────────────────────────
+    # Only runs when: origin has previously confirmed (continuation_mode = True)
+    #                 AND we are NOT currently retesting a Daily source.
+    if inp.continuation_mode and not retest_in_progress:
+        # Only consider H4 candles formed AFTER the last alert's confirming candle.
+        # This prevents re-firing from the same formation that triggered the last alert.
+        if inp.last_alert_h4_ts is not None:
+            post_last_alert_h4 = [
+                c for c in h4_history if c.timestamp > inp.last_alert_h4_ts
+            ]
+        else:
+            post_last_alert_h4 = post_breakout_h4
+
+        if post_last_alert_h4:
+            # ── 4a: Continuation A/V formation break ──────────────────────────
+            h4_event_cont = check_h4_breakout(
+                latest_h4,
+                active_breakout.direction,
+                post_last_alert_h4,
+            )
+            if h4_event_cont is not None:
+                out.h4_event = h4_event_cont
+                out.alert_to_send = AlertRecord(
+                    instrument=inp.instrument,
+                    direction=active_breakout.direction,
+                    daily_breakout=active_breakout,
+                    reaction_source=None,
+                    h4_event=h4_event_cont,
+                    fired_at=latest_h4.timestamp,
+                    classification=AlertClassification.CONTINUATION_ASHAPE,
+                )
+                out.retest_in_progress = False
+                out.active_reaction_src = None
+                out.continuation_mode = True
+                out.last_alert_h4_ts = latest_h4.timestamp
+                return out
+
+            # ── 4b: Continuation H4 OC reaction ───────────────────────────────
+            tol = inp.tolerance_pips * inp.pip_size
+            h4_oc_levels = detect_h4_oc_levels(post_last_alert_h4, active_breakout.direction)
+            for oc_midpoint, _oc_ts in h4_oc_levels:
+                if is_h4_oc_triggered(latest_h4, oc_midpoint, tol, active_breakout.direction):
+                    out.alert_to_send = AlertRecord(
+                        instrument=inp.instrument,
+                        direction=active_breakout.direction,
+                        daily_breakout=active_breakout,
+                        reaction_source=None,
+                        h4_event=None,
+                        fired_at=latest_h4.timestamp,
+                        classification=AlertClassification.CONTINUATION_H4_OC,
+                        h4_oc_level=oc_midpoint,
+                    )
+                    out.retest_in_progress = False
+                    out.active_reaction_src = None
+                    out.continuation_mode = True
+                    out.last_alert_h4_ts = latest_h4.timestamp
+                    return out
 
     return out
