@@ -128,46 +128,48 @@ export default function InstrumentsPage() {
                 {cat} <span style={{ opacity: 0.5 }}>({items.length})</span>
               </h2>
               <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Instrument</th>
-                      <th>Setup State</th>
-                      <th>Confirmed Bias</th>
-                      <th>Breakout Level</th>
-                      <th>Sources</th>
-                      <th>Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map(inst => (
-                      <tr key={inst.instrument}>
-                        <td>
-                          <span style={{ fontWeight: 600, fontSize: 13 }}>{inst.instrument}</span>
-                        </td>
-                        <td>
-                          <StateBadge state={inst.state} direction={inst.direction} />
-                        </td>
-                        <td>
-                          <ConfirmedBias inst={inst} />
-                        </td>
-                        <td>
-                          <span style={{ fontFamily: 'monospace', fontSize: 12, color: inst.breakout_level ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                            {inst.breakout_level?.toFixed(5) ?? '—'}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ fontSize: 12, color: inst.active_sources_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                            {inst.active_sources_count > 0 ? inst.active_sources_count : '—'}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{timeAgo(inst.last_updated)}</span>
-                        </td>
+                <div className="table-wrap">
+                  <table className="data-table" style={{ minWidth: 600 }}>
+                    <thead>
+                      <tr>
+                        <th>Instrument</th>
+                        <th>Setup State</th>
+                        <th>Confirmed Bias</th>
+                        <th>Breakout Level</th>
+                        <th>Sources</th>
+                        <th>Updated</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {items.map(inst => (
+                        <tr key={inst.instrument}>
+                          <td>
+                            <span style={{ fontWeight: 600, fontSize: 13 }}>{inst.instrument}</span>
+                          </td>
+                          <td>
+                            <StateBadge state={inst.state} direction={inst.direction} />
+                          </td>
+                          <td>
+                            <ConfirmedBias inst={inst} />
+                          </td>
+                          <td>
+                            <span style={{ fontFamily: 'monospace', fontSize: 12, color: inst.breakout_level ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                              {inst.breakout_level?.toFixed(5) ?? '—'}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 12, color: inst.active_sources_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                              {inst.active_sources_count > 0 ? inst.active_sources_count : '—'}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{timeAgo(inst.last_updated)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           )

@@ -138,7 +138,7 @@ export default function OverviewPage() {
             </div>
 
             {/* Progress tracker */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="topbar-progress" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {steps.map((s, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   {i > 0 && <div style={{ width: 16, height: 1, background: 'var(--border)' }} />}

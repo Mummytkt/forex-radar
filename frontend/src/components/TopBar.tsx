@@ -59,7 +59,8 @@ export default function TopBar({ title, subtitle }: Props) {
         <h1 style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', lineHeight: 1.2 }}>{title}</h1>
         {subtitle && <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{subtitle}</p>}
       </div>
-      <div className="topbar-clock" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      {/* Desktop: full clock + market labels */}
+      <div className="topbar-clock-full" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span className={forexOpen ? 'pulse' : ''} style={{ width: 7, height: 7, borderRadius: '50%', background: forexOpen ? 'var(--bullish)' : 'var(--bearish)', display: 'inline-block' }} />
@@ -76,6 +77,18 @@ export default function TopBar({ title, subtitle }: Props) {
           background: 'var(--card)', color: 'var(--text-secondary)',
           border: '1px solid var(--border)',
         }}>{timeStr}</span>
+      </div>
+
+      {/* Mobile: compact dots only */}
+      <div className="market-dots-mobile" style={{ alignItems: 'center', gap: 10 }}>
+        <span title={`Forex ${forexOpen ? 'Open' : 'Closed'}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-secondary)' }}>
+          <span className={forexOpen ? 'pulse' : ''} style={{ width: 7, height: 7, borderRadius: '50%', background: forexOpen ? 'var(--bullish)' : 'var(--bearish)', display: 'inline-block', flexShrink: 0 }} />
+          FX {forexOpen ? 'Open' : 'Closed'}
+        </span>
+        <span title="Crypto Open" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-secondary)' }}>
+          <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--bullish)', display: 'inline-block', flexShrink: 0 }} />
+          Crypto
+        </span>
       </div>
     </header>
   )

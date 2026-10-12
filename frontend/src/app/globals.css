@@ -150,8 +150,13 @@ body {
   .grid-2 { grid-template-columns: 1fr !important; }
   .grid-3 { grid-template-columns: 1fr !important; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .table-wrap .data-table { min-width: 520px; }
-  .topbar-clock { display: none !important; }
+  .table-wrap .data-table { min-width: 600px; }
+  /* hide clock + text on mobile; market-dots-mobile shows compact dots */
+  .topbar-clock-full { display: none !important; }
+  .market-dots-mobile { display: flex !important; }
+  .topbar-progress { display: none !important; }
   .sidebar-mobile { transform: translateX(-100%); }
   .sidebar-mobile.sidebar-open { transform: translateX(0); }
 }
+/* market-dots-mobile hidden by default on desktop */
+.market-dots-mobile { display: none; }
