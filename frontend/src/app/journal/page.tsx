@@ -195,6 +195,62 @@ function blank() {
   }
 }
 
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function Lightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 300,
+        background: 'rgba(0,0,0,0.88)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        style={{
+          position: 'absolute', top: 16, right: 16,
+          width: 36, height: 36, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)',
+          color: 'white', cursor: 'pointer', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <X size={16} />
+      </button>
+
+      {/* Image */}
+      <img
+        src={url}
+        alt={name}
+        onClick={e => e.stopPropagation()}
+        style={{
+          maxWidth: '100%', maxHeight: 'calc(100vh - 80px)',
+          borderRadius: 10, boxShadow: '0 8px 48px rgba(0,0,0,0.6)',
+          objectFit: 'contain', display: 'block',
+        }}
+      />
+
+      {/* Filename */}
+      <div style={{
+        marginTop: 12, fontSize: 12, color: 'rgba(255,255,255,0.6)',
+        maxWidth: '80%', textAlign: 'center', wordBreak: 'break-all',
+      }}>
+        {name}
+      </div>
+    </div>
+  )
+}
+
 // ── Image thumbnail strip ─────────────────────────────────────────────────────
 function ImageStrip({
   label,
@@ -203,6 +259,7 @@ function ImageStrip({
   pending,
   onAddPending,
   onRemovePending,
+  onView,
 }: {
   label: string
   existing: TradeImage[]
@@ -210,6 +267,7 @@ function ImageStrip({
   pending: File[]
   onAddPending: (files: File[]) => void
   onRemovePending: (idx: number) => void
+  onView: (url: string, name: string) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingUrls = useMemo(
@@ -262,15 +320,25 @@ function ImageStrip({
       ) : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {existing.map(img => (
-            <ExistingThumb key={img.id} img={img} onDelete={() => onDeleteExisting(img.id)} />
+            <ExistingThumb key={img.id} img={img}
+              onDelete={() => onDeleteExisting(img.id)}
+              onView={onView}
+            />
           ))}
           {pendingUrls.map((url, i) => (
             <div key={i} style={{ position: 'relative' }}>
-              <img src={url} alt={pending[i].name}
-                style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }} />
+              <img
+                src={url} alt={pending[i].name}
+                onClick={() => onView(url, pending[i].name)}
+                style={{
+                  width: 72, height: 72, objectFit: 'cover', borderRadius: 8,
+                  border: '1px solid var(--border)', display: 'block',
+                  cursor: 'zoom-in',
+                }}
+              />
               <button
                 type="button"
-                onClick={() => onRemovePending(i)}
+                onClick={e => { e.stopPropagation(); onRemovePending(i) }}
                 style={{
                   position: 'absolute', top: -5, right: -5,
                   width: 18, height: 18, borderRadius: '50%',
@@ -302,7 +370,13 @@ function ImageStrip({
   )
 }
 
-function ExistingThumb({ img, onDelete }: { img: TradeImage; onDelete: () => void }) {
+function ExistingThumb({
+  img, onDelete, onView,
+}: {
+  img: TradeImage
+  onDelete: () => void
+  onView: (url: string, name: string) => void
+}) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     const u = URL.createObjectURL(img.blob)
@@ -312,11 +386,18 @@ function ExistingThumb({ img, onDelete }: { img: TradeImage; onDelete: () => voi
   if (!url) return null
   return (
     <div style={{ position: 'relative' }}>
-      <img src={url} alt={img.name}
-        style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }} />
+      <img
+        src={url} alt={img.name}
+        onClick={() => onView(url, img.name)}
+        style={{
+          width: 72, height: 72, objectFit: 'cover', borderRadius: 8,
+          border: '1px solid var(--border)', display: 'block',
+          cursor: 'zoom-in',
+        }}
+      />
       <button
         type="button"
-        onClick={onDelete}
+        onClick={e => { e.stopPropagation(); onDelete() }}
         style={{
           position: 'absolute', top: -5, right: -5,
           width: 18, height: 18, borderRadius: '50%',
@@ -491,6 +572,7 @@ function TradeModal({
   const [existingAfter, setExistingAfter] = useState<TradeImage[]>([])
   const [pendingBefore, setPendingBefore] = useState<File[]>([])
   const [pendingAfter, setPendingAfter] = useState<File[]>([])
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
 
   useEffect(() => {
     if (editEntryId) {
@@ -733,6 +815,7 @@ function TradeModal({
                 pending={pendingBefore}
                 onAddPending={files => setPendingBefore(p => [...p, ...files])}
                 onRemovePending={idx => setPendingBefore(p => p.filter((_, i) => i !== idx))}
+                onView={(url, name) => setLightbox({ url, name })}
               />
               <ImageStrip
                 label="After (outcome / review)"
@@ -741,6 +824,7 @@ function TradeModal({
                 pending={pendingAfter}
                 onAddPending={files => setPendingAfter(p => [...p, ...files])}
                 onRemovePending={idx => setPendingAfter(p => p.filter((_, i) => i !== idx))}
+                onView={(url, name) => setLightbox({ url, name })}
               />
             </div>
           </div>
@@ -772,6 +856,11 @@ function TradeModal({
           </button>
         </div>
       </div>
+
+      {/* Lightbox — renders above the modal */}
+      {lightbox && (
+        <Lightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />
+      )}
     </div>
   )
 }
