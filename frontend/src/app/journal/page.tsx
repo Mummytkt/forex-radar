@@ -46,16 +46,18 @@ const RESULT_COLOR: Record<string, string> = {
   win: 'var(--bullish)',
   loss: 'var(--bearish)',
   breakeven: '#f59e0b',
+  missed: '#8b5cf6',
   open: 'var(--accent)',
 }
 const RESULT_BG: Record<string, string> = {
   win: 'var(--bullish-bg)',
   loss: 'var(--bearish-bg)',
   breakeven: 'rgba(245,158,11,0.12)',
+  missed: 'rgba(139,92,246,0.12)',
   open: 'var(--accent-bg)',
 }
 const RESULT_LABEL: Record<string, string> = {
-  win: 'WIN', loss: 'LOSS', breakeven: 'BE', open: 'OPEN',
+  win: 'WIN', loss: 'LOSS', breakeven: 'BE', missed: 'MISSED', open: 'OPEN',
 }
 const SETUP_LABELS: Record<string, string> = {
   origin: 'Origin',
@@ -432,20 +434,85 @@ function ExistingThumb({
   )
 }
 
+// ── Inline result picker ──────────────────────────────────────────────────────
+const RESULT_OPTIONS = [
+  { v: 'win',       label: '✓ Win',   color: 'var(--bullish)', bg: 'var(--bullish-bg)' },
+  { v: 'loss',      label: '✕ Loss',  color: 'var(--bearish)', bg: 'var(--bearish-bg)' },
+  { v: 'missed',    label: 'Missed',  color: '#8b5cf6',        bg: 'rgba(139,92,246,0.12)' },
+  { v: 'breakeven', label: 'B/E',     color: '#f59e0b',        bg: 'rgba(245,158,11,0.12)' },
+  { v: 'open',      label: 'Open',    color: 'var(--accent)',  bg: 'var(--accent-bg)' },
+] as const
+
+function ResultPicker({ entry, onResultChange }: { entry: Entry; onResultChange: (id: number, result: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const rc = RESULT_COLOR[entry.result] || 'var(--text-muted)'
+  const rb = RESULT_BG[entry.result] || 'transparent'
+  return (
+    <div style={{ position: 'relative', width: 58, flexShrink: 0, textAlign: 'center' }}>
+      <button
+        type="button"
+        title="Tap to mark result"
+        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        style={{
+          display: 'inline-block', fontSize: 10, fontWeight: 700,
+          padding: '3px 6px', borderRadius: 5,
+          background: rb, color: rc, border: `1px solid ${rc}`,
+          cursor: 'pointer', minWidth: 44,
+        }}
+      >
+        {RESULT_LABEL[entry.result] || entry.result.toUpperCase()}
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 149 }}
+            onClick={e => { e.stopPropagation(); setOpen(false) }} />
+          <div style={{
+            position: 'absolute', right: 0, bottom: 'calc(100% + 6px)',
+            background: 'var(--card)', border: '1px solid var(--border)',
+            borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
+            zIndex: 150, overflow: 'hidden', minWidth: 110,
+          }}>
+            <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '6px 10px 4px', margin: 0 }}>
+              Mark as
+            </p>
+            {RESULT_OPTIONS.filter(o => o.v !== entry.result).map(o => (
+              <button
+                key={o.v} type="button"
+                onClick={e => { e.stopPropagation(); onResultChange(entry.id, o.v); setOpen(false) }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  width: '100%', padding: '8px 12px', border: 'none',
+                  background: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600, color: o.color, textAlign: 'left',
+                }}
+                onMouseEnter={el => (el.currentTarget.style.background = o.bg)}
+                onMouseLeave={el => (el.currentTarget.style.background = 'none')}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Trade row ─────────────────────────────────────────────────────────────────
 function TradeRow({
   entry,
   onView,
   onEdit,
   onDelete,
+  onResultChange,
 }: {
   entry: Entry
   onView: (e: Entry) => void
   onEdit: (e: Entry) => void
   onDelete: (id: number) => void
+  onResultChange: (id: number, result: string) => void
 }) {
   const rc = RESULT_COLOR[entry.result] || 'var(--text-muted)'
-  const rb = RESULT_BG[entry.result] || 'transparent'
   const isBuy = entry.direction === 'buy'
 
   return (
@@ -534,18 +601,8 @@ function TradeRow({
         )}
       </div>
 
-      {/* Result badge */}
-      <div style={{ width: 52, textAlign: 'center', flexShrink: 0 }}>
-        <span style={{
-          display: 'inline-block',
-          fontSize: 10, fontWeight: 700,
-          padding: '3px 7px', borderRadius: 5,
-          background: rb, color: rc,
-          border: `1px solid ${rc}`,
-        }}>
-          {RESULT_LABEL[entry.result] || entry.result.toUpperCase()}
-        </span>
-      </div>
+      {/* Result picker */}
+      <ResultPicker entry={entry} onResultChange={onResultChange} />
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -951,10 +1008,11 @@ function TradeModal({
             <label style={labelStyle}>Result</label>
             <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
               {([
-                { v: 'open',      label: 'Open',  activeColor: 'var(--accent)',   activeBg: 'var(--accent-bg)' },
-                { v: 'win',       label: '✓ Win', activeColor: 'var(--bullish)',  activeBg: 'var(--bullish-bg)' },
-                { v: 'loss',      label: '✕ Loss',activeColor: 'var(--bearish)',  activeBg: 'var(--bearish-bg)' },
-                { v: 'breakeven', label: 'B/E',   activeColor: '#f59e0b',         activeBg: 'rgba(245,158,11,0.14)' },
+                { v: 'open',      label: 'Open',    activeColor: 'var(--accent)',   activeBg: 'var(--accent-bg)' },
+                { v: 'win',       label: '✓ Win',   activeColor: 'var(--bullish)',  activeBg: 'var(--bullish-bg)' },
+                { v: 'loss',      label: '✕ Loss',  activeColor: 'var(--bearish)',  activeBg: 'var(--bearish-bg)' },
+                { v: 'missed',    label: 'Missed',  activeColor: '#8b5cf6',         activeBg: 'rgba(139,92,246,0.14)' },
+                { v: 'breakeven', label: 'B/E',     activeColor: '#f59e0b',         activeBg: 'rgba(245,158,11,0.14)' },
               ] as const).map(({ v, label, activeColor, activeBg }) => (
                 <button key={v} type="button" onClick={() => set('result', v)} style={{
                   flex: 1, padding: '10px 4px', border: 'none', cursor: 'pointer',
@@ -1162,10 +1220,12 @@ export default function JournalPage() {
     const wins = closed.filter(e => e.result === 'win').length
     const losses = closed.filter(e => e.result === 'loss').length
     const breakeven = closed.filter(e => e.result === 'breakeven').length
+    const missed = closed.filter(e => e.result === 'missed').length
     const open = entries.filter(e => e.result === 'open').length
+    const decided = closed.filter(e => e.result === 'win' || e.result === 'loss')
     const totalPips = closed.reduce((s, e) => s + (e.pips ?? 0), 0)
     const avgPips = closed.length ? totalPips / closed.length : 0
-    const winRate = closed.length ? (wins / closed.length) * 100 : 0
+    const winRate = decided.length ? (wins / decided.length) * 100 : 0
     const bestPips = closed.filter(e => e.pips != null).reduce((m, e) => Math.max(m, e.pips!), -Infinity)
     const rrArr = closed.filter(e => e.rr_ratio != null).map(e => e.rr_ratio!)
     const avgRR = rrArr.length ? rrArr.reduce((s, v) => s + v, 0) / rrArr.length : null
@@ -1187,7 +1247,7 @@ export default function JournalPage() {
         for (const e of sorted) { if (e.result === first) streak++; else break }
       }
     }
-    return { total: entries.length, wins, losses, breakeven, open, totalPips, avgPips, winRate, bestPips: isFinite(bestPips) ? bestPips : null, avgRR, streak, streakType, netPnl, hasPnl: riskedEntries.length > 0 }
+    return { total: entries.length, wins, losses, breakeven, missed, open, totalPips, avgPips, winRate, bestPips: isFinite(bestPips) ? bestPips : null, avgRR, streak, streakType, netPnl, hasPnl: riskedEntries.length > 0 }
   }, [entries])
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
@@ -1262,6 +1322,14 @@ export default function JournalPage() {
     setConfirmDelete(null); load()
   }
 
+  const handleResultChange = async (id: number, result: string) => {
+    setEntries(es => es.map(e => e.id === id ? { ...e, result } : e))
+    await fetch(`${API_BASE}/api/journal/${id}`, {
+      method: 'PUT', headers: hdrs(),
+      body: JSON.stringify({ result }),
+    })
+  }
+
   const [showExportMenu, setShowExportMenu] = useState(false)
   useEffect(() => {
     if (!showExportMenu) return
@@ -1321,7 +1389,7 @@ export default function JournalPage() {
   tr:nth-child(even) td{background:#fafafa;}
   .win{color:#16a34a;font-weight:700;} .loss{color:#dc2626;font-weight:700;}
   .buy{color:#16a34a;} .sell{color:#dc2626;}
-  .open{color:#4f46e5;} .breakeven{color:#d97706;font-weight:700;}
+  .open{color:#4f46e5;} .breakeven{color:#d97706;font-weight:700;} .missed{color:#8b5cf6;font-weight:700;}
   @media print{body{margin:10px;}}
 </style></head><body>
 <h1>MummyTKT's Bias Pointer — Trading Journal</h1>
@@ -1446,6 +1514,7 @@ export default function JournalPage() {
               <span style={{ fontSize: 11, color: 'var(--bullish)', fontWeight: 600 }}>{stats.wins}W</span>
               <span style={{ fontSize: 11, color: 'var(--bearish)', fontWeight: 600 }}>{stats.losses}L</span>
               {stats.breakeven > 0 && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>{stats.breakeven}BE</span>}
+              {stats.missed > 0 && <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600 }}>{stats.missed}M</span>}
               {stats.open > 0 && <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>{stats.open} open</span>}
             </div>
             {stats.total > 0 && (
@@ -1468,7 +1537,7 @@ export default function JournalPage() {
               <WinRing rate={stats.winRate} />
               <div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{stats.wins} wins</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>of {stats.total - stats.open} closed</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>of {stats.wins + stats.losses} decided</div>
                 {stats.avgRR != null && (
                   <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>avg {stats.avgRR.toFixed(1)}R</div>
                 )}
@@ -1594,6 +1663,7 @@ export default function JournalPage() {
                   onView={setViewEntry}
                   onEdit={openEdit}
                   onDelete={id => setConfirmDelete(id)}
+                  onResultChange={handleResultChange}
                 />
               ))}
             </div>
