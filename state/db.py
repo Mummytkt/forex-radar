@@ -253,6 +253,49 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
           )
     """)
 
+    # ── Fix stale wrong-direction breakouts ───────────────────────────────────
+    # A prior engine bug allowed a small A-shape formed BELOW a bearish broken
+    # level (during a retest rally) to trigger a new BULLISH supersession.
+    # Similarly a V-shape above a bullish level could cause a spurious BEARISH
+    # supersession.  Detect and clear these: if the active breakout direction is
+    # BULLISH but the most recent stored daily candle closed BELOW the broken
+    # level, or BEARISH but closed ABOVE the broken level, the breakout is wrong.
+    # Deactivate it and clear instrument state so the engine re-detects cleanly.
+    conn.execute("""
+        UPDATE daily_breakouts
+        SET is_active = 0
+        WHERE is_active = 1
+          AND id IN (
+            SELECT db.id
+            FROM daily_breakouts db
+            JOIN instrument_state ist ON ist.active_breakout_id = db.id
+            JOIN raw_candles rc
+              ON rc.instrument = db.instrument
+             AND rc.timeframe  = '1day'
+             AND rc.ts = (
+               SELECT MAX(ts) FROM raw_candles
+               WHERE instrument = db.instrument AND timeframe = '1day'
+             )
+            WHERE (db.direction = 'bullish' AND rc.close < db.broken_level)
+               OR (db.direction = 'bearish' AND rc.close > db.broken_level)
+          )
+    """)
+
+    conn.execute("""
+        UPDATE instrument_state
+        SET active_breakout_id     = NULL,
+            retest_in_progress     = 0,
+            active_reaction_src_id = NULL,
+            retest_started_h4_ts   = NULL,
+            continuation_mode      = 0,
+            last_alert_h4_ts       = NULL,
+            last_h4_breaker_level  = NULL
+        WHERE active_breakout_id IS NOT NULL
+          AND active_breakout_id NOT IN (
+            SELECT id FROM daily_breakouts WHERE is_active = 1
+          )
+    """)
+
     # Add journal_entries table if missing
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     if "journal_entries" not in tables:

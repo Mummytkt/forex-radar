@@ -155,7 +155,37 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     most_recent_a = get_most_recent_a_shape(daily_history)
     most_recent_v = get_most_recent_v_shape(daily_history)
 
-    new_breakout = check_daily_breakout(latest_daily, most_recent_a, most_recent_v)
+    # Guard against spurious opposing-direction supersession during a retest.
+    #
+    # Scenario (bug): bearish breakout active at level X. Price retests (rallies
+    # back toward X). During the rally a small A-shape forms at level Y < X.  A
+    # daily candle closes above Y → engine fires a BULLISH breakout and discards
+    # the correct BEARISH setup.  But closing above Y (still below X) means price
+    # is still inside the bearish range — it has not reversed.
+    #
+    # Rule: an opposing breakout is only valid when its formation level is on the
+    # FAR side of the active broken level — i.e., price has genuinely reversed:
+    #   • BEARISH active at X: new BULLISH requires A-shape level ≥ X
+    #   • BULLISH active at X: new BEARISH requires V-shape level ≤ X
+    #
+    # Same-direction supersession (new bearish while bearish active, or new
+    # bullish while bullish active) is never filtered — the most recent
+    # formation in the same direction always applies.
+    check_a = most_recent_a
+    check_v = most_recent_v
+    if inp.active_breakout is not None:
+        if (inp.active_breakout.direction == Direction.BEARISH
+                and check_a is not None
+                and check_a.level < inp.active_breakout.broken_level):
+            # A-shape inside the bearish range — suppress as reversal candidate
+            check_a = None
+        elif (inp.active_breakout.direction == Direction.BULLISH
+                and check_v is not None
+                and check_v.level > inp.active_breakout.broken_level):
+            # V-shape inside the bullish range — suppress as reversal candidate
+            check_v = None
+
+    new_breakout = check_daily_breakout(latest_daily, check_a, check_v)
 
     if new_breakout is not None:
         # New breakout supersedes everything. Recompute all reaction sources.
