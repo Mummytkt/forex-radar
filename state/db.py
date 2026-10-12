@@ -239,6 +239,31 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
           )
     """)
 
+    # ── Data cleanup: prune excess AV_INSIDE_RANGE / OC_INSIDE_RANGE sources ──
+    # Long-running breakouts accumulated every pre-breakout formation in the range
+    # (50-110 sources per instrument), making retest detection fire constantly.
+    # Cap to the 5 closest to the broken_level per source_type per breakout.
+    for _stype in ("av_inside_range", "oc_inside_range"):
+        conn.execute(f"""
+            DELETE FROM reaction_sources
+            WHERE source_type = '{_stype}'
+              AND id NOT IN (
+                SELECT rs.id
+                FROM reaction_sources rs
+                JOIN daily_breakouts db ON rs.daily_breakout_id = db.id
+                WHERE rs.source_type = '{_stype}'
+                  AND (
+                    SELECT COUNT(*)
+                    FROM reaction_sources rs2
+                    JOIN daily_breakouts db2 ON rs2.daily_breakout_id = db2.id
+                    WHERE rs2.source_type = '{_stype}'
+                      AND rs2.daily_breakout_id = rs.daily_breakout_id
+                      AND ABS(rs2.level - db2.broken_level)
+                          <= ABS(rs.level - db.broken_level)
+                  ) <= 5
+              )
+        """)
+
     # Reset retest state for any instrument whose active reaction source was
     # just pruned (or was otherwise deleted/deactivated).  The engine will
     # re-detect genuine retests on the next H4 cycle via wick-based detection.

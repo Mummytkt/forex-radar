@@ -28,6 +28,9 @@ from data.models import (
 from analysis.formations import detect_a_shape, detect_oc_levels, detect_v_shape
 
 
+_MAX_INSIDE_RANGE = 5  # max AV_INSIDE_RANGE and OC_INSIDE_RANGE sources per breakout
+
+
 def _tolerance_band(level: float, tolerance_pips: float, pip_size: float) -> tuple[float, float]:
     offset = tolerance_pips * pip_size
     return (level - offset, level + offset)
@@ -103,42 +106,53 @@ def compute_reaction_sources(
     # explicitly drawn A/V level takes precedence over the derived OC level.
     # After BEARISH breakout: A-shapes inside the range are valid (resistance).
     # After BULLISH breakout: V-shapes inside the range are valid (support).
+    # Cap at _MAX_INSIDE_RANGE closest to the broken level: a long-running breakout
+    # accumulates dozens of formations across the full pre-breakout range, most of
+    # which are far from the broken level and irrelevant for retest detection.
     if direction == Direction.BEARISH:
         av_formations = detect_a_shape(pre_candles)
     else:
         av_formations = detect_v_shape(pre_candles)
 
-    for f in av_formations:
-        if range_low <= f.level <= range_high and abs(f.level - broken_level) > _tol:
-            band = _tolerance_band(f.level, tolerance_pips, pip_size)
-            sources.append(
-                ReactionSource(
-                    instrument=instrument,
-                    source_type=ReactionSourceType.AV_INSIDE_RANGE,
-                    direction=direction,
-                    level=f.level,
-                    level_band_low=band[0],
-                    level_band_high=band[1],
-                    daily_breakout_ts=breakout_ts,
-                )
+    av_candidates = [
+        f for f in av_formations
+        if range_low <= f.level <= range_high and abs(f.level - broken_level) > _tol
+    ]
+    av_candidates.sort(key=lambda f: abs(f.level - broken_level))
+    for f in av_candidates[:_MAX_INSIDE_RANGE]:
+        band = _tolerance_band(f.level, tolerance_pips, pip_size)
+        sources.append(
+            ReactionSource(
+                instrument=instrument,
+                source_type=ReactionSourceType.AV_INSIDE_RANGE,
+                direction=direction,
+                level=f.level,
+                level_band_low=band[0],
+                level_band_high=band[1],
+                daily_breakout_ts=breakout_ts,
             )
+        )
 
     # ── 3. OC_INSIDE_RANGE ───────────────────────────────────────────────────
     oc_levels = detect_oc_levels(pre_candles)
-    for oc in oc_levels:
-        if oc.direction == direction and range_low <= oc.level <= range_high and abs(oc.level - broken_level) > _tol:
-            band = _tolerance_band(oc.level, tolerance_pips, pip_size)
-            sources.append(
-                ReactionSource(
-                    instrument=instrument,
-                    source_type=ReactionSourceType.OC_INSIDE_RANGE,
-                    direction=direction,
-                    level=oc.level,
-                    level_band_low=band[0],
-                    level_band_high=band[1],
-                    daily_breakout_ts=breakout_ts,
-                )
+    oc_candidates = [
+        oc for oc in oc_levels
+        if oc.direction == direction and range_low <= oc.level <= range_high and abs(oc.level - broken_level) > _tol
+    ]
+    oc_candidates.sort(key=lambda oc: abs(oc.level - broken_level))
+    for oc in oc_candidates[:_MAX_INSIDE_RANGE]:
+        band = _tolerance_band(oc.level, tolerance_pips, pip_size)
+        sources.append(
+            ReactionSource(
+                instrument=instrument,
+                source_type=ReactionSourceType.OC_INSIDE_RANGE,
+                direction=direction,
+                level=oc.level,
+                level_band_low=band[0],
+                level_band_high=band[1],
+                daily_breakout_ts=breakout_ts,
             )
+        )
 
     # ── 4. POST_BREAKOUT_DAILY_OC ─────────────────────────────────────────────
     # Only keep the 3 most recent post-breakout OC levels. Keeping every OC
