@@ -1,12 +1,16 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Plus, Download, TrendingUp, TrendingDown, Target, Flame,
   Trophy, X, Edit2, Trash2, ChevronDown, Check, Minus,
-  BookMarked, Zap, Star
+  BookMarked, Zap, Star, Camera, Upload, ImageIcon,
 } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
+import {
+  TradeImage, getTradeImages, addTradeImage,
+  deleteTradeImage, deleteAllTradeImages,
+} from '@/lib/tradeImages'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Entry {
@@ -20,6 +24,8 @@ interface Entry {
   exit_price: number | null
   pips: number | null
   rr_ratio: number | null
+  amount_risked: number | null
+  amount_aimed: number | null
   result: string
   setup_type: string
   session: string | null
@@ -61,6 +67,8 @@ const INSTRUMENTS = [
   'GBP/JPY','GBP/AUD','GBP/CAD','GBP/NZD','GBP/CHF',
   'AUD/JPY','AUD/CAD','AUD/NZD','AUD/CHF','NZD/JPY','NZD/CAD','NZD/CHF',
   'CAD/JPY','CAD/CHF','CHF/JPY','XAU/USD',
+  'WTI/USD','US30','NAS100','SPX500','UK100','GER40','JPN225',
+  'BTC/USD','ETH/USD',
 ]
 const PERIODS: { key: Period; label: string }[] = [
   { key: 'today', label: 'Today' },
@@ -143,7 +151,6 @@ function EquityCurve({ entries }: { entries: Entry[] }) {
   const final = cumulative[cumulative.length - 1]
   const positive = final >= 0
   const lineColor = positive ? 'var(--bullish)' : 'var(--bearish)'
-  const fillColor = positive ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'
 
   return (
     <div style={{ position: 'relative' }}>
@@ -164,19 +171,12 @@ function EquityCurve({ entries }: { entries: Entry[] }) {
             <stop offset="100%" stopColor={positive ? '#22c55e' : '#ef4444'} stopOpacity="0" />
           </linearGradient>
         </defs>
-        {/* Zero line */}
         <line x1={PAD} y1={zeroY} x2={W - PAD} y2={zeroY}
           stroke="var(--border)" strokeWidth="0.5" strokeDasharray="1,1" />
-        {/* Area fill */}
         <polygon points={areaPoints} fill="url(#equityFill)" />
-        {/* Line */}
         <polyline points={linePoints} fill="none" stroke={lineColor} strokeWidth="1.2"
           strokeLinecap="round" strokeLinejoin="round" />
-        {/* Last point dot */}
-        <circle
-          cx={toX(cumulative.length - 1)} cy={toY(final)}
-          r="1.5" fill={lineColor}
-        />
+        <circle cx={toX(cumulative.length - 1)} cy={toY(final)} r="1.5" fill={lineColor} />
       </svg>
     </div>
   )
@@ -188,9 +188,150 @@ function blank() {
     trade_date: '',
     instrument: '', direction: 'buy',
     entry_price: '', stop_loss: '', take_profit: '', exit_price: '',
-    pips: '', rr_ratio: '', result: 'open', setup_type: 'other',
+    pips: '', rr_ratio: '',
+    amount_risked: '', amount_aimed: '',
+    result: 'open', setup_type: 'other',
     session: '', notes: '',
   }
+}
+
+// ── Image thumbnail strip ─────────────────────────────────────────────────────
+function ImageStrip({
+  label,
+  existing,
+  onDeleteExisting,
+  pending,
+  onAddPending,
+  onRemovePending,
+}: {
+  label: string
+  existing: TradeImage[]
+  onDeleteExisting: (id: number) => void
+  pending: File[]
+  onAddPending: (files: File[]) => void
+  onRemovePending: (idx: number) => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const pendingUrls = useMemo(
+    () => pending.map(f => URL.createObjectURL(f)),
+    [pending],
+  )
+
+  useEffect(() => {
+    return () => pendingUrls.forEach(u => URL.revokeObjectURL(u))
+  }, [pendingUrls])
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            fontSize: 11, fontWeight: 600, color: 'var(--accent)',
+            background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+          }}
+        >
+          <Upload size={11} /> Add
+        </button>
+      </div>
+      <input
+        ref={inputRef} type="file" accept="image/*" multiple
+        style={{ display: 'none' }}
+        onChange={e => {
+          if (e.target.files) onAddPending(Array.from(e.target.files))
+          e.target.value = ''
+        }}
+      />
+      {existing.length === 0 && pending.length === 0 ? (
+        <div
+          onClick={() => inputRef.current?.click()}
+          style={{
+            border: '1px dashed var(--border)', borderRadius: 8,
+            padding: '14px', textAlign: 'center', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 12,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}
+        >
+          <ImageIcon size={14} /> Click to add screenshot
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {existing.map(img => (
+            <ExistingThumb key={img.id} img={img} onDelete={() => onDeleteExisting(img.id)} />
+          ))}
+          {pendingUrls.map((url, i) => (
+            <div key={i} style={{ position: 'relative' }}>
+              <img src={url} alt={pending[i].name}
+                style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }} />
+              <button
+                type="button"
+                onClick={() => onRemovePending(i)}
+                style={{
+                  position: 'absolute', top: -5, right: -5,
+                  width: 18, height: 18, borderRadius: '50%',
+                  background: 'var(--bearish)', color: 'white',
+                  border: 'none', cursor: 'pointer', fontSize: 10,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <X size={9} />
+              </button>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pending[i].name}
+              </div>
+            </div>
+          ))}
+          <div
+            onClick={() => inputRef.current?.click()}
+            style={{
+              width: 72, height: 72, border: '1px dashed var(--border)', borderRadius: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0,
+            }}
+          >
+            <Plus size={18} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ExistingThumb({ img, onDelete }: { img: TradeImage; onDelete: () => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    const u = URL.createObjectURL(img.blob)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [img.blob])
+  if (!url) return null
+  return (
+    <div style={{ position: 'relative' }}>
+      <img src={url} alt={img.name}
+        style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }} />
+      <button
+        type="button"
+        onClick={onDelete}
+        style={{
+          position: 'absolute', top: -5, right: -5,
+          width: 18, height: 18, borderRadius: '50%',
+          background: 'var(--bearish)', color: 'white',
+          border: 'none', cursor: 'pointer', fontSize: 10,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <X size={9} />
+      </button>
+      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {img.name}
+      </div>
+    </div>
+  )
 }
 
 // ── Trade row ─────────────────────────────────────────────────────────────────
@@ -257,6 +398,22 @@ function TradeRow({
         </p>
       </div>
 
+      {/* Risk / Reward amounts */}
+      {(entry.amount_risked != null || entry.amount_aimed != null) && (
+        <div style={{ width: 80, textAlign: 'right', flexShrink: 0 }}>
+          {entry.amount_risked != null && (
+            <p style={{ fontSize: 10, color: 'var(--bearish)', fontWeight: 600 }}>
+              −${entry.amount_risked.toFixed(0)}
+            </p>
+          )}
+          {entry.amount_aimed != null && (
+            <p style={{ fontSize: 10, color: 'var(--bullish)', fontWeight: 600, marginTop: 2 }}>
+              +${entry.amount_aimed.toFixed(0)}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Pips */}
       <div style={{ width: 60, textAlign: 'right', flexShrink: 0 }}>
         {entry.pips != null ? (
@@ -316,18 +473,42 @@ function TradeRow({
 type FormState = ReturnType<typeof blank>
 
 function TradeModal({
-  form, setForm, editing, saving, onSave, onClose,
+  form, setForm, editing, saving, editEntryId,
+  onSave, onClose,
 }: {
   form: FormState
   setForm: (f: FormState) => void
   editing: boolean
   saving: boolean
-  onSave: () => void
+  editEntryId?: number
+  onSave: (beforeFiles: File[], afterFiles: File[]) => void
   onClose: () => void
 }) {
   const set = (k: keyof FormState, v: string) => setForm({ ...form, [k]: v })
 
-  // Auto-calc pips when entry + exit change
+  // ── Image state ─────────────────────────────────────────────────────────────
+  const [existingBefore, setExistingBefore] = useState<TradeImage[]>([])
+  const [existingAfter, setExistingAfter] = useState<TradeImage[]>([])
+  const [pendingBefore, setPendingBefore] = useState<File[]>([])
+  const [pendingAfter, setPendingAfter] = useState<File[]>([])
+
+  useEffect(() => {
+    if (editEntryId) {
+      getTradeImages(editEntryId, 'before').then(setExistingBefore)
+      getTradeImages(editEntryId, 'after').then(setExistingAfter)
+    } else {
+      setExistingBefore([]); setExistingAfter([])
+    }
+    setPendingBefore([]); setPendingAfter([])
+  }, [editEntryId])
+
+  const handleDeleteExisting = async (id: number, type: 'before' | 'after') => {
+    await deleteTradeImage(id)
+    if (type === 'before') setExistingBefore(p => p.filter(i => i.id !== id))
+    else setExistingAfter(p => p.filter(i => i.id !== id))
+  }
+
+  // ── Pip / RR auto-calc ───────────────────────────────────────────────────────
   const calcPips = (f: FormState) => {
     const entry = parseFloat(f.entry_price)
     const exit = parseFloat(f.exit_price)
@@ -377,7 +558,7 @@ function TradeModal({
     >
       <div style={{
         background: 'var(--card)', border: '1px solid var(--border)',
-        borderRadius: 16, width: '100%', maxWidth: 540,
+        borderRadius: 16, width: '100%', maxWidth: 560,
         maxHeight: '92vh', overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
@@ -409,9 +590,9 @@ function TradeModal({
         </div>
 
         {/* Form body */}
-        <div style={{ overflowY: 'auto', padding: '20px' }}>
+        <div style={{ overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Row 1: Date + Instrument */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>Date</label>
               <input type="date" value={form.trade_date} onChange={e => set('trade_date', e.target.value)} style={inputStyle} />
@@ -428,7 +609,7 @@ function TradeModal({
           </div>
 
           {/* Direction toggle */}
-          <div style={{ marginBottom: 14 }}>
+          <div>
             <label style={labelStyle}>Direction</label>
             <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
               {(['buy', 'sell'] as const).map(d => (
@@ -446,8 +627,8 @@ function TradeModal({
             </div>
           </div>
 
-          {/* Row 2: Entry + SL + TP + Exit */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+          {/* Entry / SL / TP / Exit */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {(['entry_price', 'stop_loss', 'take_profit', 'exit_price'] as const).map(k => (
               <div key={k}>
                 <label style={labelStyle}>{k.replace(/_/g, ' ')}</label>
@@ -458,8 +639,8 @@ function TradeModal({
             ))}
           </div>
 
-          {/* Row 3: Pips + R:R */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+          {/* Pips + R:R */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>Pips (auto-calc)</label>
               <input type="number" step="any" value={form.pips}
@@ -474,8 +655,24 @@ function TradeModal({
             </div>
           </div>
 
-          {/* Row 4: Result + Setup */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+          {/* Amount Risked + Amount Aimed */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Amount Risked ($)</label>
+              <input type="number" step="any" min="0" value={form.amount_risked}
+                onChange={e => set('amount_risked', e.target.value)}
+                placeholder="e.g. 50" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Amount Aimed ($)</label>
+              <input type="number" step="any" min="0" value={form.amount_aimed}
+                onChange={e => set('amount_aimed', e.target.value)}
+                placeholder="e.g. 200" style={inputStyle} />
+            </div>
+          </div>
+
+          {/* Result + Setup */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>Result</label>
               <select value={form.result} onChange={e => set('result', e.target.value)} style={selectStyle}>
@@ -498,7 +695,7 @@ function TradeModal({
           </div>
 
           {/* Session */}
-          <div style={{ marginBottom: 14 }}>
+          <div>
             <label style={labelStyle}>Session (optional)</label>
             <select value={form.session} onChange={e => set('session', e.target.value)} style={selectStyle}>
               <option value="">— Select —</option>
@@ -510,13 +707,42 @@ function TradeModal({
           </div>
 
           {/* Notes */}
-          <div style={{ marginBottom: 4 }}>
+          <div>
             <label style={labelStyle}>Notes</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
               placeholder="What went well? What would you do differently?"
               rows={3} style={{
                 ...inputStyle, resize: 'vertical', lineHeight: 1.5, fontFamily: 'inherit',
               }} />
+          </div>
+
+          {/* Charts section */}
+          <div style={{
+            borderTop: '1px solid var(--border)', paddingTop: 14,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+              <Camera size={13} color="var(--accent-hover)" />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Chart Screenshots</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>saved in browser only — no server upload</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <ImageStrip
+                label="Before (pre-trigger analysis)"
+                existing={existingBefore}
+                onDeleteExisting={id => handleDeleteExisting(id, 'before')}
+                pending={pendingBefore}
+                onAddPending={files => setPendingBefore(p => [...p, ...files])}
+                onRemovePending={idx => setPendingBefore(p => p.filter((_, i) => i !== idx))}
+              />
+              <ImageStrip
+                label="After (outcome / review)"
+                existing={existingAfter}
+                onDeleteExisting={id => handleDeleteExisting(id, 'after')}
+                pending={pendingAfter}
+                onAddPending={files => setPendingAfter(p => [...p, ...files])}
+                onRemovePending={idx => setPendingAfter(p => p.filter((_, i) => i !== idx))}
+              />
+            </div>
           </div>
         </div>
 
@@ -532,13 +758,16 @@ function TradeModal({
           }}>
             Cancel
           </button>
-          <button onClick={onSave} disabled={saving || !form.instrument || !form.trade_date} style={{
-            flex: 2, padding: '10px', borderRadius: 8, border: 'none',
-            background: saving ? 'var(--accent-bg)' : 'var(--accent)',
-            color: 'white', cursor: saving ? 'default' : 'pointer',
-            fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', gap: 6,
-          }}>
+          <button
+            onClick={() => onSave(pendingBefore, pendingAfter)}
+            disabled={saving || !form.instrument || !form.trade_date}
+            style={{
+              flex: 2, padding: '10px', borderRadius: 8, border: 'none',
+              background: saving ? 'var(--accent-bg)' : 'var(--accent)',
+              color: 'white', cursor: saving ? 'default' : 'pointer',
+              fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: 6,
+            }}>
             {saving ? 'Saving…' : (<><Check size={14} /> {editing ? 'Save Changes' : 'Log Trade'}</>)}
           </button>
         </div>
@@ -584,6 +813,14 @@ export default function JournalPage() {
     const rrArr = closed.filter(e => e.rr_ratio != null).map(e => e.rr_ratio!)
     const avgRR = rrArr.length ? rrArr.reduce((s, v) => s + v, 0) / rrArr.length : null
 
+    // Net P&L
+    const riskedEntries = closed.filter(e => e.amount_risked != null && e.amount_aimed != null)
+    const netPnl = riskedEntries.reduce((s, e) => {
+      if (e.result === 'win') return s + (e.amount_aimed ?? 0)
+      if (e.result === 'loss') return s - (e.amount_risked ?? 0)
+      return s
+    }, 0)
+
     let streak = 0, streakType = 'none'
     const sorted = [...closed].sort((a, b) => b.trade_date.localeCompare(a.trade_date))
     if (sorted.length) {
@@ -593,7 +830,7 @@ export default function JournalPage() {
         for (const e of sorted) { if (e.result === first) streak++; else break }
       }
     }
-    return { total: entries.length, wins, losses, breakeven, open, totalPips, avgPips, winRate, bestPips: isFinite(bestPips) ? bestPips : null, avgRR, streak, streakType }
+    return { total: entries.length, wins, losses, breakeven, open, totalPips, avgPips, winRate, bestPips: isFinite(bestPips) ? bestPips : null, avgRR, streak, streakType, netPnl, hasPnl: riskedEntries.length > 0 }
   }, [entries])
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
@@ -612,13 +849,15 @@ export default function JournalPage() {
       exit_price: e.exit_price?.toString() ?? '',
       pips: e.pips?.toString() ?? '',
       rr_ratio: e.rr_ratio?.toString() ?? '',
+      amount_risked: e.amount_risked?.toString() ?? '',
+      amount_aimed: e.amount_aimed?.toString() ?? '',
       result: e.result, setup_type: e.setup_type,
       session: e.session ?? '', notes: e.notes ?? '',
     })
     setModalOpen(true)
   }
 
-  const save = async () => {
+  const save = async (beforeFiles: File[], afterFiles: File[]) => {
     if (!form.instrument || !form.trade_date) return
     setSaving(true)
     const body = {
@@ -629,6 +868,8 @@ export default function JournalPage() {
       exit_price: form.exit_price ? parseFloat(form.exit_price) : null,
       pips: form.pips ? parseFloat(form.pips) : null,
       rr_ratio: form.rr_ratio ? parseFloat(form.rr_ratio) : null,
+      amount_risked: form.amount_risked ? parseFloat(form.amount_risked) : null,
+      amount_aimed: form.amount_aimed ? parseFloat(form.amount_aimed) : null,
       result: form.result, setup_type: form.setup_type,
       session: form.session || null, notes: form.notes || null,
     }
@@ -636,7 +877,14 @@ export default function JournalPage() {
       const url = editEntry
         ? `${API_BASE}/api/journal/${editEntry.id}`
         : `${API_BASE}/api/journal`
-      await fetch(url, { method: editEntry ? 'PUT' : 'POST', headers: hdrs(), body: JSON.stringify(body) })
+      const resp = await fetch(url, { method: editEntry ? 'PUT' : 'POST', headers: hdrs(), body: JSON.stringify(body) })
+      const saved = await resp.json()
+      const tradeId: number = saved.id
+
+      // Save pending chart screenshots to IndexedDB
+      for (const f of beforeFiles) await addTradeImage(tradeId, 'before', f)
+      for (const f of afterFiles) await addTradeImage(tradeId, 'after', f)
+
       setModalOpen(false); load()
     } catch { /* TODO: toast error */ }
     finally { setSaving(false) }
@@ -644,16 +892,18 @@ export default function JournalPage() {
 
   const deleteEntry = async (id: number) => {
     await fetch(`${API_BASE}/api/journal/${id}`, { method: 'DELETE', headers: hdrs() })
+    await deleteAllTradeImages(id)
     setConfirmDelete(null); load()
   }
 
   const exportCsv = () => {
-    const SETUP: Record<string, string> = SETUP_LABELS
-    const headers = ['Date','Instrument','Direction','Result','Entry','SL','TP','Exit','Pips','R:R','Setup','Session','Notes']
+    const headers = ['Date','Instrument','Direction','Result','Entry','SL','TP','Exit','Pips','R:R','Amount Risked','Amount Aimed','Setup','Session','Notes']
     const rows = entries.map(e => [
       e.trade_date, e.instrument, e.direction.toUpperCase(), e.result.toUpperCase(),
       e.entry_price ?? '', e.stop_loss ?? '', e.take_profit ?? '', e.exit_price ?? '',
-      e.pips ?? '', e.rr_ratio ?? '', SETUP[e.setup_type] || e.setup_type,
+      e.pips ?? '', e.rr_ratio ?? '',
+      e.amount_risked ?? '', e.amount_aimed ?? '',
+      SETUP_LABELS[e.setup_type] || e.setup_type,
       e.session ?? '', (e.notes ?? '').replace(/,/g, ';'),
     ])
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
@@ -742,7 +992,6 @@ export default function JournalPage() {
               {stats.breakeven > 0 && <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>{stats.breakeven}BE</span>}
               {stats.open > 0 && <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>{stats.open} open</span>}
             </div>
-            {/* Win/Loss bar */}
             {stats.total > 0 && (
               <div style={{ height: 4, borderRadius: 4, background: 'var(--border)', marginTop: 10, overflow: 'hidden' }}>
                 <div style={{
@@ -762,41 +1011,45 @@ export default function JournalPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <WinRing rate={stats.winRate} />
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {stats.wins} wins
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  of {stats.total - stats.open} closed
-                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{stats.wins} wins</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>of {stats.total - stats.open} closed</div>
                 {stats.avgRR != null && (
-                  <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
-                    avg {stats.avgRR.toFixed(1)}R
-                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>avg {stats.avgRR.toFixed(1)}R</div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Net Pips card */}
+          {/* Net P&L or Net Pips */}
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Net Pips</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {stats.hasPnl ? 'Net P&L' : 'Net Pips'}
+              </span>
               <div style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: stats.totalPips >= 0 ? 'var(--bullish-bg)' : 'var(--bearish-bg)',
               }}>
                 {stats.totalPips >= 0 ? <TrendingUp size={14} color="var(--bullish)" /> : <TrendingDown size={14} color="var(--bearish)" />}
               </div>
             </div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: pipsColor, lineHeight: 1 }}>
-              {stats.totalPips >= 0 ? '+' : ''}{stats.totalPips.toFixed(1)}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-              avg {stats.avgPips >= 0 ? '+' : ''}{stats.avgPips.toFixed(1)} per trade
-            </div>
-            {stats.bestPips != null && (
-              <div style={{ fontSize: 11, color: 'var(--bullish)', marginTop: 2, fontWeight: 500 }}>
-                best +{stats.bestPips.toFixed(1)} pips
-              </div>
+            {stats.hasPnl ? (
+              <>
+                <div style={{ fontSize: 30, fontWeight: 800, color: stats.netPnl >= 0 ? 'var(--bullish)' : 'var(--bearish)', lineHeight: 1 }}>
+                  {stats.netPnl >= 0 ? '+' : ''}${Math.abs(stats.netPnl).toFixed(0)}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                  {stats.totalPips >= 0 ? '+' : ''}{stats.totalPips.toFixed(1)} pips
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 30, fontWeight: 800, color: pipsColor, lineHeight: 1 }}>
+                  {stats.totalPips >= 0 ? '+' : ''}{stats.totalPips.toFixed(1)}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                  avg {stats.avgPips >= 0 ? '+' : ''}{stats.avgPips.toFixed(1)} per trade
+                </div>
+              </>
             )}
           </div>
 
@@ -846,24 +1099,19 @@ export default function JournalPage() {
 
         {/* ── Trades list ───────────────────────────────────────────────────── */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-          {/* List header */}
           <div style={{
             padding: '12px 16px', borderBottom: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             background: 'var(--surface)',
           }}>
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Trade Log
-            </h2>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Trade Log</h2>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {entries.length} {entries.length === 1 ? 'trade' : 'trades'}
             </span>
           </div>
 
           {loading ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              Loading…
-            </div>
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
           ) : entries.length === 0 ? (
             <div style={{ padding: '48px 20px', textAlign: 'center' }}>
               <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
@@ -900,6 +1148,7 @@ export default function JournalPage() {
           form={form} setForm={setForm}
           editing={!!editEntry}
           saving={saving}
+          editEntryId={editEntry?.id}
           onSave={save}
           onClose={() => setModalOpen(false)}
         />
@@ -921,22 +1170,18 @@ export default function JournalPage() {
               <Trash2 size={18} color="var(--bearish)" />
             </div>
             <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>Delete this trade?</p>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>This action cannot be undone.</p>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>This cannot be undone. Chart screenshots stored in your browser will also be removed.</p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setConfirmDelete(null)} style={{
                 flex: 1, padding: '9px', borderRadius: 8, border: '1px solid var(--border)',
                 background: 'var(--surface)', color: 'var(--text-secondary)',
                 cursor: 'pointer', fontWeight: 600, fontSize: 13,
-              }}>
-                Cancel
-              </button>
+              }}>Cancel</button>
               <button onClick={() => deleteEntry(confirmDelete)} style={{
                 flex: 1, padding: '9px', borderRadius: 8, border: 'none',
                 background: 'var(--bearish)', color: 'white',
                 cursor: 'pointer', fontWeight: 700, fontSize: 13,
-              }}>
-                Delete
-              </button>
+              }}>Delete</button>
             </div>
           </div>
         </div>

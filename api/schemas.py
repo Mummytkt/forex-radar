@@ -80,6 +80,8 @@ class JournalEntryCreate(BaseModel):
     exit_price: Optional[float] = None
     pips: Optional[float] = None
     rr_ratio: Optional[float] = None
+    amount_risked: Optional[float] = None
+    amount_aimed: Optional[float] = None
     result: str = "open"
     setup_type: str = "other"
     session: Optional[str] = None
@@ -101,6 +103,8 @@ class JournalEntryUpdate(BaseModel):
     exit_price: Optional[float] = None
     pips: Optional[float] = None
     rr_ratio: Optional[float] = None
+    amount_risked: Optional[float] = None
+    amount_aimed: Optional[float] = None
     result: Optional[str] = None
     setup_type: Optional[str] = None
     session: Optional[str] = None

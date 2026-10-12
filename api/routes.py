@@ -430,6 +430,7 @@ def _journal_period_clause(period: str) -> tuple[str, list]:
 
 
 def _row_to_entry(row) -> JournalEntry:
+    cols = set(row.keys())
     return JournalEntry(
         id=row["id"],
         trade_date=row["trade_date"],
@@ -441,6 +442,8 @@ def _row_to_entry(row) -> JournalEntry:
         exit_price=row["exit_price"],
         pips=row["pips"],
         rr_ratio=row["rr_ratio"],
+        amount_risked=row["amount_risked"] if "amount_risked" in cols else None,
+        amount_aimed=row["amount_aimed"] if "amount_aimed" in cols else None,
         result=row["result"],
         setup_type=row["setup_type"],
         session=row["session"],
@@ -466,11 +469,13 @@ def create_journal_entry(request: Request, body: JournalEntryCreate):
         cur = conn.execute(
             """INSERT INTO journal_entries
                (trade_date, instrument, direction, entry_price, stop_loss, take_profit,
-                exit_price, pips, rr_ratio, result, setup_type, session, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                exit_price, pips, rr_ratio, amount_risked, amount_aimed,
+                result, setup_type, session, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (body.trade_date, body.instrument, body.direction,
              body.entry_price, body.stop_loss, body.take_profit,
              body.exit_price, body.pips, body.rr_ratio,
+             body.amount_risked, body.amount_aimed,
              body.result, body.setup_type, body.session, body.notes),
         )
         entry_id = cur.lastrowid
@@ -513,13 +518,18 @@ def export_journal_csv(request: Request, period: str = Query("all")):
 
     buf = io.StringIO()
     writer = csv.writer(buf)
+    cols = set()
     writer.writerow(["Date", "Instrument", "Direction", "Result", "Entry", "SL", "TP",
-                     "Exit", "Pips", "R:R", "Setup", "Session", "Notes"])
+                     "Exit", "Pips", "R:R", "Amount Risked", "Amount Aimed", "Setup", "Session", "Notes"])
     for r in rows:
+        if not cols:
+            cols = set(r.keys())
         writer.writerow([
             r["trade_date"], r["instrument"], r["direction"].upper(), r["result"].upper(),
             r["entry_price"] or "", r["stop_loss"] or "", r["take_profit"] or "",
             r["exit_price"] or "", r["pips"] or "", r["rr_ratio"] or "",
+            (r["amount_risked"] if "amount_risked" in cols else "") or "",
+            (r["amount_aimed"] if "amount_aimed" in cols else "") or "",
             r["setup_type"], r["session"] or "", (r["notes"] or "").replace("\n", " "),
         ])
 

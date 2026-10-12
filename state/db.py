@@ -303,4 +303,11 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_journal_date ON journal_entries (trade_date DESC)")
 
+    # Add amount_risked / amount_aimed columns to existing journal_entries tables
+    journal_cols = {row[1] for row in conn.execute("PRAGMA table_info(journal_entries)").fetchall()}
+    for col_def in ["amount_risked REAL", "amount_aimed REAL"]:
+        col_name = col_def.split()[0]
+        if col_name not in journal_cols:
+            conn.execute(f"ALTER TABLE journal_entries ADD COLUMN {col_def}")
+
     conn.commit()
