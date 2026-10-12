@@ -87,6 +87,9 @@ class JournalEntryCreate(BaseModel):
     h4_break_type: Optional[str] = None
     entry_date: Optional[str] = None
     exit_date: Optional[str] = None
+    trigger_time: Optional[str] = None
+    entry_time: Optional[str] = None
+    exit_time: Optional[str] = None
     session: Optional[str] = None
     notes: Optional[str] = None
 
@@ -113,5 +116,8 @@ class JournalEntryUpdate(BaseModel):
     h4_break_type: Optional[str] = None
     entry_date: Optional[str] = None
     exit_date: Optional[str] = None
+    trigger_time: Optional[str] = None
+    entry_time: Optional[str] = None
+    exit_time: Optional[str] = None
     session: Optional[str] = None
     notes: Optional[str] = None

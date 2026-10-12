@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Plus, Download, TrendingUp, TrendingDown, Target, Flame,
   Trophy, X, Edit2, Trash2, ChevronDown, Check, Minus,
-  BookMarked, Zap, Star, Camera, Upload, ImageIcon,
+  BookMarked, Zap, Star, Camera, Upload, ImageIcon, Eye, FileText,
 } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
@@ -31,6 +31,9 @@ interface Entry {
   h4_break_type: string | null
   entry_date: string | null
   exit_date: string | null
+  trigger_time: string | null
+  entry_time: string | null
+  exit_time: string | null
   session: string | null
   notes: string | null
   created_at: string
@@ -196,6 +199,7 @@ function blank() {
     result: 'open', setup_type: 'other',
     h4_break_type: '',
     entry_date: '', exit_date: '',
+    trigger_time: '', entry_time: '', exit_time: '',
     session: '', notes: '',
   }
 }
@@ -431,10 +435,12 @@ function ExistingThumb({
 // ── Trade row ─────────────────────────────────────────────────────────────────
 function TradeRow({
   entry,
+  onView,
   onEdit,
   onDelete,
 }: {
   entry: Entry
+  onView: (e: Entry) => void
   onEdit: (e: Entry) => void
   onDelete: (id: number) => void
 }) {
@@ -543,6 +549,14 @@ function TradeRow({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <button onClick={() => onView(entry)} title="View"
+          style={{
+            width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)',
+            background: 'var(--surface)', color: 'var(--accent-hover)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          <Eye size={11} />
+        </button>
         <button onClick={() => onEdit(entry)} title="Edit"
           style={{
             width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)',
@@ -560,6 +574,161 @@ function TradeRow({
           <Trash2 size={11} />
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Trade detail view ─────────────────────────────────────────────────────────
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (!value && value !== 0) return null
+  return (
+    <div style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ width: 110, flexShrink: 0, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', paddingTop: 1 }}>{label}</span>
+      <span style={{ fontSize: 13, color: 'var(--text-primary)', flex: 1 }}>{value}</span>
+    </div>
+  )
+}
+
+function TradeDetailModal({ entry, onClose, onEdit }: { entry: Entry; onClose: () => void; onEdit: () => void }) {
+  const [existingBefore, setExistingBefore] = useState<TradeImage[]>([])
+  const [existingAfter, setExistingAfter] = useState<TradeImage[]>([])
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
+
+  useEffect(() => {
+    getTradeImages(entry.id, 'before').then(setExistingBefore)
+    getTradeImages(entry.id, 'after').then(setExistingAfter)
+  }, [entry.id])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const rc = RESULT_COLOR[entry.result] || 'var(--text-muted)'
+  const rb = RESULT_BG[entry.result] || 'transparent'
+  const isBuy = entry.direction === 'buy'
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, padding: '16px',
+    }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{
+        background: 'var(--card)', border: '1px solid var(--border)',
+        borderRadius: 16, width: '100%', maxWidth: 560,
+        maxHeight: '92vh', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'var(--surface)',
+        }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-primary)' }}>{entry.instrument}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+              background: isBuy ? 'var(--bullish-bg)' : 'var(--bearish-bg)',
+              color: isBuy ? 'var(--bullish)' : 'var(--bearish)',
+            }}>{isBuy ? '▲ BUY' : '▼ SELL'}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+              background: rb, color: rc, border: `1px solid ${rc}`,
+            }}>{(RESULT_LABEL[entry.result] || entry.result).toUpperCase()}</span>
+          </div>
+          <button onClick={onClose} style={{
+            width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border)',
+            background: 'var(--card-hover)', cursor: 'pointer', flexShrink: 0,
+            color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><X size={14} /></button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+          {/* Dates & Times */}
+          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-hover)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Dates & Times</p>
+          <DetailRow label="Log Date" value={entry.trade_date} />
+          <DetailRow label="Entry Date" value={entry.entry_date ? fmtLongDate(entry.entry_date) : null} />
+          <DetailRow label="Entry Time" value={entry.entry_time} />
+          <DetailRow label="Exit Date" value={entry.exit_date ? fmtLongDate(entry.exit_date) : null} />
+          <DetailRow label="Exit Time" value={entry.exit_time} />
+          <DetailRow label="Trigger Time" value={entry.trigger_time} />
+
+          {/* Prices */}
+          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-hover)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14, marginBottom: 4 }}>Price Levels</p>
+          <DetailRow label="Entry Price" value={entry.entry_price} />
+          <DetailRow label="Stop Loss" value={entry.stop_loss} />
+          <DetailRow label="Take Profit" value={entry.take_profit} />
+          <DetailRow label="Exit Price" value={entry.exit_price} />
+          <DetailRow label="Pips" value={entry.pips != null ? `${entry.pips >= 0 ? '+' : ''}${entry.pips}` : null} />
+          <DetailRow label="R:R Ratio" value={entry.rr_ratio != null ? `${entry.rr_ratio}R` : null} />
+
+          {/* Money */}
+          {(entry.amount_risked != null || entry.amount_aimed != null) && <>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-hover)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14, marginBottom: 4 }}>Money</p>
+            <DetailRow label="Amount Risked" value={entry.amount_risked != null ? `$${entry.amount_risked}` : null} />
+            <DetailRow label="Amount Aimed" value={entry.amount_aimed != null ? `$${entry.amount_aimed}` : null} />
+          </>}
+
+          {/* Classification */}
+          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-hover)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14, marginBottom: 4 }}>Trade Info</p>
+          <DetailRow label="Setup Type" value={SETUP_LABELS[entry.setup_type] || entry.setup_type} />
+          <DetailRow label="H4 Break Type" value={entry.h4_break_type ? entry.h4_break_type.charAt(0).toUpperCase() + entry.h4_break_type.slice(1) : null} />
+          <DetailRow label="Session" value={entry.session ? (SESSION_LABELS[entry.session] || entry.session) : null} />
+
+          {/* Notes */}
+          {entry.notes && <>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-hover)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14, marginBottom: 4 }}>Notes</p>
+            <p style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap', padding: '8px 0' }}>{entry.notes}</p>
+          </>}
+
+          {/* Screenshots */}
+          {(existingBefore.length > 0 || existingAfter.length > 0) && <>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-hover)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14, marginBottom: 8 }}>Chart Screenshots</p>
+            {existingBefore.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Before (pre-trigger)</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {existingBefore.map(img => <ExistingThumb key={img.id} img={img} onDelete={() => {}} onView={(url, name) => setLightbox({ url, name })} />)}
+                </div>
+              </div>
+            )}
+            {existingAfter.length > 0 && (
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>After (outcome)</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {existingAfter.map(img => <ExistingThumb key={img.id} img={img} onDelete={() => {}} onView={(url, name) => setLightbox({ url, name })} />)}
+                </div>
+              </div>
+            )}
+          </>}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '12px 20px', borderTop: '1px solid var(--border)',
+          display: 'flex', gap: 10, background: 'var(--surface)',
+        }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '9px', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--card-hover)', color: 'var(--text-secondary)',
+            cursor: 'pointer', fontWeight: 600, fontSize: 13,
+          }}>Close</button>
+          <button onClick={onEdit} style={{
+            flex: 1, padding: '9px', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: 'white',
+            cursor: 'pointer', fontWeight: 700, fontSize: 13,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}><Edit2 size={13} /> Edit Trade</button>
+        </div>
+      </div>
+
+      {lightbox && <Lightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
     </div>
   )
 }
@@ -723,6 +892,22 @@ function TradeModal({
                   {fmtLongDate(form.exit_date)}
                 </p>
               )}
+            </div>
+          </div>
+
+          {/* Trigger / Entry / Exit times */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Trigger Time</label>
+              <input type="time" value={form.trigger_time} onChange={e => set('trigger_time', e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Entry Time</label>
+              <input type="time" value={form.entry_time} onChange={e => set('entry_time', e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Exit Time</label>
+              <input type="time" value={form.exit_time} onChange={e => set('exit_time', e.target.value)} style={inputStyle} />
             </div>
           </div>
 
@@ -925,6 +1110,7 @@ export default function JournalPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<Entry | null>(null)
+  const [viewEntry, setViewEntry] = useState<Entry | null>(null)
   const [form, setForm] = useState(blank())
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
@@ -996,6 +1182,7 @@ export default function JournalPage() {
       result: e.result, setup_type: e.setup_type,
       h4_break_type: e.h4_break_type ?? '',
       entry_date: e.entry_date ?? '', exit_date: e.exit_date ?? '',
+      trigger_time: e.trigger_time ?? '', entry_time: e.entry_time ?? '', exit_time: e.exit_time ?? '',
       session: e.session ?? '', notes: e.notes ?? '',
     })
     setModalOpen(true)
@@ -1018,6 +1205,9 @@ export default function JournalPage() {
       h4_break_type: form.h4_break_type || null,
       entry_date: form.entry_date || null,
       exit_date: form.exit_date || null,
+      trigger_time: form.trigger_time || null,
+      entry_time: form.entry_time || null,
+      exit_time: form.exit_time || null,
       session: form.session || null, notes: form.notes || null,
     }
     try {
@@ -1043,8 +1233,16 @@ export default function JournalPage() {
     setConfirmDelete(null); load()
   }
 
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  useEffect(() => {
+    if (!showExportMenu) return
+    const close = () => setShowExportMenu(false)
+    window.addEventListener('click', close, { capture: true, once: true })
+    return () => window.removeEventListener('click', close, { capture: true })
+  }, [showExportMenu])
+
   const exportCsv = () => {
-    const headers = ['Date','Instrument','Direction','Result','Entry','SL','TP','Exit','Pips','R:R','Amount Risked','Amount Aimed','Setup','H4 Break Type','Entry Date','Exit Date','Session','Notes']
+    const headers = ['Date','Instrument','Direction','Result','Entry','SL','TP','Exit','Pips','R:R','Amount Risked','Amount Aimed','Setup','H4 Break Type','Entry Date','Entry Time','Exit Date','Exit Time','Trigger Time','Session','Notes']
     const rows = entries.map(e => [
       e.trade_date, e.instrument, e.direction.toUpperCase(), e.result.toUpperCase(),
       e.entry_price ?? '', e.stop_loss ?? '', e.take_profit ?? '', e.exit_price ?? '',
@@ -1052,8 +1250,9 @@ export default function JournalPage() {
       e.amount_risked ?? '', e.amount_aimed ?? '',
       SETUP_LABELS[e.setup_type] || e.setup_type,
       e.h4_break_type ?? '',
-      e.entry_date ? fmtLongDate(e.entry_date) : '',
-      e.exit_date ? fmtLongDate(e.exit_date) : '',
+      e.entry_date ? fmtLongDate(e.entry_date) : '', e.entry_time ?? '',
+      e.exit_date ? fmtLongDate(e.exit_date) : '', e.exit_time ?? '',
+      e.trigger_time ?? '',
       e.session ?? '', (e.notes ?? '').replace(/,/g, ';'),
     ])
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
@@ -1061,6 +1260,51 @@ export default function JournalPage() {
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
     a.download = `journal-${period}-${new Date().toISOString().slice(0,10)}.csv`
     a.click()
+    setShowExportMenu(false)
+  }
+
+  const exportPdf = () => {
+    setShowExportMenu(false)
+    const periodLabel = PERIODS.find(p => p.key === period)?.label ?? 'All Time'
+    const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    const rows = entries.map(e => `
+      <tr>
+        <td>${e.trade_date}</td>
+        <td><strong>${e.instrument}</strong></td>
+        <td class="${e.direction}">${e.direction.toUpperCase()}</td>
+        <td>${e.entry_price ?? '—'}</td>
+        <td>${e.exit_price ?? '—'}</td>
+        <td class="${e.pips != null ? (e.pips >= 0 ? 'win' : 'loss') : ''}">${e.pips != null ? (e.pips >= 0 ? '+' : '') + e.pips : '—'}</td>
+        <td>${e.rr_ratio != null ? e.rr_ratio + 'R' : '—'}</td>
+        <td>${e.h4_break_type ?? '—'}</td>
+        <td class="${e.result}">${(RESULT_LABEL[e.result] || e.result).toUpperCase()}</td>
+        <td>${(e.notes ?? '').replace(/</g, '&lt;').replace(/\n/g, '<br/>')}</td>
+      </tr>`).join('')
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Trading Journal — ${periodLabel}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:24px;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .meta{color:#666;font-size:10px;margin-bottom:18px;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:#e8eaf0;border:1px solid #ccc;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;}
+  td{border:1px solid #ddd;padding:6px 8px;vertical-align:top;}
+  tr:nth-child(even) td{background:#fafafa;}
+  .win{color:#16a34a;font-weight:700;} .loss{color:#dc2626;font-weight:700;}
+  .buy{color:#16a34a;} .sell{color:#dc2626;}
+  .open{color:#4f46e5;} .breakeven{color:#d97706;font-weight:700;}
+  @media print{body{margin:10px;}}
+</style></head><body>
+<h1>MummyTKT's Bias Pointer — Trading Journal</h1>
+<p class="meta">Period: ${periodLabel} &nbsp;·&nbsp; Generated: ${now} &nbsp;·&nbsp; ${entries.length} trade${entries.length !== 1 ? 's' : ''}</p>
+<table><thead><tr>
+  <th>Date</th><th>Instrument</th><th>Direction</th>
+  <th>Entry</th><th>Exit</th><th>Pips</th><th>R:R</th>
+  <th>H4 Type</th><th>Result</th><th>Notes</th>
+</tr></thead><tbody>${rows}</tbody></table>
+</body></html>`
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 400) }
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -1084,14 +1328,47 @@ export default function JournalPage() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={exportCsv} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
-              background: 'var(--surface)', color: 'var(--text-secondary)',
-              cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            }}>
-              <Download size={14} /> Export
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setShowExportMenu(v => !v)} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
+                background: 'var(--surface)', color: 'var(--text-secondary)',
+                cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              }}>
+                <Download size={14} /> Export <ChevronDown size={12} />
+              </button>
+              {showExportMenu && (
+                <div style={{
+                  position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+                  background: 'var(--card)', border: '1px solid var(--border)',
+                  borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                  zIndex: 50, overflow: 'hidden', minWidth: 160,
+                }}>
+                  <button onClick={exportCsv} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    width: '100%', padding: '10px 14px', border: 'none',
+                    background: 'none', color: 'var(--text-primary)',
+                    cursor: 'pointer', fontSize: 13, textAlign: 'left',
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--card-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                  >
+                    <Download size={13} /> Download CSV
+                  </button>
+                  <button onClick={exportPdf} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    width: '100%', padding: '10px 14px', border: 'none',
+                    background: 'none', color: 'var(--text-primary)',
+                    cursor: 'pointer', fontSize: 13, textAlign: 'left',
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--card-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                  >
+                    <FileText size={13} /> Download PDF
+                  </button>
+                </div>
+              )}
+            </div>
             <button onClick={openAdd} style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 16px', borderRadius: 8, border: 'none',
@@ -1285,6 +1562,7 @@ export default function JournalPage() {
               {entries.map(e => (
                 <TradeRow
                   key={e.id} entry={e}
+                  onView={setViewEntry}
                   onEdit={openEdit}
                   onDelete={id => setConfirmDelete(id)}
                 />
@@ -1293,6 +1571,15 @@ export default function JournalPage() {
           )}
         </div>
       </main>
+
+      {/* ── Trade detail view ─────────────────────────────────────────────────── */}
+      {viewEntry && (
+        <TradeDetailModal
+          entry={viewEntry}
+          onClose={() => setViewEntry(null)}
+          onEdit={() => { openEdit(viewEntry); setViewEntry(null) }}
+        />
+      )}
 
       {/* ── Trade modal ───────────────────────────────────────────────────────── */}
       {modalOpen && (
