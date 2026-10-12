@@ -6,7 +6,7 @@ import { fetcher } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
 import type { InstrumentOverview } from '@/lib/types'
 
-const CATEGORIES = ['Major', 'EUR Cross', 'GBP Cross', 'Commodity Cross', 'Metal', 'Crypto']
+const CATEGORIES = ['Major', 'EUR Cross', 'GBP Cross', 'Commodity Cross', 'Metal', 'Energy', 'Index', 'Crypto']
 
 // State badge: includes the setup direction as a hint (not confirmed bias)
 function StateBadge({ state, direction }: { state: string; direction: string | null }) {
