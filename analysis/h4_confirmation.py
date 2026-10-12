@@ -8,15 +8,20 @@ The H4 confirmation logic mirrors the Daily breakout rule exactly:
 The body-close rule is strictly enforced — wick crosses never qualify.
 
 Classification:
-  EXTERNAL — the formation broken is the most recent outer structural boundary
-             (the H4 A-shape for bullish or V-shape for bearish) seen before the
-             confirmation candle. This is the swing-defining formation.
-  INTERNAL — the formation broken is a smaller one that formed inside the current
-             structural leg (i.e., it established after the outer formation).
+  EXTERNAL — the formation broken is the most recent V/A shape that existed
+             BEFORE the daily reaction started (the in-place H4 structure that
+             price broke through after reacting from the daily level).
+  INTERNAL — a V/A shape that formed AFTER the daily reaction began (a new
+             smaller structure created during the reaction itself).
+
+The split between pre- and post-retest is defined by retest_started_ts, which
+is the open timestamp of the H4 candle that first triggered the daily retest
+detection. Without it, all candles are treated as pre-retest (external only).
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from data.models import (
@@ -24,95 +29,64 @@ from data.models import (
     Candle,
     Direction,
     Formation,
-    FormationType,
     H4BreakoutEvent,
-    Timeframe,
 )
 from analysis.formations import detect_a_shape, detect_v_shape
-
-
-def find_outer_h4_formation(
-    h4_candles: list[Candle],
-    direction: Direction,
-) -> Optional[Formation]:
-    """
-    Return the most recently established H4 formation that defines the current
-    swing boundary for the expected confirmation direction.
-
-    For BEARISH confirmation (price should break downward):
-      Look for H4 V-shapes — the most recent V-shape is the outer boundary
-      that a bearish candle must close below.
-
-    For BULLISH confirmation (price should break upward):
-      Look for H4 A-shapes — the most recent A-shape is the outer boundary
-      that a bullish candle must close above.
-    """
-    if direction == Direction.BEARISH:
-        formations = detect_v_shape(h4_candles)
-    else:
-        formations = detect_a_shape(h4_candles)
-
-    # The FIRST (oldest) formation defines the outer structural boundary.
-    # Formations established after it are internal to the current leg.
-    return formations[0] if formations else None
-
-
-def find_inner_h4_formations(
-    h4_candles: list[Candle],
-    direction: Direction,
-    outer_formation: Formation,
-) -> list[Formation]:
-    """
-    Return all same-type H4 formations that established AFTER the outer
-    formation (i.e., they are internal to the current structural leg).
-    """
-    if direction == Direction.BEARISH:
-        all_f = detect_v_shape(h4_candles)
-    else:
-        all_f = detect_a_shape(h4_candles)
-
-    return [f for f in all_f if f.established_at > outer_formation.established_at]
 
 
 def check_h4_breakout(
     candle: Candle,
     direction: Direction,
     h4_candles: list[Candle],
+    retest_started_ts: Optional[datetime] = None,
 ) -> Optional[H4BreakoutEvent]:
     """
     Check whether the given H4 candle has broken and closed beyond the body
-    level of any qualifying H4 formation.
+    level of a qualifying H4 formation.
 
-    Steps:
-      1. Find the outer H4 formation (swing boundary).
-      2. Find all inner formations that formed after the outer one.
-      3. For the given candle, check if its close crosses any formation's level
-         in the expected direction (body-close rule strictly enforced).
-      4. The first qualifying break found (outer checked before inner) determines
-         the classification.
+    External confirmation (stronger): breaking the most recent H4 V-shape (for
+    bearish) or A-shape (for bullish) that formed BEFORE the daily retest began.
+    This is the existing H4 structure that was in place when price returned to
+    the daily reaction source — the last structural boundary before the reaction.
 
-    Returns H4BreakoutEvent if confirmed, None otherwise.
+    Internal confirmation: breaking an H4 V-shape / A-shape that formed AFTER
+    the daily retest began — a smaller structure created during the reaction.
 
-    Note: h4_candles should NOT include the confirmation candle itself —
-    it is passed separately as `candle`. This ensures formations are evaluated
-    against the candle history BEFORE the current candle closes.
+    Parameters
+    ----------
+    candle           : the just-closed H4 candle being evaluated
+    direction        : Daily breakout direction (bearish → look for V-shapes to break)
+    h4_candles       : post-breakout H4 history, NOT including `candle` itself
+    retest_started_ts: open timestamp of the H4 candle that first triggered
+                       retest_in_progress; splits pre- vs post-retest candles
     """
-    outer = find_outer_h4_formation(h4_candles, direction)
-    if outer is None:
-        return None
+    if retest_started_ts is not None:
+        pre_retest = [c for c in h4_candles if c.timestamp < retest_started_ts]
+        post_retest = [c for c in h4_candles if c.timestamp >= retest_started_ts]
+    else:
+        pre_retest = h4_candles
+        post_retest = []
 
-    inner_formations = find_inner_h4_formations(h4_candles, direction, outer)
+    if direction == Direction.BEARISH:
+        ext_candidates = detect_v_shape(pre_retest)
+        int_candidates = detect_v_shape(post_retest)
+    else:
+        ext_candidates = detect_a_shape(pre_retest)
+        int_candidates = detect_a_shape(post_retest)
 
-    # Collect candidate formations: outer first (preferred for EXTERNAL), then inner
-    candidates = [outer] + inner_formations
+    # External: the LAST (most recent) formation before the retest — the structural
+    # boundary that was still in place when price came back to the daily level.
+    outer = ext_candidates[-1] if ext_candidates else None
 
-    for formation in candidates:
+    # Build candidate list: external first (preferred), then internal oldest → newest
+    candidates: list[tuple[Formation, BreakoutClassification]] = []
+    if outer is not None:
+        candidates.append((outer, BreakoutClassification.EXTERNAL))
+    for f in int_candidates:
+        candidates.append((f, BreakoutClassification.INTERNAL))
+
+    for formation, classification in candidates:
         if _candle_breaks_formation(candle, direction, formation):
-            classification = (
-                BreakoutClassification.EXTERNAL
-                if formation is outer
-                else BreakoutClassification.INTERNAL
-            )
             return H4BreakoutEvent(
                 instrument=candle.instrument,
                 direction=direction,

@@ -238,20 +238,17 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
 
     # ── STEP 3: Check for qualifying H4 breakout (ORIGIN) ─────────────────────
     if retest_in_progress and active_reaction_src is not None:
-        # Narrow the H4 window to candles that formed AFTER the retest began.
-        # Using the full post-breakout window (potentially months of candles) would
-        # expose pre-retest H4 formations — old bounce levels that are trivially
-        # "broken" by current price and have nothing to do with the current reaction.
-        if retest_started_h4_ts is not None:
-            confirmation_h4 = [c for c in post_breakout_h4 if c.timestamp >= retest_started_h4_ts]
-        else:
-            # Pre-migration fallback: limit to last 30 H4 candles (~5 days)
-            confirmation_h4 = post_breakout_h4[-30:] if len(post_breakout_h4) > 30 else post_breakout_h4
-
+        # Pass all post-breakout H4 candles together with the retest timestamp.
+        # check_h4_breakout splits them internally:
+        #   External = last V/A shape formed BEFORE retest_started_h4_ts
+        #             (the H4 structure in place when price returned to the daily level)
+        #   Internal = V/A shapes formed AFTER retest_started_h4_ts
+        #             (new structure created during the reaction itself)
         h4_event = check_h4_breakout(
             latest_h4,
             active_breakout.direction,
-            confirmation_h4,
+            post_breakout_h4,
+            retest_started_ts=retest_started_h4_ts,
         )
 
         if h4_event is not None:
