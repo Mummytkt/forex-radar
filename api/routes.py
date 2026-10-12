@@ -529,6 +529,54 @@ def export_journal_csv(request: Request, period: str = Query("all")):
     )
 
 
+@router.post("/admin/reset-instrument")
+def admin_reset_instrument(request: Request, body: dict):
+    """
+    Fully reset the state for one or more instruments.
+
+    Body: {"instruments": ["GBPUSD", "EURJPY"]}  — use internal names (no slash).
+
+    Deactivates the active daily breakout + all its reaction sources, then
+    clears all instrument_state columns for each pair. The engine will
+    re-detect from the current daily candle history on the next H4 cycle.
+    Useful for correcting wrong-direction state caused by spurious supersessions.
+    """
+    raw = body.get("instruments", [])
+    if not raw:
+        raise HTTPException(status_code=400, detail="'instruments' list required")
+
+    # Accept both slash (EUR/USD) and no-slash (EURUSD) forms
+    targets = [i.replace("/", "").upper() for i in raw]
+
+    with _db_write(request) as conn:
+        for inst in targets:
+            # Deactivate all active breakouts for this instrument
+            conn.execute(
+                "UPDATE daily_breakouts SET is_active = 0 WHERE instrument = ? AND is_active = 1",
+                (inst,),
+            )
+            # Deactivate all reaction sources for this instrument
+            conn.execute(
+                "UPDATE reaction_sources SET is_active = 0 WHERE instrument = ? AND is_active = 1",
+                (inst,),
+            )
+            # Reset all instrument state
+            conn.execute(
+                """UPDATE instrument_state
+                   SET active_breakout_id     = NULL,
+                       retest_in_progress     = 0,
+                       active_reaction_src_id = NULL,
+                       retest_started_h4_ts   = NULL,
+                       continuation_mode      = 0,
+                       last_alert_h4_ts       = NULL,
+                       last_h4_breaker_level  = NULL
+                   WHERE instrument = ?""",
+                (inst,),
+            )
+
+    return {"ok": True, "reset": targets}
+
+
 @router.get("/instrument/{slug}", response_model=InstrumentDetail)
 def get_instrument(slug: str, request: Request):
     config = request.app.state.config

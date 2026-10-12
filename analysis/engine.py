@@ -253,10 +253,17 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
         #
         # Case B — current source still touched, but a higher-priority source is also
         #   touched simultaneously: upgrade to the higher-priority one.
+        #
+        # Case C — price has left ALL source bands entirely:
+        #   Cancel the retest. Without this, once retest_in_progress is set it
+        #   persists until H4 confirms, meaning H4 formations forming far from the
+        #   daily reaction level (e.g. 150+ pips away after a blow-through) can
+        #   trigger spurious alerts. A fresh wick back to any source re-arms it.
         current_still_touched = (
             active_reaction_src is not None
             and is_price_retesting_source(latest_h4, active_reaction_src)
         )
+        found_new_source = False
         for src in active_sources:
             if src is active_reaction_src:
                 continue
@@ -267,6 +274,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                 # Case A: current source gone — switch regardless of priority
                 active_reaction_src = src
                 retest_started_h4_ts = latest_h4.timestamp
+                found_new_source = True
                 break
             elif (active_reaction_src is not None
                     and _SOURCE_PRIORITY.get(src.source_type, 99)
@@ -274,7 +282,15 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                 # Case B: both touched simultaneously — upgrade to higher priority
                 active_reaction_src = src
                 retest_started_h4_ts = latest_h4.timestamp
+                found_new_source = True
                 break
+
+        # Case C: price is no longer touching any source — cancel retest.
+        # A future H4 candle that wicks back to a source will re-arm it.
+        if not current_still_touched and not found_new_source:
+            retest_in_progress = False
+            active_reaction_src = None
+            retest_started_h4_ts = None
 
     out.retest_in_progress = retest_in_progress
     out.active_reaction_src = active_reaction_src
