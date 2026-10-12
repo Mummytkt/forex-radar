@@ -799,6 +799,22 @@ function TradeModal({
     let f = { ...form, [k]: v }
     if (['entry_price', 'exit_price', 'instrument', 'direction'].includes(k)) f = calcPips(f)
     if (['entry_price', 'stop_loss', 'take_profit'].includes(k)) f = calcRR(f)
+    // Auto-set result from pips when exit price changes
+    if (['exit_price', 'direction', 'instrument'].includes(k)) {
+      const p = parseFloat(f.pips)
+      if (!isNaN(p) && f.result === 'open') {
+        f = { ...f, result: p > 0 ? 'win' : p < 0 ? 'loss' : 'breakeven' }
+      }
+    }
+    setForm(f)
+  }
+
+  const handleExitDateTimeChange = (k: 'exit_date' | 'exit_time', v: string) => {
+    let f = { ...form, [k]: v }
+    if (v && f.result === 'open') {
+      const p = parseFloat(f.pips)
+      f = { ...f, result: !isNaN(p) ? (p > 0 ? 'win' : p < 0 ? 'loss' : 'breakeven') : 'loss' }
+    }
     setForm(f)
   }
 
@@ -886,7 +902,7 @@ function TradeModal({
             </div>
             <div>
               <label style={labelStyle}>Exit Date</label>
-              <input type="date" value={form.exit_date} onChange={e => set('exit_date', e.target.value)} style={inputStyle} />
+              <input type="date" value={form.exit_date} onChange={e => handleExitDateTimeChange('exit_date', e.target.value)} style={inputStyle} />
               {form.exit_date && (
                 <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
                   {fmtLongDate(form.exit_date)}
@@ -907,7 +923,7 @@ function TradeModal({
             </div>
             <div>
               <label style={labelStyle}>Exit Time</label>
-              <input type="time" value={form.exit_time} onChange={e => set('exit_time', e.target.value)} style={inputStyle} />
+              <input type="time" value={form.exit_time} onChange={e => handleExitDateTimeChange('exit_time', e.target.value)} style={inputStyle} />
             </div>
           </div>
 
@@ -925,6 +941,30 @@ function TradeModal({
                   transition: 'all 0.15s',
                 }}>
                   {d === 'buy' ? '▲ Buy' : '▼ Sell'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Result toggle */}
+          <div>
+            <label style={labelStyle}>Result</label>
+            <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+              {([
+                { v: 'open',      label: 'Open',  activeColor: 'var(--accent)',   activeBg: 'var(--accent-bg)' },
+                { v: 'win',       label: '✓ Win', activeColor: 'var(--bullish)',  activeBg: 'var(--bullish-bg)' },
+                { v: 'loss',      label: '✕ Loss',activeColor: 'var(--bearish)',  activeBg: 'var(--bearish-bg)' },
+                { v: 'breakeven', label: 'B/E',   activeColor: '#f59e0b',         activeBg: 'rgba(245,158,11,0.14)' },
+              ] as const).map(({ v, label, activeColor, activeBg }) => (
+                <button key={v} type="button" onClick={() => set('result', v)} style={{
+                  flex: 1, padding: '10px 4px', border: 'none', cursor: 'pointer',
+                  fontWeight: 700, fontSize: 12,
+                  background: form.result === v ? activeBg : 'var(--surface)',
+                  color: form.result === v ? activeColor : 'var(--text-muted)',
+                  transition: 'all 0.15s',
+                  boxShadow: form.result === v ? `inset 0 -2px 0 ${activeColor}` : 'none',
+                }}>
+                  {label}
                 </button>
               ))}
             </div>
@@ -974,27 +1014,16 @@ function TradeModal({
             </div>
           </div>
 
-          {/* Result + Setup */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Result</label>
-              <select value={form.result} onChange={e => set('result', e.target.value)} style={selectStyle}>
-                <option value="win">Win</option>
-                <option value="loss">Loss</option>
-                <option value="breakeven">Breakeven</option>
-                <option value="open">Still Open</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Setup type</label>
-              <select value={form.setup_type} onChange={e => set('setup_type', e.target.value)} style={selectStyle}>
-                <option value="origin">Origin</option>
-                <option value="continuation_ashape">Continuation — A/V</option>
-                <option value="continuation_h4oc">Continuation — OC</option>
-                <option value="continuation_h4breaker">Continuation — Breaker</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+          {/* Setup type */}
+          <div>
+            <label style={labelStyle}>Setup type</label>
+            <select value={form.setup_type} onChange={e => set('setup_type', e.target.value)} style={selectStyle}>
+              <option value="origin">Origin</option>
+              <option value="continuation_ashape">Continuation — A/V</option>
+              <option value="continuation_h4oc">Continuation — OC</option>
+              <option value="continuation_h4breaker">Continuation — Breaker</option>
+              <option value="other">Other</option>
+            </select>
           </div>
 
           {/* H4 Break Type */}
