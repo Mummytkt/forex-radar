@@ -190,6 +190,7 @@ async def process_instrument_cycle(
     continuation_mode = state.continuation_mode if state else False
     last_alert_h4_ts = state.last_alert_h4_ts if state else None
     last_h4_breaker_level = state.last_h4_breaker_level if state else None
+    retest_started_h4_ts = state.retest_started_h4_ts if state else None
 
     pip_size = pip_size_for(instrument)
 
@@ -206,6 +207,7 @@ async def process_instrument_cycle(
         continuation_mode=continuation_mode,
         last_alert_h4_ts=last_alert_h4_ts,
         last_h4_breaker_level=last_h4_breaker_level,
+        retest_started_h4_ts=retest_started_h4_ts,
     )
 
     # ── Run engine ────────────────────────────────────────────────────────────
@@ -305,6 +307,7 @@ async def process_instrument_cycle(
             continuation_mode=out.continuation_mode,
             last_alert_h4_ts=out.last_alert_h4_ts,
             last_h4_breaker_level=out.last_h4_breaker_level,
+            retest_started_h4_ts=out.retest_started_h4_ts,
         ),
     )
 

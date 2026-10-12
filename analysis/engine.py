@@ -64,6 +64,7 @@ class EngineInput:
     continuation_mode: bool = False               # True after first Origin alert fired
     last_alert_h4_ts: Optional[datetime] = None   # timestamp of confirming H4 candle from last alert
     last_h4_breaker_level: Optional[float] = None # body level of the H4 formation broken in last alert
+    retest_started_h4_ts: Optional[datetime] = None  # H4 candle timestamp when retest first detected
 
 
 @dataclass
@@ -80,6 +81,7 @@ class EngineOutput:
     # Updated retest state
     retest_in_progress: bool = False
     active_reaction_src: Optional[ReactionSource] = None
+    retest_started_h4_ts: Optional[datetime] = None  # cleared when retest ends
     # Continuation state (carried forward each cycle)
     continuation_mode: bool = False
     last_alert_h4_ts: Optional[datetime] = None
@@ -167,6 +169,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
         # Reset all state — the new breakout invalidates any in-progress retest and continuation
         out.retest_in_progress = False
         out.active_reaction_src = None
+        out.retest_started_h4_ts = None
         out.continuation_mode = False
         out.last_alert_h4_ts = None
         out.last_h4_breaker_level = None
@@ -199,6 +202,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     # ── STEP 2: Check for retest ───────────────────────────────────────────────
     retest_in_progress = inp.retest_in_progress
     active_reaction_src = inp.active_reaction_src
+    retest_started_h4_ts = inp.retest_started_h4_ts
 
     if not retest_in_progress:
         for src in active_sources:
@@ -206,6 +210,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                     and _price_established_beyond_zone(post_breakout_h4, src)):
                 retest_in_progress = True
                 active_reaction_src = src
+                retest_started_h4_ts = latest_h4.timestamp
                 break
     else:
         # Retest already in progress — allow upgrade to a higher-priority source if one
@@ -219,10 +224,12 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                     and _SOURCE_PRIORITY.get(src.source_type, 99)
                         < _SOURCE_PRIORITY.get(active_reaction_src.source_type, 99)):
                 active_reaction_src = src
+                retest_started_h4_ts = latest_h4.timestamp  # reset window to this upgrade point
                 break
 
     out.retest_in_progress = retest_in_progress
     out.active_reaction_src = active_reaction_src
+    out.retest_started_h4_ts = retest_started_h4_ts
 
     # Carry forward continuation state (may be updated below)
     out.continuation_mode = inp.continuation_mode
@@ -231,10 +238,20 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
 
     # ── STEP 3: Check for qualifying H4 breakout (ORIGIN) ─────────────────────
     if retest_in_progress and active_reaction_src is not None:
+        # Narrow the H4 window to candles that formed AFTER the retest began.
+        # Using the full post-breakout window (potentially months of candles) would
+        # expose pre-retest H4 formations — old bounce levels that are trivially
+        # "broken" by current price and have nothing to do with the current reaction.
+        if retest_started_h4_ts is not None:
+            confirmation_h4 = [c for c in post_breakout_h4 if c.timestamp >= retest_started_h4_ts]
+        else:
+            # Pre-migration fallback: limit to last 30 H4 candles (~5 days)
+            confirmation_h4 = post_breakout_h4[-30:] if len(post_breakout_h4) > 30 else post_breakout_h4
+
         h4_event = check_h4_breakout(
             latest_h4,
             active_breakout.direction,
-            post_breakout_h4,
+            confirmation_h4,
         )
 
         if h4_event is not None:
@@ -252,6 +269,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             # Source consumed; clear retest state; enable continuation mode
             out.retest_in_progress = False
             out.active_reaction_src = None
+            out.retest_started_h4_ts = None
             out.continuation_mode = True
             out.last_alert_h4_ts = latest_h4.timestamp
             out.last_h4_breaker_level = h4_event.formation_broken.level

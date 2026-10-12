@@ -179,6 +179,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         "continuation_mode INTEGER NOT NULL DEFAULT 0",
         "last_alert_h4_ts TEXT",
         "last_h4_breaker_level REAL",
+        "retest_started_h4_ts TEXT",
     ]:
         col_name = col_def.split()[0]
         existing = {row[1] for row in conn.execute("PRAGMA table_info(instrument_state)").fetchall()}
