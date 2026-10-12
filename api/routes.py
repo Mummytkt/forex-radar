@@ -545,8 +545,14 @@ def admin_reset_instrument(request: Request, body: dict):
     if not raw:
         raise HTTPException(status_code=400, detail="'instruments' list required")
 
-    # Accept both slash (EUR/USD) and no-slash (EURUSD) forms
-    targets = [i.replace("/", "").upper() for i in raw]
+    # Normalise to the DB format (EUR/USD with slash).
+    # Accept both "EURUSD" and "EUR/USD" — insert slash at position 3 when missing.
+    targets = []
+    for s in raw:
+        s = s.upper().replace("-", "/")
+        if "/" not in s and len(s) >= 6:
+            s = s[:3] + "/" + s[3:]
+        targets.append(s)
 
     with _db_write(request) as conn:
         for inst in targets:
