@@ -36,6 +36,7 @@ from data.models import (
     Direction,
     H4BreakoutEvent,
     ReactionSource,
+    ReactionSourceType,
     Timeframe,
 )
 from analysis.formations import get_most_recent_a_shape, get_most_recent_v_shape, detect_a_shape, detect_v_shape
@@ -97,6 +98,16 @@ def _h4_level_retested(candle: Candle, level: float, tolerance: float, direction
         return candle.high >= level - tolerance and candle.close < level
     else:
         return candle.low <= level + tolerance and candle.close > level
+
+
+# Higher number = lower priority. AV levels take precedence over OC levels when
+# multiple sources are touched; DAILY_BREAKER always wins; post-breakout OC is last.
+_SOURCE_PRIORITY: dict[ReactionSourceType, int] = {
+    ReactionSourceType.DAILY_BREAKER: 0,
+    ReactionSourceType.AV_INSIDE_RANGE: 1,
+    ReactionSourceType.OC_INSIDE_RANGE: 2,
+    ReactionSourceType.POST_BREAKOUT_DAILY_OC: 3,
+}
 
 
 def _price_established_beyond_zone(h4_candles: list[Candle], source: ReactionSource) -> bool:
@@ -194,6 +205,19 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             if (is_price_retesting_source(latest_h4, src)
                     and _price_established_beyond_zone(post_breakout_h4, src)):
                 retest_in_progress = True
+                active_reaction_src = src
+                break
+    else:
+        # Retest already in progress — allow upgrade to a higher-priority source if one
+        # is touched now. This handles the case where a deep OC was touched first but the
+        # actual reaction (closest to the H4 confirmation) came from a shallower AV level.
+        for src in active_sources:
+            if (src is not active_reaction_src
+                    and is_price_retesting_source(latest_h4, src)
+                    and _price_established_beyond_zone(post_breakout_h4, src)
+                    and active_reaction_src is not None
+                    and _SOURCE_PRIORITY.get(src.source_type, 99)
+                        < _SOURCE_PRIORITY.get(active_reaction_src.source_type, 99)):
                 active_reaction_src = src
                 break
 

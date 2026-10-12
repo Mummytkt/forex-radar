@@ -93,24 +93,14 @@ def compute_reaction_sources(
         range_high = broken_level
         range_low = min(c.body_low for c in pre_candles)
 
-    # ── 2. OC_INSIDE_RANGE ───────────────────────────────────────────────────
-    oc_levels = detect_oc_levels(pre_candles)
-    for oc in oc_levels:
-        if oc.direction == direction and range_low <= oc.level <= range_high:
-            band = _tolerance_band(oc.level, tolerance_pips, pip_size)
-            sources.append(
-                ReactionSource(
-                    instrument=instrument,
-                    source_type=ReactionSourceType.OC_INSIDE_RANGE,
-                    direction=direction,
-                    level=oc.level,
-                    level_band_low=band[0],
-                    level_band_high=band[1],
-                    daily_breakout_ts=breakout_ts,
-                )
-            )
+    # Minimum clearance: exclude inside-range sources whose level is within the
+    # broken_level's tolerance band — they are indistinguishable from the
+    # DAILY_BREAKER and would trigger false retests on any post-breakout wick.
+    _tol = tolerance_pips * pip_size
 
-    # ── 3. AV_INSIDE_RANGE ───────────────────────────────────────────────────
+    # ── 2. AV_INSIDE_RANGE ───────────────────────────────────────────────────
+    # Checked BEFORE OC so that when both are touched simultaneously the
+    # explicitly drawn A/V level takes precedence over the derived OC level.
     # After BEARISH breakout: A-shapes inside the range are valid (resistance).
     # After BULLISH breakout: V-shapes inside the range are valid (support).
     if direction == Direction.BEARISH:
@@ -119,7 +109,7 @@ def compute_reaction_sources(
         av_formations = detect_v_shape(pre_candles)
 
     for f in av_formations:
-        if range_low <= f.level <= range_high:
+        if range_low <= f.level <= range_high and abs(f.level - broken_level) > _tol:
             band = _tolerance_band(f.level, tolerance_pips, pip_size)
             sources.append(
                 ReactionSource(
@@ -127,6 +117,23 @@ def compute_reaction_sources(
                     source_type=ReactionSourceType.AV_INSIDE_RANGE,
                     direction=direction,
                     level=f.level,
+                    level_band_low=band[0],
+                    level_band_high=band[1],
+                    daily_breakout_ts=breakout_ts,
+                )
+            )
+
+    # ── 3. OC_INSIDE_RANGE ───────────────────────────────────────────────────
+    oc_levels = detect_oc_levels(pre_candles)
+    for oc in oc_levels:
+        if oc.direction == direction and range_low <= oc.level <= range_high and abs(oc.level - broken_level) > _tol:
+            band = _tolerance_band(oc.level, tolerance_pips, pip_size)
+            sources.append(
+                ReactionSource(
+                    instrument=instrument,
+                    source_type=ReactionSourceType.OC_INSIDE_RANGE,
+                    direction=direction,
+                    level=oc.level,
                     level_band_low=band[0],
                     level_band_high=band[1],
                     daily_breakout_ts=breakout_ts,
