@@ -69,6 +69,9 @@ CATEGORIES: dict[str, str] = {
     "BTC/USD": "Crypto", "ETH/USD": "Crypto", "SOL/USD": "Crypto",
     "BNB/USD": "Crypto", "XRP/USD": "Crypto", "ADA/USD": "Crypto",
     "DOGE/USD": "Crypto", "LTC/USD": "Crypto",
+    "WTI/USD": "Energy",
+    "US30": "Index", "NAS100": "Index", "SPX500": "Index",
+    "UK100": "Index", "GER40": "Index", "JPN225": "Index",
 }
 
 CRYPTO = {"BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD", "ADA/USD", "DOGE/USD", "LTC/USD"}

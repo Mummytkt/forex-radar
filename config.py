@@ -84,6 +84,22 @@ def pip_size_for(instrument: str) -> float:
         return 0.00002 # $0.0001 tolerance band
     if clean == "LTCUSD":
         return 0.02    # $0.10 tolerance band
+    # Energy
+    if clean == "WTIUSD":
+        return 0.05    # $0.25 tolerance band at 5 pips (~$75 oil)
+    # Indices — pip = 1 point, tolerance = 5 × pip_size points
+    if clean == "US30":
+        return 10.0    # 50-point band (~42 000 Dow)
+    if clean == "NAS100":
+        return 5.0     # 25-point band (~20 000 NASDAQ 100)
+    if clean == "SPX500":
+        return 2.0     # 10-point band (~5 800 S&P 500)
+    if clean == "UK100":
+        return 3.0     # 15-point band (~8 200 FTSE 100)
+    if clean == "GER40":
+        return 5.0     # 25-point band (~19 000 DAX)
+    if clean == "JPN225":
+        return 10.0    # 50-point band (~40 000 Nikkei 225)
     return 0.0001
 
 
@@ -105,6 +121,10 @@ DEFAULT_INSTRUMENTS: list[str] = [
     "CAD/JPY", "CAD/CHF", "CHF/JPY",
     # Metals
     "XAU/USD",
+    # Energy
+    "WTI/USD",
+    # Indices
+    "US30", "NAS100", "SPX500", "UK100", "GER40", "JPN225",
     # Crypto (24/7)
     "BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD", "ADA/USD", "DOGE/USD", "LTC/USD",
 ]

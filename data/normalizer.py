@@ -27,16 +27,36 @@ def symbol_to_instrument(symbol: str) -> str:
     return symbol.replace("/", "").upper()
 
 
+# Instruments whose internal name must not be split at position 3 — they are
+# indices or commodities with non-standard naming (e.g. "NAS100" would become
+# "NAS/100" which Twelve Data does not recognise).
+_SYMBOL_OVERRIDES: dict[str, str] = {
+    "US30":    "US30",
+    "NAS100":  "NAS100",
+    "SPX500":  "SPX500",
+    "UK100":   "UK100",
+    "GER40":   "GER40",
+    "JPN225":  "JPN225",
+}
+
+
 def instrument_to_symbol(instrument: str) -> str:
     """
-    'EURUSD' → 'EUR/USD'.
-    Handles standard 6-char forex pairs and 6-char metals (XAUUSD, XAGUSD).
-    For non-standard lengths, inserts slash at position 3.
+    Convert an internal instrument name to a Twelve Data API symbol.
+
+    'EUR/USD' → 'EUR/USD'   (already correct — returned as-is)
+    'EURUSD'  → 'EUR/USD'   (6-char no-slash → split at 3)
+    'NAS100'  → 'NAS100'    (index override — no split)
     """
-    clean = instrument.upper()
-    if len(clean) == 6:
-        return f"{clean[:3]}/{clean[3:]}"
-    return clean
+    key = instrument.upper().replace("/", "")
+    if key in _SYMBOL_OVERRIDES:
+        return _SYMBOL_OVERRIDES[key]
+    up = instrument.upper()
+    if "/" in up:
+        return up  # already in BASE/QUOTE form
+    if len(up) == 6:
+        return f"{up[:3]}/{up[3:]}"  # EURUSD → EUR/USD
+    return up
 
 
 def normalize_candles(
