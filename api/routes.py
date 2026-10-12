@@ -446,6 +446,9 @@ def _row_to_entry(row) -> JournalEntry:
         amount_aimed=row["amount_aimed"] if "amount_aimed" in cols else None,
         result=row["result"],
         setup_type=row["setup_type"],
+        h4_break_type=row["h4_break_type"] if "h4_break_type" in cols else None,
+        entry_date=row["entry_date"] if "entry_date" in cols else None,
+        exit_date=row["exit_date"] if "exit_date" in cols else None,
         session=row["session"],
         notes=row["notes"],
         created_at=row["created_at"],
@@ -470,13 +473,14 @@ def create_journal_entry(request: Request, body: JournalEntryCreate):
             """INSERT INTO journal_entries
                (trade_date, instrument, direction, entry_price, stop_loss, take_profit,
                 exit_price, pips, rr_ratio, amount_risked, amount_aimed,
-                result, setup_type, session, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                result, setup_type, h4_break_type, entry_date, exit_date, session, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (body.trade_date, body.instrument, body.direction,
              body.entry_price, body.stop_loss, body.take_profit,
              body.exit_price, body.pips, body.rr_ratio,
              body.amount_risked, body.amount_aimed,
-             body.result, body.setup_type, body.session, body.notes),
+             body.result, body.setup_type, body.h4_break_type,
+             body.entry_date, body.exit_date, body.session, body.notes),
         )
         entry_id = cur.lastrowid
         row = conn.execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
@@ -520,7 +524,8 @@ def export_journal_csv(request: Request, period: str = Query("all")):
     writer = csv.writer(buf)
     cols = set()
     writer.writerow(["Date", "Instrument", "Direction", "Result", "Entry", "SL", "TP",
-                     "Exit", "Pips", "R:R", "Amount Risked", "Amount Aimed", "Setup", "Session", "Notes"])
+                     "Exit", "Pips", "R:R", "Amount Risked", "Amount Aimed",
+                     "Setup", "H4 Break Type", "Entry Date", "Exit Date", "Session", "Notes"])
     for r in rows:
         if not cols:
             cols = set(r.keys())
@@ -530,7 +535,11 @@ def export_journal_csv(request: Request, period: str = Query("all")):
             r["exit_price"] or "", r["pips"] or "", r["rr_ratio"] or "",
             (r["amount_risked"] if "amount_risked" in cols else "") or "",
             (r["amount_aimed"] if "amount_aimed" in cols else "") or "",
-            r["setup_type"], r["session"] or "", (r["notes"] or "").replace("\n", " "),
+            r["setup_type"],
+            (r["h4_break_type"] if "h4_break_type" in cols else "") or "",
+            (r["entry_date"] if "entry_date" in cols else "") or "",
+            (r["exit_date"] if "exit_date" in cols else "") or "",
+            r["session"] or "", (r["notes"] or "").replace("\n", " "),
         ])
 
     buf.seek(0)

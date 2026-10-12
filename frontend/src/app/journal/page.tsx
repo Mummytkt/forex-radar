@@ -28,6 +28,9 @@ interface Entry {
   amount_aimed: number | null
   result: string
   setup_type: string
+  h4_break_type: string | null
+  entry_date: string | null
+  exit_date: string | null
   session: string | null
   notes: string | null
   created_at: string
@@ -191,8 +194,18 @@ function blank() {
     pips: '', rr_ratio: '',
     amount_risked: '', amount_aimed: '',
     result: 'open', setup_type: 'other',
+    h4_break_type: '',
+    entry_date: '', exit_date: '',
     session: '', notes: '',
   }
+}
+
+function fmtLongDate(iso: string): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
@@ -676,7 +689,7 @@ function TradeModal({
           {/* Row 1: Date + Instrument */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={labelStyle}>Date</label>
+              <label style={labelStyle}>Log Date</label>
               <input type="date" value={form.trade_date} onChange={e => set('trade_date', e.target.value)} style={inputStyle} />
             </div>
             <div>
@@ -687,6 +700,28 @@ function TradeModal({
               <datalist id="instruments-list">
                 {INSTRUMENTS.map(i => <option key={i} value={i} />)}
               </datalist>
+            </div>
+          </div>
+
+          {/* Row 2: Entry Date + Exit Date */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Entry Date</label>
+              <input type="date" value={form.entry_date} onChange={e => set('entry_date', e.target.value)} style={inputStyle} />
+              {form.entry_date && (
+                <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
+                  {fmtLongDate(form.entry_date)}
+                </p>
+              )}
+            </div>
+            <div>
+              <label style={labelStyle}>Exit Date</label>
+              <input type="date" value={form.exit_date} onChange={e => set('exit_date', e.target.value)} style={inputStyle} />
+              {form.exit_date && (
+                <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
+                  {fmtLongDate(form.exit_date)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -773,6 +808,23 @@ function TradeModal({
                 <option value="continuation_h4breaker">Continuation — Breaker</option>
                 <option value="other">Other</option>
               </select>
+            </div>
+          </div>
+
+          {/* H4 Break Type */}
+          <div>
+            <label style={labelStyle}>H4 Break Type</label>
+            <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+              {(['', 'internal', 'external'] as const).map(v => (
+                <button key={v} type="button" onClick={() => set('h4_break_type', v)} style={{
+                  flex: 1, padding: '9px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                  background: form.h4_break_type === v ? 'var(--accent)' : 'var(--surface)',
+                  color: form.h4_break_type === v ? 'white' : 'var(--text-secondary)',
+                  transition: 'all 0.15s',
+                }}>
+                  {v === '' ? '— Not set' : v === 'internal' ? 'Internal' : 'External'}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -941,6 +993,8 @@ export default function JournalPage() {
       amount_risked: e.amount_risked?.toString() ?? '',
       amount_aimed: e.amount_aimed?.toString() ?? '',
       result: e.result, setup_type: e.setup_type,
+      h4_break_type: e.h4_break_type ?? '',
+      entry_date: e.entry_date ?? '', exit_date: e.exit_date ?? '',
       session: e.session ?? '', notes: e.notes ?? '',
     })
     setModalOpen(true)
@@ -960,6 +1014,9 @@ export default function JournalPage() {
       amount_risked: form.amount_risked ? parseFloat(form.amount_risked) : null,
       amount_aimed: form.amount_aimed ? parseFloat(form.amount_aimed) : null,
       result: form.result, setup_type: form.setup_type,
+      h4_break_type: form.h4_break_type || null,
+      entry_date: form.entry_date || null,
+      exit_date: form.exit_date || null,
       session: form.session || null, notes: form.notes || null,
     }
     try {
@@ -986,13 +1043,16 @@ export default function JournalPage() {
   }
 
   const exportCsv = () => {
-    const headers = ['Date','Instrument','Direction','Result','Entry','SL','TP','Exit','Pips','R:R','Amount Risked','Amount Aimed','Setup','Session','Notes']
+    const headers = ['Date','Instrument','Direction','Result','Entry','SL','TP','Exit','Pips','R:R','Amount Risked','Amount Aimed','Setup','H4 Break Type','Entry Date','Exit Date','Session','Notes']
     const rows = entries.map(e => [
       e.trade_date, e.instrument, e.direction.toUpperCase(), e.result.toUpperCase(),
       e.entry_price ?? '', e.stop_loss ?? '', e.take_profit ?? '', e.exit_price ?? '',
       e.pips ?? '', e.rr_ratio ?? '',
       e.amount_risked ?? '', e.amount_aimed ?? '',
       SETUP_LABELS[e.setup_type] || e.setup_type,
+      e.h4_break_type ?? '',
+      e.entry_date ? fmtLongDate(e.entry_date) : '',
+      e.exit_date ? fmtLongDate(e.exit_date) : '',
       e.session ?? '', (e.notes ?? '').replace(/,/g, ';'),
     ])
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
