@@ -256,37 +256,39 @@ function SubscribersSection() {
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Generate an invite link to give someone access.</p>
         </div>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name / Email</th>
-              <th>Plan</th>
-              <th>Joined</th>
-              <th>Last seen</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u.id}>
-                <td>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || '—'}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{u.email}</div>
-                  {!u.invite_used && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Invite pending</span>}
-                </td>
-                <td><span style={{ fontSize: 12, fontWeight: 600, color: planColor(u.plan) }}>{planLabel(u.plan)}</span></td>
-                <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(u.created_at)}</span></td>
-                <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.last_login_at ? timeAgo(u.last_login_at) : '—'}</span></td>
-                <td>
-                  <button onClick={() => revoke(u.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--bearish-bg)', color: 'var(--bearish)', fontSize: 11, fontWeight: 600 }}>
-                    <Trash2 size={11} /> Revoke
-                  </button>
-                </td>
+        <div className="table-wrap">
+          <table className="data-table" style={{ minWidth: 500 }}>
+            <thead>
+              <tr>
+                <th>Name / Email</th>
+                <th>Plan</th>
+                <th>Joined</th>
+                <th>Last seen</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id}>
+                  <td>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || '—'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{u.email}</div>
+                    {!u.invite_used && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Invite pending</span>}
+                  </td>
+                  <td><span style={{ fontSize: 12, fontWeight: 600, color: planColor(u.plan) }}>{planLabel(u.plan)}</span></td>
+                  <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(u.created_at)}</span></td>
+                  <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.last_login_at ? timeAgo(u.last_login_at) : '—'}</span></td>
+                  <td>
+                    <button onClick={() => revoke(u.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--bearish-bg)', color: 'var(--bearish)', fontSize: 11, fontWeight: 600 }}>
+                      <Trash2 size={11} /> Revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
