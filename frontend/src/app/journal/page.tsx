@@ -445,14 +445,27 @@ const RESULT_OPTIONS = [
 
 function ResultPicker({ entry, onResultChange }: { entry: Entry; onResultChange: (id: number, result: string) => void }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, right: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
   const rc = RESULT_COLOR[entry.result] || 'var(--text-muted)'
   const rb = RESULT_BG[entry.result] || 'transparent'
+
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setPos({ top: r.top, right: window.innerWidth - r.right })
+    }
+    setOpen(v => !v)
+  }
+
   return (
-    <div style={{ position: 'relative', width: 58, flexShrink: 0, textAlign: 'center' }}>
+    <div style={{ width: 58, flexShrink: 0, textAlign: 'center' }}>
       <button
+        ref={btnRef}
         type="button"
         title="Tap to mark result"
-        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        onClick={handleOpen}
         style={{
           display: 'inline-block', fontSize: 10, fontWeight: 700,
           padding: '3px 6px', borderRadius: 5,
@@ -464,13 +477,15 @@ function ResultPicker({ entry, onResultChange }: { entry: Entry; onResultChange:
       </button>
       {open && (
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 149 }}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
             onClick={e => { e.stopPropagation(); setOpen(false) }} />
           <div style={{
-            position: 'absolute', right: 0, bottom: 'calc(100% + 6px)',
+            position: 'fixed',
+            bottom: `${window.innerHeight - pos.top + 6}px`,
+            right: `${pos.right}px`,
             background: 'var(--card)', border: '1px solid var(--border)',
-            borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
-            zIndex: 150, overflow: 'hidden', minWidth: 110,
+            borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+            zIndex: 9999, overflow: 'hidden', minWidth: 120,
           }}>
             <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '6px 10px 4px', margin: 0 }}>
               Mark as
