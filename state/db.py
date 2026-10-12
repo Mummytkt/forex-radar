@@ -217,6 +217,42 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_alerts_inst ON alerts (instrument, fired_at);
         """)
 
+    # ── Data cleanup: prune excess POST_BREAKOUT_DAILY_OC sources ────────────
+    # Earlier engine versions accumulated all OC sources without limit; some
+    # instruments accumulated 50-112 sources, guaranteeing false retest hits.
+    # Cap retroactively to the 3 most recent per breakout (same as max_oc=3).
+    # The subquery keeps the N sources with the highest id (most recently inserted)
+    # within each daily_breakout_id group — safe to run on every startup (no-op
+    # once the DB is already clean).
+    conn.execute("""
+        DELETE FROM reaction_sources
+        WHERE source_type = 'POST_BREAKOUT_DAILY_OC'
+          AND id NOT IN (
+            SELECT id FROM reaction_sources AS rs1
+            WHERE source_type = 'POST_BREAKOUT_DAILY_OC'
+              AND (
+                SELECT COUNT(*) FROM reaction_sources AS rs2
+                WHERE rs2.source_type = 'POST_BREAKOUT_DAILY_OC'
+                  AND rs2.daily_breakout_id = rs1.daily_breakout_id
+                  AND rs2.id >= rs1.id
+              ) <= 3
+          )
+    """)
+
+    # Reset retest state for any instrument whose active reaction source was
+    # just pruned (or was otherwise deleted/deactivated).  The engine will
+    # re-detect genuine retests on the next H4 cycle via wick-based detection.
+    conn.execute("""
+        UPDATE instrument_state
+        SET retest_in_progress     = 0,
+            active_reaction_src_id = NULL,
+            retest_started_h4_ts   = NULL
+        WHERE active_reaction_src_id IS NOT NULL
+          AND active_reaction_src_id NOT IN (
+            SELECT id FROM reaction_sources WHERE is_active = 1
+          )
+    """)
+
     # Add journal_entries table if missing
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     if "journal_entries" not in tables:

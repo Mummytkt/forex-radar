@@ -187,13 +187,16 @@ def _add_post_breakout_oc(
 
 def is_price_retesting_source(candle: Candle, source: ReactionSource) -> bool:
     """
-    Returns True if the H4 candle CLOSED within the source's tolerance band.
+    Returns True if the H4 candle's price range (wick) overlaps the source band.
 
-    Requiring a close (not just a wick) prevents a brief H4 spike into the zone
-    from permanently locking retest_in_progress = True. A genuine reaction needs
-    price to actually settle at the level, not just pass through it.
+    Wick-based (high/low) rather than close-based: a genuine retest of a bearish
+    level (resistance) produces H4 candles that wick INTO the band from below and
+    close BELOW it (rejection). Requiring a close within the band would miss every
+    real retest. False-positive accumulation is prevented instead by capping
+    POST_BREAKOUT_DAILY_OC sources at 3 — with only ~5-8 sources per instrument,
+    all clustered around the key level, a wick touch is meaningful again.
     """
-    return source.level_band_low <= candle.close <= source.level_band_high
+    return candle.low <= source.level_band_high and candle.high >= source.level_band_low
 
 
 _MAX_POST_BREAKOUT_OC = 3  # keep only the N most recent post-breakout OC levels
