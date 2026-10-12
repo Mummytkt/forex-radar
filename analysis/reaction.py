@@ -141,7 +141,10 @@ def compute_reaction_sources(
             )
 
     # ── 4. POST_BREAKOUT_DAILY_OC ─────────────────────────────────────────────
-    _add_post_breakout_oc(sources, instrument, direction, breakout_ts, post_candles, tolerance_pips, pip_size)
+    # Only keep the 3 most recent post-breakout OC levels. Keeping every OC
+    # since the breakout creates dozens of sources spread across the price range,
+    # guaranteeing a false "Retesting" detection wherever price happens to trade.
+    _add_post_breakout_oc(sources, instrument, direction, breakout_ts, post_candles, tolerance_pips, pip_size, max_oc=3)
 
     return sources
 
@@ -154,46 +157,46 @@ def _add_post_breakout_oc(
     post_candles: list[Candle],
     tolerance_pips: float,
     pip_size: float,
+    max_oc: int = 3,
 ) -> None:
     """
-    Append POST_BREAKOUT_DAILY_OC sources.
+    Append POST_BREAKOUT_DAILY_OC sources — at most `max_oc` most recent.
 
-    Two consecutive candles in the breakout direction that formed AFTER the
-    breakout candle constitute a valid post-breakout OC. Their midpoint is the
-    OC level. The breakout candle itself is included as the first of the
-    post-breakout sequence (it represents the breakout direction candle).
+    Two consecutive same-direction daily candles after the breakout form an OC.
+    Only the `max_oc` most recent are kept. Older OC levels are no longer
+    relevant as reaction zones, and accumulating all of them creates dozens of
+    false sources spread across the price range.
     """
-    # Only candles whose direction matches the breakout
-    if direction == Direction.BEARISH:
-        aligned = [c for c in post_candles if c.is_bearish]
-    else:
-        aligned = [c for c in post_candles if c.is_bullish]
-
-    # We need consecutive pairs from post_candles (not just aligned candles in isolation)
-    # A non-aligned candle breaks the consecutive run.
     oc_levels = detect_oc_levels(post_candles)
-    for oc in oc_levels:
-        if oc.direction == direction:
-            band = _tolerance_band(oc.level, tolerance_pips, pip_size)
-            sources.append(
-                ReactionSource(
-                    instrument=instrument,
-                    source_type=ReactionSourceType.POST_BREAKOUT_DAILY_OC,
-                    direction=direction,
-                    level=oc.level,
-                    level_band_low=band[0],
-                    level_band_high=band[1],
-                    daily_breakout_ts=breakout_ts,
-                )
+    # Filter to matching direction, then take the most recent N
+    matching = [oc for oc in oc_levels if oc.direction == direction]
+    for oc in matching[-max_oc:]:
+        band = _tolerance_band(oc.level, tolerance_pips, pip_size)
+        sources.append(
+            ReactionSource(
+                instrument=instrument,
+                source_type=ReactionSourceType.POST_BREAKOUT_DAILY_OC,
+                direction=direction,
+                level=oc.level,
+                level_band_low=band[0],
+                level_band_high=band[1],
+                daily_breakout_ts=breakout_ts,
             )
+        )
 
 
 def is_price_retesting_source(candle: Candle, source: ReactionSource) -> bool:
     """
-    Returns True if the candle's range (high or low) touches the source's
-    tolerance band. Catches intraday wicks reaching the zone, not just close.
+    Returns True if the H4 candle CLOSED within the source's tolerance band.
+
+    Requiring a close (not just a wick) prevents a brief H4 spike into the zone
+    from permanently locking retest_in_progress = True. A genuine reaction needs
+    price to actually settle at the level, not just pass through it.
     """
-    return candle.low <= source.level_band_high and candle.high >= source.level_band_low
+    return source.level_band_low <= candle.close <= source.level_band_high
+
+
+_MAX_POST_BREAKOUT_OC = 3  # keep only the N most recent post-breakout OC levels
 
 
 def update_post_breakout_sources(
@@ -205,20 +208,37 @@ def update_post_breakout_sources(
 ) -> list[ReactionSource]:
     """
     Called after a new Daily candle closes (but no new breakout occurred).
-    Adds any newly formed POST_BREAKOUT_DAILY_OC sources to the existing list.
-    Returns the updated source list.
+    Recomputes POST_BREAKOUT_DAILY_OC sources from scratch, keeping at most
+    _MAX_POST_BREAKOUT_OC most recent levels.
+
+    Recomputing (rather than appending) ensures stale OC levels formed weeks
+    ago are replaced by the current most-relevant ones.
     """
-    existing_levels = {s.level for s in existing_sources if s.source_type == ReactionSourceType.POST_BREAKOUT_DAILY_OC}
     instrument = active_breakout.instrument
     direction = active_breakout.direction
     breakout_ts = active_breakout.breakout_ts
 
     post_candles = [c for c in new_daily_candles if c.timestamp >= breakout_ts]
     oc_levels = detect_oc_levels(post_candles)
+    matching = [oc for oc in oc_levels if oc.direction == direction]
+    fresh_oc_levels = matching[-_MAX_POST_BREAKOUT_OC:]
+    fresh_levels = {oc.level for oc in fresh_oc_levels}
 
-    new_sources = list(existing_sources)
-    for oc in oc_levels:
-        if oc.direction == direction and oc.level not in existing_levels:
+    # Keep all non-POST_BREAKOUT sources unchanged; replace post-breakout OC set
+    non_oc = [s for s in existing_sources if s.source_type != ReactionSourceType.POST_BREAKOUT_DAILY_OC]
+    existing_oc_levels = {
+        s.level for s in existing_sources
+        if s.source_type == ReactionSourceType.POST_BREAKOUT_DAILY_OC
+    }
+
+    new_sources = list(non_oc)
+    # Re-add existing OC sources that are still in the fresh set (preserves db_id)
+    for s in existing_sources:
+        if s.source_type == ReactionSourceType.POST_BREAKOUT_DAILY_OC and s.level in fresh_levels:
+            new_sources.append(s)
+    # Add genuinely new OC levels
+    for oc in fresh_oc_levels:
+        if oc.level not in existing_oc_levels:
             band = _tolerance_band(oc.level, tolerance_pips, pip_size)
             new_sources.append(
                 ReactionSource(
@@ -231,6 +251,5 @@ def update_post_breakout_sources(
                     daily_breakout_ts=breakout_ts,
                 )
             )
-            existing_levels.add(oc.level)
 
     return new_sources
