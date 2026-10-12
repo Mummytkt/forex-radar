@@ -213,18 +213,37 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                 retest_started_h4_ts = latest_h4.timestamp
                 break
     else:
-        # Retest already in progress — allow upgrade to a higher-priority source if one
-        # is touched now. This handles the case where a deep OC was touched first but the
-        # actual reaction (closest to the H4 confirmation) came from a shallower AV level.
+        # Retest already in progress — two cases for updating the active source:
+        #
+        # Case A — current source no longer touched (price moved away):
+        #   Switch to whichever other source IS currently being touched. This handles
+        #   the common scenario where price wicks the breaker (no H4 confirm), moves
+        #   deeper into the range, then reacts from an OC or AV level. The alert must
+        #   attribute to the level that actually caused the H4 confirmation.
+        #
+        # Case B — current source still touched, but a higher-priority source is also
+        #   touched simultaneously: upgrade to the higher-priority one.
+        current_still_touched = (
+            active_reaction_src is not None
+            and is_price_retesting_source(latest_h4, active_reaction_src)
+        )
         for src in active_sources:
-            if (src is not active_reaction_src
-                    and is_price_retesting_source(latest_h4, src)
-                    and _price_established_beyond_zone(post_breakout_h4, src)
-                    and active_reaction_src is not None
+            if src is active_reaction_src:
+                continue
+            if not (is_price_retesting_source(latest_h4, src)
+                    and _price_established_beyond_zone(post_breakout_h4, src)):
+                continue
+            if not current_still_touched:
+                # Case A: current source gone — switch regardless of priority
+                active_reaction_src = src
+                retest_started_h4_ts = latest_h4.timestamp
+                break
+            elif (active_reaction_src is not None
                     and _SOURCE_PRIORITY.get(src.source_type, 99)
                         < _SOURCE_PRIORITY.get(active_reaction_src.source_type, 99)):
+                # Case B: both touched simultaneously — upgrade to higher priority
                 active_reaction_src = src
-                retest_started_h4_ts = latest_h4.timestamp  # reset window to this upgrade point
+                retest_started_h4_ts = latest_h4.timestamp
                 break
 
     out.retest_in_progress = retest_in_progress
