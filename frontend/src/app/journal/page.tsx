@@ -446,6 +446,7 @@ function TradeRow({
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
       padding: '12px 16px',
+      minWidth: 480,
       borderLeft: `3px solid ${rc}`,
       borderBottom: '1px solid var(--border)',
       background: 'var(--card)',
@@ -1280,13 +1281,15 @@ export default function JournalPage() {
               </button>
             </div>
           ) : (
-            entries.map(e => (
-              <TradeRow
-                key={e.id} entry={e}
-                onEdit={openEdit}
-                onDelete={id => setConfirmDelete(id)}
-              />
-            ))
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as 'auto' }}>
+              {entries.map(e => (
+                <TradeRow
+                  key={e.id} entry={e}
+                  onEdit={openEdit}
+                  onDelete={id => setConfirmDelete(id)}
+                />
+              ))}
+            </div>
           )}
         </div>
       </main>
