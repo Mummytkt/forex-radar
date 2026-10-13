@@ -1,6 +1,6 @@
 //@version=5
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v4 — TradingView Edition
+// MummyTKT's Bias Pointer v5 — TradingView Edition
 //
 // Apply to a 4H chart for each instrument.
 // Create ONE alert per instrument: condition = "Any alert() function call"
@@ -14,11 +14,10 @@
 //   INVALIDATED      — Daily close moved beyond the OPPOSITE range boundary
 //   H4_CONTINUATION  — H4 continuation event after Origin has fired
 //                      cont_type: breakout_cont | breaker_origin | breaker_cont | oc_cont
+//   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
 //
-// v4 change: all alert() calls are guarded by barstate.isrealtime so that
-//            historical recalculation on script update never fires fake alerts.
-//            State variables (formations, breakouts, etc.) still process all
-//            historical bars to keep tracking accurate.
+// v5 change: added PRICE_UPDATE event — fires at every realtime H4 close.
+//            Backend uses it to check subscriber price-level alerts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=500)
@@ -484,6 +483,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                               + ',"breakout_level":' + str.tostring(bo_level)
                               + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
                               alert.freq_once_per_bar)
+
+// ── Price feed — powers dashboard price-level alerts ─────────────────────────
+if barstate.isconfirmed and barstate.isrealtime
+    alert('{"secret":"' + wh_secret + '","type":"PRICE_UPDATE","instrument":"' + syminfo.ticker
+          + '","price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
 
 // ── Visual overlays ───────────────────────────────────────────────────────────
 float _hi  = not na(bo_dir) ? bo_level + tol : na

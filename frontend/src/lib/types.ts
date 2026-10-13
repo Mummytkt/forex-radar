@@ -52,3 +52,22 @@ export interface InstrumentDetail {
   active_sources: ActiveSource[]
   recent_alerts: AlertItem[]
 }
+
+export interface PriceAlertItem {
+  id: number
+  instrument: string
+  trigger_type: string
+  condition: string
+  price: number
+  message: string | null
+  expires_at: string | null
+  is_active: boolean
+  triggered_at: string | null
+  created_at: string
+}
+
+export interface PriceAlertsList {
+  items: PriceAlertItem[]
+  active_count: number
+  max_alerts: number
+}

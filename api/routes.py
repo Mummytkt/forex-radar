@@ -662,3 +662,131 @@ def get_instrument(slug: str, request: Request):
         ]
 
     return InstrumentDetail(overview=overview, active_sources=active_sources, recent_alerts=recent_alerts)
+
+
+# ── Price Alerts ──────────────────────────────────────────────────────────────
+
+_MAX_ACTIVE_PRICE_ALERTS = 20
+
+
+class PriceAlertItem(BaseModel):
+    id: int
+    instrument: str
+    trigger_type: str
+    condition: str
+    price: float
+    message: Optional[str]
+    expires_at: Optional[str]
+    is_active: bool
+    triggered_at: Optional[str]
+    created_at: str
+
+
+class PriceAlertsList(BaseModel):
+    items: list[PriceAlertItem]
+    active_count: int
+    max_alerts: int
+
+
+class PriceAlertCreate(BaseModel):
+    instrument: str
+    trigger_type: str = "on_touch"
+    condition: str = "crossing"
+    price: float
+    message: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
+def _user_id(request: Request) -> Optional[int]:
+    user = getattr(request.state, "user", None)
+    return user["id"] if user else None
+
+
+def _row_to_price_alert(row: sqlite3.Row) -> PriceAlertItem:
+    d = dict(row)
+    return PriceAlertItem(
+        id=d["id"],
+        instrument=d["instrument"],
+        trigger_type=d["trigger_type"],
+        condition=d["condition"],
+        price=d["price"],
+        message=d.get("message"),
+        expires_at=d.get("expires_at"),
+        is_active=bool(d["is_active"]),
+        triggered_at=d.get("triggered_at"),
+        created_at=d["created_at"],
+    )
+
+
+@router.get("/price-alerts", response_model=PriceAlertsList)
+def list_price_alerts(request: Request, tab: str = Query("active")):
+    uid = _user_id(request)
+    active_filter = "is_active = 1" if tab != "history" else "is_active = 0"
+    with _db(request) as conn:
+        if uid:
+            rows = conn.execute(
+                f"SELECT * FROM price_alerts WHERE user_id = ? AND {active_filter} ORDER BY created_at DESC",
+                (uid,),
+            ).fetchall()
+            active_count = conn.execute(
+                "SELECT COUNT(*) FROM price_alerts WHERE user_id = ? AND is_active = 1", (uid,)
+            ).fetchone()[0]
+        else:
+            rows = conn.execute(
+                f"SELECT * FROM price_alerts WHERE user_id IS NULL AND {active_filter} ORDER BY created_at DESC"
+            ).fetchall()
+            active_count = conn.execute(
+                "SELECT COUNT(*) FROM price_alerts WHERE user_id IS NULL AND is_active = 1"
+            ).fetchone()[0]
+    return PriceAlertsList(
+        items=[_row_to_price_alert(r) for r in rows],
+        active_count=active_count,
+        max_alerts=_MAX_ACTIVE_PRICE_ALERTS,
+    )
+
+
+@router.get("/price-alerts/prices")
+def get_instrument_prices(request: Request):
+    with _db(request) as conn:
+        rows = conn.execute(
+            "SELECT instrument, price, updated_at FROM instrument_prices"
+        ).fetchall()
+    return {r["instrument"]: {"price": r["price"], "updated_at": r["updated_at"]} for r in rows}
+
+
+@router.post("/price-alerts", response_model=PriceAlertItem)
+def create_price_alert(body: PriceAlertCreate, request: Request):
+    uid = _user_id(request)
+    instrument = body.instrument.replace("/", "").upper()
+    with _db_write(request) as conn:
+        if uid:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM price_alerts WHERE user_id = ? AND is_active = 1", (uid,)
+            ).fetchone()[0]
+        else:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM price_alerts WHERE user_id IS NULL AND is_active = 1"
+            ).fetchone()[0]
+        if count >= _MAX_ACTIVE_PRICE_ALERTS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum {_MAX_ACTIVE_PRICE_ALERTS} active price alerts reached.",
+            )
+        now = datetime.now(timezone.utc).isoformat()
+        cur = conn.execute("""
+            INSERT INTO price_alerts (user_id, instrument, trigger_type, condition, price, message, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (uid, instrument, body.trigger_type, body.condition, body.price, body.message, body.expires_at, now))
+        row = conn.execute("SELECT * FROM price_alerts WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return _row_to_price_alert(row)
+
+
+@router.delete("/price-alerts/{alert_id}")
+def delete_price_alert(alert_id: int, request: Request):
+    uid = _user_id(request)
+    with _db_write(request) as conn:
+        if uid:
+            conn.execute("DELETE FROM price_alerts WHERE id = ? AND user_id = ?", (alert_id, uid))
+        else:
+            conn.execute("DELETE FROM price_alerts WHERE id = ? AND user_id IS NULL", (alert_id,))
+    return {"ok": True}

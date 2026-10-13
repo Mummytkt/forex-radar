@@ -60,7 +60,7 @@ router = APIRouter()
 
 class TVWebhookPayload(BaseModel):
     secret: str
-    type: str                           # BREAKOUT | RETEST | RETEST_CANCELLED | CONFIRMED | INVALIDATED
+    type: str                           # BREAKOUT | RETEST | RETEST_CANCELLED | CONFIRMED | INVALIDATED | PRICE_UPDATE
     instrument: str                     # e.g. "USDCHF" or "USD/CHF"
     direction: Optional[str] = None     # "bullish" | "bearish"
     level: Optional[float] = None       # daily broken level (BREAKOUT)
@@ -70,6 +70,7 @@ class TVWebhookPayload(BaseModel):
     source_level: Optional[float] = None     # reaction source level (OC midpoint, or bo_level for others)
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
     cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | breaker_origin | breaker_cont | oc_cont
+    price: Optional[float] = None      # current close price (PRICE_UPDATE)
 
 
 def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
@@ -110,6 +111,8 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
         _handle_invalidated(conn, instrument)
     elif event_type == "H4_CONTINUATION":
         await _handle_h4_continuation(conn, config, instrument, payload)
+    elif event_type == "PRICE_UPDATE":
+        await _handle_price_update(conn, config, instrument, payload)
     else:
         logger.warning("Unknown TV webhook type: %s", event_type)
 
@@ -417,6 +420,93 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
 
     if config.telegram_enabled:
         await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+
+
+async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
+    price = payload.price
+    if price is None:
+        return
+
+    now = datetime.utcnow().isoformat()
+
+    # Fetch previous price for crossing detection
+    row = conn.execute(
+        "SELECT price FROM instrument_prices WHERE instrument = ?", (instrument,)
+    ).fetchone()
+    prev_price = row[0] if row else None
+
+    # Upsert current price (prev_price ← old price, price ← new price)
+    conn.execute("""
+        INSERT INTO instrument_prices (instrument, price, prev_price, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(instrument) DO UPDATE SET
+            prev_price = instrument_prices.price,
+            price = excluded.price,
+            updated_at = excluded.updated_at
+    """, (instrument, price, prev_price, now))
+    conn.commit()
+
+    if prev_price is None:
+        logger.info("%s PRICE_UPDATE %.5f (first update, skipping crossing check)", instrument, price)
+        return
+
+    # Check all active price alerts for this instrument
+    alerts = conn.execute("""
+        SELECT pa.id, pa.condition, pa.price AS alert_price, pa.message, u.telegram_chat_id
+        FROM price_alerts pa
+        LEFT JOIN users u ON pa.user_id = u.id
+        WHERE pa.instrument = ? AND pa.is_active = 1
+          AND (pa.expires_at IS NULL OR pa.expires_at > ?)
+    """, (instrument, now)).fetchall()
+
+    for alert_row in alerts:
+        alert_id    = alert_row[0]
+        condition   = alert_row[1]
+        alert_price = alert_row[2]
+        message     = alert_row[3]
+        chat_id     = alert_row[4] or config.telegram_chat_id
+
+        triggered = False
+        direction_str = ""
+        if condition == "crossing_up":
+            if prev_price < alert_price <= price:
+                triggered, direction_str = True, "above"
+        elif condition == "crossing_down":
+            if prev_price > alert_price >= price:
+                triggered, direction_str = True, "below"
+        else:  # crossing
+            if prev_price < alert_price <= price:
+                triggered, direction_str = True, "above"
+            elif prev_price > alert_price >= price:
+                triggered, direction_str = True, "below"
+
+        if not triggered:
+            continue
+
+        conn.execute(
+            "UPDATE price_alerts SET is_active = 0, triggered_at = ? WHERE id = ?",
+            (now, alert_id),
+        )
+        conn.commit()
+
+        # Determine decimal precision for display
+        if instrument.endswith("JPY"):
+            fmt = "{:.3f}"
+        elif instrument in ("XAUUSD", "USOIL", "WTIUSD"):
+            fmt = "{:.2f}"
+        else:
+            fmt = "{:.5f}"
+
+        text = f"⚡ Price Alert: {instrument}\n\n"
+        text += f"Price crossed {direction_str} {fmt.format(alert_price)}\n"
+        text += f"Current: {fmt.format(price)}"
+        if message:
+            text += f"\n\n{message}"
+
+        logger.info("%s price alert triggered — %s @ %s (id=%d)", instrument, condition, alert_price, alert_id)
+
+        if config.telegram_enabled and chat_id:
+            await send_alert(config.telegram_bot_token, chat_id, text)
 
 
 def _handle_invalidated(conn, instrument: str) -> None:

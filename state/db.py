@@ -145,6 +145,29 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 );
 CREATE INDEX IF NOT EXISTS idx_journal_date
     ON journal_entries (trade_date DESC);
+
+CREATE TABLE IF NOT EXISTS instrument_prices (
+    instrument  TEXT PRIMARY KEY,
+    price       REAL NOT NULL,
+    prev_price  REAL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER REFERENCES users(id),
+    instrument   TEXT    NOT NULL,
+    trigger_type TEXT    NOT NULL DEFAULT 'on_touch',
+    condition    TEXT    NOT NULL DEFAULT 'crossing',
+    price        REAL    NOT NULL,
+    message      TEXT,
+    expires_at   TEXT,
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    triggered_at TEXT,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_price_alerts_inst
+    ON price_alerts (instrument, is_active);
 """
 
 
@@ -309,5 +332,34 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         col_name = col_def.split()[0]
         if col_name not in journal_cols:
             conn.execute(f"ALTER TABLE journal_entries ADD COLUMN {col_def}")
+
+    # Add price alert tables if missing (handles existing DBs from before this feature)
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if "instrument_prices" not in tables:
+        conn.execute("""
+            CREATE TABLE instrument_prices (
+                instrument  TEXT PRIMARY KEY,
+                price       REAL NOT NULL,
+                prev_price  REAL,
+                updated_at  TEXT NOT NULL
+            )
+        """)
+    if "price_alerts" not in tables:
+        conn.execute("""
+            CREATE TABLE price_alerts (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      INTEGER REFERENCES users(id),
+                instrument   TEXT    NOT NULL,
+                trigger_type TEXT    NOT NULL DEFAULT 'on_touch',
+                condition    TEXT    NOT NULL DEFAULT 'crossing',
+                price        REAL    NOT NULL,
+                message      TEXT,
+                expires_at   TEXT,
+                is_active    INTEGER NOT NULL DEFAULT 1,
+                triggered_at TEXT,
+                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_price_alerts_inst ON price_alerts (instrument, is_active)")
 
     conn.commit()
