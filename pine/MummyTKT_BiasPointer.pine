@@ -505,14 +505,10 @@ p_mid = plot(_mid, "Breakout Level",    color=_line_col, linewidth=2, style=plot
 fill(p_hi, p_lo, color=_fill_col, title="Breakout Zone")
 
 // ── Formation tracking lines (always visible — verify what script detects) ────
-// Dashed red  = most recent Daily A-shape body high (bearish resistance)
-// Dashed lime = most recent Daily V-shape body low  (bullish support)
-// Dashed purple = post-breakout OC level (forms after breakout)
-// Dashed orange = H4 breaker level (forms after first CONFIRMED)
-plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,    50), linewidth=1, style=plot.style_dashes)
-plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,   50), linewidth=1, style=plot.style_dashes)
-plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 40), linewidth=1, style=plot.style_dashes)
-plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 20), linewidth=1, style=plot.style_dashes)
+p_a   = plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,    50), linewidth=1, style=plot.style_dashes)
+p_v   = plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,   50), linewidth=1, style=plot.style_dashes)
+p_poc = plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 40), linewidth=1, style=plot.style_dashes)
+p_bk  = plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 20), linewidth=1, style=plot.style_dashes)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
@@ -545,14 +541,5 @@ else if bo_dir == "bearish"
 
 var label _state_lbl = na
 label.delete(_state_lbl)
-_state_lbl := label.new(
-     bar_index, high, _state_txt,
-     style     = label.style_label_down,
-     color     = _lbl_col,
-     textcolor = color.white,
-     size      = size.small,
-     tooltip   = "bo_level: " + str.tostring(bo_level, "#.#####")
-               + "\na_lvl:   " + str.tostring(a_lvl,    "#.#####")
-               + "\nv_lvl:   " + str.tostring(v_lvl,    "#.#####")
-               + "\nh4_brk:  " + str.tostring(h4_breaker_lvl, "#.#####")
-               + "\npb_oc:   " + str.tostring(pb_oc_lvl, "#.#####"))
+string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " a=" + str.tostring(a_lvl, "#.#####") + " v=" + str.tostring(v_lvl, "#.#####") + " bk=" + str.tostring(h4_breaker_lvl, "#.#####")
+_state_lbl := label.new(bar_index, high, _state_txt, style=label.style_label_down, color=_lbl_col, textcolor=color.white, size=size.small, tooltip=_tip)
