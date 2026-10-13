@@ -505,15 +505,17 @@ p_mid = plot(_mid, "Breakout Level",    color=_line_col, linewidth=2, style=plot
 fill(p_hi, p_lo, color=_fill_col, title="Breakout Zone")
 
 // ── Formation tracking lines (always visible — verify what script detects) ────
-// Daily levels
-p_a   = plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,    50), linewidth=1, style=plot.style_linebr)
-p_v   = plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,   50), linewidth=1, style=plot.style_linebr)
-p_poc = plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 40), linewidth=1, style=plot.style_linebr)
-p_bk  = plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 20), linewidth=1, style=plot.style_linebr)
+// Daily candidate levels — bold stepline so they're always easy to see
+// D.A = most recent Daily A-shape body high  → close ABOVE this = bullish breakout
+// D.V = most recent Daily V-shape body low   → close BELOW this = bearish breakout
+p_a   = plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,     5), linewidth=3, style=plot.style_stepline)
+p_v   = plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,    5), linewidth=3, style=plot.style_stepline)
+p_poc = plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 15), linewidth=2, style=plot.style_linebr)
+p_bk  = plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 10), linewidth=2, style=plot.style_linebr)
 // H4 candidate levels (level that must be broken for H4 confirmation)
-p_h4a = plot(h4_a_lvl,       "H4 A-shape Level",    color=color.new(color.red,    70), linewidth=1, style=plot.style_linebr)
-p_h4v = plot(h4_v_lvl,       "H4 V-shape Level",    color=color.new(color.lime,   70), linewidth=1, style=plot.style_linebr)
-p_h4c = plot(h4c_oc_lvl,     "H4 OC Level",         color=color.new(color.teal,   50), linewidth=1, style=plot.style_linebr)
+p_h4a = plot(h4_a_lvl,       "H4 A-shape Level",    color=color.new(color.red,    40), linewidth=1, style=plot.style_linebr)
+p_h4v = plot(h4_v_lvl,       "H4 V-shape Level",    color=color.new(color.lime,   40), linewidth=1, style=plot.style_linebr)
+p_h4c = plot(h4c_oc_lvl,     "H4 OC Level",         color=color.new(color.teal,   20), linewidth=1, style=plot.style_linebr)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
@@ -565,6 +567,11 @@ else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
 else if h4_bo_fired
     _state_txt := "CONFIRMED | " + bo_dir + " | realigning"
+
+// Append tracked level values — if D.A/D.V show "na" the detection is not running
+string _da_str = na(a_lvl) ? "na" : str.tostring(a_lvl, "#.#####")
+string _dv_str = na(v_lvl) ? "na" : str.tostring(v_lvl, "#.#####")
+_state_txt := _state_txt + "\nD.A: " + _da_str + "   D.V: " + _dv_str
 
 color _lbl_col = color.new(color.gray, 20)
 if retest_on
