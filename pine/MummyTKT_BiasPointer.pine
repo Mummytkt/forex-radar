@@ -1,6 +1,6 @@
-//@version=5
+//@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v5 — TradingView Edition
+// MummyTKT's Bias Pointer v6 — TradingView Edition
 //
 // Apply to a 4H chart for each instrument.
 // Create ONE alert per instrument: condition = "Any alert() function call"
@@ -505,10 +505,10 @@ p_mid = plot(_mid, "Breakout Level",    color=_line_col, linewidth=2, style=plot
 fill(p_hi, p_lo, color=_fill_col, title="Breakout Zone")
 
 // ── Formation tracking lines (always visible — verify what script detects) ────
-p_a   = plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,    50), linewidth=1, style=plot.style_dashes)
-p_v   = plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,   50), linewidth=1, style=plot.style_dashes)
-p_poc = plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 40), linewidth=1, style=plot.style_dashes)
-p_bk  = plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 20), linewidth=1, style=plot.style_dashes)
+p_a   = plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,    50), linewidth=1, style=plot.style_linebr)
+p_v   = plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,   50), linewidth=1, style=plot.style_linebr)
+p_poc = plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 40), linewidth=1, style=plot.style_linebr)
+p_bk  = plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 20), linewidth=1, style=plot.style_linebr)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
