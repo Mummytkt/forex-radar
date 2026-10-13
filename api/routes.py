@@ -673,6 +673,7 @@ class PriceAlertItem(BaseModel):
     id: int
     instrument: str
     trigger_type: str
+    timeframe: str
     condition: str
     price: float
     message: Optional[str]
@@ -691,6 +692,7 @@ class PriceAlertsList(BaseModel):
 class PriceAlertCreate(BaseModel):
     instrument: str
     trigger_type: str = "on_touch"
+    timeframe: str = "5m"
     condition: str = "crossing"
     price: float
     message: Optional[str] = None
@@ -708,6 +710,7 @@ def _row_to_price_alert(row: sqlite3.Row) -> PriceAlertItem:
         id=d["id"],
         instrument=d["instrument"],
         trigger_type=d["trigger_type"],
+        timeframe=d.get("timeframe", "5m"),
         condition=d["condition"],
         price=d["price"],
         message=d.get("message"),
@@ -774,9 +777,9 @@ def create_price_alert(body: PriceAlertCreate, request: Request):
             )
         now = datetime.now(timezone.utc).isoformat()
         cur = conn.execute("""
-            INSERT INTO price_alerts (user_id, instrument, trigger_type, condition, price, message, expires_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (uid, instrument, body.trigger_type, body.condition, body.price, body.message, body.expires_at, now))
+            INSERT INTO price_alerts (user_id, instrument, trigger_type, timeframe, condition, price, message, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (uid, instrument, body.trigger_type, body.timeframe, body.condition, body.price, body.message, body.expires_at, now))
         row = conn.execute("SELECT * FROM price_alerts WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row_to_price_alert(row)
 

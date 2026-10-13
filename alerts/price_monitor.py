@@ -119,6 +119,21 @@ def _fetch_prices(instruments: list[str]) -> dict[str, float]:
     return prices
 
 
+_TF_MINUTES: dict[str, int] = {
+    "5m": 5, "15m": 15, "30m": 30, "45m": 45,
+    "1h": 60, "2h": 120, "3h": 180, "4h": 240,
+}
+
+
+def _is_candle_close_window(timeframe: str, now: datetime) -> bool:
+    """Return True if now falls within a candle-close window for this timeframe."""
+    tf_min = _TF_MINUTES.get(timeframe, 5)
+    total_min = now.hour * 60 + now.minute
+    # Round down to nearest 5-min slot (price monitor fires every 5 min)
+    slot = (total_min // 5) * 5
+    return slot % tf_min == 0
+
+
 # ── Main check cycle ─────────────────────────────────────────────────────────
 
 async def run_price_check(db_path: str, config) -> None:
@@ -185,19 +200,26 @@ async def run_price_check(db_path: str, config) -> None:
             # Step 4: Check each active alert for this instrument
             alerts = conn.execute("""
                 SELECT pa.id, pa.condition, pa.price AS alert_price,
-                       pa.message, u.telegram_chat_id
+                       pa.message, pa.trigger_type, pa.timeframe, u.telegram_chat_id
                 FROM price_alerts pa
                 LEFT JOIN users u ON pa.user_id = u.id
                 WHERE pa.instrument = ? AND pa.is_active = 1
                   AND (pa.expires_at IS NULL OR pa.expires_at > ?)
             """, (instrument, now_iso)).fetchall()
 
+            now_dt = datetime.now(timezone.utc)
             for alert_row in alerts:
                 alert_id    = alert_row[0]
                 condition   = alert_row[1]
                 alert_price = alert_row[2]
                 message     = alert_row[3]
-                chat_id     = alert_row[4] or config.telegram_chat_id
+                trigger_type = alert_row[4]
+                timeframe   = alert_row[5] or "5m"
+                chat_id     = alert_row[6] or config.telegram_chat_id
+
+                # For on_candle_close, only fire at the correct timeframe boundary
+                if trigger_type == "on_candle_close" and not _is_candle_close_window(timeframe, now_dt):
+                    continue
 
                 triggered = False
                 direction_str = ""

@@ -45,8 +45,9 @@ function conditionLabel(c: string): string {
   return 'Crosses (either)'
 }
 
-function triggerLabel(t: string): string {
-  return t === 'on_candle_close' ? 'On candle close' : 'On touch'
+function triggerLabel(t: string, tf?: string): string {
+  if (t === 'on_candle_close') return tf ? `Candle close · ${tf}` : 'On candle close'
+  return 'On touch'
 }
 
 function timeAgo(iso: string): string {
@@ -93,7 +94,7 @@ function AlertRow({ item, onDelete }: { item: PriceAlertItem; onDelete: (id: num
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {triggerLabel(item.trigger_type)}
+            {triggerLabel(item.trigger_type, item.timeframe)}
           </span>
           {item.message && (
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {item.message}</span>
@@ -132,6 +133,7 @@ export default function PriceAlertsPage() {
   // Form state
   const [instrument, setInstrument] = useState('')
   const [triggerType, setTriggerType] = useState('on_touch')
+  const [timeframe, setTimeframe] = useState('5m')
   const [condition, setCondition] = useState('crossing')
   const [price, setPrice] = useState('')
   const [expiry, setExpiry] = useState('1week')
@@ -182,6 +184,7 @@ export default function PriceAlertsPage() {
         body: JSON.stringify({
           instrument,
           trigger_type: triggerType,
+          timeframe,
           condition,
           price: priceVal,
           message: message.trim() || null,
@@ -296,6 +299,33 @@ export default function PriceAlertsPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Timeframe — only for candle close */}
+              {triggerType === 'on_candle_close' && (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                    Timeframe
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {['5m', '15m', '30m', '45m', '1h', '2h', '3h', '4h'].map(tf => (
+                      <button
+                        key={tf} type="button"
+                        onClick={() => setTimeframe(tf)}
+                        style={{
+                          padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                          border: '1px solid', cursor: 'pointer',
+                          borderColor: timeframe === tf ? 'var(--accent)' : 'var(--border)',
+                          background: timeframe === tf ? 'var(--accent)' : 'var(--bg)',
+                          color: timeframe === tf ? 'white' : 'var(--text-secondary)',
+                          transition: 'all 0.12s',
+                        }}
+                      >
+                        {tf}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Condition */}
               <div>
@@ -497,8 +527,8 @@ export default function PriceAlertsPage() {
         }}>
           <Clock size={13} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
-            Price levels are checked every H4 close using TradingView data from your charts.
-            Alerts fire to your Telegram when the level is crossed.
+            On touch alerts fire within 5 minutes of the level being crossed.
+            Candle close alerts fire only at the close of your chosen timeframe candle.
           </span>
         </div>
 

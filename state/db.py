@@ -362,4 +362,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_price_alerts_inst ON price_alerts (instrument, is_active)")
 
+    # Add timeframe column to price_alerts (idempotent)
+    pa_cols = {row[1] for row in conn.execute("PRAGMA table_info(price_alerts)").fetchall()}
+    if "timeframe" not in pa_cols:
+        conn.execute("ALTER TABLE price_alerts ADD COLUMN timeframe TEXT NOT NULL DEFAULT '5m'")
+
     conn.commit()

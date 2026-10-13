@@ -57,6 +57,7 @@ export interface PriceAlertItem {
   id: number
   instrument: string
   trigger_type: string
+  timeframe: string
   condition: string
   price: number
   message: string | null
