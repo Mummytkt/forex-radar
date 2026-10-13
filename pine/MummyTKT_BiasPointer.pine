@@ -242,9 +242,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     bool was_est = (bo_dir == "bullish") ? est_above[1] : est_below[1]
 
     // ── Zone 1: Post-Breakout OC ──────────────────────────────────────────
-    bool pb_oc_valid = not na(pb_oc_lvl) and
-                       ((bo_dir == "bullish" and pb_oc_lvl > band_hi) or
-                        (bo_dir == "bearish" and pb_oc_lvl < band_lo))
+    bool pb_oc_valid = not na(pb_oc_lvl) and ((bo_dir == "bullish" and pb_oc_lvl > band_hi) or (bo_dir == "bearish" and pb_oc_lvl < band_lo))
     bool pb_oc_zone  = pb_oc_valid and low <= pb_oc_lvl + tol and high >= pb_oc_lvl - tol
 
     // ── Zone 2: Daily Breaker ─────────────────────────────────────────────
