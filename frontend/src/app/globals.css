@@ -57,6 +57,18 @@
 /* ─── BASE ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { height: 100%; }
+
+/* Native browser picker icons (calendar/clock) are dark by default; force light in dark theme */
+:root input[type="date"],
+:root input[type="time"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="time"] {
+  color-scheme: dark;
+}
+[data-theme="light"] input[type="date"],
+[data-theme="light"] input[type="time"] {
+  color-scheme: light;
+}
 body {
   height: 100%;
   background: var(--bg);
