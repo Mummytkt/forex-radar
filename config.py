@@ -39,7 +39,7 @@ def load_config(env_path: str = ".env") -> Config:
     return Config(
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=_require("TELEGRAM_CHAT_ID"),
-        tv_webhook_secret=_require("TV_WEBHOOK_SECRET"),
+        tv_webhook_secret=os.getenv("TV_WEBHOOK_SECRET", ""),
         twelve_data_api_key=os.getenv("TWELVE_DATA_API_KEY", ""),
         db_path=os.getenv("DB_PATH", "forex_radar.db"),
         instruments=instruments,

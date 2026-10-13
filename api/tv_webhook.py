@@ -88,8 +88,8 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     config = request.app.state.config
     conn   = request.app.state.conn
 
-    # Verify shared secret
-    if payload.secret != config.tv_webhook_secret:
+    # Verify shared secret (skip check if no secret configured on the backend)
+    if config.tv_webhook_secret and payload.secret != config.tv_webhook_secret:
         logger.warning("TV webhook rejected: bad secret (instrument=%s)", payload.instrument)
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
