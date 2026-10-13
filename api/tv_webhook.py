@@ -60,14 +60,23 @@ router = APIRouter()
 
 class TVWebhookPayload(BaseModel):
     secret: str
-    type: str                          # BREAKOUT | RETEST | RETEST_CANCELLED | CONFIRMED | INVALIDATED
-    instrument: str                    # e.g. "USDCHF" or "USD/CHF"
-    direction: Optional[str] = None    # "bullish" | "bearish"
-    level: Optional[float] = None      # daily broken level (BREAKOUT)
-    source: Optional[str] = None       # "daily_breaker" (RETEST)
-    h4_class: Optional[str] = None     # "external" | "internal" (CONFIRMED)
-    breakout_level: Optional[float] = None  # daily broken level (CONFIRMED)
-    h4_level: Optional[float] = None   # H4 formation level (CONFIRMED)
+    type: str                           # BREAKOUT | RETEST | RETEST_CANCELLED | CONFIRMED | INVALIDATED
+    instrument: str                     # e.g. "USDCHF" or "USD/CHF"
+    direction: Optional[str] = None     # "bullish" | "bearish"
+    level: Optional[float] = None       # daily broken level (BREAKOUT)
+    source: Optional[str] = None        # "daily_breaker" | "inside_range" | "post_breakout_oc"
+    h4_class: Optional[str] = None      # "external" | "internal" (CONFIRMED)
+    breakout_level: Optional[float] = None   # daily broken level
+    source_level: Optional[float] = None     # reaction source level (OC midpoint, or bo_level for others)
+    h4_level: Optional[float] = None    # H4 formation level (CONFIRMED)
+
+
+def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
+    if source == "post_breakout_oc":
+        return ReactionSourceType.POST_BREAKOUT_DAILY_OC
+    if source == "inside_range":
+        return ReactionSourceType.AV_INSIDE_RANGE
+    return ReactionSourceType.DAILY_BREAKER
 
 
 # ── Main endpoint ─────────────────────────────────────────────────────────────
@@ -160,30 +169,48 @@ async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayl
 
 def _handle_retest(conn, instrument: str, payload: TVWebhookPayload) -> None:
     state = get_instrument_state(conn, instrument)
-    if state is None or state.active_breakout_id is None:
-        logger.warning("%s RETEST received but no active breakout in DB — ignored", instrument)
-        return
 
-    # Look up the daily_breaker source id so the dashboard can show it
+    # Auto-create breakout record if missing (alert set up after the breakout fired)
+    if state is None or state.active_breakout_id is None:
+        if payload.breakout_level is None or payload.direction is None:
+            logger.warning("%s RETEST received but no active breakout and no breakout_level — ignored", instrument)
+            return
+        direction = Direction(payload.direction)
+        broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
+        deactivate_all_breakouts(conn, instrument)
+        breakout = DailyBreakout(
+            instrument=instrument,
+            direction=direction,
+            broken_level=payload.breakout_level,
+            broken_type=broken_type,
+            breakout_ts=datetime.utcnow(),
+        )
+        breakout_id = insert_breakout(conn, breakout)
+        logger.info("%s auto-created breakout record from RETEST payload", instrument)
+        state = get_instrument_state(conn, instrument)
+        active_breakout_id = breakout_id
+    else:
+        active_breakout_id = state.active_breakout_id
+
+    # Look up existing reaction source for the active breakout direction
     sources = get_active_reaction_sources(conn, instrument)
-    breaker = next(
-        (s for s in sources if s.source_type == ReactionSourceType.DAILY_BREAKER), None
-    )
+    src_type = _source_type_from_str(payload.source)
+    matched = next((s for s in sources if s.source_type == src_type), None)
 
     upsert_instrument_state(conn, InstrumentStateRow(
         instrument=instrument,
-        last_daily_candle_ts=state.last_daily_candle_ts,
-        last_h4_candle_ts=state.last_h4_candle_ts,
-        active_breakout_id=state.active_breakout_id,
+        last_daily_candle_ts=state.last_daily_candle_ts if state else None,
+        last_h4_candle_ts=state.last_h4_candle_ts if state else None,
+        active_breakout_id=active_breakout_id,
         retest_in_progress=True,
-        active_reaction_src_id=breaker.db_id if breaker else None,
+        active_reaction_src_id=matched.db_id if matched else None,
         updated_at=datetime.utcnow(),
-        continuation_mode=state.continuation_mode,
-        last_alert_h4_ts=state.last_alert_h4_ts,
-        last_h4_breaker_level=state.last_h4_breaker_level,
+        continuation_mode=state.continuation_mode if state else False,
+        last_alert_h4_ts=state.last_alert_h4_ts if state else None,
+        last_h4_breaker_level=state.last_h4_breaker_level if state else None,
         retest_started_h4_ts=datetime.utcnow(),
     ))
-    logger.info("%s RETEST started (source=daily_breaker)", instrument)
+    logger.info("%s RETEST started (source=%s)", instrument, payload.source)
 
 
 def _handle_retest_cancelled(conn, instrument: str) -> None:
@@ -229,22 +256,21 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
         breakout.db_id = breakout_id
         logger.info("%s auto-created breakout record from CONFIRMED payload", instrument)
 
-    # Ensure a Daily Breaker reaction source exists
+    # Ensure the matching reaction source exists in DB
+    src_type = _source_type_from_str(payload.source)
     sources = get_active_reaction_sources(conn, instrument)
-    source = next(
-        (s for s in sources if s.source_type == ReactionSourceType.DAILY_BREAKER), None
-    )
+    source = next((s for s in sources if s.source_type == src_type), None)
     if source is None:
         pip_size = pip_size_for(instrument)
-        tol = config.level_tolerance_pips * pip_size
-        bl = payload.breakout_level or breakout.broken_level
+        tol_val = config.level_tolerance_pips * pip_size
+        src_lvl = payload.source_level or payload.breakout_level or breakout.broken_level
         source = ReactionSource(
             instrument=instrument,
-            source_type=ReactionSourceType.DAILY_BREAKER,
+            source_type=src_type,
             direction=direction,
-            level=bl,
-            level_band_low=bl - tol,
-            level_band_high=bl + tol,
+            level=src_lvl,
+            level_band_low=src_lvl - tol_val,
+            level_band_high=src_lvl + tol_val,
             daily_breakout_ts=breakout.breakout_ts,
         )
         src_ids = insert_reaction_sources(conn, [source], breakout.db_id)

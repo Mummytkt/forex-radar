@@ -1,38 +1,40 @@
 //@version=5
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer — TradingView Edition
+// MummyTKT's Bias Pointer v2 — TradingView Edition
 //
 // Apply to a 4H chart for each instrument.
 // Create ONE alert per instrument: condition = "Any alert() function call"
 //                                   webhook  = https://forex-radar.fly.dev/api/tv-webhook
 //
-// The indicator fires 5 event types as webhook JSON payloads:
-//   BREAKOUT        — Daily candle closed beyond most-recent A/V formation body
-//   RETEST          — H4 wick touched the Daily Breaker band
-//   RETEST_CANCELLED — H4 moved away from the band without confirming
-//   CONFIRMED       — H4 closed beyond an H4 A/V level during a retest (the alert)
-//   INVALIDATED     — Daily close returned through the broken level → reset to IDLE
+// Event types:
+//   BREAKOUT         — Daily candle closed beyond most-recent A/V formation body
+//   RETEST           — H4 entered a reaction source zone
+//   RETEST_CANCELLED — H4 moved away from zone without H4 confirmation
+//   CONFIRMED        — H4 closed beyond an H4 A/V level during a retest
+//   INVALIDATED      — Daily close moved beyond the OPPOSITE range boundary
+//                      (bullish setup: close below V-shape body_low
+//                       bearish setup: close above A-shape body_high)
+//
+// Three reaction sources (detected in priority order):
+//   post_breakout_oc — price retests an OC formed by 2 consecutive post-breakout
+//                      same-direction daily candles (on the breakout side)
+//   daily_breaker    — price wicks back into the broken A/V level band
+//   inside_range     — H4 closes inside the old daily range (past the Daily Breaker)
+//                      but has not yet reached the opposite boundary
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=500)
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
 string wh_secret = input.string("", "Webhook Secret",
-     tooltip="Paste your TV_WEBHOOK_SECRET env var value here")
-int    tol_pips  = input.int(5,   "Tolerance Pips", minval=1, maxval=20,
+     tooltip="Paste your TV_WEBHOOK_SECRET value here")
+int    tol_pips  = input.int(5, "Tolerance Pips", minval=1, maxval=20,
      tooltip="Half-width of the reaction zone band in pips")
 
-// ── Pip size (auto-detected from mintick) ─────────────────────────────────────
-// EURUSD  mintick=0.00001 → pip=0.0001 (standard FX)
-// USDJPY  mintick=0.001   → pip=0.01   (JPY pairs)
-// XAUUSD  mintick=0.01    → pip=0.1    (Gold)
 float pip = syminfo.mintick * 10.0
 float tol = float(tol_pips) * pip
 
-// ── Daily OHLCV via request.security ─────────────────────────────────────────
-// lookahead_off: returns the most recently CONFIRMED Daily bar.
-// During a live Daily session, this is the PREVIOUS day's closed data — correct
-// and safe. Data updates at the open of each new Daily session.
+// ── Daily OHLCV ───────────────────────────────────────────────────────────────
 var float d_time_prev = na
 float d_time  = request.security(syminfo.tickerid, "D", time,    lookahead=barmerge.lookahead_off)
 float d_open  = request.security(syminfo.tickerid, "D", open,    lookahead=barmerge.lookahead_off)
@@ -40,62 +42,77 @@ float d_close = request.security(syminfo.tickerid, "D", close,   lookahead=barme
 float d_open1 = request.security(syminfo.tickerid, "D", open[1], lookahead=barmerge.lookahead_off)
 float d_close1= request.security(syminfo.tickerid, "D", close[1],lookahead=barmerge.lookahead_off)
 
-// ── Persistent instrument state ───────────────────────────────────────────────
-var float  a_lvl     = na      // most recent Daily A-shape body_high (resistance)
-var float  v_lvl     = na      // most recent Daily V-shape body_low  (support)
-var string bo_dir    = na      // active breakout: "bullish" | "bearish" | na
-var float  bo_level  = na      // formation level that was broken
-var bool   est_above = false   // at least one H4 closed above band_hi
-var bool   est_below = false   // at least one H4 closed below band_lo
-var bool   retest_on = false   // H4 is currently wicking into the reaction zone
-var float  h4_a_lvl  = na      // most recent H4 A-shape body_high (tracked post-breakout)
-var float  h4_v_lvl  = na      // most recent H4 V-shape body_low  (tracked post-breakout)
-var bool   h4_a_pre  = false   // H4 A-shape formed BEFORE retest started (external)
-var bool   h4_v_pre  = false   // H4 V-shape formed BEFORE retest started (external)
+// ── Persistent state ──────────────────────────────────────────────────────────
+var float  a_lvl      = na      // most recent Daily A-shape body_high (resistance)
+var float  v_lvl      = na      // most recent Daily V-shape body_low  (support)
+var string bo_dir     = na      // "bullish" | "bearish" | na
+var float  bo_level   = na      // formation level that was broken
+var bool   est_above  = false   // H4 closed above band_hi at least once
+var bool   est_below  = false   // H4 closed below band_lo at least once
+var bool   retest_on  = false
+var string retest_src = na      // "daily_breaker" | "inside_range" | "post_breakout_oc"
+var float  h4_a_lvl   = na      // H4 A-shape body_high (tracked post-breakout)
+var float  h4_v_lvl   = na      // H4 V-shape body_low  (tracked post-breakout)
+var bool   h4_a_pre   = false   // A-shape formed before retest started → external
+var bool   h4_v_pre   = false   // V-shape formed before retest started → external
+var int    pb_consec  = 0       // consecutive post-breakout same-direction daily count
+var float  pb_close1  = na      // first pb candle's close for OC midpoint
+var float  pb_oc_lvl  = na      // computed post-breakout OC level
+var bool   just_broke = false   // true only on the bar a new breakout fires (daily block)
 
-// ── Daily update block ────────────────────────────────────────────────────────
-// Fires once per Daily session start (on the first H4 bar open after daily close).
-// d_time changes at the Daily session boundary, triggering formation + breakout checks.
+// ── Daily block ───────────────────────────────────────────────────────────────
 bool new_daily = not na(d_time) and d_time != d_time_prev
 if new_daily
     d_time_prev := d_time
+    just_broke  := false        // reset each daily session
 
-    bool d_bull = d_close  >= d_open   // just-confirmed daily candle: bullish
-    bool d_bear = d_close  <  d_open   //                              bearish
-    bool p_bull = d_close1 >= d_open1  // prior daily candle: bullish
-    bool p_bear = d_close1 <  d_open1  //                     bearish
+    bool d_bull = d_close  >= d_open
+    bool d_bear = d_close  <  d_open
+    bool p_bull = d_close1 >= d_open1
+    bool p_bear = d_close1 <  d_open1
 
-    // A-shape: prev bullish → curr bearish → resistance level = prev body_high
+    // ── Daily formation detection ─────────────────────────────────────────
     if p_bull and d_bear
         a_lvl := math.max(d_open1, d_close1)
-
-    // V-shape: prev bearish → curr bullish → support level = prev body_low
     if p_bear and d_bull
         v_lvl := math.min(d_open1, d_close1)
 
-    // ── Breakout invalidation (runs BEFORE new breakout detection) ─────────
-    // If price returned through the broken level by > tol: reset to IDLE.
+    // ── INVALIDATED — opposite range boundary breach ──────────────────────
+    // Breakout stays active while price is anywhere inside the daily range.
+    // Only invalidates when daily close crosses the boundary on the OTHER side.
+    //   Bullish setup: close below last V-shape body_low (v_lvl) - tol
+    //   Bearish setup: close above last A-shape body_high (a_lvl) + tol
     if not na(bo_dir) and not na(bo_level)
-        if bo_dir == "bullish" and d_close < bo_level - tol
+        if bo_dir == "bullish" and not na(v_lvl) and d_close < v_lvl - tol
             bo_dir    := na
             bo_level  := na
             est_above := false
-            retest_on := false
-            h4_a_lvl  := na
-            h4_v_lvl  := na
-            alert('{"secret":"' + wh_secret + '","type":"INVALIDATED","instrument":"' + syminfo.ticker + '"}',
-                  alert.freq_once_per_bar)
-        if bo_dir == "bearish" and d_close > bo_level + tol
-            bo_dir    := na
-            bo_level  := na
             est_below := false
             retest_on := false
+            retest_src:= na
             h4_a_lvl  := na
             h4_v_lvl  := na
+            pb_consec := 0
+            pb_close1 := na
+            pb_oc_lvl := na
+            alert('{"secret":"' + wh_secret + '","type":"INVALIDATED","instrument":"' + syminfo.ticker + '"}',
+                  alert.freq_once_per_bar)
+        if bo_dir == "bearish" and not na(a_lvl) and d_close > a_lvl + tol
+            bo_dir    := na
+            bo_level  := na
+            est_above := false
+            est_below := false
+            retest_on := false
+            retest_src:= na
+            h4_a_lvl  := na
+            h4_v_lvl  := na
+            pb_consec := 0
+            pb_close1 := na
+            pb_oc_lvl := na
             alert('{"secret":"' + wh_secret + '","type":"INVALIDATED","instrument":"' + syminfo.ticker + '"}',
                   alert.freq_once_per_bar)
 
-    // ── Bullish breakout: daily closed above A-shape body_high + tol ───────
+    // ── Bullish breakout ──────────────────────────────────────────────────
     if not na(a_lvl) and d_close > a_lvl + tol
         bool is_new_bo = na(bo_dir) or bo_dir != "bullish" or math.abs(bo_level - a_lvl) > tol
         if is_new_bo
@@ -104,13 +121,18 @@ if new_daily
             est_above := false
             est_below := false
             retest_on := false
+            retest_src:= na
             h4_a_lvl  := na
             h4_v_lvl  := na
+            pb_consec := 0
+            pb_close1 := na
+            pb_oc_lvl := na
+            just_broke:= true
             alert('{"secret":"' + wh_secret + '","type":"BREAKOUT","instrument":"' + syminfo.ticker
                   + '","direction":"bullish","level":' + str.tostring(bo_level) + '}',
                   alert.freq_once_per_bar)
 
-    // ── Bearish breakout: daily closed below V-shape body_low - tol ────────
+    // ── Bearish breakout ──────────────────────────────────────────────────
     if not na(v_lvl) and d_close < v_lvl - tol
         bool is_new_bo = na(bo_dir) or bo_dir != "bearish" or math.abs(bo_level - v_lvl) > tol
         if is_new_bo
@@ -119,115 +141,177 @@ if new_daily
             est_above := false
             est_below := false
             retest_on := false
+            retest_src:= na
             h4_a_lvl  := na
             h4_v_lvl  := na
+            pb_consec := 0
+            pb_close1 := na
+            pb_oc_lvl := na
+            just_broke:= true
             alert('{"secret":"' + wh_secret + '","type":"BREAKOUT","instrument":"' + syminfo.ticker
                   + '","direction":"bearish","level":' + str.tostring(bo_level) + '}',
                   alert.freq_once_per_bar)
 
-// ── H4 logic block ────────────────────────────────────────────────────────────
-// Runs at every H4 bar close (barstate.isconfirmed).
-// Tracks H4 formations, manages retest state, fires CONFIRMED when H4 confirms.
+    // ── Post-breakout OC tracking ─────────────────────────────────────────
+    // Counts consecutive post-breakout same-direction daily candles that close
+    // on the breakout side. The breakout candle itself is excluded (just_broke).
+    // When two consecutive qualifying candles are found, pb_oc_lvl = their midpoint.
+    if not na(bo_dir) and not just_broke
+        bool pb_match = false
+        if bo_dir == "bullish"
+            pb_match := d_bull and d_close > bo_level
+        else
+            pb_match := d_bear and d_close < bo_level
+        if pb_match
+            pb_consec := pb_consec + 1
+            if pb_consec == 1
+                pb_close1 := d_close
+            else if pb_consec >= 2
+                pb_oc_lvl := (pb_close1 + d_close) / 2.0
+                pb_close1 := d_close    // slide window for next potential OC
+        else
+            pb_consec := 0
+            // Keep pb_oc_lvl — level stays valid even if daily streak breaks
+
+// ── H4 block ──────────────────────────────────────────────────────────────────
 if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     float band_hi = bo_level + tol
     float band_lo = bo_level - tol
 
-    // ── H4 formation detection (A-shape and V-shape) ─────────────────────
-    // h4_a_lvl / h4_v_lvl reset to na on each new breakout, so we only track
-    // formations that formed AFTER the current daily breakout.
-    bool h4_bull1 = close[1] >= open[1]   // previous H4 bar: bullish
-    bool h4_bear1 = close[1] <  open[1]   //                  bearish
-    bool h4_bull0 = close    >= open      // current  H4 bar: bullish
-    bool h4_bear0 = close    <  open      //                  bearish
+    // ── H4 formation detection ────────────────────────────────────────────
+    bool h4_bull1 = close[1] >= open[1]
+    bool h4_bear1 = close[1] <  open[1]
+    bool h4_bull0 = close    >= open
+    bool h4_bear0 = close    <  open
 
-    // A-shape: H4[1] bullish → H4[0] bearish → resistance at H4[1] body_high
     bool new_a = h4_bull1 and h4_bear0
     if new_a
         h4_a_lvl := math.max(open[1], close[1])
-        h4_a_pre := not retest_on   // external if formed before retest started
+        h4_a_pre := not retest_on
 
-    // V-shape: H4[1] bearish → H4[0] bullish → support at H4[1] body_low
     bool new_v = h4_bear1 and h4_bull0
     if new_v
         h4_v_lvl := math.min(open[1], close[1])
-        h4_v_pre := not retest_on   // external if formed before retest started
+        h4_v_pre := not retest_on
 
-    // ── Established-beyond-zone tracking ─────────────────────────────────
-    // An H4 must close BEYOND the band before a retest is valid.
-    // This prevents premature retest detection immediately after a breakout.
+    // ── Establishment tracking ────────────────────────────────────────────
+    // Requires at least one H4 close beyond the band before any retest is valid.
     if bo_dir == "bullish" and close > band_hi
         est_above := true
     if bo_dir == "bearish" and close < band_lo
         est_below := true
 
-    // Use the PREVIOUS bar's established state to require at least 1 bar delay.
-    // This prevents a single H4 candle from simultaneously establishing AND retesting.
+    // Use PREVIOUS bar's established flag: prevents same-bar establish + retest.
     bool was_est = (bo_dir == "bullish") ? est_above[1] : est_below[1]
 
-    // Current H4 wick touching the reaction band
-    bool touching = low <= band_hi and high >= band_lo
+    // ── Zone 1: Post-Breakout OC ──────────────────────────────────────────
+    // OC must be clearly beyond the Daily Breaker band (on the breakout side).
+    // Retest = wick touching the OC ± tol band.
+    bool pb_oc_valid    = not na(pb_oc_lvl) and
+                          ((bo_dir == "bullish" and pb_oc_lvl > band_hi) or
+                           (bo_dir == "bearish" and pb_oc_lvl < band_lo))
+    bool pb_oc_zone     = pb_oc_valid and low <= pb_oc_lvl + tol and high >= pb_oc_lvl - tol
 
-    // ── Retest detection ──────────────────────────────────────────────────
-    if not retest_on and was_est and touching
-        retest_on := true
-        alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
-              + '","direction":"' + bo_dir + '","source":"daily_breaker"}',
-              alert.freq_once_per_bar)
+    // ── Zone 2: Daily Breaker ─────────────────────────────────────────────
+    // Wick touching the broken A/V level ± tol band.
+    bool db_zone = low <= band_hi and high >= band_lo
 
-    // ── Retest cancellation ───────────────────────────────────────────────
-    if retest_on and not touching
-        retest_on := false
-        alert('{"secret":"' + wh_secret + '","type":"RETEST_CANCELLED","instrument":"' + syminfo.ticker + '"}',
-              alert.freq_once_per_bar)
+    // ── Zone 3: Inside Range ──────────────────────────────────────────────
+    // H4 CLOSE (not just wick) has moved inside the old daily range.
+    // Bullish: close below band_lo but above v_lvl + tol
+    // Bearish: close above band_hi but below a_lvl - tol
+    bool ir_zone = false
+    if bo_dir == "bullish" and not na(v_lvl)
+        ir_zone := close < band_lo and close > v_lvl + tol
+    if bo_dir == "bearish" and not na(a_lvl)
+        ir_zone := close > band_hi and close < a_lvl - tol
 
-    // ── H4 confirmation ───────────────────────────────────────────────────
-    // Only fires when a retest is in progress.
-    // Bullish:  H4 closes ABOVE an H4 A-shape body_high
-    // Bearish:  H4 closes BELOW an H4 V-shape body_low
-    // Guard `not new_a` / `not new_v` prevents firing on the same bar
-    // the formation is detected (confirmation bar must be a subsequent bar).
+    // ── RETEST detection (priority: pb_oc > daily_breaker > inside_range) ─
+    if not retest_on
+        if pb_oc_zone and was_est
+            retest_on  := true
+            retest_src := "post_breakout_oc"
+            alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
+                  + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
+                  + ',"breakout_level":' + str.tostring(bo_level)
+                  + ',"source_level":' + str.tostring(pb_oc_lvl) + '}',
+                  alert.freq_once_per_bar)
+        else if db_zone and was_est
+            retest_on  := true
+            retest_src := "daily_breaker"
+            alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
+                  + '","direction":"' + bo_dir + '","source":"daily_breaker"'
+                  + ',"breakout_level":' + str.tostring(bo_level)
+                  + ',"source_level":' + str.tostring(bo_level) + '}',
+                  alert.freq_once_per_bar)
+        else if ir_zone and was_est
+            retest_on  := true
+            retest_src := "inside_range"
+            alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
+                  + '","direction":"' + bo_dir + '","source":"inside_range"'
+                  + ',"breakout_level":' + str.tostring(bo_level)
+                  + ',"source_level":' + str.tostring(bo_level) + '}',
+                  alert.freq_once_per_bar)
+
+    // ── RETEST_CANCELLED ──────────────────────────────────────────────────
     if retest_on
-        // Bullish confirmation
+        bool still_in_zone = false
+        if retest_src == "post_breakout_oc"
+            still_in_zone := pb_oc_zone
+        else if retest_src == "daily_breaker"
+            still_in_zone := db_zone
+        else if retest_src == "inside_range"
+            still_in_zone := ir_zone
+
+        if not still_in_zone
+            retest_on  := false
+            retest_src := na
+            alert('{"secret":"' + wh_secret + '","type":"RETEST_CANCELLED","instrument":"' + syminfo.ticker + '"}',
+                  alert.freq_once_per_bar)
+
+    // ── H4 CONFIRMED ──────────────────────────────────────────────────────
+    // H4 candle must CLOSE (body) beyond the H4 A/V level — wicks do not count.
+    // Guard `not new_a` / `not new_v` prevents confirmation on the same bar
+    // the H4 formation is detected (must be a subsequent H4 bar).
+    if retest_on
+        float src_lvl = retest_src == "post_breakout_oc" ? pb_oc_lvl : bo_level
+
         if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
             string h4_cls = h4_a_pre ? "external" : "internal"
             alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
-                  + '","direction":"bullish","source":"daily_breaker","h4_class":"' + h4_cls
+                  + '","direction":"bullish","source":"' + retest_src
+                  + '","h4_class":"' + h4_cls
                   + '","breakout_level":' + str.tostring(bo_level)
+                  + ',"source_level":' + str.tostring(src_lvl)
                   + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
                   alert.freq_once_per_bar)
-            retest_on := false
+            retest_on  := false
+            retest_src := na
 
-        // Bearish confirmation
         if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
             string h4_cls = h4_v_pre ? "external" : "internal"
             alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
-                  + '","direction":"bearish","source":"daily_breaker","h4_class":"' + h4_cls
+                  + '","direction":"bearish","source":"' + retest_src
+                  + '","h4_class":"' + h4_cls
                   + '","breakout_level":' + str.tostring(bo_level)
+                  + ',"source_level":' + str.tostring(src_lvl)
                   + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
                   alert.freq_once_per_bar)
-            retest_on := false
+            retest_on  := false
+            retest_src := na
 
 // ── Visual overlays ───────────────────────────────────────────────────────────
-// Draws the active reaction zone on the chart so the user can verify the
-// indicator is working correctly before relying on live alerts.
-
 float _hi  = not na(bo_dir) ? bo_level + tol : na
 float _lo  = not na(bo_dir) ? bo_level - tol : na
-float _mid = bo_level  // plots na when bo_level is na
+float _mid = bo_level
 
-color _bull_col  = color.new(color.green, 0)
-color _bear_col  = color.new(color.red, 0)
-color _bull_fill = color.new(color.green, 88)
-color _bear_fill = color.new(color.red, 88)
-
-color _line_col = na(bo_dir) ? na : bo_dir == "bullish" ? _bull_col : _bear_col
-color _fill_col = na(bo_dir) ? na : bo_dir == "bullish" ? _bull_fill : _bear_fill
+color _line_col = na(bo_dir) ? na : bo_dir == "bullish" ? color.new(color.green, 0) : color.new(color.red, 0)
+color _fill_col = na(bo_dir) ? na : bo_dir == "bullish" ? color.new(color.green, 88) : color.new(color.red, 88)
 
 p_hi  = plot(_hi,  "Band Hi",        color=_line_col, linewidth=1, style=plot.style_line)
 p_lo  = plot(_lo,  "Band Lo",        color=_line_col, linewidth=1, style=plot.style_line)
 p_mid = plot(_mid, "Breakout Level", color=_line_col, linewidth=2, style=plot.style_line)
 fill(p_hi, p_lo, color=_fill_col, title="Reaction Zone")
 
-// Orange diamond above the bar when a retest is active
 plotchar(retest_on and barstate.isconfirmed, "Retest Active", "◆",
          location.abovebar, color.orange, size=size.tiny)
