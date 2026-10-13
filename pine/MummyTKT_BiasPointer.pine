@@ -32,12 +32,12 @@ float pip = syminfo.mintick * 10.0
 float tol = float(tol_pips) * pip
 
 // ── Daily OHLCV ───────────────────────────────────────────────────────────────
-var float d_time_prev = na
-float d_time  = request.security(syminfo.tickerid, "D", time,    lookahead=barmerge.lookahead_off)
-float d_open  = request.security(syminfo.tickerid, "D", open,    lookahead=barmerge.lookahead_off)
-float d_close = request.security(syminfo.tickerid, "D", close,   lookahead=barmerge.lookahead_off)
-float d_open1 = request.security(syminfo.tickerid, "D", open[1], lookahead=barmerge.lookahead_off)
-float d_close1= request.security(syminfo.tickerid, "D", close[1],lookahead=barmerge.lookahead_off)
+// close[1]/open[1] = just-completed daily bar; close[2]/open[2] = bar before that
+// Using timeframe.change("D") instead of manual time tracking — more reliable in v6
+float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_off)
+float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_off)
+float d_open1 = request.security(syminfo.tickerid, "D", open[2],  lookahead=barmerge.lookahead_off)
+float d_close1= request.security(syminfo.tickerid, "D", close[2], lookahead=barmerge.lookahead_off)
 
 // ── Persistent state ──────────────────────────────────────────────────────────
 var float  a_lvl      = na
@@ -69,9 +69,8 @@ var float  h4c_oc_lvl            = na
 var bool   h4c_oc_ready          = false
 
 // ── Daily block ───────────────────────────────────────────────────────────────
-bool new_daily = not na(d_time) and d_time != d_time_prev
+bool new_daily = timeframe.change("D")
 if new_daily
-    d_time_prev := d_time
     just_broke  := false
 
     bool d_bull = d_close  >= d_open
