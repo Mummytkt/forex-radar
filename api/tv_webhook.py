@@ -210,11 +210,24 @@ def _handle_retest_cancelled(conn, instrument: str) -> None:
 async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
     direction = Direction(payload.direction)
 
-    # Get the active breakout from DB
+    # Get the active breakout from DB — if missing (e.g. alert was set up after
+    # the breakout happened), auto-create it from the CONFIRMED payload so the
+    # alert still fires correctly.
     breakout = get_active_breakout(conn, instrument)
     if breakout is None:
-        logger.warning("%s CONFIRMED received but no active breakout in DB — ignored", instrument)
-        return
+        bl = payload.breakout_level or payload.h4_level or 0.0
+        broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
+        deactivate_all_breakouts(conn, instrument)
+        breakout = DailyBreakout(
+            instrument=instrument,
+            direction=direction,
+            broken_level=bl,
+            broken_type=broken_type,
+            breakout_ts=datetime.utcnow(),
+        )
+        breakout_id = insert_breakout(conn, breakout)
+        breakout.db_id = breakout_id
+        logger.info("%s auto-created breakout record from CONFIRMED payload", instrument)
 
     # Ensure a Daily Breaker reaction source exists
     sources = get_active_reaction_sources(conn, instrument)
