@@ -505,16 +505,55 @@ p_mid = plot(_mid, "Breakout Level",    color=_line_col, linewidth=2, style=plot
 fill(p_hi, p_lo, color=_fill_col, title="Breakout Zone")
 
 // ── Formation tracking lines (always visible — verify what script detects) ────
+// Daily levels
 p_a   = plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,    50), linewidth=1, style=plot.style_linebr)
 p_v   = plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,   50), linewidth=1, style=plot.style_linebr)
 p_poc = plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 40), linewidth=1, style=plot.style_linebr)
 p_bk  = plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 20), linewidth=1, style=plot.style_linebr)
+// H4 candidate levels (level that must be broken for H4 confirmation)
+p_h4a = plot(h4_a_lvl,       "H4 A-shape Level",    color=color.new(color.red,    70), linewidth=1, style=plot.style_linebr)
+p_h4v = plot(h4_v_lvl,       "H4 V-shape Level",    color=color.new(color.lime,   70), linewidth=1, style=plot.style_linebr)
+p_h4c = plot(h4c_oc_lvl,     "H4 OC Level",         color=color.new(color.teal,   50), linewidth=1, style=plot.style_linebr)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
      "Retest Active", "◆", location.abovebar, color.orange, size=size.tiny)
 plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed,
      "H4 Aligned", "▲", location.belowbar, color.new(color.blue, 40), size=size.tiny)
+
+// ── Right-edge level labels — self-identifying tags at the last bar ────────────
+// Each label shows the level's name and exact price; deleted & recreated each bar
+var label _a_lbl   = na
+var label _v_lbl   = na
+var label _h4a_lbl = na
+var label _h4v_lbl = na
+var label _poc_lbl = na
+var label _bk_lbl  = na
+var label _h4c_lbl = na
+
+label.delete(_a_lbl)
+label.delete(_v_lbl)
+label.delete(_h4a_lbl)
+label.delete(_h4v_lbl)
+label.delete(_poc_lbl)
+label.delete(_bk_lbl)
+label.delete(_h4c_lbl)
+
+if barstate.islast
+    if not na(a_lvl)
+        _a_lbl := label.new(bar_index, a_lvl, "D.A  " + str.tostring(a_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.red, 55), textcolor=color.white, size=size.tiny)
+    if not na(v_lvl)
+        _v_lbl := label.new(bar_index, v_lvl, "D.V  " + str.tostring(v_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.lime, 45), textcolor=color.black, size=size.tiny)
+    if not na(h4_a_lvl)
+        _h4a_lbl := label.new(bar_index, h4_a_lvl, "H4.A " + str.tostring(h4_a_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.red, 72), textcolor=color.white, size=size.tiny)
+    if not na(h4_v_lvl)
+        _h4v_lbl := label.new(bar_index, h4_v_lvl, "H4.V " + str.tostring(h4_v_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.lime, 65), textcolor=color.black, size=size.tiny)
+    if not na(pb_oc_lvl)
+        _poc_lbl := label.new(bar_index, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.tiny)
+    if not na(h4_breaker_lvl)
+        _bk_lbl := label.new(bar_index, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.tiny)
+    if not na(h4c_oc_lvl)
+        _h4c_lbl := label.new(bar_index, h4c_oc_lvl, "H4.OC " + str.tostring(h4c_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.teal, 45), textcolor=color.white, size=size.tiny)
 
 // ── State label — shows script's current understanding at the latest bar ──────
 string _state_txt = "IDLE - no breakout detected"
@@ -541,5 +580,5 @@ else if bo_dir == "bearish"
 
 var label _state_lbl = na
 label.delete(_state_lbl)
-string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " a=" + str.tostring(a_lvl, "#.#####") + " v=" + str.tostring(v_lvl, "#.#####") + " bk=" + str.tostring(h4_breaker_lvl, "#.#####")
+string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " D.A=" + str.tostring(a_lvl, "#.#####") + " D.V=" + str.tostring(v_lvl, "#.#####") + " D.OC=" + str.tostring(pb_oc_lvl, "#.#####") + " H4.A=" + str.tostring(h4_a_lvl, "#.#####") + " H4.V=" + str.tostring(h4_v_lvl, "#.#####") + " H4.BK=" + str.tostring(h4_breaker_lvl, "#.#####") + " H4.OC=" + str.tostring(h4c_oc_lvl, "#.#####")
 _state_lbl := label.new(bar_index, high, _state_txt, style=label.style_label_down, color=_lbl_col, textcolor=color.white, size=size.small, tooltip=_tip)
