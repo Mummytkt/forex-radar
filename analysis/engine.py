@@ -250,6 +250,14 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     breakout_ts = active_breakout.breakout_ts
     post_breakout_h4 = [c for c in h4_history if c.timestamp >= breakout_ts]
 
+    # Include the latest H4 candle in the "established beyond zone" check.
+    # post_breakout_h4 excludes the latest candle (it uses h4_history), so on
+    # the very first H4 cycle after a daily breakout post_breakout_h4 is empty
+    # and _price_established_beyond_zone always returns False. Using the full
+    # list here means the first post-breakout H4 candle can itself satisfy both
+    # "established beyond" and "retest wicking into band" simultaneously.
+    all_post_breakout_h4 = [c for c in inp.h4_candles if c.timestamp >= breakout_ts]
+
     # ── STEP 2: Check for retest ───────────────────────────────────────────────
     retest_in_progress = inp.retest_in_progress
     active_reaction_src = inp.active_reaction_src
@@ -258,7 +266,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
     if not retest_in_progress:
         for src in active_sources:
             if (is_price_retesting_source(latest_h4, src)
-                    and _price_established_beyond_zone(post_breakout_h4, src)):
+                    and _price_established_beyond_zone(all_post_breakout_h4, src)):
                 retest_in_progress = True
                 active_reaction_src = src
                 retest_started_h4_ts = latest_h4.timestamp
@@ -289,7 +297,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             if src is active_reaction_src:
                 continue
             if not (is_price_retesting_source(latest_h4, src)
-                    and _price_established_beyond_zone(post_breakout_h4, src)):
+                    and _price_established_beyond_zone(all_post_breakout_h4, src)):
                 continue
             if not current_still_touched:
                 # Case A: current source gone — switch regardless of priority
