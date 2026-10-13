@@ -40,9 +40,49 @@ function expiryFromPreset(preset: string): string | null {
 }
 
 function conditionLabel(c: string): string {
-  if (c === 'crossing_up') return 'Crosses above'
-  if (c === 'crossing_down') return 'Crosses below'
+  if (c === 'crossing_up') return 'Closes above'
+  if (c === 'crossing_down') return 'Closes below'
+  if (c === 'rejects') return 'Rejects level'
   return 'Crosses (either)'
+}
+
+function alertPreview(
+  instrument: string,
+  triggerType: string,
+  timeframe: string,
+  condition: string,
+  priceStr: string,
+  currentPrice: number | undefined,
+): string {
+  const priceVal = parseFloat(priceStr)
+  if (!instrument || isNaN(priceVal) || priceVal <= 0) return ''
+  const fmt = formatPrice(instrument, priceVal)
+  const candle = triggerType === 'on_candle_close' ? `${timeframe} candle` : null
+
+  if (condition === 'crossing_up') {
+    const base = candle
+      ? `One Telegram message when a ${candle} closes above ${fmt}.`
+      : `One Telegram message when price touches ${fmt} from below.`
+    if (currentPrice !== undefined && currentPrice > priceVal)
+      return base + ` Price is currently above it — a candle has to close below ${fmt} first.`
+    return base
+  }
+  if (condition === 'crossing_down') {
+    const base = candle
+      ? `One Telegram message when a ${candle} closes below ${fmt}.`
+      : `One Telegram message when price touches ${fmt} from above.`
+    if (currentPrice !== undefined && currentPrice < priceVal)
+      return base + ` Price is currently below it — a candle has to close above ${fmt} first.`
+    return base
+  }
+  if (condition === 'rejects') {
+    return candle
+      ? `One Telegram message when a ${candle} wicks to ${fmt} and closes back on the same side.`
+      : `One Telegram message when price wicks to ${fmt} and closes back on the side it came from.`
+  }
+  return candle
+    ? `One Telegram message when a ${candle} closes on either side of ${fmt}.`
+    : `One Telegram message when price crosses through ${fmt} in either direction.`
 }
 
 function triggerLabel(t: string, tf?: string): string {
@@ -333,7 +373,7 @@ export default function PriceAlertsPage() {
                   Condition
                 </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {[['crossing', 'Crossing (either direction)'], ['crossing_up', 'Crossing up'], ['crossing_down', 'Crossing down']].map(([val, lbl]) => (
+                  {[['crossing', 'Crossing (either direction)'], ['crossing_up', 'Crossing up'], ['crossing_down', 'Crossing down'], ['rejects', 'Rejects level (wick + close back)']].map(([val, lbl]) => (
                     <button
                       key={val} type="button"
                       onClick={() => setCondition(val)}
@@ -370,6 +410,21 @@ export default function PriceAlertsPage() {
                   }}
                 />
               </div>
+
+              {/* Alert preview */}
+              {(() => {
+                const preview = alertPreview(instrument, triggerType, timeframe, condition, price, currentPrice)
+                if (!preview) return null
+                return (
+                  <div style={{
+                    fontSize: 12, color: 'var(--text-secondary)',
+                    background: 'var(--bg)', border: '1px solid var(--border)',
+                    borderRadius: 8, padding: '10px 12px', lineHeight: 1.6,
+                  }}>
+                    {preview}
+                  </div>
+                )
+              })()}
 
               {/* Expires */}
               <div>

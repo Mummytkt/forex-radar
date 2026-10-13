@@ -56,10 +56,10 @@ def _to_yf_ticker(instrument: str) -> Optional[str]:
     return None
 
 
-def _fetch_prices(instruments: list[str]) -> dict[str, float]:
+def _fetch_prices(instruments: list[str]) -> dict[str, dict]:
     """
-    Fetch current prices for a list of instruments via Yahoo Finance.
-    Returns {instrument: price}. Missing instruments are silently omitted.
+    Fetch current OHLC for a list of instruments via Yahoo Finance.
+    Returns {instrument: {price, high, low}}. Missing instruments are omitted.
     """
     try:
         import yfinance as yf
@@ -68,7 +68,6 @@ def _fetch_prices(instruments: list[str]) -> dict[str, float]:
         logger.error("yfinance/pandas not installed — run: pip install yfinance pandas")
         return {}
 
-    # Build instrument → yf_symbol map
     sym_map: dict[str, str] = {}
     for inst in instruments:
         sym = _to_yf_ticker(inst)
@@ -78,12 +77,10 @@ def _fetch_prices(instruments: list[str]) -> dict[str, float]:
     if not sym_map:
         return {}
 
-    # Deduplicate symbols (two instruments might share one yf ticker)
     unique_syms = list(dict.fromkeys(sym_map.values()))
-    prices: dict[str, float] = {}
+    prices: dict[str, dict] = {}
 
     try:
-        # Download 1 day of 5-minute bars; take the latest close
         tickers_arg = unique_syms if len(unique_syms) > 1 else unique_syms[0]
         raw = yf.download(
             tickers_arg,
@@ -97,19 +94,25 @@ def _fetch_prices(instruments: list[str]) -> dict[str, float]:
             logger.debug("yfinance returned empty DataFrame for %s", unique_syms)
             return {}
 
-        close_data = raw["Close"]
+        multi = isinstance(raw["Close"], pd.DataFrame)
 
         for inst, sym in sym_map.items():
             try:
-                if isinstance(close_data, pd.DataFrame):
-                    col = close_data[sym].dropna()
-                else:
-                    # Single ticker — close_data is a Series
-                    col = close_data.dropna()
-                if not col.empty:
-                    val = float(col.iloc[-1])
-                    if val == val:  # NaN check
-                        prices[inst] = val
+                def _col(field: str) -> "pd.Series":
+                    s = raw[field][sym] if multi else raw[field]
+                    return s.dropna()
+
+                close_col = _col("Close")
+                if close_col.empty:
+                    continue
+                val = float(close_col.iloc[-1])
+                if val != val:  # NaN check
+                    continue
+                high_col = _col("High")
+                low_col  = _col("Low")
+                high_val = float(high_col.iloc[-1]) if not high_col.empty else val
+                low_val  = float(low_col.iloc[-1])  if not low_col.empty  else val
+                prices[inst] = {"price": val, "high": high_val, "low": low_val}
             except Exception as exc:
                 logger.debug("Could not extract price for %s (%s): %s", inst, sym, exc)
 
@@ -178,7 +181,10 @@ async def run_price_check(db_path: str, config) -> None:
             return
 
         # Step 3 & 4: Update prices + check alerts
-        for instrument, price in prices.items():
+        for instrument, candle_data in prices.items():
+            price = candle_data["price"]
+            high  = candle_data.get("high", price)
+            low   = candle_data.get("low",  price)
             prev_row = conn.execute(
                 "SELECT price FROM instrument_prices WHERE instrument = ?", (instrument,)
             ).fetchone()
@@ -230,6 +236,13 @@ async def run_price_check(db_path: str, config) -> None:
                 elif condition == "crossing_down":
                     if prev_price > alert_price >= price:
                         triggered, direction_str = True, "below"
+                elif condition == "rejects":
+                    # Bearish rejection: wick reached/exceeded level, close back below
+                    if high >= alert_price and price < alert_price:
+                        triggered, direction_str = True, "from above"
+                    # Bullish rejection: wick dipped to/below level, close back above
+                    elif low <= alert_price and price > alert_price:
+                        triggered, direction_str = True, "from below"
                 else:  # crossing — either direction
                     if prev_price < alert_price <= price:
                         triggered, direction_str = True, "above"
@@ -256,11 +269,18 @@ async def run_price_check(db_path: str, config) -> None:
                 else:
                     fmt = "{:.5f}"
 
-                text = (
-                    f"⚡ Price Alert: {instrument}\n\n"
-                    f"Price crossed {direction_str} {fmt.format(alert_price)}\n"
-                    f"Current: {fmt.format(price)}"
-                )
+                if condition == "rejects":
+                    text = (
+                        f"⚡ Price Alert: {instrument}\n\n"
+                        f"Price rejected at {fmt.format(alert_price)} ({direction_str})\n"
+                        f"Close: {fmt.format(price)}"
+                    )
+                else:
+                    text = (
+                        f"⚡ Price Alert: {instrument}\n\n"
+                        f"Price crossed {direction_str} {fmt.format(alert_price)}\n"
+                        f"Current: {fmt.format(price)}"
+                    )
                 if message:
                     text += f"\n\n{message}"
 
