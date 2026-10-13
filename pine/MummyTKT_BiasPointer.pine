@@ -490,19 +490,62 @@ if barstate.isconfirmed and barstate.isrealtime
           + '","price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
 
 // ── Visual overlays ───────────────────────────────────────────────────────────
+
+// ── Breakout zone band (solid, only when breakout is active) ──────────────────
 float _hi  = not na(bo_dir) ? bo_level + tol : na
 float _lo  = not na(bo_dir) ? bo_level - tol : na
-float _mid = bo_level
+float _mid = not na(bo_dir) ? bo_level       : na
 
 color _line_col = na(bo_dir) ? na : bo_dir == "bullish" ? color.new(color.green, 0) : color.new(color.red, 0)
-color _fill_col = na(bo_dir) ? na : bo_dir == "bullish" ? color.new(color.green, 88) : color.new(color.red, 88)
+color _fill_col = na(bo_dir) ? na : bo_dir == "bullish" ? color.new(color.green, 85) : color.new(color.red, 85)
 
-p_hi  = plot(_hi,  "Band Hi",        color=_line_col, linewidth=1, style=plot.style_line)
-p_lo  = plot(_lo,  "Band Lo",        color=_line_col, linewidth=1, style=plot.style_line)
-p_mid = plot(_mid, "Breakout Level", color=_line_col, linewidth=2, style=plot.style_line)
-fill(p_hi, p_lo, color=_fill_col, title="Reaction Zone")
+p_hi  = plot(_hi,  "Breakout Band Hi",  color=_line_col, linewidth=1, style=plot.style_line)
+p_lo  = plot(_lo,  "Breakout Band Lo",  color=_line_col, linewidth=1, style=plot.style_line)
+p_mid = plot(_mid, "Breakout Level",    color=_line_col, linewidth=2, style=plot.style_line)
+fill(p_hi, p_lo, color=_fill_col, title="Breakout Zone")
 
-plotchar(retest_on and barstate.isconfirmed, "Retest Active", "◆",
-         location.abovebar, color.orange, size=size.tiny)
-plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed, "H4 Aligned", "▲",
-         location.belowbar, color.new(color.blue, 40), size=size.tiny)
+// ── Formation tracking lines (always visible — verify what script detects) ────
+// Dashed red  = most recent Daily A-shape body high (bearish resistance)
+// Dashed lime = most recent Daily V-shape body low  (bullish support)
+// Dashed purple = post-breakout OC level (forms after breakout)
+// Dashed orange = H4 breaker level (forms after first CONFIRMED)
+plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,    50), linewidth=1, style=plot.style_dashes)
+plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,   50), linewidth=1, style=plot.style_dashes)
+plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 40), linewidth=1, style=plot.style_dashes)
+plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 20), linewidth=1, style=plot.style_dashes)
+
+// ── Per-bar state markers ─────────────────────────────────────────────────────
+plotchar(retest_on and barstate.isconfirmed,
+     "Retest Active", "◆", location.abovebar, color.orange, size=size.tiny)
+plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed,
+     "H4 Aligned", "▲", location.belowbar, color.new(color.blue, 40), size=size.tiny)
+
+// ── State label — shows script's current understanding at the latest bar ──────
+string _state_txt =
+     na(bo_dir)                       ? "IDLE — no breakout detected" :
+     not h4_bo_fired and retest_on    ? "RETEST  · " + retest_src :
+     not h4_bo_fired                  ? "BREAKOUT · " + bo_dir + " · awaiting retest" :
+     h4_bo_fired and h4_aligned       ? "CONFIRMED · " + bo_dir + " · H4 aligned" :
+                                        "CONFIRMED · " + bo_dir + " · realigning"
+
+color _lbl_col =
+     na(bo_dir)                       ? color.new(color.gray,  20) :
+     retest_on                        ? color.new(color.orange, 0) :
+     h4_bo_fired and h4_aligned       ? color.new(color.teal,   0) :
+     h4_bo_fired                      ? color.new(color.blue,   0) :
+     bo_dir == "bullish"              ? color.new(color.green, 10) :
+                                        color.new(color.red,   10)
+
+var label _state_lbl = na
+label.delete(_state_lbl)
+_state_lbl := label.new(
+     bar_index, high, _state_txt,
+     style    = label.style_label_down,
+     color    = _lbl_col,
+     textcolor= color.white,
+     size     = size.small,
+     tooltip  = "bo_level: " + str.tostring(bo_level, "#.#####")
+              + "\na_lvl:   " + str.tostring(a_lvl,    "#.#####")
+              + "\nv_lvl:   " + str.tostring(v_lvl,    "#.#####")
+              + "\nh4_brk:  " + str.tostring(h4_breaker_lvl, "#.#####")
+              + "\npb_oc:   " + str.tostring(pb_oc_lvl, "#.#####"))
