@@ -503,18 +503,10 @@ p_lo  = plot(_lo,  "Breakout Band Lo",  color=_line_col, linewidth=1, style=plot
 p_mid = plot(_mid, "Breakout Level",    color=_line_col, linewidth=2, style=plot.style_line)
 fill(p_hi, p_lo, color=_fill_col, title="Breakout Zone")
 
-// ── Formation tracking lines (always visible — verify what script detects) ────
-// Daily candidate levels — bold stepline so they're always easy to see
-// D.A = most recent Daily A-shape body high  → close ABOVE this = bullish breakout
-// D.V = most recent Daily V-shape body low   → close BELOW this = bearish breakout
-p_a   = plot(a_lvl,          "Daily A-shape Level", color=color.new(color.red,     5), linewidth=3, style=plot.style_stepline)
-p_v   = plot(v_lvl,          "Daily V-shape Level", color=color.new(color.lime,    5), linewidth=3, style=plot.style_stepline)
-p_poc = plot(pb_oc_lvl,      "Post-BO OC Level",    color=color.new(color.purple, 15), linewidth=2, style=plot.style_linebr)
-p_bk  = plot(h4_breaker_lvl, "H4 Breaker Level",    color=color.new(color.orange, 10), linewidth=2, style=plot.style_linebr)
-// H4 candidate levels (level that must be broken for H4 confirmation)
-p_h4a = plot(h4_a_lvl,       "H4 A-shape Level",    color=color.new(color.red,    40), linewidth=1, style=plot.style_linebr)
-p_h4v = plot(h4_v_lvl,       "H4 V-shape Level",    color=color.new(color.lime,   40), linewidth=1, style=plot.style_linebr)
-p_h4c = plot(h4c_oc_lvl,     "H4 OC Level",         color=color.new(color.teal,   20), linewidth=1, style=plot.style_linebr)
+// ── Key level lines — most recent Daily A-shape, V-shape, post-BO OC ──────────
+plot(a_lvl,     "Daily A-shape Level", color=color.new(color.red,    10), linewidth=1, style=plot.style_line)
+plot(v_lvl,     "Daily V-shape Level", color=color.new(color.lime,   10), linewidth=1, style=plot.style_line)
+plot(pb_oc_lvl, "Post-BO OC Level",    color=color.new(color.purple, 10), linewidth=1, style=plot.style_line)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
@@ -522,39 +514,6 @@ plotchar(retest_on and barstate.isconfirmed,
 plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed,
      "H4 Aligned", "▲", location.belowbar, color.new(color.blue, 40), size=size.tiny)
 
-// ── Right-edge level labels — self-identifying tags at the last bar ────────────
-// Each label shows the level's name and exact price; deleted & recreated each bar
-var label _a_lbl   = na
-var label _v_lbl   = na
-var label _h4a_lbl = na
-var label _h4v_lbl = na
-var label _poc_lbl = na
-var label _bk_lbl  = na
-var label _h4c_lbl = na
-
-label.delete(_a_lbl)
-label.delete(_v_lbl)
-label.delete(_h4a_lbl)
-label.delete(_h4v_lbl)
-label.delete(_poc_lbl)
-label.delete(_bk_lbl)
-label.delete(_h4c_lbl)
-
-if barstate.islast
-    if not na(a_lvl)
-        _a_lbl := label.new(bar_index, a_lvl, "D.A  " + str.tostring(a_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.red, 55), textcolor=color.white, size=size.tiny)
-    if not na(v_lvl)
-        _v_lbl := label.new(bar_index, v_lvl, "D.V  " + str.tostring(v_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.lime, 45), textcolor=color.black, size=size.tiny)
-    if not na(h4_a_lvl)
-        _h4a_lbl := label.new(bar_index, h4_a_lvl, "H4.A " + str.tostring(h4_a_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.red, 72), textcolor=color.white, size=size.tiny)
-    if not na(h4_v_lvl)
-        _h4v_lbl := label.new(bar_index, h4_v_lvl, "H4.V " + str.tostring(h4_v_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.lime, 65), textcolor=color.black, size=size.tiny)
-    if not na(pb_oc_lvl)
-        _poc_lbl := label.new(bar_index, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.tiny)
-    if not na(h4_breaker_lvl)
-        _bk_lbl := label.new(bar_index, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.tiny)
-    if not na(h4c_oc_lvl)
-        _h4c_lbl := label.new(bar_index, h4c_oc_lvl, "H4.OC " + str.tostring(h4c_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.teal, 45), textcolor=color.white, size=size.tiny)
 
 // ── State label — shows script's current understanding at the latest bar ──────
 string _state_txt = "IDLE - no breakout detected"
@@ -567,10 +526,6 @@ else if h4_bo_fired and h4_aligned
 else if h4_bo_fired
     _state_txt := "CONFIRMED | " + bo_dir + " | realigning"
 
-// Append tracked level values — if D.A/D.V show "na" the detection is not running
-string _da_str = na(a_lvl) ? "na" : str.tostring(a_lvl, "#.#####")
-string _dv_str = na(v_lvl) ? "na" : str.tostring(v_lvl, "#.#####")
-_state_txt := _state_txt + "\nD.A: " + _da_str + "   D.V: " + _dv_str
 
 color _lbl_col = color.new(color.gray, 20)
 if retest_on
