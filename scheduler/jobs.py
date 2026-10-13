@@ -217,6 +217,34 @@ async def process_instrument_cycle(
     active_breakout_id: int | None = active_breakout.db_id if active_breakout else None
     active_src_id: int | None = None
 
+    # Breakout invalidated: price returned through the broken level — go IDLE
+    if out.invalidated and active_breakout_id:
+        logger.info(
+            "%s breakout invalidated (price returned through %.5f) — resetting to IDLE",
+            instrument,
+            active_breakout.broken_level if active_breakout else 0,
+        )
+        repo.deactivate_reaction_sources_for_breakout(conn, active_breakout_id)
+        repo.deactivate_breakout(conn, active_breakout_id)
+        active_breakout_id = None
+        repo.upsert_instrument_state(
+            conn,
+            InstrumentStateRow(
+                instrument=instrument,
+                last_daily_candle_ts=latest_daily_ts,
+                last_h4_candle_ts=latest_h4_ts,
+                active_breakout_id=None,
+                retest_in_progress=False,
+                active_reaction_src_id=None,
+                updated_at=datetime.utcnow(),
+                continuation_mode=False,
+                last_alert_h4_ts=None,
+                last_h4_breaker_level=None,
+                retest_started_h4_ts=None,
+            ),
+        )
+        return
+
     if out.new_breakout is not None:
         # Deactivate old breakout and its sources
         if active_breakout_id:

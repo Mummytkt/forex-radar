@@ -26,15 +26,19 @@ def check_daily_breakout(
     candle: Candle,
     most_recent_a_shape: Optional[Formation],
     most_recent_v_shape: Optional[Formation],
+    min_distance: float = 0.0,
 ) -> Optional[DailyBreakout]:
     """
     Evaluate one just-closed Daily candle for a breakout.
 
-    Bullish: candle.close > most_recent_a_shape.level  (strictly greater)
-    Bearish: candle.close < most_recent_v_shape.level  (strictly less)
+    Bullish: candle.close > most_recent_a_shape.level + min_distance
+    Bearish: candle.close < most_recent_v_shape.level - min_distance
 
-    If both conditions are met simultaneously (e.g., a gap candle that
-    skips over both levels), the one with the greater body distance wins.
+    min_distance (in price units, not pips) filters out noise closes that
+    barely exceed a formation level — pass tolerance_pips * pip_size.
+
+    If both conditions are met simultaneously (gap candle), the one with
+    the greater distance from the level wins.
 
     Returns a new DailyBreakout if one fired, otherwise None.
     The caller is responsible for deactivating the previous breakout in DB.
@@ -42,7 +46,7 @@ def check_daily_breakout(
     bullish_candidate: Optional[tuple[DailyBreakout, float]] = None
     bearish_candidate: Optional[tuple[DailyBreakout, float]] = None
 
-    if most_recent_a_shape is not None and candle.close > most_recent_a_shape.level:
+    if most_recent_a_shape is not None and candle.close > most_recent_a_shape.level + min_distance:
         distance = candle.close - most_recent_a_shape.level
         breakout = DailyBreakout(
             instrument=candle.instrument,
@@ -53,7 +57,7 @@ def check_daily_breakout(
         )
         bullish_candidate = (breakout, distance)
 
-    if most_recent_v_shape is not None and candle.close < most_recent_v_shape.level:
+    if most_recent_v_shape is not None and candle.close < most_recent_v_shape.level - min_distance:
         distance = most_recent_v_shape.level - candle.close
         breakout = DailyBreakout(
             instrument=candle.instrument,

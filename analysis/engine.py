@@ -86,6 +86,9 @@ class EngineOutput:
     continuation_mode: bool = False
     last_alert_h4_ts: Optional[datetime] = None
     last_h4_breaker_level: Optional[float] = None
+    # True when the active breakout was invalidated (price returned through the
+    # broken level). Caller should deactivate the breakout and go IDLE.
+    invalidated: bool = False
 
 
 def _h4_level_retested(candle: Candle, level: float, tolerance: float, direction: Direction) -> bool:
@@ -185,7 +188,8 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             # V-shape inside the bullish range — suppress as reversal candidate
             check_v = None
 
-    new_breakout = check_daily_breakout(latest_daily, check_a, check_v)
+    min_distance = inp.tolerance_pips * inp.pip_size
+    new_breakout = check_daily_breakout(latest_daily, check_a, check_v, min_distance)
 
     if new_breakout is not None:
         # New breakout supersedes everything. Recompute all reaction sources.
@@ -210,6 +214,23 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
 
     if active_breakout is None:
         return out
+
+    # ── Breakout invalidation: if price has returned through the broken level
+    # by more than tolerance_pips, the breakout is stale and the instrument
+    # should go IDLE rather than wait indefinitely for H4 confirmation.
+    # This prevents the engine getting stuck on a bullish setup while price
+    # trends bearishly far below the breakout level (and vice versa).
+    invalidation_margin = min_distance  # reuse the same tolerance
+    if active_breakout.direction == Direction.BULLISH:
+        # Bullish breakout invalidated: daily close back below broken_level by >tolerance
+        if latest_daily.close < active_breakout.broken_level - invalidation_margin:
+            out.invalidated = True
+            return out
+    else:
+        # Bearish breakout invalidated: daily close back above broken_level by >tolerance
+        if latest_daily.close > active_breakout.broken_level + invalidation_margin:
+            out.invalidated = True
+            return out
 
     # ── STEP 1b: Update post-breakout OC sources after new Daily candle ───────
     updated_srcs = update_post_breakout_sources(
