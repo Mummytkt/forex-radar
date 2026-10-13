@@ -61,6 +61,14 @@ def format_alert(alert: AlertRecord) -> str:
         return _format_continuation_ashape(alert)
     if alert.classification == AlertClassification.CONTINUATION_H4_BREAKER:
         return _format_continuation_h4_breaker(alert)
+    if alert.classification == AlertClassification.H4_BREAKER_ORIGIN:
+        return _format_h4_breaker_origin(alert)
+    if alert.classification == AlertClassification.H4_BREAKOUT_CONT:
+        return _format_h4_breakout_cont(alert)
+    if alert.classification == AlertClassification.H4_BREAKER_CONT:
+        return _format_h4_breaker_cont(alert)
+    if alert.classification == AlertClassification.H4_OC_CONT:
+        return _format_h4_oc_cont(alert)
     return _format_origin(alert)
 
 
@@ -284,6 +292,190 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
     lines = [
         f"{bias_label} — {instrument}",
         f"Daily → H4 OC continuation",
+        "",
+        f"Daily breakout: {direction_label} (active)",
+        "",
+        f"H4 OC reaction: midpoint @ {level_str}",
+        oc_desc,
+        "",
+        f"Reason: Price rejected from an H4 {direction_lower} OC midpoint at {level_str}, "
+        f"confirming continuation of the active Daily {direction_lower} bias.",
+        "",
+        "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+    ]
+    return "\n".join(lines)
+
+
+# ── H4 Breaker Origin alert ───────────────────────────────────────────────────
+
+def _format_h4_breaker_origin(alert: AlertRecord) -> str:
+    direction = alert.direction
+    instrument = alert.instrument
+    level = alert.h4_breaker_level
+
+    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
+    direction_lower = direction_label.lower()
+
+    level_str = _fmt_level(instrument, level) if level is not None else "—"
+
+    if direction == Direction.BULLISH:
+        desc = (
+            f"Price retraced to the H4 key level created at the Origin confirmation @ {level_str}. "
+            f"An H4 candle wicked into the level and closed above it, "
+            f"confirming the H4 Breaker for the first time."
+        )
+        reason = (
+            f"The H4 Origin level at {level_str} has been retested and confirmed for the first time. "
+            f"This establishes the H4 Breaker, extending the bullish bias."
+        )
+    else:
+        desc = (
+            f"Price retraced to the H4 key level created at the Origin confirmation @ {level_str}. "
+            f"An H4 candle wicked into the level and closed below it, "
+            f"confirming the H4 Breaker for the first time."
+        )
+        reason = (
+            f"The H4 Origin level at {level_str} has been retested and confirmed for the first time. "
+            f"This establishes the H4 Breaker, extending the bearish bias."
+        )
+
+    lines = [
+        f"{bias_label} — {instrument}",
+        "H4 Breaker Origin",
+        "",
+        f"Daily breakout: {direction_label} (active)",
+        "",
+        f"H4 Breaker Origin @ {level_str}",
+        desc,
+        "",
+        f"Reason: {reason}",
+        "",
+        "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+    ]
+    return "\n".join(lines)
+
+
+# ── H4 Breakout Continuation alert ───────────────────────────────────────────
+
+def _format_h4_breakout_cont(alert: AlertRecord) -> str:
+    direction = alert.direction
+    instrument = alert.instrument
+    level = alert.h4_breaker_level
+
+    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
+    direction_lower = direction_label.lower()
+
+    level_str = _fmt_level(instrument, level) if level is not None else "—"
+
+    if direction == Direction.BULLISH:
+        desc = (
+            f"An H4 formation was broken and an H4 candle closed above its body level @ {level_str}, "
+            f"continuing the established bullish bias."
+        )
+    else:
+        desc = (
+            f"An H4 formation was broken and an H4 candle closed below its body level @ {level_str}, "
+            f"continuing the established bearish bias."
+        )
+
+    lines = [
+        f"{bias_label} — {instrument}",
+        "H4 Breakout Continuation",
+        "",
+        f"Daily breakout: {direction_label} (active)",
+        "",
+        f"H4 breakout @ {level_str}",
+        desc,
+        "",
+        f"Reason: A new H4 breakout in the {direction_lower} direction has extended the active Daily "
+        f"{direction_lower} bias. The overall direction remains intact.",
+        "",
+        "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+    ]
+    return "\n".join(lines)
+
+
+# ── H4 Breaker Continuation alert ────────────────────────────────────────────
+
+def _format_h4_breaker_cont(alert: AlertRecord) -> str:
+    direction = alert.direction
+    instrument = alert.instrument
+    level = alert.h4_breaker_level
+
+    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
+    direction_lower = direction_label.lower()
+
+    level_str = _fmt_level(instrument, level) if level is not None else "—"
+
+    if direction == Direction.BULLISH:
+        desc = (
+            f"Price revisited the H4 Breaker zone at {level_str}. "
+            f"An H4 candle wicked into the level and closed above it, "
+            f"confirming continued support and bias continuation."
+        )
+        reason = (
+            f"An H4 candle confirmed rejection from the H4 Breaker level at {level_str}, "
+            f"keeping the bullish bias intact."
+        )
+    else:
+        desc = (
+            f"Price revisited the H4 Breaker zone at {level_str}. "
+            f"An H4 candle wicked into the level and closed below it, "
+            f"confirming continued resistance and bias continuation."
+        )
+        reason = (
+            f"An H4 candle confirmed rejection from the H4 Breaker level at {level_str}, "
+            f"keeping the bearish bias intact."
+        )
+
+    lines = [
+        f"{bias_label} — {instrument}",
+        "H4 Breaker Continuation",
+        "",
+        f"Daily breakout: {direction_label} (active)",
+        "",
+        f"H4 Breaker retest @ {level_str}",
+        desc,
+        "",
+        f"Reason: {reason}",
+        "",
+        "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+    ]
+    return "\n".join(lines)
+
+
+# ── H4 OC Continuation alert ──────────────────────────────────────────────────
+
+def _format_h4_oc_cont(alert: AlertRecord) -> str:
+    direction = alert.direction
+    instrument = alert.instrument
+    oc_level = alert.h4_oc_level
+
+    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
+    direction_lower = direction_label.lower()
+
+    level_str = _fmt_level(instrument, oc_level) if oc_level is not None else "—"
+
+    if direction == Direction.BULLISH:
+        oc_desc = (
+            f"A bullish H4 OC formed (two consecutive bullish H4 candles). "
+            f"Price returned to react from the OC midpoint at {level_str} "
+            f"and closed above it, confirming a bullish continuation."
+        )
+    else:
+        oc_desc = (
+            f"A bearish H4 OC formed (two consecutive bearish H4 candles). "
+            f"Price returned to react from the OC midpoint at {level_str} "
+            f"and closed below it, confirming a bearish continuation."
+        )
+
+    lines = [
+        f"{bias_label} — {instrument}",
+        "H4 OC Continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
         "",

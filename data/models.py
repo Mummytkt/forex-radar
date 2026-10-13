@@ -36,6 +36,10 @@ class AlertClassification(str, Enum):
     CONTINUATION_ASHAPE = "continuation_ashape"
     CONTINUATION_H4_OC = "continuation_h4oc"
     CONTINUATION_H4_BREAKER = "continuation_h4breaker"
+    H4_BREAKER_ORIGIN = "h4_breaker_origin"
+    H4_BREAKOUT_CONT = "h4_breakout_cont"
+    H4_BREAKER_CONT = "h4_breaker_cont"
+    H4_OC_CONT = "h4_oc_cont"
 
 
 class ReactionSourceType(str, Enum):

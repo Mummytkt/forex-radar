@@ -68,7 +68,8 @@ class TVWebhookPayload(BaseModel):
     h4_class: Optional[str] = None      # "external" | "internal" (CONFIRMED)
     breakout_level: Optional[float] = None   # daily broken level
     source_level: Optional[float] = None     # reaction source level (OC midpoint, or bo_level for others)
-    h4_level: Optional[float] = None    # H4 formation level (CONFIRMED)
+    h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
+    cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | breaker_origin | breaker_cont | oc_cont
 
 
 def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
@@ -107,6 +108,8 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
         await _handle_confirmed(conn, config, instrument, payload)
     elif event_type == "INVALIDATED":
         _handle_invalidated(conn, instrument)
+    elif event_type == "H4_CONTINUATION":
+        await _handle_h4_continuation(conn, config, instrument, payload)
     else:
         logger.warning("Unknown TV webhook type: %s", event_type)
 
@@ -343,6 +346,74 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
     ))
 
     logger.info("%s CONFIRMED %s (h4_class=%s) — alert stored", instrument, direction.value, payload.h4_class)
+
+    if config.telegram_enabled:
+        await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+
+
+_CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
+    "breakout_cont":  AlertClassification.H4_BREAKOUT_CONT,
+    "breaker_origin": AlertClassification.H4_BREAKER_ORIGIN,
+    "breaker_cont":   AlertClassification.H4_BREAKER_CONT,
+    "oc_cont":        AlertClassification.H4_OC_CONT,
+}
+
+
+async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
+    direction = Direction(payload.direction)
+    cont_type = payload.cont_type or "breakout_cont"
+    classification = _CONT_TYPE_TO_CLASSIFICATION.get(cont_type, AlertClassification.H4_BREAKOUT_CONT)
+
+    breakout = get_active_breakout(conn, instrument)
+    if breakout is None:
+        bl = payload.breakout_level or payload.h4_level or 0.0
+        broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
+        deactivate_all_breakouts(conn, instrument)
+        breakout = DailyBreakout(
+            instrument=instrument,
+            direction=direction,
+            broken_level=bl,
+            broken_type=broken_type,
+            breakout_ts=datetime.utcnow(),
+        )
+        breakout_id = insert_breakout(conn, breakout)
+        breakout.db_id = breakout_id
+        logger.info("%s auto-created breakout record from H4_CONTINUATION payload", instrument)
+
+    now = datetime.utcnow()
+    h4_level = payload.h4_level or (payload.breakout_level or breakout.broken_level)
+
+    alert_record = AlertRecord(
+        instrument=instrument,
+        direction=direction,
+        daily_breakout=breakout,
+        reaction_source=None,
+        h4_event=None,
+        fired_at=now,
+        classification=classification,
+        h4_oc_level=h4_level if classification == AlertClassification.H4_OC_CONT else None,
+        h4_breaker_level=h4_level if classification != AlertClassification.H4_OC_CONT else None,
+    )
+
+    alert_text = format_alert(alert_record)
+    insert_alert(conn, alert_record, breakout.db_id, None, None, alert_text)
+
+    state = get_instrument_state(conn, instrument)
+    upsert_instrument_state(conn, InstrumentStateRow(
+        instrument=instrument,
+        last_daily_candle_ts=state.last_daily_candle_ts if state else None,
+        last_h4_candle_ts=state.last_h4_candle_ts if state else None,
+        active_breakout_id=breakout.db_id,
+        retest_in_progress=False,
+        active_reaction_src_id=None,
+        updated_at=now,
+        continuation_mode=True,
+        last_alert_h4_ts=now,
+        last_h4_breaker_level=h4_level,
+        retest_started_h4_ts=None,
+    ))
+
+    logger.info("%s H4_CONTINUATION %s (cont_type=%s) — alert stored", instrument, direction.value, cont_type)
 
     if config.telegram_enabled:
         await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)

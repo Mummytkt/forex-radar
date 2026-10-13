@@ -1,6 +1,6 @@
 //@version=5
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v2 — TradingView Edition
+// MummyTKT's Bias Pointer v3 — TradingView Edition
 //
 // Apply to a 4H chart for each instrument.
 // Create ONE alert per instrument: condition = "Any alert() function call"
@@ -10,10 +10,10 @@
 //   BREAKOUT         — Daily candle closed beyond most-recent A/V formation body
 //   RETEST           — H4 entered a reaction source zone
 //   RETEST_CANCELLED — H4 moved away from zone without H4 confirmation
-//   CONFIRMED        — H4 closed beyond an H4 A/V level during a retest
+//   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
 //   INVALIDATED      — Daily close moved beyond the OPPOSITE range boundary
-//                      (bullish setup: close below V-shape body_low
-//                       bearish setup: close above A-shape body_high)
+//   H4_CONTINUATION  — H4 continuation event after Origin has fired
+//                      cont_type: breakout_cont | breaker_origin | breaker_cont | oc_cont
 //
 // Three reaction sources (detected in priority order):
 //   post_breakout_oc — price retests an OC formed by 2 consecutive post-breakout
@@ -60,6 +60,17 @@ var float  pb_close1  = na      // first pb candle's close for OC midpoint
 var float  pb_oc_lvl  = na      // computed post-breakout OC level
 var bool   just_broke = false   // true only on the bar a new breakout fires (daily block)
 
+// ── H4 continuation state ─────────────────────────────────────────────────────
+var bool   h4_bo_fired       = false   // Origin CONFIRMED has fired
+var bool   h4_breaker_orig_fired = false  // H4 Breaker Origin has fired
+var float  h4_breaker_lvl    = na      // H4 A/V level broken at most recent H4 breakout
+var float  h4_invalid_lvl    = na      // H4 close beyond this → H4 not aligned with daily
+var bool   h4_aligned        = false   // H4 direction currently aligned with daily
+var int    h4c_consec        = 0       // consecutive H4 candles in bias direction (OC tracking)
+var float  h4c_oc_close1     = na      // close of first H4 candle in OC pair
+var float  h4c_oc_lvl        = na      // H4 OC midpoint level
+var bool   h4c_oc_ready      = false   // true once an H4 OC level has been formed
+
 // ── Daily block ───────────────────────────────────────────────────────────────
 bool new_daily = not na(d_time) and d_time != d_time_prev
 if new_daily
@@ -78,10 +89,6 @@ if new_daily
         v_lvl := math.min(d_open1, d_close1)
 
     // ── INVALIDATED — opposite range boundary breach ──────────────────────
-    // Breakout stays active while price is anywhere inside the daily range.
-    // Only invalidates when daily close crosses the boundary on the OTHER side.
-    //   Bullish setup: close below last V-shape body_low (v_lvl) - tol
-    //   Bearish setup: close above last A-shape body_high (a_lvl) + tol
     if not na(bo_dir) and not na(bo_level)
         if bo_dir == "bullish" and not na(v_lvl) and d_close < v_lvl - tol
             bo_dir    := na
@@ -95,6 +102,15 @@ if new_daily
             pb_consec := 0
             pb_close1 := na
             pb_oc_lvl := na
+            h4_bo_fired       := false
+            h4_breaker_orig_fired := false
+            h4_breaker_lvl    := na
+            h4_invalid_lvl    := na
+            h4_aligned        := false
+            h4c_consec        := 0
+            h4c_oc_close1     := na
+            h4c_oc_lvl        := na
+            h4c_oc_ready      := false
             alert('{"secret":"' + wh_secret + '","type":"INVALIDATED","instrument":"' + syminfo.ticker + '"}',
                   alert.freq_once_per_bar)
         if bo_dir == "bearish" and not na(a_lvl) and d_close > a_lvl + tol
@@ -109,6 +125,15 @@ if new_daily
             pb_consec := 0
             pb_close1 := na
             pb_oc_lvl := na
+            h4_bo_fired       := false
+            h4_breaker_orig_fired := false
+            h4_breaker_lvl    := na
+            h4_invalid_lvl    := na
+            h4_aligned        := false
+            h4c_consec        := 0
+            h4c_oc_close1     := na
+            h4c_oc_lvl        := na
+            h4c_oc_ready      := false
             alert('{"secret":"' + wh_secret + '","type":"INVALIDATED","instrument":"' + syminfo.ticker + '"}',
                   alert.freq_once_per_bar)
 
@@ -128,6 +153,15 @@ if new_daily
             pb_close1 := na
             pb_oc_lvl := na
             just_broke:= true
+            h4_bo_fired       := false
+            h4_breaker_orig_fired := false
+            h4_breaker_lvl    := na
+            h4_invalid_lvl    := na
+            h4_aligned        := false
+            h4c_consec        := 0
+            h4c_oc_close1     := na
+            h4c_oc_lvl        := na
+            h4c_oc_ready      := false
             alert('{"secret":"' + wh_secret + '","type":"BREAKOUT","instrument":"' + syminfo.ticker
                   + '","direction":"bullish","level":' + str.tostring(bo_level) + '}',
                   alert.freq_once_per_bar)
@@ -148,14 +182,20 @@ if new_daily
             pb_close1 := na
             pb_oc_lvl := na
             just_broke:= true
+            h4_bo_fired       := false
+            h4_breaker_orig_fired := false
+            h4_breaker_lvl    := na
+            h4_invalid_lvl    := na
+            h4_aligned        := false
+            h4c_consec        := 0
+            h4c_oc_close1     := na
+            h4c_oc_lvl        := na
+            h4c_oc_ready      := false
             alert('{"secret":"' + wh_secret + '","type":"BREAKOUT","instrument":"' + syminfo.ticker
                   + '","direction":"bearish","level":' + str.tostring(bo_level) + '}',
                   alert.freq_once_per_bar)
 
     // ── Post-breakout OC tracking ─────────────────────────────────────────
-    // Counts consecutive post-breakout same-direction daily candles that close
-    // on the breakout side. The breakout candle itself is excluded (just_broke).
-    // When two consecutive qualifying candles are found, pb_oc_lvl = their midpoint.
     if not na(bo_dir) and not just_broke
         bool pb_match = false
         if bo_dir == "bullish"
@@ -168,10 +208,9 @@ if new_daily
                 pb_close1 := d_close
             else if pb_consec >= 2
                 pb_oc_lvl := (pb_close1 + d_close) / 2.0
-                pb_close1 := d_close    // slide window for next potential OC
+                pb_close1 := d_close
         else
             pb_consec := 0
-            // Keep pb_oc_lvl — level stays valid even if daily streak breaks
 
 // ── H4 block ──────────────────────────────────────────────────────────────────
 if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
@@ -195,31 +234,23 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         h4_v_pre := not retest_on
 
     // ── Establishment tracking ────────────────────────────────────────────
-    // Requires at least one H4 close beyond the band before any retest is valid.
     if bo_dir == "bullish" and close > band_hi
         est_above := true
     if bo_dir == "bearish" and close < band_lo
         est_below := true
 
-    // Use PREVIOUS bar's established flag: prevents same-bar establish + retest.
     bool was_est = (bo_dir == "bullish") ? est_above[1] : est_below[1]
 
     // ── Zone 1: Post-Breakout OC ──────────────────────────────────────────
-    // OC must be clearly beyond the Daily Breaker band (on the breakout side).
-    // Retest = wick touching the OC ± tol band.
-    bool pb_oc_valid    = not na(pb_oc_lvl) and
-                          ((bo_dir == "bullish" and pb_oc_lvl > band_hi) or
-                           (bo_dir == "bearish" and pb_oc_lvl < band_lo))
-    bool pb_oc_zone     = pb_oc_valid and low <= pb_oc_lvl + tol and high >= pb_oc_lvl - tol
+    bool pb_oc_valid = not na(pb_oc_lvl) and
+                       ((bo_dir == "bullish" and pb_oc_lvl > band_hi) or
+                        (bo_dir == "bearish" and pb_oc_lvl < band_lo))
+    bool pb_oc_zone  = pb_oc_valid and low <= pb_oc_lvl + tol and high >= pb_oc_lvl - tol
 
     // ── Zone 2: Daily Breaker ─────────────────────────────────────────────
-    // Wick touching the broken A/V level ± tol band.
     bool db_zone = low <= band_hi and high >= band_lo
 
     // ── Zone 3: Inside Range ──────────────────────────────────────────────
-    // H4 CLOSE (not just wick) has moved inside the old daily range.
-    // Bullish: close below band_lo but above v_lvl + tol
-    // Bearish: close above band_hi but below a_lvl - tol
     bool ir_zone = false
     if bo_dir == "bullish" and not na(v_lvl)
         ir_zone := close < band_lo and close > v_lvl + tol
@@ -227,7 +258,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         ir_zone := close > band_hi and close < a_lvl - tol
 
     // ── RETEST detection (priority: pb_oc > daily_breaker > inside_range) ─
-    if not retest_on
+    if not retest_on and not h4_bo_fired
         if pb_oc_zone and was_est
             retest_on  := true
             retest_src := "post_breakout_oc"
@@ -270,35 +301,191 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                   alert.freq_once_per_bar)
 
     // ── H4 CONFIRMED ──────────────────────────────────────────────────────
-    // H4 candle must CLOSE (body) beyond the H4 A/V level — wicks do not count.
+    // Fires Origin (first time) or breakout_cont (if Origin already fired).
     // Guard `not new_a` / `not new_v` prevents confirmation on the same bar
-    // the H4 formation is detected (must be a subsequent H4 bar).
+    // the H4 formation is detected.
+    bool confirmed_this_bar = false
+
     if retest_on
         float src_lvl = retest_src == "post_breakout_oc" ? pb_oc_lvl : bo_level
 
         if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
             string h4_cls = h4_a_pre ? "external" : "internal"
-            alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
-                  + '","direction":"bullish","source":"' + retest_src
-                  + '","h4_class":"' + h4_cls
-                  + '","breakout_level":' + str.tostring(bo_level)
-                  + ',"source_level":' + str.tostring(src_lvl)
-                  + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
-                  alert.freq_once_per_bar)
+            if not h4_bo_fired
+                // Origin: first H4 confirmation after daily retest
+                h4_bo_fired           := true
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_a_lvl
+                h4_invalid_lvl        := h4_v_lvl
+                h4c_consec            := 0
+                h4c_oc_close1         := na
+                h4c_oc_lvl            := na
+                h4c_oc_ready          := false
+                h4_breaker_orig_fired := false
+                confirmed_this_bar    := true
+                alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
+                      + '","direction":"bullish","source":"' + retest_src
+                      + '","h4_class":"' + h4_cls
+                      + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"source_level":' + str.tostring(src_lvl)
+                      + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
+                      alert.freq_once_per_bar)
+            else
+                // Continuation: H4 A/V breakout via daily retest path after Origin already fired
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_a_lvl
+                h4_invalid_lvl        := h4_v_lvl
+                h4c_consec            := 0
+                h4c_oc_close1         := na
+                h4c_oc_lvl            := na
+                h4c_oc_ready          := false
+                confirmed_this_bar    := true
+                alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                      + '","direction":"bullish","cont_type":"breakout_cont"'
+                      + ',"breakout_level":' + str.tostring(bo_level)
+                      + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
+                      alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na
 
         if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
             string h4_cls = h4_v_pre ? "external" : "internal"
-            alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
-                  + '","direction":"bearish","source":"' + retest_src
-                  + '","h4_class":"' + h4_cls
-                  + '","breakout_level":' + str.tostring(bo_level)
-                  + ',"source_level":' + str.tostring(src_lvl)
-                  + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
-                  alert.freq_once_per_bar)
+            if not h4_bo_fired
+                // Origin
+                h4_bo_fired           := true
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_v_lvl
+                h4_invalid_lvl        := h4_a_lvl
+                h4c_consec            := 0
+                h4c_oc_close1         := na
+                h4c_oc_lvl            := na
+                h4c_oc_ready          := false
+                h4_breaker_orig_fired := false
+                confirmed_this_bar    := true
+                alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
+                      + '","direction":"bearish","source":"' + retest_src
+                      + '","h4_class":"' + h4_cls
+                      + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"source_level":' + str.tostring(src_lvl)
+                      + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
+                      alert.freq_once_per_bar)
+            else
+                // Continuation via daily retest path
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_v_lvl
+                h4_invalid_lvl        := h4_a_lvl
+                h4c_consec            := 0
+                h4c_oc_close1         := na
+                h4c_oc_lvl            := na
+                h4c_oc_ready          := false
+                confirmed_this_bar    := true
+                alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                      + '","direction":"bearish","cont_type":"breakout_cont"'
+                      + ',"breakout_level":' + str.tostring(bo_level)
+                      + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
+                      alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na
+
+    // ── H4 Continuation block ─────────────────────────────────────────────
+    // Runs after Origin has fired. Tracks H4 Breaker, OC, and realignment.
+    if h4_bo_fired
+        // Invalidity: H4 close beyond opposite H4 boundary suspends alignment
+        if h4_aligned and not na(h4_invalid_lvl)
+            if bo_dir == "bullish" and close < h4_invalid_lvl - tol
+                h4_aligned := false
+                h4c_consec := 0
+            if bo_dir == "bearish" and close > h4_invalid_lvl + tol
+                h4_aligned := false
+                h4c_consec := 0
+
+        // Realignment: new H4 A/V breakout in daily direction when misaligned
+        // (only when not currently in a daily retest — CONFIRMED handles that path)
+        bool cont_acted = false
+        if not h4_aligned and not retest_on
+            if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_a_lvl
+                h4_invalid_lvl        := h4_v_lvl
+                h4c_consec            := 0
+                h4c_oc_close1         := na
+                h4c_oc_lvl            := na
+                h4c_oc_ready          := false
+                cont_acted            := true
+                alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                      + '","direction":"bullish","cont_type":"breakout_cont"'
+                      + ',"breakout_level":' + str.tostring(bo_level)
+                      + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
+                      alert.freq_once_per_bar)
+            if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_v_lvl
+                h4_invalid_lvl        := h4_a_lvl
+                h4c_consec            := 0
+                h4c_oc_close1         := na
+                h4c_oc_lvl            := na
+                h4c_oc_ready          := false
+                cont_acted            := true
+                alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                      + '","direction":"bearish","cont_type":"breakout_cont"'
+                      + ',"breakout_level":' + str.tostring(bo_level)
+                      + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
+                      alert.freq_once_per_bar)
+
+        // Aligned-mode events: OC tracking, Breaker retest, OC retest
+        // Skip on the bar that just fired a CONFIRMED/continuation event
+        if h4_aligned and not cont_acted and not confirmed_this_bar
+
+            // H4 OC tracking (consecutive H4 candles in bias direction)
+            bool h4c_match = (bo_dir == "bullish") ? h4_bull0 : h4_bear0
+            if h4c_match
+                h4c_consec := h4c_consec + 1
+                if h4c_consec == 1
+                    h4c_oc_close1 := close
+                else if h4c_consec >= 2
+                    h4c_oc_lvl   := (h4c_oc_close1 + close) / 2.0
+                    h4c_oc_close1 := close
+                    h4c_oc_ready := true
+            else
+                h4c_consec := 0
+
+            // H4 Breaker retest (wick touches level ± tol, close confirms direction)
+            if not na(h4_breaker_lvl)
+                bool bk_touched = low <= h4_breaker_lvl + tol and high >= h4_breaker_lvl - tol
+                if bo_dir == "bullish" and bk_touched and close > h4_breaker_lvl
+                    string bk_type = h4_breaker_orig_fired ? "breaker_cont" : "breaker_origin"
+                    if not h4_breaker_orig_fired
+                        h4_breaker_orig_fired := true
+                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                          + '","direction":"bullish","cont_type":"' + bk_type + '"'
+                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
+                          alert.freq_once_per_bar)
+                if bo_dir == "bearish" and bk_touched and close < h4_breaker_lvl
+                    string bk_type = h4_breaker_orig_fired ? "breaker_cont" : "breaker_origin"
+                    if not h4_breaker_orig_fired
+                        h4_breaker_orig_fired := true
+                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                          + '","direction":"bearish","cont_type":"' + bk_type + '"'
+                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
+                          alert.freq_once_per_bar)
+
+            // H4 OC retest (wick touches OC ± tol, close confirms direction)
+            if h4c_oc_ready and not na(h4c_oc_lvl)
+                bool oc_touched = low <= h4c_oc_lvl + tol and high >= h4c_oc_lvl - tol
+                if bo_dir == "bullish" and oc_touched and close > h4c_oc_lvl
+                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                          + '","direction":"bullish","cont_type":"oc_cont"'
+                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
+                          alert.freq_once_per_bar)
+                if bo_dir == "bearish" and oc_touched and close < h4c_oc_lvl
+                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                          + '","direction":"bearish","cont_type":"oc_cont"'
+                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
+                          alert.freq_once_per_bar)
 
 // ── Visual overlays ───────────────────────────────────────────────────────────
 float _hi  = not na(bo_dir) ? bo_level + tol : na
@@ -315,3 +502,5 @@ fill(p_hi, p_lo, color=_fill_col, title="Reaction Zone")
 
 plotchar(retest_on and barstate.isconfirmed, "Retest Active", "◆",
          location.abovebar, color.orange, size=size.tiny)
+plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed, "H4 Aligned", "▲",
+         location.belowbar, color.new(color.blue, 40), size=size.tiny)
