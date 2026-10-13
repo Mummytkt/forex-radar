@@ -153,6 +153,8 @@ def _format_origin(alert: AlertRecord) -> str:
         f"Reason: {reason}",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
@@ -203,6 +205,8 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
         f"This is a continuation of the established bias.",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
@@ -259,6 +263,8 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
         f"Reason: {reason}",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
@@ -302,6 +308,8 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
         f"confirming continuation of the active Daily {direction_lower} bias.",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
@@ -352,6 +360,8 @@ def _format_h4_breaker_origin(alert: AlertRecord) -> str:
         f"Reason: {reason}",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
@@ -393,6 +403,8 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
         f"{direction_lower} bias. The overall direction remains intact.",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
@@ -443,6 +455,8 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
         f"Reason: {reason}",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
@@ -486,6 +500,8 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
         f"confirming continuation of the active Daily {direction_lower} bias.",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
     ]
     return "\n".join(lines)
 
