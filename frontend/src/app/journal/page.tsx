@@ -1009,7 +1009,7 @@ function TradeModal({
                   background: form.direction === d
                     ? (d === 'buy' ? 'var(--bullish)' : 'var(--bearish)')
                     : 'var(--surface)',
-                  color: form.direction === d ? 'white' : 'var(--text-secondary)',
+                  color: form.direction === d ? 'white' : 'var(--text-primary)',
                   transition: 'all 0.15s',
                 }}>
                   {d === 'buy' ? '▲ Buy' : '▼ Sell'}
@@ -1033,7 +1033,7 @@ function TradeModal({
                   flex: 1, padding: '10px 4px', border: 'none', cursor: 'pointer',
                   fontWeight: 700, fontSize: 12,
                   background: form.result === v ? activeBg : 'var(--surface)',
-                  color: form.result === v ? activeColor : 'var(--text-muted)',
+                  color: form.result === v ? activeColor : 'var(--text-secondary)',
                   transition: 'all 0.15s',
                   boxShadow: form.result === v ? `inset 0 -2px 0 ${activeColor}` : 'none',
                 }}>
