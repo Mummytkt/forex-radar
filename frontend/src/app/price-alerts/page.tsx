@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import useSWR, { mutate } from 'swr'
-import { Target, Trash2, Clock, CheckCircle2, Bell } from 'lucide-react'
+import { Target, Trash2, Clock, CheckCircle2, Bell, Pencil } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { fetcher, API_BASE } from '@/lib/api'
 import type { InstrumentOverview, PriceAlertsList, PriceAlertItem } from '@/lib/types'
@@ -102,7 +102,7 @@ function timeAgo(iso: string): string {
 
 // ── Alert row component ───────────────────────────────────────────────────────
 
-function AlertRow({ item, onDelete }: { item: PriceAlertItem; onDelete: (id: number) => void }) {
+function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: (id: number) => void; onEdit: (item: PriceAlertItem) => void }) {
   const triggered = !!item.triggered_at
   return (
     <div style={{
@@ -149,18 +149,34 @@ function AlertRow({ item, onDelete }: { item: PriceAlertItem; onDelete: (id: num
           )}
         </div>
       </div>
-      <button
-        onClick={() => onDelete(item.id)}
-        style={{
-          width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer',
-          background: 'var(--border)', color: 'var(--text-muted)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, transition: 'background 0.1s',
-        }}
-        title="Delete"
-      >
-        <Trash2 size={12} />
-      </button>
+      <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+        {!triggered && (
+          <button
+            onClick={() => onEdit(item)}
+            style={{
+              width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer',
+              background: 'var(--border)', color: 'var(--text-muted)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.1s',
+            }}
+            title="Edit"
+          >
+            <Pencil size={11} />
+          </button>
+        )}
+        <button
+          onClick={() => onDelete(item.id)}
+          style={{
+            width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: 'var(--border)', color: 'var(--text-muted)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.1s',
+          }}
+          title="Delete"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
     </div>
   )
 }
@@ -181,6 +197,7 @@ export default function PriceAlertsPage() {
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
 
   // Data
   const { data: overview } = useSWR<InstrumentOverview[]>('/api/overview', fetcher)
@@ -236,6 +253,13 @@ export default function PriceAlertsPage() {
         setFormError(err.detail || 'Failed to create alert.')
         return
       }
+      // If editing, delete the old alert now that the new one is saved
+      if (editingId !== null) {
+        await fetch(`${API_BASE}/api/price-alerts/${editingId}`, {
+          method: 'DELETE', headers: authHeaders(),
+        })
+        setEditingId(null)
+      }
       setPrice('')
       setMessage('')
       setTab('active')
@@ -247,11 +271,27 @@ export default function PriceAlertsPage() {
     }
   }
 
+  function handleEdit(item: PriceAlertItem) {
+    setInstrument(item.instrument)
+    setTriggerType(item.trigger_type)
+    setTimeframe(item.timeframe || '5m')
+    setCondition(item.condition)
+    setPrice(String(item.price))
+    setMessage(item.message ?? '')
+    setExpiry('never')
+    setCustomExpiry('')
+    setFormError('')
+    setEditingId(item.id)
+    // Scroll form into view
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function handleDelete(id: number) {
     await fetch(`${API_BASE}/api/price-alerts/${id}`, {
       method: 'DELETE',
       headers: authHeaders(),
     })
+    if (editingId === id) setEditingId(null)
     mutateAlerts()
   }
 
@@ -277,11 +317,20 @@ export default function PriceAlertsPage() {
                 <Target size={14} color="var(--accent-hover)" />
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>New Price Alert</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{editingId ? 'Edit Alert' : 'New Price Alert'}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                  Notify me when price reaches a level
+                  {editingId ? 'Modify the alert — old one will be replaced' : 'Notify me when price reaches a level'}
                 </div>
               </div>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={() => { setEditingId(null); setPrice(''); setMessage('') }}
+                  style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+              )}
             </div>
 
             <form onSubmit={handleCreate} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -496,7 +545,7 @@ export default function PriceAlertsPage() {
                   transition: 'opacity 0.1s',
                 }}
               >
-                {submitting ? 'Creating…' : 'Create Alert'}
+                {submitting ? (editingId ? 'Updating…' : 'Creating…') : (editingId ? 'Update Alert' : 'Create Alert')}
               </button>
 
             </form>
@@ -566,7 +615,7 @@ export default function PriceAlertsPage() {
             {alertsData && alertsData.items.length > 0 && (
               <div>
                 {alertsData.items.map(item => (
-                  <AlertRow key={item.id} item={item} onDelete={handleDelete} />
+                  <AlertRow key={item.id} item={item} onDelete={handleDelete} onEdit={handleEdit} />
                 ))}
               </div>
             )}
