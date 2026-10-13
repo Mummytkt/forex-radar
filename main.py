@@ -18,10 +18,12 @@ import logging
 import sys
 
 import uvicorn
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config import load_config
 from state.db import get_connection, bootstrap_schema
 from api.app import app as fastapi_app
+from alerts.price_monitor import run_price_check
 
 
 def setup_logging(level: str) -> None:
@@ -72,6 +74,20 @@ async def main(dry_run: bool = False) -> None:
 
     logger.info("Forex Radar started — listening for TradingView webhooks on /api/tv-webhook")
 
+    # Price alert monitor — runs every 5 minutes, independent of bias alert system
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        run_price_check,
+        "interval",
+        minutes=5,
+        kwargs={"db_path": config.db_path, "config": config},
+        id="price_monitor",
+        name="Price level alert monitor",
+        misfire_grace_time=60,
+    )
+    scheduler.start()
+    logger.info("Price monitor started — checking price levels every 5 minutes")
+
     server = uvicorn.Server(
         uvicorn.Config(
             fastapi_app, host="0.0.0.0", port=8080,
@@ -84,6 +100,7 @@ async def main(dry_run: bool = False) -> None:
     except (KeyboardInterrupt, SystemExit):
         logger.info("Shutting down…")
     finally:
+        scheduler.shutdown(wait=False)
         conn.close()
 
 
