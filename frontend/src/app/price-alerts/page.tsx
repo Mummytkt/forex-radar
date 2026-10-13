@@ -157,7 +157,7 @@ export default function PriceAlertsPage() {
   }, [overview, instrument])
 
   const instruments = overview?.map(o => o.instrument) ?? []
-  const currentPrice = instrument && prices?.[instrument]?.price
+  const currentPrice: number | undefined = instrument ? prices?.[instrument]?.price : undefined
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
