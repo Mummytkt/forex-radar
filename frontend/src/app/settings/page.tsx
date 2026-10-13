@@ -167,7 +167,7 @@ function InstrumentManager() {
             <XCircle size={13} /> Failed to save
           </span>
         )}
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>H4 every 4h · Daily 21:05 &amp; 22:05 UTC</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>Alerts fire via TradingView webhook</span>
       </div>
     </div>
   )
@@ -202,7 +202,7 @@ export default function SettingsPage() {
       <TopBar title="Settings" subtitle="Instruments, account, and engine configuration" />
       <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        <Section title="Monitored Instruments" desc="Choose which pairs the engine analyses. Changes apply on the next scheduler cycle — no restart needed.">
+        <Section title="Monitored Instruments" desc="Choose which pairs the engine analyses. Changes apply on the next TradingView webhook — no restart needed.">
           <InstrumentManager />
         </Section>
 
@@ -245,8 +245,6 @@ export default function SettingsPage() {
           <Row label="Tolerance band" value="5 pips" note="Reaction source tolerance for retest detection" />
           <Row label="Daily lookback" value="200 candles" note="Historical candles fetched on startup" />
           <Row label="H4 lookback" value="500 candles" note="Historical H4 candles fetched on startup" />
-          <Row label="H4 schedule" value="00:05 / 04:05 / 08:05 / 12:05 / 16:05 / 20:05 UTC" note="5 min after each 4h close" />
-          <Row label="Daily schedule" value="21:05 + 22:05 UTC" note="Dual-fire covers EDT and EST daily close" />
           <div style={{ display: 'flex', gap: 8, padding: '12px 20px', fontSize: 12, color: 'var(--text-secondary)', alignItems: 'flex-start' }}>
             <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: 'var(--info)' }} />
             <span>Tolerance and lookback values require a restart to change.</span>
