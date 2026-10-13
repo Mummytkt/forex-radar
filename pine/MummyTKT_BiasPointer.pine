@@ -23,10 +23,16 @@
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=500)
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
-string wh_secret = input.string("", "Webhook Secret",
+string wh_secret       = input.string("", "Webhook Secret",
      tooltip="Paste your TV_WEBHOOK_SECRET value here")
-int    tol_pips  = input.int(5, "Tolerance Pips", minval=1, maxval=20,
+int    tol_pips        = input.int(5, "Tolerance Pips", minval=1, maxval=20,
      tooltip="Half-width of the reaction zone band in pips")
+bool   show_daily_lbls = input.bool(true,  "Show Daily labels (D.A / D.V / D.OC)",
+     tooltip="Toggle right-edge labels for Daily A-shape, V-shape and OC levels",
+     group="Labels")
+bool   show_h4_lbls    = input.bool(true,  "Show H4 labels (H4.A / H4.V / H4.OC / H4.BK)",
+     tooltip="Toggle right-edge labels for H4 formation and breaker levels",
+     group="Labels")
 
 float pip = syminfo.mintick * 10.0
 float tol = float(tol_pips) * pip
@@ -508,20 +514,22 @@ label.delete(_bk_lbl)
 label.delete(_h4c_lbl)
 
 if barstate.islast
-    if not na(a_lvl)
-        _a_lbl   := label.new(bar_index, a_lvl,          "D.A  " + str.tostring(a_lvl,          "#.#####"), style=label.style_label_left, color=color.new(color.red,    55), textcolor=color.white, size=size.small)
-    if not na(v_lvl)
-        _v_lbl   := label.new(bar_index, v_lvl,          "D.V  " + str.tostring(v_lvl,          "#.#####"), style=label.style_label_left, color=color.new(color.lime,   45), textcolor=color.black, size=size.small)
-    if not na(h4_a_lvl)
-        _h4a_lbl := label.new(bar_index, h4_a_lvl,       "H4.A " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.red,    72), textcolor=color.white, size=size.small)
-    if not na(h4_v_lvl)
-        _h4v_lbl := label.new(bar_index, h4_v_lvl,       "H4.V " + str.tostring(h4_v_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.lime,   65), textcolor=color.black, size=size.small)
-    if not na(pb_oc_lvl)
-        _poc_lbl := label.new(bar_index, pb_oc_lvl,      "D.OC " + str.tostring(pb_oc_lvl,      "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
-    if not na(h4_breaker_lvl)
-        _bk_lbl  := label.new(bar_index, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl,"#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.small)
-    if not na(h4c_oc_lvl)
-        _h4c_lbl := label.new(bar_index, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,    "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
+    if show_daily_lbls
+        if not na(a_lvl)
+            _a_lbl   := label.new(bar_index, a_lvl,     "D.A  " + str.tostring(a_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.red,    55), textcolor=color.white, size=size.small)
+        if not na(v_lvl)
+            _v_lbl   := label.new(bar_index, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.lime,   45), textcolor=color.black, size=size.small)
+        if not na(pb_oc_lvl)
+            _poc_lbl := label.new(bar_index, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
+    if show_h4_lbls
+        if not na(h4_a_lvl)
+            _h4a_lbl := label.new(bar_index, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.red,    72), textcolor=color.white, size=size.small)
+        if not na(h4_v_lvl)
+            _h4v_lbl := label.new(bar_index, h4_v_lvl,       "H4.V  " + str.tostring(h4_v_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.lime,   65), textcolor=color.black, size=size.small)
+        if not na(h4_breaker_lvl)
+            _bk_lbl  := label.new(bar_index, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.small)
+        if not na(h4c_oc_lvl)
+            _h4c_lbl := label.new(bar_index, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
