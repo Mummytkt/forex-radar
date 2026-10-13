@@ -11,6 +11,7 @@ _ALWAYS_PUBLIC = {
     "/api/auth/setup",
     "/api/auth/login",
     "/api/auth/register",
+    "/api/tv-webhook",   # TradingView Pine Script webhook (uses its own secret)
 }
 _PUBLIC_PREFIXES = ("/api/videos/", "/api/public/")
 

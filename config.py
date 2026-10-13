@@ -16,13 +16,12 @@ from dotenv import load_dotenv
 
 @dataclass
 class Config:
-    twelve_data_api_key: str
     telegram_bot_token: str
     telegram_chat_id: str
+    tv_webhook_secret: str           # shared secret validated on every Pine Script webhook
+    twelve_data_api_key: str = ""    # legacy — no longer used by the analysis engine
     db_path: str = "forex_radar.db"
     instruments: list[str] = field(default_factory=list)
-    poll_lookback_daily: int = 200   # candles fetched on backfill for Daily
-    poll_lookback_h4: int = 500      # candles fetched on backfill for H4
     level_tolerance_pips: float = 5.0
     log_level: str = "INFO"
     telegram_enabled: bool = True    # set False for dry-run / testing
@@ -38,13 +37,12 @@ def load_config(env_path: str = ".env") -> Config:
         instruments = DEFAULT_INSTRUMENTS
 
     return Config(
-        twelve_data_api_key=_require("TWELVE_DATA_API_KEY"),
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=_require("TELEGRAM_CHAT_ID"),
+        tv_webhook_secret=_require("TV_WEBHOOK_SECRET"),
+        twelve_data_api_key=os.getenv("TWELVE_DATA_API_KEY", ""),
         db_path=os.getenv("DB_PATH", "forex_radar.db"),
         instruments=instruments,
-        poll_lookback_daily=int(os.getenv("POLL_LOOKBACK_DAILY", "200")),
-        poll_lookback_h4=int(os.getenv("POLL_LOOKBACK_H4", "500")),
         level_tolerance_pips=float(os.getenv("LEVEL_TOLERANCE_PIPS", "5.0")),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         telegram_enabled=os.getenv("TELEGRAM_ENABLED", "true").lower() != "false",
