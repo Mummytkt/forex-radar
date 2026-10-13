@@ -521,31 +521,38 @@ plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed,
      "H4 Aligned", "▲", location.belowbar, color.new(color.blue, 40), size=size.tiny)
 
 // ── State label — shows script's current understanding at the latest bar ──────
-string _state_txt =
-     na(bo_dir)                       ? "IDLE — no breakout detected" :
-     not h4_bo_fired and retest_on    ? "RETEST  · " + retest_src :
-     not h4_bo_fired                  ? "BREAKOUT · " + bo_dir + " · awaiting retest" :
-     h4_bo_fired and h4_aligned       ? "CONFIRMED · " + bo_dir + " · H4 aligned" :
-                                        "CONFIRMED · " + bo_dir + " · realigning"
+string _state_txt = "IDLE - no breakout detected"
+if not na(bo_dir) and not h4_bo_fired and retest_on
+    _state_txt := "RETEST | " + retest_src
+else if not na(bo_dir) and not h4_bo_fired
+    _state_txt := "BREAKOUT | " + bo_dir + " | awaiting retest"
+else if h4_bo_fired and h4_aligned
+    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
+else if h4_bo_fired
+    _state_txt := "CONFIRMED | " + bo_dir + " | realigning"
 
-color _lbl_col =
-     na(bo_dir)                       ? color.new(color.gray,  20) :
-     retest_on                        ? color.new(color.orange, 0) :
-     h4_bo_fired and h4_aligned       ? color.new(color.teal,   0) :
-     h4_bo_fired                      ? color.new(color.blue,   0) :
-     bo_dir == "bullish"              ? color.new(color.green, 10) :
-                                        color.new(color.red,   10)
+color _lbl_col = color.new(color.gray, 20)
+if retest_on
+    _lbl_col := color.orange
+else if h4_bo_fired and h4_aligned
+    _lbl_col := color.teal
+else if h4_bo_fired
+    _lbl_col := color.blue
+else if bo_dir == "bullish"
+    _lbl_col := color.new(color.green, 10)
+else if bo_dir == "bearish"
+    _lbl_col := color.new(color.red, 10)
 
 var label _state_lbl = na
 label.delete(_state_lbl)
 _state_lbl := label.new(
      bar_index, high, _state_txt,
-     style    = label.style_label_down,
-     color    = _lbl_col,
-     textcolor= color.white,
-     size     = size.small,
-     tooltip  = "bo_level: " + str.tostring(bo_level, "#.#####")
-              + "\na_lvl:   " + str.tostring(a_lvl,    "#.#####")
-              + "\nv_lvl:   " + str.tostring(v_lvl,    "#.#####")
-              + "\nh4_brk:  " + str.tostring(h4_breaker_lvl, "#.#####")
-              + "\npb_oc:   " + str.tostring(pb_oc_lvl, "#.#####"))
+     style     = label.style_label_down,
+     color     = _lbl_col,
+     textcolor = color.white,
+     size      = size.small,
+     tooltip   = "bo_level: " + str.tostring(bo_level, "#.#####")
+               + "\na_lvl:   " + str.tostring(a_lvl,    "#.#####")
+               + "\nv_lvl:   " + str.tostring(v_lvl,    "#.#####")
+               + "\nh4_brk:  " + str.tostring(h4_breaker_lvl, "#.#####")
+               + "\npb_oc:   " + str.tostring(pb_oc_lvl, "#.#####"))
