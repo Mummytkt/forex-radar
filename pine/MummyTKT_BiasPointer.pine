@@ -42,6 +42,29 @@ color  daily_line_col  = input.color(color.new(color.gray, 20), "Daily line colo
 color  h4_line_col     = input.color(color.new(color.gray, 40), "H4 line color",
      tooltip="Color for H4.A / H4.V / H4.OC / H4.BK lines",
      group="Labels")
+string daily_lbl_max_tf = input.string("Daily", "Daily labels visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="Daily level labels appear on this timeframe and all lower timeframes. E.g. choose Weekly to also see them on the weekly chart.",
+     group="Labels")
+string h4_lbl_max_tf    = input.string("4H",    "H4 labels visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="H4 level labels appear on this timeframe and all lower timeframes. E.g. choose Daily to also see them on the daily chart.",
+     group="Labels")
+
+// ── Timeframe visibility helpers ──────────────────────────────────────────────
+f_tf_str(opt) =>
+    switch opt
+        "Monthly" => "M"
+        "Weekly"  => "W"
+        "Daily"   => "D"
+        "4H"      => "240"
+        "1H"      => "60"
+        "30m"     => "30"
+        "15m"     => "15"
+        =>           "5"
+
+bool show_daily_on_tf = timeframe.in_seconds() <= timeframe.in_seconds(f_tf_str(daily_lbl_max_tf))
+bool show_h4_on_tf    = timeframe.in_seconds() <= timeframe.in_seconds(f_tf_str(h4_lbl_max_tf))
 
 float pip = syminfo.mintick * 10.0
 float tol = float(tol_pips) * pip
@@ -561,14 +584,14 @@ line.delete(_h4c_line)
 
 if barstate.islast
     int lbl_x = bar_index + 20
-    if show_daily_lbls
+    if show_daily_lbls and show_daily_on_tf
         if not na(a_lvl)
             _a_lbl   := label.new(lbl_x, a_lvl,     "D.A  " + str.tostring(a_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.red,    55), textcolor=color.white, size=size.small)
         if not na(v_lvl)
             _v_lbl   := label.new(lbl_x, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.lime,   45), textcolor=color.black, size=size.small)
         if not na(pb_oc_lvl)
             _poc_lbl := label.new(lbl_x, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
-    if show_h4_lbls
+    if show_h4_lbls and show_h4_on_tf
         if not na(h4_a_lvl)
             _h4a_lbl := label.new(lbl_x, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.red,    72), textcolor=color.white, size=size.small)
         if not na(h4_v_lvl)
