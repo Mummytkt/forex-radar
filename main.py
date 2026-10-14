@@ -68,6 +68,15 @@ async def main(dry_run: bool = False) -> None:
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     fastapi_app.state.auth_enabled = user_count > 0
 
+    # Seed owner's telegram_chat_id from env var so the per-user alert filter applies to them.
+    # Runs every startup — idempotent (only writes when the column is still NULL).
+    if config.telegram_chat_id:
+        conn.execute(
+            "UPDATE users SET telegram_chat_id = ? WHERE role = 'OWNER' AND (telegram_chat_id IS NULL OR telegram_chat_id = '')",
+            (config.telegram_chat_id,),
+        )
+        conn.commit()
+
     # Attach shared state to the API
     fastapi_app.state.conn = conn
     fastapi_app.state.config = config
