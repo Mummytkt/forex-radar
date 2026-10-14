@@ -37,6 +37,14 @@ _BROKEN_TYPE_NAMES: dict[FormationType, str] = {
 }
 
 
+# ── Context label ────────────────────────────────────────────────────────────
+
+def _context_line(alert: AlertRecord) -> str:
+    ctx = getattr(alert, "daily_level_context", "internal")
+    label = "External" if ctx == "external" else "Internal"
+    return f"Daily level context: {label}"
+
+
 # ── Price / timestamp helpers ─────────────────────────────────────────────────
 
 def _fmt_level(instrument: str, level: float) -> str:
@@ -152,6 +160,8 @@ def _format_origin(alert: AlertRecord) -> str:
         "",
         f"Reason: {reason}",
         "",
+        _context_line(alert),
+        "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
         "— TradingView Feed",
@@ -203,6 +213,8 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
         f"Reason: A qualifying {classification_label.lower()} {direction_lower} H4 breakout "
         f"has occurred in line with the active Daily {direction_lower} breakout. "
         f"This is a continuation of the established bias.",
+        "",
+        _context_line(alert),
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
@@ -262,6 +274,8 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
         "",
         f"Reason: {reason}",
         "",
+        _context_line(alert),
+        "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
         "— TradingView Feed",
@@ -306,6 +320,8 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
         "",
         f"Reason: Price rejected from an H4 {direction_lower} OC level at {level_str}, "
         f"confirming continuation of the active Daily {direction_lower} bias.",
+        "",
+        _context_line(alert),
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",

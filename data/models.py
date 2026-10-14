@@ -144,3 +144,4 @@ class AlertRecord:
     classification: AlertClassification = AlertClassification.ORIGIN
     h4_oc_level: Optional[float] = None         # set for CONTINUATION_H4_OC
     h4_breaker_level: Optional[float] = None    # set for CONTINUATION_H4_BREAKER
+    daily_level_context: str = "internal"       # "external" or "internal" Daily level

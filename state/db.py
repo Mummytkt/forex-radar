@@ -339,6 +339,16 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         if col_name not in journal_cols:
             conn.execute(f"ALTER TABLE journal_entries ADD COLUMN {col_def}")
 
+    # Add external level tracking to instrument_state
+    istate_cols = {row[1] for row in conn.execute("PRAGMA table_info(instrument_state)").fetchall()}
+    for col_def in [
+        "external_level REAL",
+        "external_level_direction TEXT",
+    ]:
+        col_name = col_def.split()[0]
+        if col_name not in istate_cols:
+            conn.execute(f"ALTER TABLE instrument_state ADD COLUMN {col_def}")
+
     # Add price alert tables if missing (handles existing DBs from before this feature)
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     if "instrument_prices" not in tables:

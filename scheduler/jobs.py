@@ -33,6 +33,7 @@ from data.client import TwelveDataClient, TwelveDataError
 from data.normalizer import normalize_candles, aggregate_h4_from_1h, symbol_to_instrument, instrument_to_symbol
 from data.models import Timeframe
 from analysis.engine import EngineInput, run_engine_cycle
+from data.models import Direction
 from alerts.formatter import format_alert
 from alerts.telegram import send_alert
 from state import repository as repo
@@ -191,6 +192,13 @@ async def process_instrument_cycle(
     last_alert_h4_ts = state.last_alert_h4_ts if state else None
     last_h4_breaker_level = state.last_h4_breaker_level if state else None
     retest_started_h4_ts = state.retest_started_h4_ts if state else None
+    external_level = state.external_level if state else None
+    external_level_direction: Direction | None = None
+    if state and state.external_level_direction:
+        try:
+            external_level_direction = Direction(state.external_level_direction)
+        except ValueError:
+            pass
 
     pip_size = pip_size_for(instrument)
 
@@ -208,6 +216,8 @@ async def process_instrument_cycle(
         last_alert_h4_ts=last_alert_h4_ts,
         last_h4_breaker_level=last_h4_breaker_level,
         retest_started_h4_ts=retest_started_h4_ts,
+        external_level=external_level,
+        external_level_direction=external_level_direction,
     )
 
     # ── Run engine ────────────────────────────────────────────────────────────
@@ -241,6 +251,8 @@ async def process_instrument_cycle(
                 last_alert_h4_ts=None,
                 last_h4_breaker_level=None,
                 retest_started_h4_ts=None,
+                external_level=None,
+                external_level_direction=None,
             ),
         )
         return
@@ -321,6 +333,13 @@ async def process_instrument_cycle(
     if out.active_reaction_src is not None:
         active_src_id = out.active_reaction_src.db_id
 
+    # Carry forward or update external level
+    final_ext_level = out.new_external_level if out.new_external_level is not None else external_level
+    final_ext_dir = (
+        out.new_external_direction.value if out.new_external_direction is not None
+        else (external_level_direction.value if external_level_direction is not None else None)
+    )
+
     # ── Update instrument state ───────────────────────────────────────────────
     repo.upsert_instrument_state(
         conn,
@@ -336,6 +355,8 @@ async def process_instrument_cycle(
             last_alert_h4_ts=out.last_alert_h4_ts,
             last_h4_breaker_level=out.last_h4_breaker_level,
             retest_started_h4_ts=out.retest_started_h4_ts,
+            external_level=final_ext_level,
+            external_level_direction=final_ext_dir,
         ),
     )
 

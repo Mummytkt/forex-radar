@@ -17,7 +17,8 @@ The confirmation chain (all steps required for ORIGIN):
 After an ORIGIN alert, CONTINUATION alerts fire without needing a new Daily retest:
   • CONTINUATION_ASHAPE: any subsequent H4 A/V formation broken in the daily direction.
   • CONTINUATION_H4_OC: price reacts from a bullish/bearish H4 OC (two consecutive
-    same-direction H4 candles), closing beyond the OC midpoint.
+    same-direction H4 candles), closing beyond the OC level (c1.close junction price).
+    The reacting candle must be distinct from the candle that completed the OC pair.
 
 A new opposing Daily breakout resets everything and starts a fresh origin cycle.
 """
@@ -65,6 +66,8 @@ class EngineInput:
     last_alert_h4_ts: Optional[datetime] = None   # timestamp of confirming H4 candle from last alert
     last_h4_breaker_level: Optional[float] = None # body level of the H4 formation broken in last alert
     retest_started_h4_ts: Optional[datetime] = None  # H4 candle timestamp when retest first detected
+    external_level: Optional[float] = None        # most extreme A/V level bounding the current trend
+    external_level_direction: Optional[Direction] = None  # direction of the external level
 
 
 @dataclass
@@ -89,6 +92,48 @@ class EngineOutput:
     # True when the active breakout was invalidated (price returned through the
     # broken level). Caller should deactivate the breakout and go IDLE.
     invalidated: bool = False
+    # Updated external level (set when a new breakout fires or level is reset)
+    new_external_level: Optional[float] = None
+    new_external_direction: Optional[Direction] = None
+
+
+def _compute_external_level(daily_candles: list[Candle], direction: Direction) -> Optional[float]:
+    """
+    Derive the external bounding level for the current trend direction.
+    BEARISH trend → external HIGH = highest A-shape body_high in history.
+    BULLISH trend → external LOW  = lowest  V-shape body_low  in history.
+    Returns None if no qualifying formation exists.
+    """
+    from analysis.formations import detect_a_shape, detect_v_shape
+    if direction == Direction.BEARISH:
+        shapes = detect_a_shape(daily_candles)
+        return max((f.level for f in shapes), default=None)
+    else:
+        shapes = detect_v_shape(daily_candles)
+        return min((f.level for f in shapes), default=None)
+
+
+def _classify_daily_level(
+    daily_candles: list[Candle],
+    external_level: Optional[float],
+    external_direction: Optional[Direction],
+    alert_direction: Direction,
+    tolerance: float,
+) -> str:
+    """
+    Return "external" if recent Daily candles show price tested the external level
+    before this alert triggered, "internal" otherwise.
+
+    Checks the last 5 Daily candles' body_high (bearish) or body_low (bullish)
+    against the external level within tolerance.
+    """
+    if external_level is None or external_direction != alert_direction:
+        return "internal"
+    recent = daily_candles[-5:]
+    if alert_direction == Direction.BEARISH:
+        return "external" if any(c.body_high >= external_level - tolerance for c in recent) else "internal"
+    else:
+        return "external" if any(c.body_low <= external_level + tolerance for c in recent) else "internal"
 
 
 def _h4_level_retested(candle: Candle, level: float, tolerance: float, direction: Direction) -> bool:
@@ -207,6 +252,11 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
         out.continuation_mode = False
         out.last_alert_h4_ts = None
         out.last_h4_breaker_level = None
+        # Compute or reset external level for the new trend direction
+        ext = _compute_external_level(inp.daily_candles, new_breakout.direction)
+        if ext is not None:
+            out.new_external_level = ext
+            out.new_external_direction = new_breakout.direction
         return out
 
     # No new breakout this cycle — carry forward existing state
@@ -347,6 +397,11 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
 
         if h4_event is not None:
             out.h4_event = h4_event
+            _tol = inp.tolerance_pips * inp.pip_size
+            _ctx = _classify_daily_level(
+                inp.daily_candles, inp.external_level, inp.external_level_direction,
+                active_breakout.direction, _tol,
+            )
             out.alert_to_send = AlertRecord(
                 instrument=inp.instrument,
                 direction=active_breakout.direction,
@@ -355,6 +410,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                 h4_event=h4_event,
                 fired_at=latest_h4.timestamp,
                 classification=AlertClassification.ORIGIN,
+                daily_level_context=_ctx,
             )
 
             # Source consumed; clear retest state; enable continuation mode
@@ -419,6 +475,10 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                         break
 
             if breaker_fired and breaker_level_hit is not None:
+                _ctx_br = _classify_daily_level(
+                    inp.daily_candles, inp.external_level, inp.external_level_direction,
+                    active_breakout.direction, tol,
+                )
                 out.alert_to_send = AlertRecord(
                     instrument=inp.instrument,
                     direction=active_breakout.direction,
@@ -428,6 +488,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                     fired_at=latest_h4.timestamp,
                     classification=AlertClassification.CONTINUATION_H4_BREAKER,
                     h4_breaker_level=breaker_level_hit,
+                    daily_level_context=_ctx_br,
                 )
                 out.retest_in_progress = False
                 out.active_reaction_src = None
@@ -444,6 +505,10 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
             )
             if h4_event_cont is not None:
                 out.h4_event = h4_event_cont
+                _ctx_cont = _classify_daily_level(
+                    inp.daily_candles, inp.external_level, inp.external_level_direction,
+                    active_breakout.direction, tol,
+                )
                 out.alert_to_send = AlertRecord(
                     instrument=inp.instrument,
                     direction=active_breakout.direction,
@@ -452,6 +517,7 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                     h4_event=h4_event_cont,
                     fired_at=latest_h4.timestamp,
                     classification=AlertClassification.CONTINUATION_ASHAPE,
+                    daily_level_context=_ctx_cont,
                 )
                 out.retest_in_progress = False
                 out.active_reaction_src = None
@@ -462,8 +528,17 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
 
             # ── 4c: Continuation H4 OC reaction ───────────────────────────────
             h4_oc_levels = detect_h4_oc_levels(post_last_alert_h4, active_breakout.direction)
-            for oc_midpoint, _oc_ts in h4_oc_levels:
-                if is_h4_oc_triggered(latest_h4, oc_midpoint, tol, active_breakout.direction):
+            for oc_level, oc_ts in h4_oc_levels:
+                # The OC must have been established by a PRIOR candle — skip any
+                # OC whose completing candle IS latest_h4, otherwise the alert
+                # fires the instant the OC forms without a separate reaction.
+                if oc_ts >= latest_h4.timestamp:
+                    continue
+                if is_h4_oc_triggered(latest_h4, oc_level, tol, active_breakout.direction):
+                    _ctx_oc = _classify_daily_level(
+                        inp.daily_candles, inp.external_level, inp.external_level_direction,
+                        active_breakout.direction, tol,
+                    )
                     out.alert_to_send = AlertRecord(
                         instrument=inp.instrument,
                         direction=active_breakout.direction,
@@ -472,7 +547,8 @@ def run_engine_cycle(inp: EngineInput) -> EngineOutput:
                         h4_event=None,
                         fired_at=latest_h4.timestamp,
                         classification=AlertClassification.CONTINUATION_H4_OC,
-                        h4_oc_level=oc_midpoint,
+                        h4_oc_level=oc_level,
+                        daily_level_context=_ctx_oc,
                     )
                     out.retest_in_progress = False
                     out.active_reaction_src = None

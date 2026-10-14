@@ -625,13 +625,15 @@ def admin_reset_instrument(request: Request, body: dict):
             # Reset all instrument state
             conn.execute(
                 """UPDATE instrument_state
-                   SET active_breakout_id     = NULL,
-                       retest_in_progress     = 0,
-                       active_reaction_src_id = NULL,
-                       retest_started_h4_ts   = NULL,
-                       continuation_mode      = 0,
-                       last_alert_h4_ts       = NULL,
-                       last_h4_breaker_level  = NULL
+                   SET active_breakout_id       = NULL,
+                       retest_in_progress       = 0,
+                       active_reaction_src_id   = NULL,
+                       retest_started_h4_ts     = NULL,
+                       continuation_mode        = 0,
+                       last_alert_h4_ts         = NULL,
+                       last_h4_breaker_level    = NULL,
+                       external_level           = NULL,
+                       external_level_direction = NULL
                    WHERE instrument = ?""",
                 (inst,),
             )

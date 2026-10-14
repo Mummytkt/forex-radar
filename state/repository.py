@@ -54,6 +54,8 @@ class InstrumentStateRow:
     last_alert_h4_ts: Optional[datetime] = None
     last_h4_breaker_level: Optional[float] = None
     retest_started_h4_ts: Optional[datetime] = None
+    external_level: Optional[float] = None
+    external_level_direction: Optional[str] = None  # 'bearish' or 'bullish'
 
 
 def get_instrument_state(conn: sqlite3.Connection, instrument: str) -> Optional[InstrumentStateRow]:
@@ -75,6 +77,8 @@ def get_instrument_state(conn: sqlite3.Connection, instrument: str) -> Optional[
         last_alert_h4_ts=_str_dt(row["last_alert_h4_ts"]) if ("last_alert_h4_ts" in keys and row["last_alert_h4_ts"]) else None,
         last_h4_breaker_level=float(row["last_h4_breaker_level"]) if ("last_h4_breaker_level" in keys and row["last_h4_breaker_level"] is not None) else None,
         retest_started_h4_ts=_str_dt(row["retest_started_h4_ts"]) if ("retest_started_h4_ts" in keys and row["retest_started_h4_ts"]) else None,
+        external_level=float(row["external_level"]) if ("external_level" in keys and row["external_level"] is not None) else None,
+        external_level_direction=row["external_level_direction"] if ("external_level_direction" in keys and row["external_level_direction"]) else None,
     )
 
 
@@ -85,19 +89,22 @@ def upsert_instrument_state(conn: sqlite3.Connection, state: InstrumentStateRow)
             (instrument, last_daily_candle_ts, last_h4_candle_ts,
              active_breakout_id, retest_in_progress, active_reaction_src_id,
              continuation_mode, last_alert_h4_ts, last_h4_breaker_level,
-             retest_started_h4_ts, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             retest_started_h4_ts, external_level, external_level_direction,
+             updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(instrument) DO UPDATE SET
-            last_daily_candle_ts   = excluded.last_daily_candle_ts,
-            last_h4_candle_ts      = excluded.last_h4_candle_ts,
-            active_breakout_id     = excluded.active_breakout_id,
-            retest_in_progress     = excluded.retest_in_progress,
-            active_reaction_src_id = excluded.active_reaction_src_id,
-            continuation_mode      = excluded.continuation_mode,
-            last_alert_h4_ts       = excluded.last_alert_h4_ts,
-            last_h4_breaker_level  = excluded.last_h4_breaker_level,
-            retest_started_h4_ts   = excluded.retest_started_h4_ts,
-            updated_at             = excluded.updated_at
+            last_daily_candle_ts      = excluded.last_daily_candle_ts,
+            last_h4_candle_ts         = excluded.last_h4_candle_ts,
+            active_breakout_id        = excluded.active_breakout_id,
+            retest_in_progress        = excluded.retest_in_progress,
+            active_reaction_src_id    = excluded.active_reaction_src_id,
+            continuation_mode         = excluded.continuation_mode,
+            last_alert_h4_ts          = excluded.last_alert_h4_ts,
+            last_h4_breaker_level     = excluded.last_h4_breaker_level,
+            retest_started_h4_ts      = excluded.retest_started_h4_ts,
+            external_level            = excluded.external_level,
+            external_level_direction  = excluded.external_level_direction,
+            updated_at                = excluded.updated_at
         """,
         (
             state.instrument,
@@ -110,6 +117,8 @@ def upsert_instrument_state(conn: sqlite3.Connection, state: InstrumentStateRow)
             _dt_str(state.last_alert_h4_ts) if state.last_alert_h4_ts else None,
             state.last_h4_breaker_level,
             _dt_str(state.retest_started_h4_ts) if state.retest_started_h4_ts else None,
+            state.external_level,
+            state.external_level_direction,
             _dt_str(state.updated_at),
         ),
     )
