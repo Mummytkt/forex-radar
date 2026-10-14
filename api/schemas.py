@@ -84,6 +84,8 @@ class JournalEntryCreate(BaseModel):
     amount_aimed: Optional[float] = None
     result: str = "open"
     setup_type: str = "other"
+    setup_type_notes: Optional[str] = None
+    trade_type: str = "live"
     h4_break_type: Optional[str] = None
     entry_date: Optional[str] = None
     exit_date: Optional[str] = None
@@ -113,6 +115,8 @@ class JournalEntryUpdate(BaseModel):
     amount_aimed: Optional[float] = None
     result: Optional[str] = None
     setup_type: Optional[str] = None
+    setup_type_notes: Optional[str] = None
+    trade_type: Optional[str] = None
     h4_break_type: Optional[str] = None
     entry_date: Optional[str] = None
     exit_date: Optional[str] = None

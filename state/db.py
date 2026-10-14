@@ -328,7 +328,13 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
 
     # Add new columns to existing journal_entries tables
     journal_cols = {row[1] for row in conn.execute("PRAGMA table_info(journal_entries)").fetchall()}
-    for col_def in ["amount_risked REAL", "amount_aimed REAL", "h4_break_type TEXT", "entry_date TEXT", "exit_date TEXT", "trigger_time TEXT", "entry_time TEXT", "exit_time TEXT"]:
+    for col_def in [
+        "amount_risked REAL", "amount_aimed REAL", "h4_break_type TEXT",
+        "entry_date TEXT", "exit_date TEXT", "trigger_time TEXT",
+        "entry_time TEXT", "exit_time TEXT",
+        "setup_type_notes TEXT",
+        "trade_type TEXT NOT NULL DEFAULT 'live'",
+    ]:
         col_name = col_def.split()[0]
         if col_name not in journal_cols:
             conn.execute(f"ALTER TABLE journal_entries ADD COLUMN {col_def}")

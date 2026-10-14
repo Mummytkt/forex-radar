@@ -446,6 +446,8 @@ def _row_to_entry(row) -> JournalEntry:
         amount_aimed=row["amount_aimed"] if "amount_aimed" in cols else None,
         result=row["result"],
         setup_type=row["setup_type"],
+        setup_type_notes=row["setup_type_notes"] if "setup_type_notes" in cols else None,
+        trade_type=row["trade_type"] if "trade_type" in cols else "live",
         h4_break_type=row["h4_break_type"] if "h4_break_type" in cols else None,
         entry_date=row["entry_date"] if "entry_date" in cols else None,
         exit_date=row["exit_date"] if "exit_date" in cols else None,
@@ -459,12 +461,16 @@ def _row_to_entry(row) -> JournalEntry:
 
 
 @router.get("/journal", response_model=list[JournalEntry])
-def get_journal(request: Request, period: str = Query("all")):
+def get_journal(request: Request, period: str = Query("all"), trade_type: str = Query("live")):
     where, params = _journal_period_clause(period)
+    if where:
+        full_where = f"{where} AND trade_type = ?"
+    else:
+        full_where = "WHERE trade_type = ?"
     with _db(request) as conn:
         rows = conn.execute(
-            f"SELECT * FROM journal_entries {where} ORDER BY trade_date DESC, id DESC",
-            params,
+            f"SELECT * FROM journal_entries {full_where} ORDER BY trade_date DESC, id DESC",
+            params + [trade_type],
         ).fetchall()
     return [_row_to_entry(r) for r in rows]
 
@@ -476,15 +482,15 @@ def create_journal_entry(request: Request, body: JournalEntryCreate):
             """INSERT INTO journal_entries
                (trade_date, instrument, direction, entry_price, stop_loss, take_profit,
                 exit_price, pips, rr_ratio, amount_risked, amount_aimed,
-                result, setup_type, h4_break_type, entry_date, exit_date,
-               trigger_time, entry_time, exit_time, session, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                result, setup_type, setup_type_notes, trade_type, h4_break_type,
+                entry_date, exit_date, trigger_time, entry_time, exit_time, session, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (body.trade_date, body.instrument, body.direction,
              body.entry_price, body.stop_loss, body.take_profit,
              body.exit_price, body.pips, body.rr_ratio,
              body.amount_risked, body.amount_aimed,
-             body.result, body.setup_type, body.h4_break_type,
-             body.entry_date, body.exit_date,
+             body.result, body.setup_type, body.setup_type_notes, body.trade_type,
+             body.h4_break_type, body.entry_date, body.exit_date,
              body.trigger_time, body.entry_time, body.exit_time,
              body.session, body.notes),
         )
@@ -518,12 +524,16 @@ def delete_journal_entry(entry_id: int, request: Request):
 
 
 @router.get("/journal/export.csv")
-def export_journal_csv(request: Request, period: str = Query("all")):
+def export_journal_csv(request: Request, period: str = Query("all"), trade_type: str = Query("live")):
     where, params = _journal_period_clause(period)
+    if where:
+        full_where = f"{where} AND trade_type = ?"
+    else:
+        full_where = "WHERE trade_type = ?"
     with _db(request) as conn:
         rows = conn.execute(
-            f"SELECT * FROM journal_entries {where} ORDER BY trade_date DESC, id DESC",
-            params,
+            f"SELECT * FROM journal_entries {full_where} ORDER BY trade_date DESC, id DESC",
+            params + [trade_type],
         ).fetchall()
 
     buf = io.StringIO()
