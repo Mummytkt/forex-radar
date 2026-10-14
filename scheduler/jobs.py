@@ -22,6 +22,7 @@ Instruments are processed sequentially within each job to avoid bursting.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -323,7 +324,26 @@ async def process_instrument_cycle(
                     _send = False
 
             if _send:
-                await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+                # Deliver to every user who has a telegram_chat_id and watches this instrument.
+                # watched_instruments is stored with slashes (e.g. "EUR/USD"); alert.instrument
+                # uses no slashes internally (e.g. "EURUSD") — normalise for comparison.
+                instr_no_slash = alert.instrument.replace("/", "").upper()
+                recipients = conn.execute(
+                    "SELECT telegram_chat_id, watched_instruments FROM users "
+                    "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+                ).fetchall()
+                sent_any = False
+                for rec in recipients:
+                    raw_watched = rec["watched_instruments"]
+                    if raw_watched:
+                        watched = [w.replace("/", "").upper() for w in json.loads(raw_watched)]
+                        if instr_no_slash not in watched:
+                            continue
+                    await send_alert(config.telegram_bot_token, rec["telegram_chat_id"], alert_text)
+                    sent_any = True
+                # Fallback: if no users have chat IDs set, use the global config chat ID
+                if not sent_any and config.telegram_chat_id:
+                    await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
             else:
                 logger.info("Alert suppressed by preference filter: %s %s breakout", alert.instrument, _cls)
         else:
