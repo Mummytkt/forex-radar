@@ -541,7 +541,7 @@ plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed,
 // ── State label — shows script's current understanding at the latest bar ──────
 string _state_txt = "IDLE - no breakout detected"
 if not na(bo_dir) and not h4_bo_fired and retest_on
-    _state_txt := "RETEST | " + retest_src
+    _state_txt := (bo_dir == "bullish" ? "Bullish" : "Bearish") + " Retest | " + retest_src
 else if not na(bo_dir) and not h4_bo_fired
     _state_txt := "BREAKOUT | " + bo_dir + " | awaiting retest"
 else if h4_bo_fired and h4_aligned
