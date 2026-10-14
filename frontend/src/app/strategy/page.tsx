@@ -195,7 +195,7 @@ export default function StrategyPage() {
           <Step n={1} title="Daily Breakout" body="The engine identifies A-shapes (bearish resistance) and V-shapes (bullish support) on the Daily chart using body-only levels — never wicks. A breakout occurs when a Daily candle closes beyond the most recent A or V body level." />
           <Step n={2} title="Reaction Source Identification" body="After a breakout, the engine identifies up to 4 types of reaction sources: the Daily Breaker level, OC levels inside the pre-breakout range, A/V levels inside the range, and post-breakout OC levels. These become the zones price must retest." />
           <Step n={3} title="Retest Detection" body="When an H4 candle's high or low (including wicks) touches any active reaction source band, the engine flags a retest in progress. The band is the source level ± the configured tolerance (default 5 pips)." />
-          <Step n={4} title="H4 Confirmation" body="With a retest in progress, the engine checks subsequent H4 candles for a qualifying H4 A-shape or V-shape breakout that closes beyond the body level. This confirms directional alignment between the Daily and H4 timeframes, triggering the alert." />
+          <Step n={4} title="H4 Confirmation" body="With a retest in progress, the engine checks subsequent H4 candles for a qualifying confirmation: (a) an H4 A-shape or V-shape breakout — candle closes beyond the body level of an H4 formation in the breakout direction, or (b) an H4 OC reaction — candle wicks into an H4 OC zone and closes beyond the OC level in the breakout direction. Either confirms Daily + H4 alignment and triggers the alert." />
         </Card>
 
         <Card title="Formation Types">
@@ -204,7 +204,7 @@ export default function StrategyPage() {
           <Def term="V-Shape (Bullish support)"
             def="Two consecutive Daily candles where candle 1 is bearish and candle 2 is bullish. The level is candle 1's body low (min of open/close, never the wick)." />
           <Def term="OC (Open-Close level)"
-            def="Formed when 2+ consecutive same-direction candles run. Each consecutive pair produces an OC level at the midpoint of their two closes. A run of 3 candles produces exactly 2 independent OC levels." />
+            def="Formed when 2+ consecutive same-direction candles run. The OC level is the close of the first candle in each consecutive pair (the junction price — not the midpoint). A run of 3 candles produces exactly 2 independent OC levels." />
         </Card>
 
         <Card title="H4 Breakout Classification">
@@ -212,6 +212,23 @@ export default function StrategyPage() {
             {[
               { label: 'External', color: 'var(--accent)', bg: 'var(--accent-bg)', desc: 'The H4 candle closes beyond the outermost H4 formation — the swing boundary. This is the conservative confirmation.' },
               { label: 'Internal', color: 'var(--warning)', bg: 'var(--warning-bg)', desc: 'The H4 candle closes beyond an inner H4 formation that formed after the outer swing. This is an earlier, more aggressive confirmation.' },
+            ].map(({ label, color, bg, desc }) => (
+              <div key={label} style={{ background: bg, border: `1px solid ${color}30`, borderRadius: 10, padding: 16 }}>
+                <p style={{ fontWeight: 700, fontSize: 14, color, marginBottom: 8 }}>{label}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Daily Level Context">
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 16 }}>
+            Every alert includes a Daily level context tag that tells you where price is relative to the overall swing structure at the time of confirmation.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {[
+              { label: 'External', color: 'var(--bullish)', bg: 'var(--bullish-bg)', desc: 'Price has reached or broken through the outermost A/V formation that originally bounded the trend. Confirms the move is pushing the extremes of the structure — the strongest context.' },
+              { label: 'Internal', color: 'var(--warning)', bg: 'var(--warning-bg)', desc: 'Price confirmed within the range bounded by prior A/V formations. The bias is valid but price has not yet reached the outer structural boundary.' },
             ].map(({ label, color, bg, desc }) => (
               <div key={label} style={{ background: bg, border: `1px solid ${color}30`, borderRadius: 10, padding: 16 }}>
                 <p style={{ fontWeight: 700, fontSize: 14, color, marginBottom: 8 }}>{label}</p>
