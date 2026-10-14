@@ -22,7 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from alerts.formatter import format_alert
+from alerts.formatter import format_alert, format_entry_alert
 from alerts.telegram import send_alert
 from config import pip_size_for
 from data.models import (
@@ -93,7 +93,10 @@ class TVWebhookPayload(BaseModel):
     source_level: Optional[float] = None     # reaction source level (OC midpoint, or bo_level for others)
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
     cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | breaker_origin | breaker_cont | oc_cont
-    price: Optional[float] = None      # current close price (PRICE_UPDATE)
+    price: Optional[float] = None      # current close price (PRICE_UPDATE / ENTRY_CONFIRMATION)
+    pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "engulfing_sweep"
+    timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
+    swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
 
 
 def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
@@ -134,6 +137,8 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
         _handle_invalidated(conn, instrument)
     elif event_type == "H4_CONTINUATION":
         await _handle_h4_continuation(conn, config, instrument, payload)
+    elif event_type == "ENTRY_CONFIRMATION":
+        await _handle_entry_confirmation(conn, config, instrument, payload)
     elif event_type == "PRICE_UPDATE":
         await _handle_price_update(conn, config, instrument, payload)
     else:
@@ -530,6 +535,69 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
 
         if config.telegram_enabled and chat_id:
             await send_alert(config.telegram_bot_token, chat_id, text)
+
+
+async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
+    """
+    H1/H2 entry-pattern confirmation (PCL or Engulfing Sweep).
+    Gated by three requirements before firing a Telegram alert:
+      1. The pair must have an active Daily breakout.
+      2. The pattern direction must match the active bias direction.
+      3. Price must be within tolerance of the broken level or an active
+         reaction source level — the user is only interested in entries
+         AT the key level, not random H1/H2 sweeps.
+    """
+    direction = payload.direction
+    pattern = payload.pattern
+    tf = payload.timeframe or "60"
+    price = payload.price
+    swept_level = payload.swept_level
+
+    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "engulfing_sweep"):
+        logger.warning("%s ENTRY_CONFIRMATION ignored — bad direction/pattern (%s/%s)",
+                       instrument, direction, pattern)
+        return
+    if price is None or swept_level is None:
+        logger.warning("%s ENTRY_CONFIRMATION ignored — missing price/swept_level", instrument)
+        return
+
+    breakout = get_active_breakout(conn, instrument)
+    if breakout is None:
+        logger.info("%s ENTRY_CONFIRMATION skipped — no active bias", instrument)
+        return
+
+    if breakout.direction.value != direction:
+        logger.info("%s ENTRY_CONFIRMATION skipped — direction %s does not match active bias %s",
+                    instrument, direction, breakout.direction.value)
+        return
+
+    # Price proximity gate: within 30 pips of broken_level or any active reaction source.
+    pip_size = pip_size_for(instrument)
+    proximity = 30 * pip_size
+
+    candidate_levels = [breakout.broken_level]
+    for src in get_active_reaction_sources(conn, instrument):
+        candidate_levels.append(src.level)
+
+    if not any(abs(price - lvl) <= proximity for lvl in candidate_levels):
+        logger.info("%s ENTRY_CONFIRMATION skipped — price %.5f not near any key level %s",
+                    instrument, price, candidate_levels)
+        return
+
+    alert_text = format_entry_alert(
+        instrument=instrument,
+        direction=direction,
+        pattern=pattern,
+        timeframe=tf,
+        price=price,
+        swept_level=swept_level,
+    )
+
+    logger.info("%s ENTRY_CONFIRMATION %s %s on TF %s @ %.5f — delivering alert",
+                instrument, direction, pattern, tf, price)
+
+    if config.telegram_enabled:
+        await _deliver_alert(conn, config, instrument, alert_text)
 
 
 def _handle_invalidated(conn, instrument: str) -> None:

@@ -591,3 +591,84 @@ def _reason_origin(
         f"The reaction produced a qualifying {classification_lower} "
         f"{direction_lower} H4 breakout, aligning the Daily and H4 directions."
     )
+
+
+# ── Entry confirmation alert (PCL / Engulfing Sweep) ──────────────────────────
+
+_ENTRY_PATTERN_NAMES: dict[str, str] = {
+    "pcl":              "MummyTKT's PCL",
+    "engulfing_sweep":  "Engulfing Sweep",
+}
+
+_TF_LABELS: dict[str, str] = {
+    "60":  "H1",
+    "120": "H2",
+    "240": "H4",
+}
+
+
+def format_entry_alert(
+    instrument: str,
+    direction: str,          # "bullish" | "bearish"
+    pattern: str,            # "pcl" | "engulfing_sweep"
+    timeframe: str,          # pine's timeframe.period, e.g. "60" / "120"
+    price: float,
+    swept_level: float,
+) -> str:
+    """Build the Telegram message for a PCL or Engulfing Sweep entry confirmation."""
+    direction_label = "Bullish" if direction == "bullish" else "Bearish"
+    direction_lower = direction_label.lower()
+    bias_side = "Buy" if direction == "bullish" else "Sell"
+
+    pattern_name = _ENTRY_PATTERN_NAMES.get(pattern, pattern.replace("_", " ").title())
+    tf_label = _TF_LABELS.get(timeframe, timeframe)
+
+    price_str = _fmt_level(instrument, price)
+    swept_str = _fmt_level(instrument, swept_level)
+
+    if pattern == "pcl":
+        if direction == "bearish":
+            desc = (
+                f"The {tf_label} candle wicked below the previous bullish body low "
+                f"@ {swept_str} but closed back above it — a liquidity sweep "
+                f"without a body close-through."
+            )
+        else:
+            desc = (
+                f"The {tf_label} candle wicked above the previous bearish body high "
+                f"@ {swept_str} but closed back below it — a liquidity sweep "
+                f"without a body close-through."
+            )
+    else:  # engulfing_sweep
+        if direction == "bearish":
+            desc = (
+                f"The {tf_label} candle swept the previous bullish body low "
+                f"@ {swept_str} AND closed below it — a full sweep with body "
+                f"close-through (stronger than a PCL)."
+            )
+        else:
+            desc = (
+                f"The {tf_label} candle swept the previous bearish body high "
+                f"@ {swept_str} AND closed above it — a full sweep with body "
+                f"close-through (stronger than a PCL)."
+            )
+
+    lines = [
+        f"ENTRY CONFIRMATION — {instrument}",
+        f"{pattern_name} · {tf_label} · {direction_label}",
+        "",
+        f"Pattern: {pattern_name} ({direction_lower})",
+        f"Timeframe: {tf_label}",
+        f"Swept level: {swept_str}",
+        f"Confirmation close: {price_str}",
+        "",
+        desc,
+        "",
+        f"Aligned with the active {bias_side} bias — look for your entry from here, "
+        f"managed per your plan.",
+        "",
+        "⚠️ Entry confirmation — not financial advice. Trade your own risk.",
+        "",
+        "— TradingView Feed",
+    ]
+    return "\n".join(lines)
