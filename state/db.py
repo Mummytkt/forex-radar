@@ -350,6 +350,11 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         if col_name not in journal_cols:
             conn.execute(f"ALTER TABLE journal_entries ADD COLUMN {col_def}")
 
+    # Add per-user instrument watch-list to users table
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "watched_instruments" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN watched_instruments TEXT")
+
     # Add external level tracking to instrument_state
     istate_cols = {row[1] for row in conn.execute("PRAGMA table_info(instrument_state)").fetchall()}
     for col_def in [

@@ -1,9 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Send, CheckCircle, XCircle, User, Save, Info, Check, Search, RefreshCw } from 'lucide-react'
+import { Send, CheckCircle, XCircle, User, Save, Check, Search, RefreshCw } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { loadUserName, saveUserName } from '@/lib/preferences'
-import { useAuth } from '@/lib/auth'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
@@ -60,7 +59,7 @@ function InstrumentManager() {
   const load = async () => {
     setLoading(true)
     try {
-      const r = await apiFetch('/api/config/instruments')
+      const r = await apiFetch('/api/user/instruments')
       const data = await r.json()
       setEnabled(data.instruments ?? [])
     } catch { /* ignore */ }
@@ -86,7 +85,7 @@ function InstrumentManager() {
     setSaving(true)
     setSaveResult(null)
     try {
-      const r = await apiFetch('/api/config/instruments', {
+      const r = await apiFetch('/api/user/instruments', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruments: enabled }),
@@ -177,8 +176,6 @@ function InstrumentManager() {
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth()
-  const isOwner = !user || user.role === 'OWNER'
   const [name, setName] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -207,22 +204,9 @@ export default function SettingsPage() {
       <TopBar title="Settings" subtitle="Instruments, account, and engine configuration" />
       <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {isOwner ? (
-          <Section title="Monitored Instruments" desc="Choose which pairs the engine analyses. Changes apply on the next TradingView webhook — no restart needed.">
-            <InstrumentManager />
-          </Section>
-        ) : (
-          <Section title="Monitored Instruments" desc="The platform owner controls which pairs the engine analyses.">
-            <div style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <Info size={15} color="var(--text-secondary)" style={{ marginTop: 1, flexShrink: 0 }} />
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Instruments are managed by the platform owner. To filter which pairs appear in your{' '}
-                <strong style={{ color: 'var(--text-primary)' }}>History</strong> view, go to{' '}
-                <a href="/preferences" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>Preferences</a>.
-              </p>
-            </div>
-          </Section>
-        )}
+        <Section title="My Instruments" desc="Select which pairs you want to receive alerts for. Your choices are private and don't affect other users.">
+          <InstrumentManager />
+        </Section>
 
         <Section title="Profile" desc="Your display name shown on the Overview greeting.">
           <div style={{ padding: '16px 20px' }}>

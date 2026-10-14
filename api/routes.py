@@ -344,6 +344,35 @@ def update_config_instruments(request: Request, body: InstrumentsUpdate):
     return {"ok": True, "count": len(instruments), "instruments": instruments}
 
 
+@router.get("/user/instruments")
+def get_user_instruments(request: Request):
+    """Return this user's personal instrument watch-list."""
+    uid = _user_id(request)
+    if uid:
+        with _db(request) as conn:
+            row = conn.execute("SELECT watched_instruments FROM users WHERE id = ?", (uid,)).fetchone()
+        if row and row[0]:
+            return {"instruments": json.loads(row[0])}
+    # No personal list yet — return the full engine list as default
+    return {"instruments": request.app.state.config.instruments}
+
+
+@router.put("/user/instruments")
+def update_user_instruments(request: Request, body: InstrumentsUpdate):
+    """Persist this user's personal instrument watch-list."""
+    instruments = [i.strip().upper() for i in body.instruments if i.strip()]
+    if not instruments:
+        raise HTTPException(status_code=400, detail="Must select at least one instrument.")
+    uid = _user_id(request)
+    if uid:
+        with _db_write(request) as conn:
+            conn.execute(
+                "UPDATE users SET watched_instruments = ? WHERE id = ?",
+                (json.dumps(instruments), uid),
+            )
+    return {"ok": True, "instruments": instruments}
+
+
 @router.get("/preferences", response_model=AlertPreferences)
 def get_preferences(request: Request):
     """Return the owner's alert-type delivery preferences."""
