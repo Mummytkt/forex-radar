@@ -216,13 +216,27 @@ def get_overview(request: Request):
 @router.get("/stats", response_model=Stats)
 def get_stats(request: Request):
     config = request.app.state.config
+    # Scope all counts to watched instruments only — orphan rows from removed
+    # instruments would otherwise inflate retests/breakouts counts vs the
+    # instruments page which only iterates config.instruments.
+    watched = config.instruments
+    if watched:
+        placeholders = ",".join("?" * len(watched))
+        inst_filter = f"AND instrument IN ({placeholders})"
+        inst_params = watched
+    else:
+        inst_filter = ""
+        inst_params = []
+
     with _db(request) as conn:
         active_breakouts = conn.execute(
-            "SELECT COUNT(*) FROM instrument_state WHERE active_breakout_id IS NOT NULL"
+            f"SELECT COUNT(*) FROM instrument_state WHERE active_breakout_id IS NOT NULL {inst_filter}",
+            inst_params,
         ).fetchone()[0]
 
         retests = conn.execute(
-            "SELECT COUNT(*) FROM instrument_state WHERE retest_in_progress = 1"
+            f"SELECT COUNT(*) FROM instrument_state WHERE retest_in_progress = 1 {inst_filter}",
+            inst_params,
         ).fetchone()[0]
 
         today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
