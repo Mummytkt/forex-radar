@@ -50,6 +50,12 @@ string h4_lbl_max_tf    = input.string("4H",    "H4 labels visible on",
      options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
      tooltip="H4 level labels appear on this timeframe and all lower timeframes. E.g. choose Daily to also see them on the daily chart.",
      group="Labels")
+color  bull_lbl_col     = input.color(color.new(color.green, 60), "Bullish state label color",
+     tooltip="Background color of the state label when direction is bullish (BREAKOUT / awaiting retest)",
+     group="Labels")
+color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state label color",
+     tooltip="Background color of the state label when direction is bearish (BREAKOUT / awaiting retest)",
+     group="Labels")
 
 // ── Timeframe visibility helpers ──────────────────────────────────────────────
 f_tf_str(opt) =>
@@ -643,9 +649,9 @@ else if h4_bo_fired and h4_aligned
 else if h4_bo_fired
     _lbl_col := color.blue
 else if bo_dir == "bullish"
-    _lbl_col := color.new(color.green, 10)
+    _lbl_col := bull_lbl_col
 else if bo_dir == "bearish"
-    _lbl_col := color.new(color.red, 10)
+    _lbl_col := bear_lbl_col
 
 var label _state_lbl = na
 label.delete(_state_lbl)
