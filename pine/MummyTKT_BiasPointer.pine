@@ -33,6 +33,15 @@ bool   show_daily_lbls = input.bool(true,  "Show Daily labels (D.A / D.V / D.OC)
 bool   show_h4_lbls    = input.bool(true,  "Show H4 labels (H4.A / H4.V / H4.OC / H4.BK)",
      tooltip="Toggle right-edge labels for H4 formation and breaker levels",
      group="Labels")
+bool   show_lvl_lines  = input.bool(false, "Show level lines (extend right)",
+     tooltip="Draw a horizontal line from each level's origin extending to the right",
+     group="Labels")
+color  daily_line_col  = input.color(color.new(color.gray, 20), "Daily line color",
+     tooltip="Color for D.A / D.V / D.OC lines",
+     group="Labels")
+color  h4_line_col     = input.color(color.new(color.gray, 40), "H4 line color",
+     tooltip="Color for H4.A / H4.V / H4.OC / H4.BK lines",
+     group="Labels")
 
 float pip = syminfo.mintick * 10.0
 float tol = float(tol_pips) * pip
@@ -74,6 +83,15 @@ var float  h4c_oc_close1         = na
 var float  h4c_oc_lvl            = na
 var bool   h4c_oc_ready          = false
 
+// ── Level origin bar tracking (for extend-right lines) ───────────────────────
+var int    a_origin   = na
+var int    v_origin   = na
+var int    poc_origin = na
+var int    h4a_origin = na
+var int    h4v_origin = na
+var int    bk_origin  = na
+var int    h4c_origin = na
+
 // ── Daily block ───────────────────────────────────────────────────────────────
 bool new_daily = timeframe.change("D")
 if new_daily
@@ -86,9 +104,11 @@ if new_daily
 
     // ── Daily formation detection ─────────────────────────────────────────
     if p_bull and d_bear
-        a_lvl := math.max(d_open1, d_close1)
+        a_lvl    := math.max(d_open1, d_close1)
+        a_origin := bar_index
     if p_bear and d_bull
-        v_lvl := math.min(d_open1, d_close1)
+        v_lvl    := math.min(d_open1, d_close1)
+        v_origin := bar_index
 
     // ── INVALIDATED ───────────────────────────────────────────────────────
     if not na(bo_dir) and not na(bo_level)
@@ -214,8 +234,9 @@ if new_daily
             if pb_consec == 1
                 pb_close1 := d_close
             else if pb_consec >= 2
-                pb_oc_lvl := (pb_close1 + d_close) / 2.0
-                pb_close1 := d_close
+                pb_oc_lvl  := (pb_close1 + d_close) / 2.0
+                poc_origin := bar_index
+                pb_close1  := d_close
         else
             pb_consec := 0
 
@@ -232,13 +253,15 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
 
     bool new_a = h4_bull1 and h4_bear0
     if new_a
-        h4_a_lvl := math.max(open[1], close[1])
-        h4_a_pre := not retest_on
+        h4_a_lvl   := math.max(open[1], close[1])
+        h4a_origin := bar_index
+        h4_a_pre   := not retest_on
 
     bool new_v = h4_bear1 and h4_bull0
     if new_v
-        h4_v_lvl := math.min(open[1], close[1])
-        h4_v_pre := not retest_on
+        h4_v_lvl   := math.min(open[1], close[1])
+        h4v_origin := bar_index
+        h4_v_pre   := not retest_on
 
     // ── Establishment tracking ────────────────────────────────────────────
     if bo_dir == "bullish" and close > band_hi
@@ -321,6 +344,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_bo_fired           := true
                 h4_aligned            := true
                 h4_breaker_lvl        := h4_a_lvl
+                bk_origin             := bar_index
                 h4_invalid_lvl        := h4_v_lvl
                 h4c_consec            := 0
                 h4c_oc_close1         := na
@@ -339,6 +363,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             else
                 h4_aligned            := true
                 h4_breaker_lvl        := h4_a_lvl
+                bk_origin             := bar_index
                 h4_invalid_lvl        := h4_v_lvl
                 h4c_consec            := 0
                 h4c_oc_close1         := na
@@ -360,6 +385,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_bo_fired           := true
                 h4_aligned            := true
                 h4_breaker_lvl        := h4_v_lvl
+                bk_origin             := bar_index
                 h4_invalid_lvl        := h4_a_lvl
                 h4c_consec            := 0
                 h4c_oc_close1         := na
@@ -378,6 +404,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             else
                 h4_aligned            := true
                 h4_breaker_lvl        := h4_v_lvl
+                bk_origin             := bar_index
                 h4_invalid_lvl        := h4_a_lvl
                 h4c_consec            := 0
                 h4c_oc_close1         := na
@@ -408,6 +435,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
                 h4_aligned            := true
                 h4_breaker_lvl        := h4_a_lvl
+                bk_origin             := bar_index
                 h4_invalid_lvl        := h4_v_lvl
                 h4c_consec            := 0
                 h4c_oc_close1         := na
@@ -423,6 +451,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
                 h4_aligned            := true
                 h4_breaker_lvl        := h4_v_lvl
+                bk_origin             := bar_index
                 h4_invalid_lvl        := h4_a_lvl
                 h4c_consec            := 0
                 h4c_oc_close1         := na
@@ -443,9 +472,10 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if h4c_consec == 1
                     h4c_oc_close1 := close
                 else if h4c_consec >= 2
-                    h4c_oc_lvl   := (h4c_oc_close1 + close) / 2.0
+                    h4c_oc_lvl    := (h4c_oc_close1 + close) / 2.0
+                    h4c_origin    := bar_index
                     h4c_oc_close1 := close
-                    h4c_oc_ready := true
+                    h4c_oc_ready  := true
             else
                 h4c_consec := 0
 
@@ -505,6 +535,14 @@ var label _poc_lbl = na
 var label _bk_lbl  = na
 var label _h4c_lbl = na
 
+var line _a_line   = na
+var line _v_line   = na
+var line _h4a_line = na
+var line _h4v_line = na
+var line _poc_line = na
+var line _bk_line  = na
+var line _h4c_line = na
+
 label.delete(_a_lbl)
 label.delete(_v_lbl)
 label.delete(_h4a_lbl)
@@ -512,6 +550,14 @@ label.delete(_h4v_lbl)
 label.delete(_poc_lbl)
 label.delete(_bk_lbl)
 label.delete(_h4c_lbl)
+
+line.delete(_a_line)
+line.delete(_v_line)
+line.delete(_h4a_line)
+line.delete(_h4v_line)
+line.delete(_poc_line)
+line.delete(_bk_line)
+line.delete(_h4c_line)
 
 if barstate.islast
     if show_daily_lbls
@@ -530,6 +576,21 @@ if barstate.islast
             _bk_lbl  := label.new(bar_index, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.small)
         if not na(h4c_oc_lvl)
             _h4c_lbl := label.new(bar_index, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
+    if show_lvl_lines
+        if not na(a_lvl)          and not na(a_origin)
+            _a_line   := line.new(a_origin,   a_lvl,          bar_index, a_lvl,          extend=extend.right, color=daily_line_col, width=1)
+        if not na(v_lvl)          and not na(v_origin)
+            _v_line   := line.new(v_origin,   v_lvl,          bar_index, v_lvl,          extend=extend.right, color=daily_line_col, width=1)
+        if not na(pb_oc_lvl)      and not na(poc_origin)
+            _poc_line := line.new(poc_origin, pb_oc_lvl,      bar_index, pb_oc_lvl,      extend=extend.right, color=daily_line_col, width=1)
+        if not na(h4_a_lvl)       and not na(h4a_origin)
+            _h4a_line := line.new(h4a_origin, h4_a_lvl,       bar_index, h4_a_lvl,       extend=extend.right, color=h4_line_col,    width=1)
+        if not na(h4_v_lvl)       and not na(h4v_origin)
+            _h4v_line := line.new(h4v_origin, h4_v_lvl,       bar_index, h4_v_lvl,       extend=extend.right, color=h4_line_col,    width=1)
+        if not na(h4_breaker_lvl) and not na(bk_origin)
+            _bk_line  := line.new(bk_origin,  h4_breaker_lvl, bar_index, h4_breaker_lvl, extend=extend.right, color=h4_line_col,    width=1)
+        if not na(h4c_oc_lvl)     and not na(h4c_origin)
+            _h4c_line := line.new(h4c_origin, h4c_oc_lvl,     bar_index, h4c_oc_lvl,     extend=extend.right, color=h4_line_col,    width=1)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
