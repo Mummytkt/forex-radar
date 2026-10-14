@@ -9,6 +9,8 @@ import { fetcher } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
 import { useTimezone } from '@/lib/timezone'
 import { useAuth } from '@/lib/auth'
+import { useAccent } from '@/lib/useAccent'
+import { PALETTE } from '@/lib/accent'
 import type { InstrumentOverview, Stats, AlertsPage } from '@/lib/types'
 
 interface Profile {
@@ -49,6 +51,7 @@ export default function OverviewPage() {
   }, [])
 
   const firstName = user?.name?.split(' ')[0] || user?.name || ''
+  const { accent, setAccent } = useAccent()
 
   const activeSetups = (instruments ?? []).filter(i => i.state !== 'IDLE')
     .sort((a, b) => {
@@ -275,6 +278,47 @@ export default function OverviewPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Personalise */}
+        <div style={{
+          background: 'var(--card)',
+          border: '1px solid var(--border)',
+          borderRadius: 12,
+          padding: '20px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 16,
+        }}>
+          <div>
+            <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Personalise</p>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Choose your interface accent colour</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {PALETTE.map(swatch => (
+              <button
+                key={swatch.id}
+                title={swatch.name}
+                onClick={() => setAccent(swatch.id)}
+                style={{
+                  width: 28, height: 28,
+                  borderRadius: '50%',
+                  background: swatch.color,
+                  border: accent === swatch.id
+                    ? `3px solid var(--text-primary)`
+                    : '3px solid transparent',
+                  outline: accent === swatch.id ? `2px solid ${swatch.color}` : 'none',
+                  outlineOffset: 1,
+                  cursor: 'pointer',
+                  transition: 'transform 0.15s, border 0.15s',
+                  transform: accent === swatch.id ? 'scale(1.15)' : 'scale(1)',
+                  flexShrink: 0,
+                }}
+              />
+            ))}
           </div>
         </div>
 

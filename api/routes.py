@@ -369,6 +369,30 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
     return {"ok": True}
 
 
+@router.get("/preferences")
+def get_preferences(request: Request):
+    """Return the subscriber's UI preferences (e.g. accent colour)."""
+    with _db(request) as conn:
+        row = conn.execute("SELECT value FROM user_config WHERE key = 'accent_color'").fetchone()
+    return {"accent_color": row[0] if row else None}
+
+
+@router.post("/preferences")
+def save_preferences(request: Request, body: dict):
+    """Save UI preferences. Body: { accent_color: 'emerald' }"""
+    import re
+    color = body.get("accent_color", "")
+    valid = {"indigo","emerald","sky","purple","amber","rose","cyan","orange"}
+    if color not in valid:
+        raise HTTPException(status_code=400, detail="Unknown accent colour")
+    with _db_write(request) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('accent_color', ?, datetime('now'))",
+            (color,),
+        )
+    return {"ok": True}
+
+
 @router.get("/profile")
 def get_profile(request: Request):
     config = request.app.state.config

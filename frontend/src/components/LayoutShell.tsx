@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback } from 'react'
 import { ThemeProvider } from '@/lib/theme'
 import { AuthProvider } from '@/lib/auth'
 import { TimezoneProvider } from '@/lib/timezone'
+import { AccentProvider } from '@/lib/useAccent'
 import Sidebar from './Sidebar'
 
 interface SidebarCtx { open: boolean; toggle: () => void; close: () => void }
@@ -21,6 +22,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
   return (
     <ThemeProvider>
+      <AccentProvider>
       <TimezoneProvider>
         <AuthProvider>
           <SidebarContext.Provider value={{ open, toggle, close }}>
@@ -56,6 +58,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
           </SidebarContext.Provider>
         </AuthProvider>
       </TimezoneProvider>
+      </AccentProvider>
     </ThemeProvider>
   )
 }
