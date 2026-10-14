@@ -323,6 +323,10 @@ def get_config_instruments(request: Request):
 @router.put("/config/instruments")
 def update_config_instruments(request: Request, body: InstrumentsUpdate):
     """Update the monitored instrument list. Takes effect on the next scheduler cycle."""
+    user = getattr(request.state, "user", None)
+    if user and user.get("role") != "OWNER":
+        raise HTTPException(status_code=403, detail="Only the platform owner can change the monitored instrument list.")
+
     instruments = [i.strip().upper() for i in body.instruments if i.strip()]
     if not instruments:
         raise HTTPException(status_code=400, detail="Must specify at least one instrument.")
