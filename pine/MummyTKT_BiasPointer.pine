@@ -560,22 +560,23 @@ line.delete(_bk_line)
 line.delete(_h4c_line)
 
 if barstate.islast
+    int lbl_x = bar_index + 20
     if show_daily_lbls
         if not na(a_lvl)
-            _a_lbl   := label.new(bar_index, a_lvl,     "D.A  " + str.tostring(a_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.red,    55), textcolor=color.white, size=size.small)
+            _a_lbl   := label.new(lbl_x, a_lvl,     "D.A  " + str.tostring(a_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.red,    55), textcolor=color.white, size=size.small)
         if not na(v_lvl)
-            _v_lbl   := label.new(bar_index, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.lime,   45), textcolor=color.black, size=size.small)
+            _v_lbl   := label.new(lbl_x, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.lime,   45), textcolor=color.black, size=size.small)
         if not na(pb_oc_lvl)
-            _poc_lbl := label.new(bar_index, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
+            _poc_lbl := label.new(lbl_x, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
     if show_h4_lbls
         if not na(h4_a_lvl)
-            _h4a_lbl := label.new(bar_index, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.red,    72), textcolor=color.white, size=size.small)
+            _h4a_lbl := label.new(lbl_x, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.red,    72), textcolor=color.white, size=size.small)
         if not na(h4_v_lvl)
-            _h4v_lbl := label.new(bar_index, h4_v_lvl,       "H4.V  " + str.tostring(h4_v_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.lime,   65), textcolor=color.black, size=size.small)
+            _h4v_lbl := label.new(lbl_x, h4_v_lvl,       "H4.V  " + str.tostring(h4_v_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.lime,   65), textcolor=color.black, size=size.small)
         if not na(h4_breaker_lvl)
-            _bk_lbl  := label.new(bar_index, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.small)
+            _bk_lbl  := label.new(lbl_x, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.small)
         if not na(h4c_oc_lvl)
-            _h4c_lbl := label.new(bar_index, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
+            _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
     if show_lvl_lines
         if not na(a_lvl)          and not na(a_origin)
             _a_line   := line.new(a_origin,   a_lvl,          bar_index, a_lvl,          extend=extend.right, color=daily_line_col, width=1)
