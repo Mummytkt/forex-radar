@@ -160,7 +160,14 @@ function EquityCurve({ entries }: { entries: Entry[] }) {
 
   const cumulative: number[] = []
   let sum = 0
-  for (const p of pts) { sum += p.pips!; cumulative.push(sum) }
+  for (const p of pts) {
+    // Honour the result field: if marked as a loss, negate the pips regardless
+    // of how they were entered. Wins use absolute value to avoid double-negatives.
+    const raw = p.pips!
+    const contribution = p.result === 'loss' ? -Math.abs(raw) : p.result === 'win' ? Math.abs(raw) : raw
+    sum += contribution
+    cumulative.push(sum)
+  }
 
   const W = 100, H = 35, PAD = 3
   const maxY = Math.max(0, ...cumulative)
