@@ -52,8 +52,31 @@ from state.repository import (
     upsert_instrument_state,
 )
 
+import json as _json
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _deliver_alert(conn, config, instrument: str, alert_text: str) -> None:
+    """Send alert_text to every user whose watched_instruments includes instrument."""
+    instr_norm = instrument.replace("/", "").upper()
+    recipients = conn.execute(
+        "SELECT telegram_chat_id, watched_instruments FROM users "
+        "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+    ).fetchall()
+    sent_any = False
+    for rec in recipients:
+        raw = rec["watched_instruments"]
+        if raw:
+            watched = [w.replace("/", "").upper() for w in _json.loads(raw)]
+            if instr_norm not in watched:
+                continue
+        await send_alert(config.telegram_bot_token, rec["telegram_chat_id"], alert_text)
+        sent_any = True
+    # Fallback: no users with chat IDs → use global config chat ID
+    if not sent_any and config.telegram_chat_id:
+        await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
 
 
 # ── Pydantic model for incoming Pine payloads ─────────────────────────────────
@@ -351,7 +374,7 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
     logger.info("%s CONFIRMED %s (h4_class=%s) — alert stored", instrument, direction.value, payload.h4_class)
 
     if config.telegram_enabled:
-        await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+        await _deliver_alert(conn, config, instrument, alert_text)
 
 
 _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
@@ -419,7 +442,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     logger.info("%s H4_CONTINUATION %s (cont_type=%s) — alert stored", instrument, direction.value, cont_type)
 
     if config.telegram_enabled:
-        await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+        await _deliver_alert(conn, config, instrument, alert_text)
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
