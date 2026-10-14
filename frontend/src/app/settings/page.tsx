@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Send, CheckCircle, XCircle, User, Save, Info, Check, Search, RefreshCw } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { loadUserName, saveUserName } from '@/lib/preferences'
+import { useAuth } from '@/lib/auth'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
@@ -181,15 +182,29 @@ function InstrumentManager() {
 }
 
 export default function SettingsPage() {
+  const { user, refresh } = useAuth()
   const [name, setName] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<'ok' | 'fail' | null>(null)
 
-  useEffect(() => { setName(loadUserName()) }, [])
+  useEffect(() => {
+    // Prefer the account name; fall back to localStorage
+    setName(user?.name || loadUserName())
+  }, [user])
 
-  const saveName = () => {
-    saveUserName(name.trim())
+  const saveName = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    saveUserName(trimmed)
+    try {
+      await apiFetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      await refresh() // update the greeting immediately
+    } catch { /* non-critical — localStorage already saved */ }
     setNameSaved(true)
     setTimeout(() => setNameSaved(false), 2000)
   }
