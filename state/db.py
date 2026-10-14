@@ -302,6 +302,17 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     """)
 
 
+    # Add user_id column to journal_entries (scopes entries per user)
+    jcols = {row[1] for row in conn.execute("PRAGMA table_info(journal_entries)").fetchall()}
+    if "user_id" not in jcols:
+        conn.execute("ALTER TABLE journal_entries ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        # Backfill: assign all existing entries (created before this column existed) to the owner
+        conn.execute(
+            """UPDATE journal_entries SET user_id = (
+                SELECT id FROM users WHERE role = 'OWNER' LIMIT 1
+               ) WHERE user_id IS NULL"""
+        )
+
     # Add journal_entries table if missing
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     if "journal_entries" not in tables:

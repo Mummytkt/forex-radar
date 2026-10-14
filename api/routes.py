@@ -500,29 +500,34 @@ def _row_to_entry(row) -> JournalEntry:
 
 @router.get("/journal", response_model=list[JournalEntry])
 def get_journal(request: Request, period: str = Query("all"), trade_type: str = Query("live")):
+    uid = _user_id(request)
     where, params = _journal_period_clause(period)
+    user_clause = "user_id = ?" if uid else "1=0"
     if where:
-        full_where = f"{where} AND trade_type = ?"
+        full_where = f"{where} AND trade_type = ? AND {user_clause}"
     else:
-        full_where = "WHERE trade_type = ?"
+        full_where = f"WHERE trade_type = ? AND {user_clause}"
+    query_params = params + [trade_type] + ([uid] if uid else [])
     with _db(request) as conn:
         rows = conn.execute(
             f"SELECT * FROM journal_entries {full_where} ORDER BY trade_date DESC, id DESC",
-            params + [trade_type],
+            query_params,
         ).fetchall()
     return [_row_to_entry(r) for r in rows]
 
 
 @router.post("/journal", response_model=JournalEntry)
 def create_journal_entry(request: Request, body: JournalEntryCreate):
+    uid = _user_id(request)
     with _db_write(request) as conn:
         cur = conn.execute(
             """INSERT INTO journal_entries
                (trade_date, instrument, direction, entry_price, stop_loss, take_profit,
                 exit_price, pips, rr_ratio, amount_risked, amount_aimed,
                 result, setup_type, setup_type_notes, trade_type, h4_break_type,
-                entry_date, exit_date, trigger_time, entry_time, exit_time, session, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                entry_date, exit_date, trigger_time, entry_time, exit_time, session, notes,
+                user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (body.trade_date, body.instrument, body.direction,
              body.entry_price, body.stop_loss, body.take_profit,
              body.exit_price, body.pips, body.rr_ratio,
@@ -530,7 +535,7 @@ def create_journal_entry(request: Request, body: JournalEntryCreate):
              body.result, body.setup_type, body.setup_type_notes, body.trade_type,
              body.h4_break_type, body.entry_date, body.exit_date,
              body.trigger_time, body.entry_time, body.exit_time,
-             body.session, body.notes),
+             body.session, body.notes, uid),
         )
         entry_id = cur.lastrowid
         row = conn.execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
@@ -539,16 +544,19 @@ def create_journal_entry(request: Request, body: JournalEntryCreate):
 
 @router.put("/journal/{entry_id}", response_model=JournalEntry)
 def update_journal_entry(entry_id: int, request: Request, body: JournalEntryUpdate):
+    uid = _user_id(request)
     with _db_write(request) as conn:
-        row = conn.execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM journal_entries WHERE id = ? AND user_id = ?", (entry_id, uid)
+        ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Entry not found")
         updates = {k: v for k, v in body.model_dump().items() if v is not None}
         if updates:
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             conn.execute(
-                f"UPDATE journal_entries SET {set_clause} WHERE id = ?",
-                list(updates.values()) + [entry_id],
+                f"UPDATE journal_entries SET {set_clause} WHERE id = ? AND user_id = ?",
+                list(updates.values()) + [entry_id, uid],
             )
         row = conn.execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
     return _row_to_entry(row)
@@ -556,22 +564,26 @@ def update_journal_entry(entry_id: int, request: Request, body: JournalEntryUpda
 
 @router.delete("/journal/{entry_id}")
 def delete_journal_entry(entry_id: int, request: Request):
+    uid = _user_id(request)
     with _db_write(request) as conn:
-        conn.execute("DELETE FROM journal_entries WHERE id = ?", (entry_id,))
+        conn.execute("DELETE FROM journal_entries WHERE id = ? AND user_id = ?", (entry_id, uid))
     return {"ok": True}
 
 
 @router.get("/journal/export.csv")
 def export_journal_csv(request: Request, period: str = Query("all"), trade_type: str = Query("live")):
+    uid = _user_id(request)
     where, params = _journal_period_clause(period)
+    user_clause = "user_id = ?" if uid else "1=0"
     if where:
-        full_where = f"{where} AND trade_type = ?"
+        full_where = f"{where} AND trade_type = ? AND {user_clause}"
     else:
-        full_where = "WHERE trade_type = ?"
+        full_where = f"WHERE trade_type = ? AND {user_clause}"
+    query_params = params + [trade_type] + ([uid] if uid else [])
     with _db(request) as conn:
         rows = conn.execute(
             f"SELECT * FROM journal_entries {full_where} ORDER BY trade_date DESC, id DESC",
-            params + [trade_type],
+            query_params,
         ).fetchall()
 
     buf = io.StringIO()
