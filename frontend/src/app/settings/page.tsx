@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Send, CheckCircle, XCircle, User, Save, Check, Search, RefreshCw } from 'lucide-react'
+import { Send, CheckCircle, XCircle, User, Save, Info, Check, Search, RefreshCw } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { loadUserName, saveUserName } from '@/lib/preferences'
 
