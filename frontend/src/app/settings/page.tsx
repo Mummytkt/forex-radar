@@ -20,6 +20,8 @@ const ALL_INSTRUMENTS: Record<string, string[]> = {
   'GBP Crosses': ['GBP/JPY','GBP/AUD','GBP/CAD','GBP/NZD','GBP/CHF'],
   'Commodity Crosses': ['AUD/JPY','AUD/CAD','AUD/NZD','AUD/CHF','NZD/JPY','NZD/CAD','NZD/CHF','CAD/JPY','CAD/CHF','CHF/JPY'],
   'Metals': ['XAU/USD'],
+  'Energy': ['WTI/USD'],
+  'Indices': ['US30','NAS100','SPX500','UK100','GER40','JPN225'],
   'Crypto': ['BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','LTC/USD'],
 }
 
