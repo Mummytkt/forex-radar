@@ -353,8 +353,8 @@ def get_user_instruments(request: Request):
             row = conn.execute("SELECT watched_instruments FROM users WHERE id = ?", (uid,)).fetchone()
         if row and row[0]:
             return {"instruments": json.loads(row[0])}
-    # No personal list yet — return the full engine list as default
-    return {"instruments": request.app.state.config.instruments}
+    # No personal list saved yet — return null so the frontend defaults to all pairs selected
+    return {"instruments": None}
 
 
 @router.put("/user/instruments")

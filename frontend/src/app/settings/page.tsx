@@ -61,7 +61,12 @@ function InstrumentManager() {
     try {
       const r = await apiFetch('/api/user/instruments')
       const data = await r.json()
-      setEnabled(data.instruments ?? [])
+      // null = no personal list saved yet → default all pairs to selected
+      if (data.instruments === null || data.instruments === undefined) {
+        setEnabled(Object.values(ALL_INSTRUMENTS).flat())
+      } else {
+        setEnabled(data.instruments)
+      }
     } catch { /* ignore */ }
     setLoading(false)
   }
