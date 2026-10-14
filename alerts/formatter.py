@@ -285,13 +285,13 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
     if direction == Direction.BULLISH:
         oc_desc = (
             f"A bullish H4 OC formed (two consecutive bullish H4 candles). "
-            f"Price returned to react from the OC midpoint at {level_str} "
+            f"Price returned to react from the OC level at {level_str} "
             f"and closed above it, confirming a {direction_lower} continuation."
         )
     else:
         oc_desc = (
             f"A bearish H4 OC formed (two consecutive bearish H4 candles). "
-            f"Price returned to react from the OC midpoint at {level_str} "
+            f"Price returned to react from the OC level at {level_str} "
             f"and closed below it, confirming a {direction_lower} continuation."
         )
 
@@ -301,10 +301,10 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
         "",
         f"Daily breakout: {direction_label} (active)",
         "",
-        f"H4 OC reaction: midpoint @ {level_str}",
+        f"H4 OC reaction: level @ {level_str}",
         oc_desc,
         "",
-        f"Reason: Price rejected from an H4 {direction_lower} OC midpoint at {level_str}, "
+        f"Reason: Price rejected from an H4 {direction_lower} OC level at {level_str}, "
         f"confirming continuation of the active Daily {direction_lower} bias.",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
@@ -477,13 +477,13 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
     if direction == Direction.BULLISH:
         oc_desc = (
             f"A bullish H4 OC formed (two consecutive bullish H4 candles). "
-            f"Price returned to react from the OC midpoint at {level_str} "
+            f"Price returned to react from the OC level at {level_str} "
             f"and closed above it, confirming a bullish continuation."
         )
     else:
         oc_desc = (
             f"A bearish H4 OC formed (two consecutive bearish H4 candles). "
-            f"Price returned to react from the OC midpoint at {level_str} "
+            f"Price returned to react from the OC level at {level_str} "
             f"and closed below it, confirming a bearish continuation."
         )
 
@@ -493,10 +493,10 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
         "",
         f"Daily breakout: {direction_label} (active)",
         "",
-        f"H4 OC reaction: midpoint @ {level_str}",
+        f"H4 OC reaction: level @ {level_str}",
         oc_desc,
         "",
-        f"Reason: Price rejected from an H4 {direction_lower} OC midpoint at {level_str}, "
+        f"Reason: Price rejected from an H4 {direction_lower} OC level at {level_str}, "
         f"confirming continuation of the active Daily {direction_lower} bias.",
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",

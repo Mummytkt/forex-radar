@@ -263,7 +263,7 @@ if new_daily
             if pb_consec == 1
                 pb_close1 := d_close
             else if pb_consec >= 2
-                pb_oc_lvl  := (pb_close1 + d_close) / 2.0
+                pb_oc_lvl  := pb_close1
                 poc_origin := bar_index
                 pb_close1  := d_close
         else
@@ -501,7 +501,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if h4c_consec == 1
                     h4c_oc_close1 := close
                 else if h4c_consec >= 2
-                    h4c_oc_lvl    := (h4c_oc_close1 + close) / 2.0
+                    h4c_oc_lvl    := h4c_oc_close1
                     h4c_origin    := bar_index
                     h4c_oc_close1 := close
                     h4c_oc_ready  := true

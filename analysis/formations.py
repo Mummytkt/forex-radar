@@ -79,14 +79,17 @@ def detect_oc_levels(candles: list[Candle]) -> list[Formation]:
     """
     Scan for OC (Open-Close) levels from consecutive same-direction runs.
 
+    OC level = the exact price where candle[k] closed AND candle[k+1] opened.
+    In gapless forex markets close[k] == open[k+1], so the level is simply c1.close.
+
     For a run of N same-direction candles, produces N-1 OC levels:
-      OC[k] level = (candles[k].close + candles[k+1].close) / 2
+      OC[k] level = candles[k].close  (= candles[k+1].open in gapless markets)
       OC[k] direction = run direction
       OC[k] established_at = candles[k+1].timestamp
 
     A run of 3 bullish candles [A, B, C] yields:
-      OC(A,B) at B.timestamp
-      OC(B,C) at C.timestamp
+      OC(A,B) = A.close  at B.timestamp
+      OC(B,C) = B.close  at C.timestamp
     """
     results: list[Formation] = []
     if not candles:
@@ -100,7 +103,7 @@ def detect_oc_levels(candles: list[Candle]) -> list[Formation]:
             direction = Direction.BULLISH if run[0].is_bullish else Direction.BEARISH
             for k in range(len(run) - 1):
                 c1, c2 = run[k], run[k + 1]
-                level = (c1.close + c2.close) / 2.0
+                level = c1.close  # close of c1 = open of c2 (gapless forex)
                 results.append(
                     Formation(
                         instrument=c1.instrument,
