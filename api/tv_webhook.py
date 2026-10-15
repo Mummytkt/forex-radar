@@ -15,8 +15,9 @@ Event types received from Pine:
 
 from __future__ import annotations
 
+import hmac
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -58,15 +59,47 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _subscription_active(role, plan, plan_expires_at) -> bool:
+    """Owners and lifetime accounts never expire; everyone else only until plan_expires_at."""
+    if role == "OWNER" or plan == "LIFETIME" or not plan_expires_at:
+        return True
+    try:
+        exp = datetime.fromisoformat(str(plan_expires_at).replace("Z", "+00:00"))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return exp > datetime.now(timezone.utc)
+    except Exception:
+        return True
+
+
+def _resolve_chat(config, user_id, chat_id, role, plan, plan_expires_at):
+    """Where a user-owned alert (price / entry pattern) should be delivered.
+    Only alerts with no owning user, or owned by the platform owner, may fall back
+    to the owner's global chat — a subscriber's alert must never reach the owner,
+    and an expired or revoked subscriber's alert is not delivered at all."""
+    if user_id is None:
+        return config.telegram_chat_id
+    if role is None:  # account revoked/deleted
+        return None
+    if not _subscription_active(role, plan, plan_expires_at):
+        return None
+    if chat_id:
+        return chat_id
+    return config.telegram_chat_id if role == "OWNER" else None
+
+
 async def _deliver_alert(conn, config, instrument: str, alert_text: str) -> None:
-    """Send alert_text to every user whose watched_instruments includes instrument."""
+    """Send alert_text to every active user whose watched_instruments includes instrument."""
     instr_norm = instrument.replace("/", "").upper()
     recipients = conn.execute(
-        "SELECT telegram_chat_id, watched_instruments FROM users "
+        "SELECT telegram_chat_id, watched_instruments, role, plan, plan_expires_at FROM users "
         "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
     ).fetchall()
     sent_any = False
     for rec in recipients:
+        if not _subscription_active(rec["role"], rec["plan"], rec["plan_expires_at"]):
+            continue  # expired subscriber — no more signals
+
         raw = rec["watched_instruments"]
         if raw:
             watched = [w.replace("/", "").upper() for w in _json.loads(raw)]
@@ -114,8 +147,11 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     config = request.app.state.config
     conn   = request.app.state.conn
 
-    # Verify shared secret (skip check if no secret configured on the backend)
-    if config.tv_webhook_secret and payload.secret != config.tv_webhook_secret:
+    # Verify shared secret. Fail closed: with no secret configured, nobody can post.
+    if not config.tv_webhook_secret:
+        logger.error("TV webhook rejected: TV_WEBHOOK_SECRET is not configured")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    if not hmac.compare_digest((payload.secret or "").encode(), config.tv_webhook_secret.encode()):
         logger.warning("TV webhook rejected: bad secret (instrument=%s)", payload.instrument)
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
@@ -480,7 +516,8 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
 
     # Check all active price alerts for this instrument
     alerts = conn.execute("""
-        SELECT pa.id, pa.condition, pa.price AS alert_price, pa.message, u.telegram_chat_id
+        SELECT pa.id, pa.condition, pa.price AS alert_price, pa.message, u.telegram_chat_id,
+               pa.user_id, u.role, u.plan, u.plan_expires_at
         FROM price_alerts pa
         LEFT JOIN users u ON pa.user_id = u.id
         WHERE pa.instrument = ? AND pa.is_active = 1
@@ -492,7 +529,10 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
         condition   = alert_row[1]
         alert_price = alert_row[2]
         message     = alert_row[3]
-        chat_id     = alert_row[4] or config.telegram_chat_id
+        # None when the alert's owner is unlinked/expired/revoked: still marked
+        # triggered below, but never rerouted to anyone else's chat.
+        chat_id     = _resolve_chat(config, alert_row[5], alert_row[4],
+                                    alert_row[6], alert_row[7], alert_row[8])
 
         triggered = False
         direction_str = ""
@@ -570,7 +610,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     # Find every active, matching, non-expired entry alert for this instrument + direction
     rows = conn.execute("""
         SELECT epa.id, epa.price, epa.tolerance_pips, epa.note,
-               u.telegram_chat_id
+               u.telegram_chat_id, epa.user_id, u.role, u.plan, u.plan_expires_at
         FROM entry_pattern_alerts epa
         LEFT JOIN users u ON u.id = epa.user_id
         WHERE epa.instrument = ?
@@ -591,7 +631,9 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         alert_price = row["price"]
         tol_pips = row["tolerance_pips"]
         note = row["note"]
-        chat_id = row["telegram_chat_id"] or config.telegram_chat_id
+        # None when the alert's owner is unlinked/expired/revoked: never rerouted.
+        chat_id = _resolve_chat(config, row["user_id"], row["telegram_chat_id"],
+                                row["role"], row["plan"], row["plan_expires_at"])
 
         proximity = tol_pips * pip_size
         if abs(price - alert_price) > proximity:

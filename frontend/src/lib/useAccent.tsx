@@ -27,7 +27,7 @@ export function AccentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('mbp_token') : null
     if (!token) return
-    fetch(`${API_BASE}/api/preferences`, {
+    fetch(`${API_BASE}/api/preferences/accent`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
@@ -44,7 +44,7 @@ export function AccentProvider({ children }: { children: ReactNode }) {
     applyAccent(id, (document.documentElement.getAttribute('data-theme') ?? 'dark') as 'dark' | 'light')
     const token = typeof window !== 'undefined' ? localStorage.getItem('mbp_token') : null
     if (!token) return
-    await fetch(`${API_BASE}/api/preferences`, {
+    await fetch(`${API_BASE}/api/preferences/accent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ accent_color: id }),

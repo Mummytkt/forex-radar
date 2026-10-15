@@ -60,10 +60,21 @@ async def main(dry_run: bool = False) -> None:
         conn.commit()
         logger.info("Wrote default instrument list (%d) to DB config.", len(config.instruments))
 
-    # Load JWT secret
+    # Load JWT secret — create a random one if missing, so tokens are never
+    # signed with a guessable fallback.
     jwt_row = conn.execute("SELECT value FROM user_config WHERE key = 'jwt_secret'").fetchone()
-    if jwt_row:
+    if jwt_row and jwt_row[0]:
         fastapi_app.state.jwt_secret = jwt_row[0]
+    else:
+        import secrets as _secrets
+        new_secret = _secrets.token_hex(32)
+        conn.execute(
+            "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('jwt_secret', ?, datetime('now'))",
+            (new_secret,),
+        )
+        conn.commit()
+        fastapi_app.state.jwt_secret = new_secret
+        logger.warning("No JWT secret found — generated a new one (existing sessions must sign in again).")
 
     # Auth check
     user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]

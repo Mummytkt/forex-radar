@@ -4,6 +4,8 @@ import base64
 import hashlib
 import secrets
 import sqlite3
+import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -54,7 +56,11 @@ def _db_write(request: Request):
 # ── JWT ───────────────────────────────────────────────────────────────────────
 
 def _secret(app) -> str:
-    return getattr(app.state, "jwt_secret", None) or "dev-only-secret"
+    secret = getattr(app.state, "jwt_secret", None)
+    if not secret:
+        # Never fall back to a known value — that would let anyone forge tokens.
+        raise RuntimeError("JWT secret is not configured")
+    return secret
 
 
 def create_token(payload: dict, app) -> str:
@@ -89,6 +95,39 @@ def verify_pw(plain: str, stored: str) -> bool:
         return base64.b64decode(b64) == h
     except Exception:
         return False
+
+
+# ── Rate limiting (single-machine, in-memory) ─────────────────────────────────
+# Throttles password guessing. Keys are "email:<addr>" and "ip:<addr>".
+
+_HITS: dict[str, list[float]] = {}
+_HITS_LOCK = threading.Lock()
+
+
+def client_ip(request: Request) -> str:
+    # Fly's proxy puts the real client address in Fly-Client-IP.
+    return request.headers.get("fly-client-ip") or (request.client.host if request.client else "unknown")
+
+
+def rate_limited(key: str, max_hits: int, window_s: int) -> bool:
+    now = time.time()
+    with _HITS_LOCK:
+        hits = [t for t in _HITS.get(key, []) if now - t < window_s]
+        _HITS[key] = hits
+        return len(hits) >= max_hits
+
+
+def record_hit(key: str) -> None:
+    with _HITS_LOCK:
+        _HITS.setdefault(key, []).append(time.time())
+
+
+def clear_hits(key: str) -> None:
+    with _HITS_LOCK:
+        _HITS.pop(key, None)
+
+
+_LOGIN_WINDOW = 15 * 60
 
 
 # ── Request helpers ───────────────────────────────────────────────────────────
@@ -203,6 +242,10 @@ def setup(body: SetupBody, request: Request):
 def login(body: LoginBody, request: Request):
     if not _CRYPTO_OK:
         raise HTTPException(500, "Auth dependencies not installed")
+    email_key = "email:" + body.email.strip().lower()
+    ip_key = "ip:" + client_ip(request)
+    if rate_limited(email_key, 8, _LOGIN_WINDOW) or rate_limited(ip_key, 30, _LOGIN_WINDOW):
+        raise HTTPException(429, "Too many sign-in attempts. Please wait 15 minutes and try again.")
     with _db(request) as conn:
         row = conn.execute(
             "SELECT id, email, name, password_hash, role, plan, plan_expires_at "
@@ -210,7 +253,10 @@ def login(body: LoginBody, request: Request):
             (body.email.strip(),),
         ).fetchone()
     if not row or not verify_pw(body.password, row["password_hash"] or ""):
+        record_hit(email_key)
+        record_hit(ip_key)
         raise HTTPException(401, "Invalid email or password")
+    clear_hits(email_key)
     if row["plan"] not in ("LIFETIME",) and row["plan_expires_at"]:
         exp = datetime.fromisoformat(row["plan_expires_at"].replace("Z", "+00:00"))
         if exp.tzinfo is None:
@@ -347,5 +393,9 @@ def revoke_user(user_id: int, request: Request):
     if owner["id"] == user_id:
         raise HTTPException(400, "Cannot revoke your own access")
     with _db_write(request) as conn:
-        conn.execute("DELETE FROM users WHERE id = ? AND role != 'OWNER'", (user_id,))
+        cur = conn.execute("DELETE FROM users WHERE id = ? AND role != 'OWNER'", (user_id,))
+        if cur.rowcount:
+            # Stop anything the revoked user set up from continuing to run.
+            conn.execute("UPDATE price_alerts SET is_active = 0 WHERE user_id = ?", (user_id,))
+            conn.execute("UPDATE entry_pattern_alerts SET is_active = 0 WHERE user_id = ?", (user_id,))
     return {"ok": True}

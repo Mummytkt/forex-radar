@@ -26,7 +26,7 @@ from typing import Optional
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
-from api.auth import hash_pw, create_token
+from api.auth import hash_pw, create_token, client_ip, rate_limited, record_hit
 from api import paystack
 from api.exchange_rate import get_ngn_rate
 
@@ -174,6 +174,10 @@ async def start_checkout(body: CheckoutBody, request: Request):
     config = request.app.state.config
     if not config.paystack_secret_key:
         raise HTTPException(503, "Payments are not configured yet.")
+    ip_key = "checkout:" + client_ip(request)
+    if rate_limited(ip_key, 20, 3600):
+        raise HTTPException(429, "Too many checkout attempts. Please try again later.")
+    record_hit(ip_key)
     plan = PLANS.get(body.plan.upper())
     if not plan:
         raise HTTPException(400, "Unknown plan.")
@@ -182,6 +186,16 @@ async def start_checkout(body: CheckoutBody, request: Request):
         raise HTTPException(400, "A valid email is required.")
 
     trial = body.plan.upper() == "TRIAL"
+    if trial:
+        # One free trial per email: no trial for existing accounts or repeat trials.
+        with _db_write(request) as conn:
+            has_account = conn.execute(
+                "SELECT 1 FROM users WHERE LOWER(email) = ?", (email,)).fetchone()
+            had_trial = conn.execute(
+                "SELECT 1 FROM payments WHERE LOWER(email) = ? AND trial = 1 AND status = 'paid'",
+                (email,)).fetchone()
+        if has_account or had_trial:
+            raise HTTPException(400, "The free trial is for new members only. Please choose a plan.")
     billing = "trial" if trial else ("auto" if body.billing == "auto" else "once")
     usd = plan["usd"]
     reference = "mbp_" + secrets.token_hex(12)
@@ -319,6 +333,14 @@ def set_password(body: SetPwBody, request: Request):
 
 # ── Affiliate programme ─────────────────────────────────────────────────────────
 
+def _mask_email(email: str) -> str:
+    """Affiliates see that a referral paid, not who: jo***@gmail.com."""
+    local, _, domain = (email or "").partition("@")
+    if not domain:
+        return "***"
+    return f"{local[:2]}***@{domain}"
+
+
 def _affiliate_payload(conn, request: Request, aff: sqlite3.Row) -> dict:
     base = request.app.state.config.frontend_url
     rows = conn.execute(
@@ -348,7 +370,7 @@ def _affiliate_payload(conn, request: Request, aff: sqlite3.Row) -> dict:
             "pending": round(pending, 2), "available": round(available, 2),
             "paid": round(paid, 2), "lifetime": round(lifetime, 2),
         },
-        "recent": [dict(r) for r in recent],
+        "recent": [{**dict(r), "customer_email": _mask_email(r["customer_email"])} for r in recent],
     }
 
 

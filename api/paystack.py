@@ -102,7 +102,7 @@ def refund(secret_key: str, reference: str) -> dict:
 
 def verify_webhook_signature(secret_key: str, raw_body: bytes, signature: str) -> bool:
     """Paystack signs webhook bodies with HMAC-SHA512 of the raw body."""
-    if not signature:
+    if not signature or not secret_key:
         return False
     expected = hmac.new(secret_key.encode(), raw_body, hashlib.sha512).hexdigest()
     return hmac.compare_digest(expected, signature)

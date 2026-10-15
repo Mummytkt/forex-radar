@@ -176,7 +176,12 @@ class SignupRequestBody(BaseModel):
 @router.post("/public/signup-request")
 async def signup_request(body: SignupRequestBody, request: Request):
     """Public endpoint — no auth required. Forwards signup interest to the owner via Telegram."""
-    name = body.name.strip()
+    from api.auth import client_ip, rate_limited, record_hit
+    ip_key = "signup:" + client_ip(request)
+    if rate_limited(ip_key, 5, 3600):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    record_hit(ip_key)
+    name = body.name.strip()[:100]
     email = body.email.strip()
     plan = body.plan.strip()
     telegram_handle = body.telegram.strip()
@@ -394,11 +399,12 @@ async def telegram_update(request: Request):
     """
     config = request.app.state.config
 
-    # Verify Telegram's secret token header (set via setWebhook) when configured
-    if config.telegram_webhook_secret:
-        sent = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        if sent != config.telegram_webhook_secret:
-            raise HTTPException(status_code=401, detail="bad secret")
+    # Verify Telegram's secret token header (set via setWebhook). Fail closed.
+    import hmac as _hmac
+    sent = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not config.telegram_webhook_secret or not _hmac.compare_digest(
+            sent.encode(), config.telegram_webhook_secret.encode()):
+        raise HTTPException(status_code=401, detail="bad secret")
 
     try:
         update = await request.json()
@@ -426,7 +432,10 @@ async def telegram_update(request: Request):
             "SELECT id, name FROM users WHERE telegram_link_token = ?", (token,)
         ).fetchone()
         if row:
-            conn.execute("UPDATE users SET telegram_chat_id = ? WHERE id = ?", (str(chat_id), row["id"]))
+            # One-time link: clear the token so a leaked/old link can't relink
+            # this account to someone else's chat. A fresh one is issued on demand.
+            conn.execute("UPDATE users SET telegram_chat_id = ?, telegram_link_token = NULL WHERE id = ?",
+                         (str(chat_id), row["id"]))
 
     from alerts.telegram import send_alert
     if row:
@@ -528,26 +537,33 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
     return {"ok": True}
 
 
-@router.get("/preferences")
-def get_preferences(request: Request):
-    """Return the subscriber's UI preferences (e.g. accent colour)."""
+_ACCENTS = {"indigo", "emerald", "sky", "purple", "amber", "rose", "cyan", "orange"}
+
+
+@router.get("/preferences/accent")
+def get_accent(request: Request):
+    """Return this user's own accent colour (each account has its own)."""
+    uid = _user_id(request)
+    if not uid:
+        return {"accent_color": None}
     with _db(request) as conn:
-        row = conn.execute("SELECT value FROM user_config WHERE key = 'accent_color'").fetchone()
+        row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"accent_color:{uid}",)).fetchone()
     return {"accent_color": row[0] if row else None}
 
 
-@router.post("/preferences")
-def save_preferences(request: Request, body: dict):
-    """Save UI preferences. Body: { accent_color: 'emerald' }"""
-    import re
+@router.post("/preferences/accent")
+def save_accent(request: Request, body: dict):
+    """Save this user's accent colour. Body: { accent_color: 'emerald' }"""
+    uid = _user_id(request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     color = body.get("accent_color", "")
-    valid = {"indigo","emerald","sky","purple","amber","rose","cyan","orange"}
-    if color not in valid:
+    if color not in _ACCENTS:
         raise HTTPException(status_code=400, detail="Unknown accent colour")
     with _db_write(request) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('accent_color', ?, datetime('now'))",
-            (color,),
+            "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+            (f"accent_color:{uid}", color),
         )
     return {"ok": True}
 
