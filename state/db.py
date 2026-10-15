@@ -399,4 +399,25 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     if "timeframe" not in pa_cols:
         conn.execute("ALTER TABLE price_alerts ADD COLUMN timeframe TEXT NOT NULL DEFAULT '5m'")
 
+    # Entry pattern alerts (PCL + Engulfing Sweep at user-set price levels)
+    if "entry_pattern_alerts" not in tables:
+        conn.execute("""
+            CREATE TABLE entry_pattern_alerts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         INTEGER REFERENCES users(id),
+                instrument      TEXT    NOT NULL,
+                direction       TEXT    NOT NULL,     -- 'bullish' | 'bearish'
+                price           REAL    NOT NULL,
+                tolerance_pips  REAL    NOT NULL DEFAULT 20,
+                note            TEXT,
+                expires_at      TEXT,
+                is_active       INTEGER NOT NULL DEFAULT 1,
+                triggered_at    TEXT,
+                triggered_pattern TEXT,                -- 'pcl' | 'engulfing_sweep' (set on fire)
+                triggered_tf    TEXT,                  -- 'H1' | 'H2' (set on fire)
+                created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_pattern_alerts_inst ON entry_pattern_alerts (instrument, is_active)")
+
     conn.commit()

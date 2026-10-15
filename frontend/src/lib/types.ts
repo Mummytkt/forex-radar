@@ -72,3 +72,24 @@ export interface PriceAlertsList {
   active_count: number
   max_alerts: number
 }
+
+export interface EntryAlertItem {
+  id: number
+  instrument: string
+  direction: string            // 'bullish' | 'bearish'
+  price: number
+  tolerance_pips: number
+  note: string | null
+  expires_at: string | null
+  is_active: boolean
+  triggered_at: string | null
+  triggered_pattern: string | null  // 'pcl' | 'engulfing_sweep'
+  triggered_tf: string | null       // 'H1' | 'H2'
+  created_at: string
+}
+
+export interface EntryAlertsList {
+  items: EntryAlertItem[]
+  active_count: number
+  max_alerts: number
+}

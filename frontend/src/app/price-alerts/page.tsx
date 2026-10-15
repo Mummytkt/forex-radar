@@ -1,10 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import useSWR, { mutate } from 'swr'
-import { Target, Trash2, Clock, CheckCircle2, Bell, Pencil } from 'lucide-react'
+import { Target, Trash2, Clock, CheckCircle2, Bell, Pencil, Zap } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { fetcher, API_BASE } from '@/lib/api'
-import type { InstrumentOverview, PriceAlertsList, PriceAlertItem } from '@/lib/types'
+import type { InstrumentOverview, PriceAlertsList, PriceAlertItem, EntryAlertsList, EntryAlertItem } from '@/lib/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -183,7 +183,423 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Entry Pattern Alert row ───────────────────────────────────────────────────
+
+function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id: number) => void }) {
+  const triggered = !!item.triggered_at
+  const dirLabel = item.direction === 'bullish' ? 'Buy' : 'Sell'
+  const dirColor = item.direction === 'bullish' ? 'var(--bullish)' : 'var(--bearish)'
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '12px 16px',
+      borderBottom: '1px solid var(--border)',
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+        background: triggered ? 'var(--bullish-bg)' : 'var(--accent-bg)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {triggered
+          ? <CheckCircle2 size={14} color="var(--bullish)" />
+          : <Zap size={14} color="var(--accent-hover)" />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>{item.instrument}</span>
+          <span style={{
+            fontSize: 11, padding: '2px 7px', borderRadius: 5,
+            background: 'var(--border)', color: dirColor, fontWeight: 600,
+          }}>
+            {dirLabel}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-hover)' }}>
+            {formatPrice(item.instrument, item.price)}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            ± {item.tolerance_pips}p
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            PCL or Engulfing Sweep · H1/H2
+          </span>
+          {item.note && (
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {item.note}</span>
+          )}
+          {triggered && item.triggered_pattern && (
+            <span style={{ fontSize: 11, color: 'var(--bullish)' }}>
+              · {item.triggered_pattern === 'pcl' ? 'PCL' : 'Engulfing Sweep'} on {item.triggered_tf} · {timeAgo(item.triggered_at!)}
+            </span>
+          )}
+          {!triggered && item.expires_at && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              · Expires {timeAgo(item.expires_at).replace('ago', 'left')}
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={() => onDelete(item.id)}
+        style={{
+          width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer',
+          background: 'var(--border)', color: 'var(--text-muted)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+        title="Delete"
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
+  )
+}
+
+
+// ── Entry Pattern Alerts tab content ──────────────────────────────────────────
+
+function EntryAlertsPanel({ instruments, prices }: {
+  instruments: string[]
+  prices?: Record<string, { price: number; updated_at: string }>
+}) {
+  const [tab, setTab] = useState<'active' | 'history'>('active')
+  const [instrument, setInstrument] = useState('')
+  const [direction, setDirection] = useState<'bullish' | 'bearish'>('bearish')
+  const [price, setPrice] = useState('')
+  const [tolerance, setTolerance] = useState('20')
+  const [expiry, setExpiry] = useState('1week')
+  const [customExpiry, setCustomExpiry] = useState('')
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  const { data: entryData, mutate: mutateEntry } = useSWR<EntryAlertsList>(
+    `/api/entry-alerts?tab=${tab}`, fetcher, { refreshInterval: 30000 }
+  )
+
+  useEffect(() => {
+    if (instruments.length > 0 && !instrument) {
+      setInstrument(instruments[0].replace('/', ''))
+    }
+  }, [instruments, instrument])
+
+  const currentPrice: number | undefined = instrument ? prices?.[instrument]?.price : undefined
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    setFormError('')
+    const priceVal = parseFloat(price)
+    const tolVal = parseFloat(tolerance)
+    if (!instrument || isNaN(priceVal) || priceVal <= 0) {
+      setFormError('Select an instrument and enter a valid price.')
+      return
+    }
+    if (isNaN(tolVal) || tolVal <= 0) {
+      setFormError('Tolerance must be greater than 0.')
+      return
+    }
+    let expiresAt: string | null = null
+    if (expiry === 'custom') {
+      if (!customExpiry) { setFormError('Choose a custom expiry date.'); return }
+      expiresAt = new Date(customExpiry).toISOString()
+    } else if (expiry !== 'never') {
+      expiresAt = expiryFromPreset(expiry)
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/entry-alerts`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          instrument,
+          direction,
+          price: priceVal,
+          tolerance_pips: tolVal,
+          note: note.trim() || null,
+          expires_at: expiresAt,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setFormError(err.detail || 'Failed to create alert.')
+        return
+      }
+      setPrice('')
+      setNote('')
+      setTab('active')
+      mutateEntry()
+    } catch {
+      setFormError('Network error — please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDelete(id: number) {
+    await fetch(`${API_BASE}/api/entry-alerts/${id}`, {
+      method: 'DELETE', headers: authHeaders(),
+    })
+    mutateEntry()
+  }
+
+  const activeCount = entryData?.active_count ?? 0
+  const maxAlerts = entryData?.max_alerts ?? 20
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20, alignItems: 'start' }}>
+
+      {/* ── Create form ─────────────────────────────────────────────── */}
+      <div style={{
+        background: 'var(--card)', border: '1px solid var(--border)',
+        borderRadius: 12, overflow: 'hidden',
+      }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Zap size={14} color="var(--accent-hover)" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>New Entry Pattern Alert</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+              Notify me when PCL or Engulfing Sweep forms at my level
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleCreate} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              Instrument
+            </label>
+            <select
+              value={instrument}
+              onChange={e => setInstrument(e.target.value)}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
+                border: '1px solid var(--border)', background: 'var(--bg)',
+                color: 'var(--text-primary)', outline: 'none',
+              }}
+            >
+              {instruments.map(inst => (
+                <option key={inst} value={inst.replace('/', '')}>{inst}</option>
+              ))}
+            </select>
+            {currentPrice !== undefined && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                Current price: <strong style={{ color: 'var(--text-secondary)' }}>{formatPrice(instrument, currentPrice)}</strong>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              Bias direction
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {([['bullish', 'Buy (bullish)'], ['bearish', 'Sell (bearish)']] as const).map(([val, lbl]) => (
+                <button
+                  key={val} type="button"
+                  onClick={() => setDirection(val as 'bullish' | 'bearish')}
+                  style={{
+                    padding: '8px 10px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                    border: '1px solid', cursor: 'pointer',
+                    borderColor: direction === val ? 'var(--accent)' : 'var(--border)',
+                    background: direction === val ? 'var(--accent)' : 'var(--bg)',
+                    color: direction === val ? 'white' : 'var(--text-secondary)',
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              Price level
+            </label>
+            <input
+              type="number"
+              step="any"
+              value={price}
+              onChange={e => setPrice(e.target.value)}
+              placeholder={currentPrice !== undefined ? formatPrice(instrument, currentPrice) : '0.00000'}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
+                border: '1px solid var(--border)', background: 'var(--bg)',
+                color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              Tolerance (pips)
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="1"
+              value={tolerance}
+              onChange={e => setTolerance(e.target.value)}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
+                border: '1px solid var(--border)', background: 'var(--bg)',
+                color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+              How close the pattern must form to your level. Default 20 pips covers
+              normal overshoots. Use smaller (5-10) for tight levels, larger (30-50)
+              for wider zones.
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              Expires
+            </label>
+            <select
+              value={expiry}
+              onChange={e => setExpiry(e.target.value)}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
+                border: '1px solid var(--border)', background: 'var(--bg)',
+                color: 'var(--text-primary)', outline: 'none',
+              }}
+            >
+              <option value="eod">End of day</option>
+              <option value="1week">1 week</option>
+              <option value="1month">1 month</option>
+              <option value="custom">Custom date</option>
+              <option value="never">Never</option>
+            </select>
+            {expiry === 'custom' && (
+              <input
+                type="date"
+                value={customExpiry}
+                onChange={e => setCustomExpiry(e.target.value)}
+                style={{
+                  marginTop: 8, width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
+                  border: '1px solid var(--border)', background: 'var(--bg)',
+                  color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            )}
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              Note <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
+            </label>
+            <textarea
+              rows={2}
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="e.g. Daily Breaker retest from today's SELL BIAS"
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
+                border: '1px solid var(--border)', background: 'var(--bg)',
+                color: 'var(--text-primary)', outline: 'none', resize: 'vertical',
+                boxSizing: 'border-box', fontFamily: 'inherit',
+              }}
+            />
+          </div>
+
+          {formError && (
+            <div style={{ fontSize: 12, color: 'var(--bearish)', padding: '8px 12px', borderRadius: 8, background: 'var(--bearish-bg)' }}>
+              {formError}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: '10px 16px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+              border: 'none', cursor: submitting ? 'not-allowed' : 'pointer',
+              background: 'var(--accent)', color: 'white',
+              opacity: submitting ? 0.6 : 1,
+            }}
+          >
+            {submitting ? 'Creating…' : 'Create Entry Alert'}
+          </button>
+
+        </form>
+      </div>
+
+      {/* ── Alert list ─────────────────────────────────────────────── */}
+      <div style={{
+        background: 'var(--card)', border: '1px solid var(--border)',
+        borderRadius: 12, overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bell size={14} color="var(--accent-hover)" />
+            </div>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Your Entry Alerts</span>
+          </div>
+          <span style={{
+            fontSize: 12, padding: '3px 10px', borderRadius: 20,
+            background: activeCount >= maxAlerts ? 'var(--bearish-bg)' : 'var(--bullish-bg)',
+            color: activeCount >= maxAlerts ? 'var(--bearish)' : 'var(--bullish)',
+            fontWeight: 600,
+          }}>
+            {activeCount} of {maxAlerts} active
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+          {(['active', 'history'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                flex: 1, padding: '11px', fontSize: 13, fontWeight: tab === t ? 600 : 400,
+                border: 'none', cursor: 'pointer', background: 'transparent',
+                color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
+                borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
+              }}
+            >
+              {t === 'active' ? 'Active' : 'History'}
+            </button>
+          ))}
+        </div>
+
+        {!entryData && (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            Loading…
+          </div>
+        )}
+        {entryData?.items.length === 0 && (
+          <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+            <Zap size={28} color="var(--text-muted)" style={{ marginBottom: 12 }} />
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
+              {tab === 'active' ? 'No active entry alerts' : 'No triggered entry alerts yet'}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+              {tab === 'active' ? 'Create one using the form.' : 'Triggered alerts appear here.'}
+            </p>
+          </div>
+        )}
+        {entryData && entryData.items.length > 0 && (
+          <div>
+            {entryData.items.map(item => (
+              <EntryAlertRow key={item.id} item={item} onDelete={handleDelete} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 export default function PriceAlertsPage() {
+  const [mainTab, setMainTab] = useState<'price' | 'entry'>('price')
   const [tab, setTab] = useState<'active' | 'history'>('active')
 
   // Form state
@@ -302,9 +718,38 @@ export default function PriceAlertsPage() {
     <>
       <TopBar
         title="Price Alerts"
-        subtitle="Get notified when any instrument hits your target level"
+        subtitle="Get notified when price hits your level or an entry pattern forms there"
       />
       <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* ── Top-level tab switcher ────────────────────────────────── */}
+        <div style={{ display: 'inline-flex', gap: 4, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, alignSelf: 'flex-start' }}>
+          {([
+            ['price', 'Price Alerts', Target],
+            ['entry', 'Entry Pattern Alerts', Zap],
+          ] as const).map(([val, lbl, Icon]) => (
+            <button
+              key={val}
+              onClick={() => setMainTab(val)}
+              style={{
+                padding: '8px 16px', borderRadius: 7, fontSize: 13,
+                fontWeight: mainTab === val ? 600 : 500,
+                border: 'none', cursor: 'pointer',
+                background: mainTab === val ? 'var(--accent)' : 'transparent',
+                color: mainTab === val ? 'white' : 'var(--text-secondary)',
+                display: 'flex', alignItems: 'center', gap: 6,
+                transition: 'all 0.12s',
+              }}
+            >
+              <Icon size={13} />
+              {lbl}
+            </button>
+          ))}
+        </div>
+
+        {mainTab === 'entry' ? (
+          <EntryAlertsPanel instruments={instruments} prices={prices} />
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20, alignItems: 'start' }}>
 
           {/* ── Create form ─────────────────────────────────────────────── */}
@@ -622,6 +1067,7 @@ export default function PriceAlertsPage() {
           </div>
 
         </div>
+        )}
 
         {/* Note about price updates */}
         <div style={{
@@ -631,8 +1077,9 @@ export default function PriceAlertsPage() {
         }}>
           <Clock size={13} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
-            On touch alerts fire within 5 minutes of the level being crossed.
-            Candle close alerts fire only at the close of your chosen timeframe candle.
+            {mainTab === 'entry'
+              ? 'Entry Pattern alerts fire at H1 or H2 candle close when a PCL or Engulfing Sweep forms within tolerance of your level and matches your direction. Fires once, then auto-closes.'
+              : 'On touch alerts fire within 5 minutes of the level being crossed. Candle close alerts fire only at the close of your chosen timeframe candle.'}
           </span>
         </div>
 

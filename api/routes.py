@@ -888,3 +888,127 @@ def delete_price_alert(alert_id: int, request: Request):
         else:
             conn.execute("DELETE FROM price_alerts WHERE id = ? AND user_id IS NULL", (alert_id,))
     return {"ok": True}
+
+
+# ── Entry Pattern Alerts (PCL + Engulfing Sweep at user-set levels) ──────────
+
+_MAX_ACTIVE_ENTRY_ALERTS = 20
+
+
+class EntryAlertItem(BaseModel):
+    id: int
+    instrument: str
+    direction: str          # 'bullish' | 'bearish'
+    price: float
+    tolerance_pips: float
+    note: Optional[str]
+    expires_at: Optional[str]
+    is_active: bool
+    triggered_at: Optional[str]
+    triggered_pattern: Optional[str]
+    triggered_tf: Optional[str]
+    created_at: str
+
+
+class EntryAlertsList(BaseModel):
+    items: list[EntryAlertItem]
+    active_count: int
+    max_alerts: int
+
+
+class EntryAlertCreate(BaseModel):
+    instrument: str
+    direction: str          # 'bullish' | 'bearish'
+    price: float
+    tolerance_pips: float = 20
+    note: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
+def _row_to_entry_alert(row: sqlite3.Row) -> EntryAlertItem:
+    d = dict(row)
+    return EntryAlertItem(
+        id=d["id"],
+        instrument=d["instrument"],
+        direction=d["direction"],
+        price=d["price"],
+        tolerance_pips=d["tolerance_pips"],
+        note=d.get("note"),
+        expires_at=d.get("expires_at"),
+        is_active=bool(d["is_active"]),
+        triggered_at=d.get("triggered_at"),
+        triggered_pattern=d.get("triggered_pattern"),
+        triggered_tf=d.get("triggered_tf"),
+        created_at=d["created_at"],
+    )
+
+
+@router.get("/entry-alerts", response_model=EntryAlertsList)
+def list_entry_alerts(request: Request, tab: str = Query("active")):
+    uid = _user_id(request)
+    active_filter = "is_active = 1" if tab != "history" else "is_active = 0"
+    with _db(request) as conn:
+        if uid:
+            rows = conn.execute(
+                f"SELECT * FROM entry_pattern_alerts WHERE user_id = ? AND {active_filter} ORDER BY created_at DESC",
+                (uid,),
+            ).fetchall()
+            active_count = conn.execute(
+                "SELECT COUNT(*) FROM entry_pattern_alerts WHERE user_id = ? AND is_active = 1", (uid,)
+            ).fetchone()[0]
+        else:
+            rows = conn.execute(
+                f"SELECT * FROM entry_pattern_alerts WHERE user_id IS NULL AND {active_filter} ORDER BY created_at DESC"
+            ).fetchall()
+            active_count = conn.execute(
+                "SELECT COUNT(*) FROM entry_pattern_alerts WHERE user_id IS NULL AND is_active = 1"
+            ).fetchone()[0]
+    return EntryAlertsList(
+        items=[_row_to_entry_alert(r) for r in rows],
+        active_count=active_count,
+        max_alerts=_MAX_ACTIVE_ENTRY_ALERTS,
+    )
+
+
+@router.post("/entry-alerts", response_model=EntryAlertItem)
+def create_entry_alert(body: EntryAlertCreate, request: Request):
+    uid = _user_id(request)
+    instrument = body.instrument.replace("/", "").upper()
+    direction = body.direction.lower()
+    if direction not in ("bullish", "bearish"):
+        raise HTTPException(status_code=400, detail="direction must be 'bullish' or 'bearish'")
+    if body.tolerance_pips <= 0:
+        raise HTTPException(status_code=400, detail="tolerance_pips must be > 0")
+    with _db_write(request) as conn:
+        if uid:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM entry_pattern_alerts WHERE user_id = ? AND is_active = 1", (uid,)
+            ).fetchone()[0]
+        else:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM entry_pattern_alerts WHERE user_id IS NULL AND is_active = 1"
+            ).fetchone()[0]
+        if count >= _MAX_ACTIVE_ENTRY_ALERTS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum {_MAX_ACTIVE_ENTRY_ALERTS} active entry pattern alerts reached.",
+            )
+        now = datetime.now(timezone.utc).isoformat()
+        cur = conn.execute("""
+            INSERT INTO entry_pattern_alerts
+                (user_id, instrument, direction, price, tolerance_pips, note, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (uid, instrument, direction, body.price, body.tolerance_pips, body.note, body.expires_at, now))
+        row = conn.execute("SELECT * FROM entry_pattern_alerts WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return _row_to_entry_alert(row)
+
+
+@router.delete("/entry-alerts/{alert_id}")
+def delete_entry_alert(alert_id: int, request: Request):
+    uid = _user_id(request)
+    with _db_write(request) as conn:
+        if uid:
+            conn.execute("DELETE FROM entry_pattern_alerts WHERE id = ? AND user_id = ?", (alert_id, uid))
+        else:
+            conn.execute("DELETE FROM entry_pattern_alerts WHERE id = ? AND user_id IS NULL", (alert_id,))
+    return {"ok": True}

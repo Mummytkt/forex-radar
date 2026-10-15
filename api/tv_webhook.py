@@ -540,12 +540,15 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
 async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
     """
     H1/H2 entry-pattern confirmation (PCL or Engulfing Sweep).
-    Gated by three requirements before firing a Telegram alert:
-      1. The pair must have an active Daily breakout.
-      2. The pattern direction must match the active bias direction.
-      3. Price must be within tolerance of the broken level or an active
-         reaction source level — the user is only interested in entries
-         AT the key level, not random H1/H2 sweeps.
+
+    Matches the incoming pattern against each user's active entry_pattern_alerts
+    for this instrument. An alert fires (and auto-closes) when ALL of these hold:
+      - direction matches
+      - pattern price is within <alert.tolerance_pips> of the user's set price
+      - alert is active and not expired
+
+    If no user is watching this instrument/direction/price band — silently ignored.
+    No bias-state gating: users deliberately choose when and where to watch.
     """
     direction = payload.direction
     pattern = payload.pattern
@@ -561,43 +564,64 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         logger.warning("%s ENTRY_CONFIRMATION ignored — missing price/swept_level", instrument)
         return
 
-    breakout = get_active_breakout(conn, instrument)
-    if breakout is None:
-        logger.info("%s ENTRY_CONFIRMATION skipped — no active bias", instrument)
-        return
-
-    if breakout.direction.value != direction:
-        logger.info("%s ENTRY_CONFIRMATION skipped — direction %s does not match active bias %s",
-                    instrument, direction, breakout.direction.value)
-        return
-
-    # Price proximity gate: within 30 pips of broken_level or any active reaction source.
+    now_iso = datetime.utcnow().isoformat()
     pip_size = pip_size_for(instrument)
-    proximity = 30 * pip_size
 
-    candidate_levels = [breakout.broken_level]
-    for src in get_active_reaction_sources(conn, instrument):
-        candidate_levels.append(src.level)
+    # Find every active, matching, non-expired entry alert for this instrument + direction
+    rows = conn.execute("""
+        SELECT epa.id, epa.price, epa.tolerance_pips, epa.note,
+               u.telegram_chat_id
+        FROM entry_pattern_alerts epa
+        LEFT JOIN users u ON u.id = epa.user_id
+        WHERE epa.instrument = ?
+          AND epa.direction = ?
+          AND epa.is_active = 1
+          AND (epa.expires_at IS NULL OR epa.expires_at > ?)
+    """, (instrument, direction, now_iso)).fetchall()
 
-    if not any(abs(price - lvl) <= proximity for lvl in candidate_levels):
-        logger.info("%s ENTRY_CONFIRMATION skipped — price %.5f not near any key level %s",
-                    instrument, price, candidate_levels)
+    if not rows:
+        logger.info("%s ENTRY_CONFIRMATION %s %s @ %.5f — no watchers",
+                    instrument, direction, pattern, price)
         return
 
-    alert_text = format_entry_alert(
-        instrument=instrument,
-        direction=direction,
-        pattern=pattern,
-        timeframe=tf,
-        price=price,
-        swept_level=swept_level,
-    )
+    tf_label = "H1" if tf == "60" else ("H2" if tf == "120" else tf)
 
-    logger.info("%s ENTRY_CONFIRMATION %s %s on TF %s @ %.5f — delivering alert",
-                instrument, direction, pattern, tf, price)
+    for row in rows:
+        alert_id = row["id"]
+        alert_price = row["price"]
+        tol_pips = row["tolerance_pips"]
+        note = row["note"]
+        chat_id = row["telegram_chat_id"] or config.telegram_chat_id
 
-    if config.telegram_enabled:
-        await _deliver_alert(conn, config, instrument, alert_text)
+        proximity = tol_pips * pip_size
+        if abs(price - alert_price) > proximity:
+            continue  # pattern formed too far from this user's watched level
+
+        # Mark the alert as triggered (one-shot — auto-closes)
+        conn.execute("""
+            UPDATE entry_pattern_alerts
+            SET is_active = 0, triggered_at = ?,
+                triggered_pattern = ?, triggered_tf = ?
+            WHERE id = ?
+        """, (now_iso, pattern, tf_label, alert_id))
+        conn.commit()
+
+        alert_text = format_entry_alert(
+            instrument=instrument,
+            direction=direction,
+            pattern=pattern,
+            timeframe=tf,
+            price=price,
+            swept_level=swept_level,
+        )
+        if note:
+            alert_text += f"\n\nYour note: {note}"
+
+        logger.info("%s ENTRY_CONFIRMATION %s %s @ %.5f matched alert_id=%d (watched @ %.5f, tol %.1f pips)",
+                    instrument, direction, pattern, price, alert_id, alert_price, tol_pips)
+
+        if config.telegram_enabled and chat_id:
+            await send_alert(config.telegram_bot_token, chat_id, alert_text)
 
 
 def _handle_invalidated(conn, instrument: str) -> None:
