@@ -261,7 +261,7 @@ export default function LandingPage() {
         <section style={{ position: 'relative', zIndex: 2, maxWidth: 1000, margin: '0 auto', padding: '20px 24px 120px' }}>
           <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
             {PILLARS.map(({ icon: Icon, title, body, color }) => (
-              <div key={title} style={{ background: `${color}1f`, border: `1px solid ${color}55`, borderRadius: 18, padding: '26px 22px', backdropFilter: 'blur(6px)', boxShadow: `0 18px 44px -24px ${color}` }}>
+              <div key={title} className="lp-pop" style={{ background: `${color}1f`, border: `1px solid ${color}55`, borderRadius: 18, padding: '26px 22px', backdropFilter: 'blur(6px)', boxShadow: `0 18px 44px -24px ${color}` }}>
                 <div style={{ width: 46, height: 46, borderRadius: 13, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, boxShadow: `0 8px 20px -6px ${color}` }}>
                   <Icon size={21} color="#fff" />
                 </div>
@@ -295,7 +295,7 @@ export default function LandingPage() {
         </div>
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
           {STEPS.map(({ n, title, body, color }) => (
-            <div key={n} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '22px 20px', borderTop: `3px solid ${color}` }}>
+            <div key={n} className="lp-pop" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '22px 20px', borderTop: `3px solid ${color}` }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 9, background: `${color}22`, color, fontSize: 13, fontWeight: 800, marginBottom: 12 }}>{n}</div>
               <p style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 7 }}>{title}</p>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{body}</p>
@@ -308,7 +308,7 @@ export default function LandingPage() {
       <section style={{ maxWidth: 940, margin: '0 auto', padding: '60px 24px 72px' }}>
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           {FEATURES.map(({ icon: Icon, title, body, color }) => (
-            <div key={title} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 20px' }}>
+            <div key={title} className="lp-pop" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 20px' }}>
               <div style={{ width: 40, height: 40, borderRadius: 11, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, boxShadow: `0 8px 20px -6px ${color}` }}>
                 <Icon size={19} color="#fff" />
               </div>
@@ -340,11 +340,10 @@ export default function LandingPage() {
 
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16 }}>
           {PLANS.map(plan => (
-            <div key={plan.id} style={{
-              background: `${plan.color}1f`, border: `1px solid ${plan.color}55`,
+            <div key={plan.id} className="lp-pop" style={{
+              background: `${plan.color}1f`, border: `${plan.highlight ? 2 : 1}px solid ${plan.color}${plan.highlight ? 'aa' : '55'}`,
               borderRadius: 18, padding: '26px 22px', display: 'flex', flexDirection: 'column',
               boxShadow: `0 18px 44px -24px ${plan.color}`, position: 'relative',
-              transform: plan.highlight ? 'scale(1.03)' : undefined,
             }}>
               {plan.badge && (
                 <div style={{ position: 'absolute', top: 14, right: 14, padding: '3px 10px', borderRadius: 99, background: `${plan.color}2e`, color: plan.color, fontSize: 11, fontWeight: 700 }}>{plan.badge}</div>

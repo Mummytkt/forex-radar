@@ -5,11 +5,11 @@ import Link from 'next/link'
 import { Radio, CheckCircle2, ArrowLeft, Loader2 } from 'lucide-react'
 import { API_BASE } from '@/lib/api'
 
-const PLAN_LABELS: Record<string, { label: string; price: number; duration: string }> = {
-  '30DAY':   { label: '30 Days',   price: 10, duration: '30 days' },
-  '6MONTH':  { label: '6 Months',  price: 48, duration: '6 months' },
-  '9MONTH':  { label: '9 Months',  price: 63, duration: '9 months' },
-  '12MONTH': { label: '12 Months', price: 72, duration: '12 months' },
+const PLAN_LABELS: Record<string, { label: string; price: number; duration: string; color: string }> = {
+  '30DAY':   { label: '30 Days',   price: 10, duration: '30 days',   color: '#3b82f6' },
+  '6MONTH':  { label: '6 Months',  price: 48, duration: '6 months',  color: '#10b981' },
+  '9MONTH':  { label: '9 Months',  price: 63, duration: '9 months',  color: '#7c3aed' },
+  '12MONTH': { label: '12 Months', price: 72, duration: '12 months', color: '#f59e0b' },
 }
 
 function SignupForm() {
@@ -78,16 +78,17 @@ function SignupForm() {
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Plan summary */}
       <div style={{
-        background: 'var(--accent-bg)', border: '1px solid rgba(99,102,241,0.25)',
-        borderRadius: 10, padding: '14px 18px',
+        background: `${plan.color}1f`, border: `1px solid ${plan.color}55`,
+        borderRadius: 12, padding: '14px 18px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        boxShadow: `0 14px 36px -22px ${plan.color}`,
       }}>
         <div>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>Selected plan</p>
-          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent-hover)' }}>{plan.label}</p>
+          <p style={{ fontSize: 15, fontWeight: 700, color: plan.color }}>{plan.label}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>${plan.price}</p>
+          <p style={{ fontSize: 22, fontWeight: 800, color: plan.color }}>${plan.price}</p>
           <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>{plan.duration}</p>
         </div>
       </div>
@@ -159,7 +160,7 @@ export default function SignupPage() {
         </div>
 
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: '28px 28px' }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Request access</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4, letterSpacing: '-0.01em' }}>Request <span className="lp-grad1">access</span></h1>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
             Fill in your details and we&apos;ll send payment instructions. Access is set up manually once payment is confirmed.
           </p>
