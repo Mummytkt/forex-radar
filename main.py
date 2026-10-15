@@ -27,6 +27,7 @@ from alerts.price_monitor import run_price_check
 from alerts.billing_cycle import run_billing_cycle
 from alerts.backup import run_backup
 from alerts.feed_monitor import run_feed_check
+from alerts.reminders import run_reminders
 
 
 def setup_logging(level: str) -> None:
@@ -135,8 +136,17 @@ async def main(dry_run: bool = False) -> None:
         name="TradingView feed health (warns owner when a pair goes silent)",
         misfire_grace_time=600,
     )
+    scheduler.add_job(
+        run_reminders,
+        "interval",
+        hours=6,
+        kwargs={"db_path": config.db_path, "config": config},
+        id="subscription_reminders",
+        name="Renewal / trial-ending / access-ended reminders to subscribers' Telegram",
+        misfire_grace_time=1800,
+    )
     scheduler.start()
-    logger.info("Price monitor + billing cycle + daily backup + feed monitor started")
+    logger.info("Price monitor + billing cycle + daily backup + feed monitor + reminders started")
 
     server = uvicorn.Server(
         uvicorn.Config(

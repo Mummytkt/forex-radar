@@ -497,6 +497,15 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_pattern_alerts_inst ON entry_pattern_alerts (instrument, is_active)")
 
+    # One row per one-off notice already sent (renewal reminders etc.) — prevents repeats
+    if "notices_sent" not in tables:
+        conn.execute("""
+            CREATE TABLE notices_sent (
+                key     TEXT PRIMARY KEY,   -- e.g. 'expiry3:<uid>:<plan_expires_at>'
+                sent_at TEXT NOT NULL
+            )
+        """)
+
     # H4 closing prices from TradingView PRICE_UPDATE webhooks — powers the track record
     if "price_ticks" not in tables:
         conn.execute("""

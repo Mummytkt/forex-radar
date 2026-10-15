@@ -107,6 +107,7 @@ async def run_billing_cycle(db_path: str, config) -> None:
                 conn.execute("UPDATE users SET next_charge_at = ? WHERE id = ?",
                              (( now + timedelta(days=1)).isoformat(), u["id"]))
                 conn.commit()
+                await _notify_charge_failed(conn, config, u["id"])
                 continue
 
             if data.get("status") == "success":
@@ -122,16 +123,44 @@ async def run_billing_cycle(db_path: str, config) -> None:
                 link_and_maybe_credit(conn, pay, u["id"], credit=True)
                 conn.commit()
                 logger.info("Renewed %s on %s (+%d days)", u["email"], u["renew_plan"], days)
+                await _notify_renewed(conn, config, u["id"], reference, amount, new_exp)
             else:
                 conn.execute("UPDATE payments SET status = 'failed' WHERE reference = ?", (reference,))
                 conn.execute("UPDATE users SET next_charge_at = ? WHERE id = ?",
                              ((now + timedelta(days=1)).isoformat(), u["id"]))
                 conn.commit()
+                await _notify_charge_failed(conn, config, u["id"])
 
     except Exception as exc:
         logger.exception("Billing cycle failed: %s", exc)
     finally:
         conn.close()
+
+
+async def _notify_charge_failed(conn, config, uid: int) -> None:
+    """Tell the subscriber once per period that their card was declined."""
+    from alerts.reminders import notify_once, fmt_day, _parse as _p
+    u = conn.execute("SELECT name, plan_expires_at, telegram_chat_id FROM users WHERE id = ?", (uid,)).fetchone()
+    if not u:
+        return
+    exp = _p(u["plan_expires_at"])
+    first = (u["name"] or "").split(" ")[0]
+    text = (f"Hi{' ' + first if first else ''}, we couldn't charge your card to renew MummyTKT's Bias Pointer. "
+            "We'll try again over the next few days.\n\n"
+            + (f"Your access runs until {fmt_day(exp)}. " if exp else "")
+            + f"To use a different card, choose a plan here: {config.frontend_url}/checkout")
+    await notify_once(conn, config, f"chargefail:{uid}:{u['plan_expires_at']}", u["telegram_chat_id"], text)
+
+
+async def _notify_renewed(conn, config, uid: int, reference: str, amount: float, new_exp) -> None:
+    """Receipt for a successful automatic renewal."""
+    from alerts.reminders import notify_once, fmt_day
+    u = conn.execute("SELECT telegram_chat_id FROM users WHERE id = ?", (uid,)).fetchone()
+    if not u:
+        return
+    text = (f"✅ Renewed: ${amount:g} charged. Your MummyTKT's Bias Pointer access now runs until {fmt_day(new_exp)}.\n"
+            f"Reference: {reference}")
+    await notify_once(conn, config, f"renewed:{uid}:{reference}", u["telegram_chat_id"], text)
 
 
 def _current_expiry(conn, uid: int):
