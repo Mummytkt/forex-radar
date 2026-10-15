@@ -187,7 +187,11 @@ body {
 
 .sidebar-mobile { transition: transform 0.25s ease, background 0.25s, border-color 0.25s; }
 
+/* Form + list split used on the alerts pages */
+.alert-split { display: grid; grid-template-columns: 1fr 1.4fr; gap: 20px; align-items: start; }
+
 @media (max-width: 767px) {
+  .alert-split { grid-template-columns: 1fr !important; }
   :root { --sidebar-w: 0px; }
   .mobile-only { display: flex !important; }
   .desktop-only { display: none !important; }

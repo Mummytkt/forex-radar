@@ -345,7 +345,7 @@ function EntryAlertsPanel({ instruments, prices }: {
   const maxAlerts = entryData?.max_alerts ?? 20
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20, alignItems: 'start' }}>
+    <div className="alert-split">
 
       {/* ── Create form ─────────────────────────────────────────────── */}
       <div style={{
@@ -750,7 +750,7 @@ export default function PriceAlertsPage() {
         {mainTab === 'entry' ? (
           <EntryAlertsPanel instruments={instruments} prices={prices} />
         ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20, alignItems: 'start' }}>
+        <div className="alert-split">
 
           {/* ── Create form ─────────────────────────────────────────────── */}
           <div style={{

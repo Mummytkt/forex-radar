@@ -157,11 +157,12 @@ function InstrumentManager() {
         ))}
       </div>
 
-      <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)' }}>
+      <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', flexWrap: 'wrap' }}>
         <button onClick={save} disabled={saving || enabled.length === 0} style={{
           display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 8,
           fontSize: 13, fontWeight: 600, background: 'var(--accent)', color: 'white',
           border: 'none', cursor: 'pointer', opacity: saving || enabled.length === 0 ? 0.6 : 1,
+          flexShrink: 0,
         }}>
           <Save size={13} /> {saving ? 'Saving…' : 'Save & Apply'}
         </button>
@@ -308,7 +309,7 @@ export default function SettingsPage() {
   return (
     <>
       <TopBar title="Settings" subtitle="Instruments, account, and engine configuration" />
-      <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main className="page-padded" style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         <Section title="My Instruments" desc="Select which pairs you want to receive alerts for. Your choices are private and don't affect other users.">
           <InstrumentManager />
@@ -316,14 +317,14 @@ export default function SettingsPage() {
 
         <Section title="Profile" desc="Your display name shown on the Overview greeting.">
           <div style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', flex: 1 }}>
-                <User size={14} color="var(--text-secondary)" />
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', flex: '1 1 200px', minWidth: 0 }}>
+                <User size={14} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
                 <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveName()}
                   placeholder="e.g. Alex"
-                  style={{ background: 'none', border: 'none', outline: 'none', fontSize: 13, color: 'var(--text-primary)', flex: 1 }} />
+                  style={{ background: 'none', border: 'none', outline: 'none', fontSize: 13, color: 'var(--text-primary)', flex: 1, minWidth: 0 }} />
               </div>
-              <button onClick={saveName} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer' }}>
+              <button onClick={saveName} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
                 <Save size={13} /> {nameSaved ? 'Saved ✓' : 'Save'}
               </button>
             </div>
