@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
+from datetime import datetime, timezone
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -16,6 +19,40 @@ _ALWAYS_PUBLIC = {
     "/api/paystack/webhook", # Paystack webhook (verified by HMAC signature)
 }
 _PUBLIC_PREFIXES = ("/api/videos/", "/api/public/")
+
+
+def _load_live_user(app, user_id: int):
+    """Re-read the user from the DB on every request so revocation and plan
+    expiry take effect immediately — not only at the next login. Returns
+    (ok, role_or_detail). ok=False means the request must be rejected."""
+    path = app.state.config.db_path
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT role, plan, plan_expires_at FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    # Account no longer exists (revoked/deleted) — token must stop working now.
+    if row is None:
+        return False, "Account no longer exists"
+
+    role = row["role"]
+    # Owners and lifetime accounts never expire. Everyone else is enforced
+    # per-request: when the plan expires, access ends immediately.
+    if role != "OWNER" and row["plan"] != "LIFETIME" and row["plan_expires_at"]:
+        try:
+            exp = datetime.fromisoformat(row["plan_expires_at"].replace("Z", "+00:00"))
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < datetime.now(timezone.utc):
+                return False, "Your subscription has expired"
+        except Exception:
+            # Unparseable expiry → treat as non-blocking rather than lock out.
+            pass
+    return True, role
 
 
 async def auth_middleware(request: Request, call_next):
@@ -46,5 +83,14 @@ async def auth_middleware(request: Request, call_next):
     if not payload:
         return JSONResponse({"detail": "Invalid or expired token"}, status_code=401)
 
-    request.state.user = {"id": int(payload["sub"]), "role": payload["role"]}
+    user_id = int(payload["sub"])
+
+    # Re-validate against the live DB every request: enforces revocation and
+    # plan expiry the moment they happen, regardless of the 60-day token life.
+    ok, role_or_detail = _load_live_user(request.app, user_id)
+    if not ok:
+        return JSONResponse({"detail": role_or_detail}, status_code=403)
+
+    # Use the authoritative role from the DB, not the (possibly stale) token.
+    request.state.user = {"id": user_id, "role": role_or_detail}
     return await call_next(request)

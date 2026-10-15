@@ -55,6 +55,17 @@ def _db_write(request: Request):
 
 router = APIRouter()
 
+
+def _require_owner(request: Request) -> None:
+    """Gate platform-control actions to the owner. Mirrors the convention used
+    by PUT /config/instruments: when auth is enabled the middleware always sets
+    request.state.user, so a subscriber hitting these routes is rejected; before
+    any account exists (bootstrap) there is no user and the call is allowed."""
+    user = getattr(request.state, "user", None)
+    if user and user.get("role") != "OWNER":
+        raise HTTPException(status_code=403, detail="Only the platform owner can perform this action.")
+
+
 CATEGORIES: dict[str, str] = {
     "EUR/USD": "Major", "GBP/USD": "Major", "USD/JPY": "Major",
     "USD/CHF": "Major", "USD/CAD": "Major", "AUD/USD": "Major", "NZD/USD": "Major",
@@ -502,6 +513,7 @@ def get_preferences(request: Request):
 @router.patch("/preferences")
 def update_preferences(request: Request, body: AlertPreferencesUpdate):
     """Persist alert-type delivery preferences (controls what Telegram receives)."""
+    _require_owner(request)
     with _db_write(request) as conn:
         if body.alertExternal is not None:
             conn.execute(
@@ -575,6 +587,7 @@ def list_videos(request: Request):
 
 @router.post("/videos")
 def add_video(request: Request, body: VideoAdd):
+    _require_owner(request)
     with _db_write(request) as conn:
         row = conn.execute("SELECT value FROM user_config WHERE key = 'tutorial_videos'").fetchone()
         videos = json.loads(row[0]) if row else []
@@ -588,6 +601,7 @@ def add_video(request: Request, body: VideoAdd):
 
 @router.delete("/videos")
 def remove_video(request: Request, url: str = Query(...)):
+    _require_owner(request)
     with _db_write(request) as conn:
         row = conn.execute("SELECT value FROM user_config WHERE key = 'tutorial_videos'").fetchone()
         videos = json.loads(row[0]) if row else []
@@ -780,6 +794,7 @@ def admin_reset_instrument(request: Request, body: dict):
     re-detect from the current daily candle history on the next H4 cycle.
     Useful for correcting wrong-direction state caused by spurious supersessions.
     """
+    _require_owner(request)
     raw = body.get("instruments", [])
     if not raw:
         raise HTTPException(status_code=400, detail="'instruments' list required")
