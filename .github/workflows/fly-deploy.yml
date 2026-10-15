@@ -1,4 +1,5 @@
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+# Requires the FLY_API_TOKEN repo secret (Settings > Secrets > Actions).
 
 name: Fly Deploy
 on:
