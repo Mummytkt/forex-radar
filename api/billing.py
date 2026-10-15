@@ -185,6 +185,12 @@ async def start_checkout(body: CheckoutBody, request: Request):
     usd = plan["usd"]
     reference = "mbp_" + secrets.token_hex(12)
 
+    # Convert USD to the correct subunit amount for the charge currency
+    if config.paystack_currency == "NGN":
+        amount_subunits = round(usd * config.paystack_ngn_rate * 100)  # kobo
+    else:
+        amount_subunits = round(usd * 100)  # cents
+
     with _db_write(request) as conn:
         conn.execute(
             "INSERT INTO payments (reference, email, name, plan, billing_mode, amount_usd, currency, "
@@ -198,11 +204,12 @@ async def start_checkout(body: CheckoutBody, request: Request):
             paystack.initialize_transaction,
             config.paystack_secret_key,
             email=email,
-            amount_subunits=round(usd * 100),
+            amount_subunits=amount_subunits,
             currency=config.paystack_currency,
             reference=reference,
             callback_url=f"{config.frontend_url}/checkout/success?reference={reference}",
-            metadata={"plan": body.plan.upper(), "billing": billing, "trial": trial, "name": body.name.strip()},
+            metadata={"plan": body.plan.upper(), "billing": billing, "trial": trial, "name": body.name.strip(), "usd_amount": usd},
+            channels=["card", "bank", "ussd", "bank_transfer"],
         )
     except paystack.PaystackError as e:
         raise HTTPException(502, f"Could not start checkout: {e}")

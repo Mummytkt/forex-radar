@@ -135,7 +135,8 @@ function CheckoutForm() {
       </button>
 
       <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-        Payments are processed securely by Paystack. Card details never touch our servers.
+        Prices in USD. You&apos;ll be charged the equivalent in NGN (shown on the Paystack checkout).
+        Payments processed securely by Paystack — card details never touch our servers.
       </p>
       <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
         Already have an account? <Link href="/login" style={{ color: 'var(--accent-hover)', textDecoration: 'none', fontWeight: 600 }}>Sign in</Link>

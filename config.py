@@ -22,6 +22,7 @@ class Config:
     telegram_webhook_secret: str = ""  # secret_token header validated on Telegram bot webhook
     paystack_secret_key: str = ""    # Paystack secret (server-side API + webhook signature)
     paystack_currency: str = "USD"   # charge currency; set NGN if USD isn't enabled on the account
+    paystack_ngn_rate: float = 1600.0  # USD→NGN rate used when currency is NGN; update via PAYSTACK_NGN_RATE secret
     frontend_url: str = "https://frontend-fawn-nine-68.vercel.app"  # for Paystack callback_url
     db_path: str = "forex_radar.db"
     instruments: list[str] = field(default_factory=list)
@@ -46,6 +47,7 @@ def load_config(env_path: str = ".env") -> Config:
         telegram_webhook_secret=os.getenv("TELEGRAM_WEBHOOK_SECRET", ""),
         paystack_secret_key=os.getenv("PAYSTACK_SECRET_KEY", ""),
         paystack_currency=os.getenv("PAYSTACK_CURRENCY", "USD"),
+        paystack_ngn_rate=float(os.getenv("PAYSTACK_NGN_RATE", "1600")),
         frontend_url=os.getenv("FRONTEND_URL", "https://frontend-fawn-nine-68.vercel.app"),
         db_path=os.getenv("DB_PATH", "forex_radar.db"),
         instruments=instruments,

@@ -82,16 +82,21 @@ async def run_billing_cycle(db_path: str, config) -> None:
             )
             conn.commit()
 
+            if config.paystack_currency == "NGN":
+                charge_subunits = round(amount * config.paystack_ngn_rate * 100)
+            else:
+                charge_subunits = round(amount * 100)
+
             try:
                 data = await asyncio.to_thread(
                     paystack.charge_authorization,
                     config.paystack_secret_key,
                     email=u["email"],
-                    amount_subunits=round(amount * 100),
+                    amount_subunits=charge_subunits,
                     currency=config.paystack_currency,
                     authorization_code=u["paystack_auth_code"],
                     reference=reference,
-                    metadata={"renewal": True, "plan": u["renew_plan"]},
+                    metadata={"renewal": True, "plan": u["renew_plan"], "usd_amount": amount},
                 )
             except paystack.PaystackError as e:
                 logger.warning("Renewal charge failed for %s: %s", u["email"], e)

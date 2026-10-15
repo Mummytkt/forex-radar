@@ -48,6 +48,7 @@ def _request(method: str, path: str, secret_key: str, body: dict | None = None) 
 def initialize_transaction(
     secret_key: str, *, email: str, amount_subunits: int, currency: str,
     reference: str, callback_url: str, metadata: dict,
+    channels: list | None = None,
 ) -> dict:
     """Start a transaction; returns {authorization_url, access_code, reference}."""
     payload = {
@@ -58,6 +59,8 @@ def initialize_transaction(
         "callback_url": callback_url,
         "metadata": metadata,
     }
+    if channels:
+        payload["channels"] = channels
     res = _request("POST", "/transaction/initialize", secret_key, payload)
     if not res.get("status"):
         raise PaystackError(res.get("message", "initialize failed"))
