@@ -331,6 +331,39 @@ def set_password(body: SetPwBody, request: Request):
     return {"token": token, "user": {"id": u["id"], "email": u["email"], "name": u["name"] or "", "role": u["role"], "plan": u["plan"]}}
 
 
+class ClaimBody(BaseModel):
+    email: str
+    reference: str
+
+
+@router.post("/public/claim-account")
+def claim_account(body: ClaimBody, request: Request):
+    """Someone paid but left before setting a password. They prove the payment is
+    theirs with their email + the transaction reference from Paystack's receipt
+    email, and get a one-time set-password token."""
+    ip_key = "claim:" + client_ip(request)
+    if rate_limited(ip_key, 10, 3600):
+        raise HTTPException(429, "Too many attempts. Please try again later.")
+    record_hit(ip_key)
+    email = body.email.strip().lower()
+    reference = body.reference.strip()
+    generic = "We couldn't match that payment. Check the email and the reference on your Paystack receipt."
+    with _db_write(request) as conn:
+        pay = conn.execute(
+            "SELECT user_id FROM payments WHERE reference = ? AND LOWER(email) = ? AND status = 'paid'",
+            (reference, email)).fetchone()
+        if not pay or not pay["user_id"]:
+            raise HTTPException(400, generic)
+        u = conn.execute("SELECT id, password_hash FROM users WHERE id = ?", (pay["user_id"],)).fetchone()
+        if not u:
+            raise HTTPException(400, generic)
+        if u["password_hash"]:
+            raise HTTPException(400, "This account already has a password. Sign in, or use Forgot password.")
+        token = secrets.token_urlsafe(24)
+        conn.execute("UPDATE users SET set_password_token = ? WHERE id = ?", (token, u["id"]))
+    return {"set_password_token": token}
+
+
 # ── Affiliate programme ─────────────────────────────────────────────────────────
 
 def _mask_email(email: str) -> str:

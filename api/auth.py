@@ -66,7 +66,8 @@ def _secret(app) -> str:
 def create_token(payload: dict, app) -> str:
     if not _CRYPTO_OK:
         raise RuntimeError("python-jose not installed")
-    data = {**payload, "exp": datetime.now(timezone.utc) + timedelta(days=TOKEN_DAYS)}
+    now = datetime.now(timezone.utc)
+    data = {**payload, "iat": int(now.timestamp()), "exp": now + timedelta(days=TOKEN_DAYS)}
     return jwt.encode(data, _secret(app), algorithm=ALGORITHM)
 
 
@@ -312,10 +313,17 @@ def update_profile(body: ProfileBody, request: Request):
         params.append(hash_pw(body.new_password))
     if not updates:
         raise HTTPException(400, "Nothing to update")
+    new_token = None
+    if body.new_password:
+        # Signs out every other session; this one gets a fresh token below.
+        updates.append("pw_changed_at = ?")
+        params.append(int(datetime.now(timezone.utc).timestamp()))
     params.append(u["id"])
     with _db_write(request) as conn:
         conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
-    return {"ok": True}
+    if body.new_password:
+        new_token = create_token({"sub": str(u["id"]), "role": u["role"]}, request.app)
+    return {"ok": True, "token": new_token}
 
 
 @auth_router.get("/users")
@@ -323,16 +331,108 @@ def list_users(request: Request):
     require_owner(request)
     with _db(request) as conn:
         rows = conn.execute(
-            "SELECT id, email, name, role, plan, plan_expires_at, invite_used, created_at, last_login_at, telegram_chat_id "
+            "SELECT id, email, name, role, plan, plan_expires_at, invite_used, created_at, last_login_at, "
+            "telegram_chat_id, password_hash, billing_mode "
             "FROM users ORDER BY created_at ASC"
         ).fetchall()
     out = []
     for r in rows:
         d = dict(r)
-        # expose only whether Telegram is linked, never the chat id itself
+        # expose only whether Telegram is linked / a password is set — never the values
         d["telegram_linked"] = bool((d.pop("telegram_chat_id", None) or "").strip())
+        d["has_password"] = bool(d.pop("password_hash", None))
         out.append(d)
     return out
+
+
+# ── Password reset ────────────────────────────────────────────────────────────
+
+class ForgotBody(BaseModel):
+    email: str
+
+
+class ResetBody(BaseModel):
+    token: str
+    password: str
+
+
+def _issue_reset_token(conn, user_id: int, minutes: int) -> str:
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
+    conn.execute("UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?",
+                 (token, expires, user_id))
+    return token
+
+
+@auth_router.post("/forgot")
+async def forgot_password(body: ForgotBody, request: Request):
+    """Send a one-time reset link to the account's linked Telegram. Always answers the
+    same way, so nobody can use this to find out which emails have accounts."""
+    email = body.email.strip().lower()
+    ip_key, email_key = "forgot-ip:" + client_ip(request), "forgot-email:" + email
+    if rate_limited(ip_key, 5, 900) or rate_limited(email_key, 3, 3600):
+        raise HTTPException(429, "Too many reset requests. Please wait a while and try again.")
+    record_hit(ip_key)
+    record_hit(email_key)
+
+    config = request.app.state.config
+    with _db_write(request) as conn:
+        row = conn.execute("SELECT id, name, telegram_chat_id FROM users WHERE LOWER(email) = ?",
+                           (email,)).fetchone()
+        token = _issue_reset_token(conn, row["id"], 30) if row and row["telegram_chat_id"] else None
+
+    if token and config.telegram_enabled:
+        from alerts.telegram import send_alert
+        link = f"{config.frontend_url}/reset?token={token}"
+        await send_alert(
+            config.telegram_bot_token, row["telegram_chat_id"],
+            "🔐 Password reset for your MummyTKT's Bias Pointer account.\n\n"
+            f"Tap to choose a new password (link works once, for 30 minutes):\n{link}\n\n"
+            "Didn't ask for this? Ignore this message and your password stays the same.",
+        )
+    return {
+        "ok": True,
+        "message": "If that email has an account with Telegram linked, a reset link is on its way to that Telegram.",
+    }
+
+
+@auth_router.post("/reset")
+def reset_password(body: ResetBody, request: Request):
+    if len(body.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    with _db_write(request) as conn:
+        u = conn.execute(
+            "SELECT id, email, name, role, plan, reset_token_expires_at FROM users WHERE reset_token = ?",
+            (body.token,)).fetchone()
+        if not u:
+            raise HTTPException(400, "This reset link is invalid or has already been used.")
+        exp = datetime.fromisoformat(u["reset_token_expires_at"]) if u["reset_token_expires_at"] else None
+        if not exp or exp < datetime.now(timezone.utc):
+            conn.execute("UPDATE users SET reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?", (u["id"],))
+            raise HTTPException(400, "This reset link has expired. Request a new one.")
+        conn.execute(
+            "UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires_at = NULL, "
+            "set_password_token = NULL, pw_changed_at = ?, last_login_at = datetime('now') WHERE id = ?",
+            (hash_pw(body.password), int(datetime.now(timezone.utc).timestamp()), u["id"]))
+    clear_hits("email:" + u["email"].lower())
+    token = create_token({"sub": str(u["id"]), "role": u["role"]}, request.app)
+    return {"token": token, "user": {"id": u["id"], "email": u["email"], "name": u["name"] or "",
+                                     "role": u["role"], "plan": u["plan"]}}
+
+
+@auth_router.post("/users/{user_id}/reset-link")
+def owner_reset_link(user_id: int, request: Request):
+    """Owner-only: a 24-hour one-time link to send a subscriber who can't use Telegram
+    reset (no Telegram linked, or never set a password after paying)."""
+    require_owner(request)
+    with _db_write(request) as conn:
+        u = conn.execute("SELECT id, role FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not u:
+            raise HTTPException(404, "User not found")
+        if u["role"] == "OWNER":
+            raise HTTPException(400, "Use Change password on your own account")
+        token = _issue_reset_token(conn, user_id, 24 * 60)
+    return {"link": f"{request.app.state.config.frontend_url}/reset?token={token}"}
 
 
 @auth_router.post("/invite")

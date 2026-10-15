@@ -124,8 +124,11 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 20 }}>
-          Access granted by the platform owner only.
+        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 20, lineHeight: 1.9 }}>
+          <a href="/forgot" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>Forgot password?</a>
+          <br />
+          Paid but never set a password?{' '}
+          <a href="/claim" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>Finish setting up</a>
         </p>
       </div>
     </div>

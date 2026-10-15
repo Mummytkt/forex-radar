@@ -414,6 +414,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         "next_charge_at TEXT",           # when the scheduler should next charge
         "set_password_token TEXT",       # one-time token to set a password after checkout
         "referred_by INTEGER",           # affiliate user id that referred this account
+        "reset_token TEXT",              # one-time password-reset token
+        "reset_token_expires_at TEXT",   # reset token expiry (ISO UTC)
+        "pw_changed_at INTEGER",         # epoch secs; tokens issued before this are rejected
     ]:
         name = col_def.split()[0]
         if name not in user_cols2:

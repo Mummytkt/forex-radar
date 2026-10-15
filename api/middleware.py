@@ -14,6 +14,8 @@ _ALWAYS_PUBLIC = {
     "/api/auth/setup",
     "/api/auth/login",
     "/api/auth/register",
+    "/api/auth/forgot",      # request a reset link (sent to the account's Telegram)
+    "/api/auth/reset",       # complete a reset with the one-time token
     "/api/tv-webhook",   # TradingView Pine Script webhook (uses its own secret)
     "/api/telegram/update",  # Telegram bot webhook (uses its own secret header)
     "/api/paystack/webhook", # Paystack webhook (verified by HMAC signature)
@@ -21,16 +23,16 @@ _ALWAYS_PUBLIC = {
 _PUBLIC_PREFIXES = ("/api/videos/", "/api/public/")
 
 
-def _load_live_user(app, user_id: int):
-    """Re-read the user from the DB on every request so revocation and plan
-    expiry take effect immediately — not only at the next login. Returns
-    (ok, role_or_detail). ok=False means the request must be rejected."""
+def _load_live_user(app, user_id: int, issued_at: int = 0):
+    """Re-read the user from the DB on every request so revocation, plan
+    expiry and password changes take effect immediately — not only at the
+    next login. Returns (ok, role_or_detail). ok=False means reject."""
     path = app.state.config.db_path
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
         row = conn.execute(
-            "SELECT role, plan, plan_expires_at FROM users WHERE id = ?", (user_id,)
+            "SELECT role, plan, plan_expires_at, pw_changed_at FROM users WHERE id = ?", (user_id,)
         ).fetchone()
     finally:
         conn.close()
@@ -38,6 +40,10 @@ def _load_live_user(app, user_id: int):
     # Account no longer exists (revoked/deleted) — token must stop working now.
     if row is None:
         return False, "Account no longer exists"
+
+    # Password changed after this token was issued — sign this session out.
+    if row["pw_changed_at"] and int(issued_at or 0) < int(row["pw_changed_at"]):
+        return False, "Your password was changed. Please sign in again."
 
     role = row["role"]
     # Owners and lifetime accounts never expire. Everyone else is enforced
@@ -87,9 +93,12 @@ async def auth_middleware(request: Request, call_next):
 
     # Re-validate against the live DB every request: enforces revocation and
     # plan expiry the moment they happen, regardless of the 60-day token life.
-    ok, role_or_detail = _load_live_user(request.app, user_id)
+    ok, role_or_detail = _load_live_user(request.app, user_id, payload.get("iat", 0))
     if not ok:
-        return JSONResponse({"detail": role_or_detail}, status_code=403)
+        # 401 for a signed-out session (frontend sends the user to sign in);
+        # 403 for revoked / expired access.
+        status = 401 if role_or_detail.startswith("Your password was changed") else 403
+        return JSONResponse({"detail": role_or_detail}, status_code=status)
 
     # Use the authoritative role from the DB, not the (possibly stale) token.
     request.state.user = {"id": user_id, "role": role_or_detail}

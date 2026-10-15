@@ -126,6 +126,8 @@ interface Subscriber {
   plan_expires_at: string | null; invite_used: number
   created_at: string; last_login_at: string | null
   telegram_linked?: boolean
+  has_password?: boolean
+  billing_mode?: string | null
 }
 
 function SubscribersSection() {
@@ -179,9 +181,28 @@ function SubscribersSection() {
     }
   }
 
+  const [confirmRevoke, setConfirmRevoke] = useState<number | null>(null)
+  const [resetLinks, setResetLinks] = useState<Record<number, { link: string; copied: boolean }>>({})
+
   const revoke = async (id: number) => {
-    await authFetch(`/api/auth/users/${id}`, { method: 'DELETE' })
-    setUsers(u => u.filter(x => x.id !== id))
+    // Two-step: first click arms, second click (within 4s) revokes.
+    if (confirmRevoke !== id) {
+      setConfirmRevoke(id)
+      setTimeout(() => setConfirmRevoke(c => (c === id ? null : c)), 4000)
+      return
+    }
+    setConfirmRevoke(null)
+    const r = await authFetch(`/api/auth/users/${id}`, { method: 'DELETE' })
+    if (r.ok) setUsers(u => u.filter(x => x.id !== id))
+  }
+
+  const makeResetLink = async (id: number) => {
+    const r = await authFetch(`/api/auth/users/${id}/reset-link`, { method: 'POST' })
+    if (!r.ok) return
+    const { link } = await r.json()
+    let copied = false
+    try { await navigator.clipboard.writeText(link); copied = true } catch {}
+    setResetLinks(m => ({ ...m, [id]: { link, copied } }))
   }
 
   const copyLink = async () => {
@@ -333,16 +354,36 @@ function SubscribersSection() {
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || '—'}</div>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 15 }}>{u.email}</div>
-                    {!u.invite_used && !u.last_login_at && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600, marginLeft: 15 }}>Invite pending</span>}
+                    {(u.has_password === undefined ? (!u.invite_used && !u.last_login_at) : !u.has_password) && (
+                      <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600, marginLeft: 15 }}>
+                        {u.billing_mode ? 'Paid · password not set' : 'Invite pending'}
+                      </span>
+                    )}
+                    {resetLinks[u.id] && (
+                      <div style={{ marginLeft: 15, marginTop: 6, maxWidth: 320 }}>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--bullish)' }}>
+                          {resetLinks[u.id].copied ? 'Reset link copied. Send it to them (valid 24h, works once):' : 'Send them this link (valid 24h, works once):'}
+                        </div>
+                        <div style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)', wordBreak: 'break-all', userSelect: 'all' }}>
+                          {resetLinks[u.id].link}
+                        </div>
+                      </div>
+                    )}
                   </td>
                   <td><span style={{ fontSize: 12, fontWeight: 600, color: planColor(u.plan) }}>{planLabel(u.plan)}</span></td>
                   <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(u.created_at)}</span></td>
                   <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.last_login_at ? timeAgo(u.last_login_at) : '—'}</span></td>
                   <td>
-                    <button onClick={() => revoke(u.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--bearish-bg)', color: 'var(--bearish)', fontSize: 11, fontWeight: 600 }}>
-                      <Trash2 size={11} /> Revoke
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button onClick={() => makeResetLink(u.id)} title="Create a one-time password link to send this subscriber"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer', background: 'var(--card-hover)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        <Link2 size={11} /> Reset link
+                      </button>
+                      <button onClick={() => revoke(u.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: confirmRevoke === u.id ? 'var(--bearish)' : 'var(--bearish-bg)', color: confirmRevoke === u.id ? 'white' : 'var(--bearish)', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        <Trash2 size={11} /> {confirmRevoke === u.id ? 'Tap again to revoke' : 'Revoke'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -419,8 +460,11 @@ export default function AccountPage() {
         body: JSON.stringify({ current_password: curPw, new_password: newPw }),
       })
       if (!r.ok) throw new Error((await r.json()).detail)
+      // Changing the password signs out every other session; keep this one.
+      const d = await r.json().catch(() => null)
+      if (d?.token) { try { localStorage.setItem('mbp_token', d.token) } catch {} }
       setCurPw(''); setNewPw(''); setConfirmPw('')
-      setPwMsg('Password updated')
+      setPwMsg('Password updated. Other devices have been signed out.')
       setTimeout(() => setPwMsg(''), 3000)
     } catch (e: unknown) {
       setPwMsg(e instanceof Error ? e.message : 'Error')
