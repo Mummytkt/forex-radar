@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Shield, Users, Link2, Copy, Check, Trash2, Eye, EyeOff, LogIn, Crown, Clock, UserPlus, Globe } from 'lucide-react'
+import { Shield, Users, Link2, Copy, Check, Trash2, Eye, EyeOff, LogIn, Crown, Clock, UserPlus, Globe, Search } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { useAuth } from '@/lib/auth'
 import { API_BASE } from '@/lib/api'
@@ -140,6 +140,8 @@ function SubscribersSection() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [showInviteForm, setShowInviteForm] = useState(false)
+  const [search, setSearch] = useState('')
+  const [planFilter, setPlanFilter] = useState('ALL')
 
   const load = () => {
     authFetch('/api/auth/users').then(r => r.json()).then(d => {
@@ -186,6 +188,15 @@ function SubscribersSection() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const q = search.trim().toLowerCase()
+  const filtered = users.filter(u => {
+    const matchesPlan = planFilter === 'ALL' || u.plan === planFilter
+    const matchesSearch = !q
+      || (u.name || '').toLowerCase().includes(q)
+      || (u.email || '').toLowerCase().includes(q)
+    return matchesPlan && matchesSearch
+  })
 
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
@@ -247,6 +258,30 @@ function SubscribersSection() {
         </div>
       )}
 
+      {!loading && users.length > 0 && (
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
+            <Search size={13} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              style={{ width: '100%', padding: '8px 12px 8px 32px', borderRadius: 8, fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }} />
+          </div>
+          <select value={planFilter} onChange={e => setPlanFilter(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: 8, fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}>
+            <option value="ALL">All plans</option>
+            {Object.keys(PLAN_META).map(p => (
+              <option key={p} value={p}>{PLAN_META[p].label}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            {filtered.length} of {users.length}
+          </span>
+        </div>
+      )}
+
       {loading ? (
         <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</div>
       ) : users.length === 0 ? (
@@ -254,6 +289,15 @@ function SubscribersSection() {
           <UserPlus size={28} color="var(--text-muted)" style={{ margin: '0 auto 10px' }} />
           <p>No subscribers yet.</p>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Generate an invite link to give someone access.</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+          <Search size={26} color="var(--text-muted)" style={{ margin: '0 auto 10px' }} />
+          <p>No subscribers match your search.</p>
+          <button onClick={() => { setSearch(''); setPlanFilter('ALL') }}
+            style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'var(--card-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)', cursor: 'pointer' }}>
+            Clear filters
+          </button>
         </div>
       ) : (
         <div className="table-wrap">
@@ -268,7 +312,7 @@ function SubscribersSection() {
               </tr>
             </thead>
             <tbody>
-              {users.map(u => (
+              {filtered.map(u => (
                 <tr key={u.id}>
                   <td>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || '—'}</div>
