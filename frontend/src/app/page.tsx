@@ -113,11 +113,11 @@ function BgDashboardSim({ dark }: { dark: boolean }) {
         <MockPanel cls="lp-float" bg={C.panelBg} border={C.panelBorder} style={{ left: '7%', bottom: '12%', width: 170, transform: 'rotate(2deg)', display: 'flex', alignItems: 'center', gap: 14 }}>
           <svg viewBox="0 0 52 52" style={{ width: 52, height: 52, flexShrink: 0 }}>
             <circle cx="26" cy="26" r="21" fill="none" stroke={C.ring} strokeWidth="6" />
-            <circle cx="26" cy="26" r="21" fill="none" stroke={C.chart} strokeWidth="6" strokeDasharray="132" strokeDashoffset="30" transform="rotate(-90 26 26)" strokeLinecap="round" />
+            <circle cx="26" cy="26" r="21" fill="none" stroke={C.chart} strokeWidth="6" strokeDasharray="132" strokeDashoffset="20" transform="rotate(-90 26 26)" strokeLinecap="round" />
           </svg>
           <div>
             <div style={lbl}>Accuracy</div>
-            <div style={{ ...big, fontSize: 18 }}>77%</div>
+            <div style={{ ...big, fontSize: 18 }}>85%</div>
           </div>
         </MockPanel>
 
@@ -203,7 +203,7 @@ export default function LandingPage() {
   const heroTitle: React.CSSProperties = { textShadow: dark ? '0 2px 30px rgba(0,0,0,0.55)' : 'none' }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text-primary)', overflowX: 'hidden' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text-primary)', overflowX: 'clip' }}>
 
       {/* Nav */}
       <nav style={{ position: 'sticky', top: 0, zIndex: 40, borderBottom: '1px solid var(--border)', background: 'var(--surface)', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 58 }}>
@@ -341,21 +341,21 @@ export default function LandingPage() {
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16 }}>
           {PLANS.map(plan => (
             <div key={plan.id} style={{
-              background: `linear-gradient(160deg, ${plan.color}, ${plan.color}cc)`,
+              background: `${plan.color}1f`, border: `1px solid ${plan.color}55`,
               borderRadius: 18, padding: '26px 22px', display: 'flex', flexDirection: 'column',
-              boxShadow: `0 20px 46px -18px ${plan.color}`, position: 'relative',
+              boxShadow: `0 18px 44px -24px ${plan.color}`, position: 'relative',
               transform: plan.highlight ? 'scale(1.03)' : undefined,
             }}>
               {plan.badge && (
-                <div style={{ position: 'absolute', top: 14, right: 14, padding: '3px 10px', borderRadius: 99, background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 11, fontWeight: 700 }}>{plan.badge}</div>
+                <div style={{ position: 'absolute', top: 14, right: 14, padding: '3px 10px', borderRadius: 99, background: `${plan.color}2e`, color: plan.color, fontSize: 11, fontWeight: 700 }}>{plan.badge}</div>
               )}
-              <p style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.9)', marginBottom: 12 }}>{plan.label}</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12 }}>{plan.label}</p>
               <div style={{ marginBottom: 4 }}>
-                <span style={{ fontSize: 40, fontWeight: 800, color: '#fff' }}>${plan.price}</span>
-                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginLeft: 5 }}>total</span>
+                <span style={{ fontSize: 40, fontWeight: 800, color: plan.color }}>${plan.price}</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 5 }}>total</span>
               </div>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.78)', marginBottom: 22 }}>${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}</p>
-              <Link href={`/signup?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '11px 16px', borderRadius: 10, marginTop: 'auto', background: '#fff', color: plan.color, fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>Get started</Link>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 22 }}>${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}</p>
+              <Link href={`/signup?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '11px 16px', borderRadius: 10, marginTop: 'auto', background: plan.color, color: '#fff', fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>Get started</Link>
             </div>
           ))}
         </div>
