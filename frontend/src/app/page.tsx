@@ -58,10 +58,7 @@ const STEPS = [
 function useReveal() {
   useEffect(() => {
     const els = Array.from(document.querySelectorAll('.lp-reveal'))
-    if (!('IntersectionObserver' in window)) {
-      els.forEach(el => el.classList.add('lp-in'))
-      return
-    }
+    if (!('IntersectionObserver' in window)) { els.forEach(el => el.classList.add('lp-in')); return }
     const io = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('lp-in'); io.unobserve(e.target) } })
     }, { threshold: 0.15 })
@@ -70,115 +67,103 @@ function useReveal() {
   }, [])
 }
 
-// ── Animated hero scene: self-drawing equity chart + floating alert cards ──────
-function HeroScene() {
+// ── Scenic chart + dawn background (pure CSS/SVG — zero bandwidth) ─────────────
+function BgChartSky() {
   return (
-    <div style={{ position: 'relative', maxWidth: 720, margin: '0 auto', padding: '0 8px' }}>
-      {/* dawn / horizon glow behind the card */}
-      <div className="lp-drift" aria-hidden style={{
-        position: 'absolute', inset: '-40px -10px -20px', zIndex: 0,
-        background: 'radial-gradient(60% 70% at 70% 30%, rgba(99,102,241,0.35), transparent 70%), radial-gradient(50% 60% at 25% 80%, rgba(236,72,153,0.22), transparent 70%)',
-        filter: 'blur(8px)', borderRadius: 32,
-      }} />
-
-      {/* product card */}
-      <div className="lp-rise" style={{
-        position: 'relative', zIndex: 1,
-        background: 'var(--card)', border: '1px solid var(--border)',
-        borderRadius: 18, overflow: 'hidden',
-        boxShadow: '0 30px 80px -20px rgba(0,0,0,0.45)',
-      }}>
-        {/* mock top bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#ef4444' }} />
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f59e0b' }} />
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#22c55e' }} />
-          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>MummyTKT&apos;s Bias Pointer</span>
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'var(--bullish)' }}>
-            <span className="pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--bullish)' }} /> Live
-          </span>
-        </div>
-
-        {/* self-drawing equity chart */}
-        <div style={{ padding: '18px 16px 10px' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Cumulative bias accuracy</div>
-          <svg viewBox="0 0 400 180" preserveAspectRatio="none" style={{ width: '100%', height: 170, display: 'block', marginTop: 6 }}>
-            <defs>
-              <linearGradient id="lpArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
-                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {/* area fill */}
-            <path d="M0,150 C60,132 90,140 130,104 S220,74 260,58 S340,30 400,16 L400,180 L0,180 Z" fill="url(#lpArea)" />
-            {/* drawing line */}
-            <path className="lp-draw-path" d="M0,150 C60,132 90,140 130,104 S220,74 260,58 S340,30 400,16"
-              fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" />
-            {/* endpoint glow */}
-            <circle className="lp-glow" cx="398" cy="16" r="6" fill="var(--accent)" />
-          </svg>
-        </div>
-      </div>
-
-      {/* floating alert cards */}
-      <div className="lp-float" style={{
-        position: 'absolute', zIndex: 2, top: 30, right: -6, maxWidth: 230,
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
-        padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(6px)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>
-          <CheckCircle2 size={14} /> BUY BIAS CONFIRMED
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>EUR/USD · Daily → H4 aligned</div>
-      </div>
-
-      <div className="lp-float-sl" style={{
-        position: 'absolute', zIndex: 2, bottom: -14, left: -4, maxWidth: 220,
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
-        padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(6px)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: 'var(--accent-hover)' }}>
-          <Zap size={14} /> ENTRY CONFIRMATION
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>XAU/USD · H1 sweep at your level</div>
-      </div>
+    <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
+      {/* dawn sky gradient */}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #080816 0%, #121233 42%, #241a44 68%, #3a2347 100%)' }} />
+      {/* horizon sun glow */}
+      <div className="lp-drift" style={{ position: 'absolute', left: '50%', bottom: '-14%', width: '80%', height: '62%', transform: 'translateX(-50%)', background: 'radial-gradient(circle at 50% 100%, rgba(245,158,11,0.38), rgba(236,72,153,0.20) 42%, transparent 72%)', filter: 'blur(26px)' }} />
+      {/* accent glow */}
+      <div className="lp-drift" style={{ position: 'absolute', left: '8%', top: '6%', width: '46%', height: '52%', background: 'radial-gradient(circle, rgba(99,102,241,0.28), transparent 70%)', filter: 'blur(34px)' }} />
+      {/* chart grid + rising equity curve */}
+      <svg viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <defs>
+          <pattern id="lpGrid" width="90" height="90" patternUnits="userSpaceOnUse">
+            <path d="M90 0 L0 0 0 90" fill="none" stroke="rgba(255,255,255,0.045)" strokeWidth="1" />
+          </pattern>
+          <linearGradient id="lpBgArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(129,140,248,0.42)" />
+            <stop offset="100%" stopColor="rgba(129,140,248,0)" />
+          </linearGradient>
+        </defs>
+        <rect width="1440" height="600" fill="url(#lpGrid)" />
+        <path d="M0,520 C180,505 300,470 440,432 S720,338 860,300 S1180,176 1440,120 L1440,600 L0,600 Z" fill="url(#lpBgArea)" />
+        <path d="M0,520 C180,505 300,470 440,432 S720,338 860,300 S1180,176 1440,120" fill="none" stroke="rgba(129,140,248,0.65)" strokeWidth="2.5" strokeLinecap="round" />
+        <circle className="lp-glow" cx="1438" cy="120" r="7" fill="#a5b4fc" />
+      </svg>
+      {/* readability scrim */}
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(70% 60% at 50% 40%, rgba(5,5,16,0.52), rgba(5,5,16,0.80))' }} />
     </div>
   )
 }
 
-// ── Floating lifestyle motifs for the freedom band ────────────────────────────
+// Floating lifestyle motifs (desktop only, kept clear of the headline column)
 function FreedomScenery() {
   const chips = [
-    { icon: Home,     label: 'Home',     cls: 'lp-float',    left: '8%',  top: '18%' },
-    { icon: Car,      label: 'Freedom',  cls: 'lp-float-sl', left: '70%', top: '12%' },
-    { icon: Plane,    label: 'Travel',   cls: 'lp-float',    left: '82%', top: '58%' },
-    { icon: Palmtree, label: 'Rest',     cls: 'lp-float-sl', left: '16%', top: '62%' },
+    { icon: Home,     label: 'Home',   cls: 'lp-float',    left: '4%',  top: '30%' },
+    { icon: Car,      label: 'Freedom',cls: 'lp-float-sl', left: '90%', top: '24%' },
+    { icon: Plane,    label: 'Travel', cls: 'lp-float',    left: '92%', top: '66%' },
+    { icon: Palmtree, label: 'Rest',   cls: 'lp-float-sl', left: '3%',  top: '68%' },
   ]
   return (
-    <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-      {/* dawn horizon */}
-      <div className="lp-drift" style={{
-        position: 'absolute', inset: 0,
-        background: 'radial-gradient(70% 90% at 50% 120%, rgba(245,158,11,0.18), transparent 60%), radial-gradient(60% 80% at 20% -10%, rgba(99,102,241,0.18), transparent 60%)',
-      }} />
+    <div className="desktop-only" aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 1 }}>
       {chips.map(({ icon: Icon, label, cls, left, top }) => (
-        <div key={label} className={cls} style={{
-          position: 'absolute', left, top,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: 0.55,
-        }}>
-          <div style={{
-            width: 46, height: 46, borderRadius: 14,
-            background: 'var(--card)', border: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)',
-          }}>
-            <Icon size={20} color="var(--accent-hover)" />
+        <div key={label} className={cls} style={{ position: 'absolute', left, top, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: 0.42 }}>
+          <div style={{ width: 46, height: 46, borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+            <Icon size={20} color="#c7d2fe" />
           </div>
-          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)' }}>{label}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>{label}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Animated product scene: self-drawing equity chart + floating alert cards
+function HeroScene() {
+  return (
+    <div style={{ position: 'relative', maxWidth: 680, margin: '0 auto', padding: '0 8px' }}>
+      <div className="lp-rise" style={{ position: 'relative', zIndex: 1, background: 'rgba(16,16,34,0.72)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 30px 80px -20px rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#ef4444' }} />
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f59e0b' }} />
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#22c55e' }} />
+          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>MummyTKT&apos;s Bias Pointer</span>
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: '#4ade80' }}>
+            <span className="pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80' }} /> Live
+          </span>
+        </div>
+        <div style={{ padding: '18px 16px 10px' }}>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Cumulative bias accuracy</div>
+          <svg viewBox="0 0 400 180" preserveAspectRatio="none" style={{ width: '100%', height: 170, display: 'block', marginTop: 6 }}>
+            <defs>
+              <linearGradient id="lpArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M0,150 C60,132 90,140 130,104 S220,74 260,58 S340,30 400,16 L400,180 L0,180 Z" fill="url(#lpArea)" />
+            <path className="lp-draw-path" d="M0,150 C60,132 90,140 130,104 S220,74 260,58 S340,30 400,16" fill="none" stroke="#818cf8" strokeWidth="3" strokeLinecap="round" />
+            <circle className="lp-glow" cx="398" cy="16" r="6" fill="#a5b4fc" />
+          </svg>
+        </div>
+      </div>
+
+      <div className="lp-float" style={{ position: 'absolute', zIndex: 2, top: 26, right: -6, maxWidth: 230, background: 'rgba(16,16,34,0.9)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#4ade80' }}>
+          <CheckCircle2 size={14} /> BUY BIAS CONFIRMED
+        </div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>EUR/USD · Daily → H4 aligned</div>
+      </div>
+
+      <div className="lp-float-sl" style={{ position: 'absolute', zIndex: 2, bottom: -14, left: -4, maxWidth: 220, background: 'rgba(16,16,34,0.9)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#a5b4fc' }}>
+          <Zap size={14} /> ENTRY CONFIRMATION
+        </div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>XAU/USD · H1 sweep at your level</div>
+      </div>
     </div>
   )
 }
@@ -189,15 +174,13 @@ export default function LandingPage() {
   useEffect(() => { setYear(new Date().getFullYear()) }, [])
   useReveal()
 
+  const heroTitle: React.CSSProperties = { textShadow: '0 2px 30px rgba(0,0,0,0.5)' }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text-primary)', overflowX: 'hidden' }}>
 
       {/* Nav */}
-      <nav style={{
-        position: 'sticky', top: 0, zIndex: 40,
-        borderBottom: '1px solid var(--border)', background: 'var(--surface)',
-        padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 58,
-      }}>
+      <nav style={{ position: 'sticky', top: 0, zIndex: 40, borderBottom: '1px solid var(--border)', background: 'var(--surface)', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 58 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 12px rgba(99,102,241,0.4)' }}>
             <Radio size={15} color="white" />
@@ -211,59 +194,57 @@ export default function LandingPage() {
           <button onClick={toggle} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           </button>
-          <Link href="/login" style={{ padding: '8px 20px', borderRadius: 9, background: 'var(--accent)', color: 'white', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-            Sign In
-          </Link>
+          <Link href="/login" style={{ padding: '8px 20px', borderRadius: 9, background: 'var(--accent)', color: 'white', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Sign In</Link>
         </div>
       </nav>
 
-      {/* Hero */}
-      <section style={{ textAlign: 'center', padding: '72px 24px 40px', maxWidth: 760, margin: '0 auto' }}>
-        <div className="lp-rise" style={{
-          display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 14px', borderRadius: 99,
-          background: 'var(--accent-bg)', border: '1px solid rgba(99,102,241,0.3)',
-          fontSize: 12, fontWeight: 600, color: 'var(--accent-hover)', marginBottom: 26,
-        }}>
-          <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--bullish)', display: 'inline-block' }} />
-          Engine monitoring 30+ markets · 24/7
-        </div>
-        <h1 className="lp-rise" style={{ fontSize: 'clamp(38px, 6.4vw, 60px)', fontWeight: 800, lineHeight: 1.08, marginBottom: 20, letterSpacing: '-0.02em' }}>
-          Profitability starts here.<br />
-          <span style={{ color: 'var(--accent)' }}>Know the direction. Trade with confidence.</span>
-        </h1>
-        <p className="lp-rise" style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.75, maxWidth: 560, margin: '0 auto 34px' }}>
-          MummyTKT&apos;s Bias Pointer is a rules-based forex engine that confirms Daily + H4
-          directional alignment and sends structured bias alerts straight to your Telegram.
-          No screen-watching. No second-guessing. Just clarity — and the freedom to live
-          while the market works for you.
-        </p>
-        <div className="lp-rise" style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 56 }}>
-          <a href="#pricing" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '13px 30px', borderRadius: 11, background: 'var(--accent)', color: 'white', fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 8px 28px rgba(99,102,241,0.4)' }}>
-            Start trading with clarity <ArrowRight size={16} />
-          </a>
-          <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '13px 30px', borderRadius: 11, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-primary)', fontSize: 15, fontWeight: 600, textDecoration: 'none' }}>
-            Sign In
-          </Link>
-        </div>
-
-        <HeroScene />
-      </section>
-
-      {/* Freedom band */}
-      <section style={{ position: 'relative', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'var(--surface)', padding: '90px 24px', marginTop: 48, overflow: 'hidden' }}>
+      {/* Scenic hero band — contains the freedom headline + the profitability scene */}
+      <div style={{ position: 'relative', background: '#080816' }}>
+        <BgChartSky />
         <FreedomScenery />
-        <div className="lp-reveal" style={{ position: 'relative', zIndex: 1, maxWidth: 680, margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ fontSize: 'clamp(28px, 4.5vw, 40px)', fontWeight: 800, lineHeight: 1.15, marginBottom: 16, letterSpacing: '-0.02em' }}>
-            Trading should fund your life —<br /><span style={{ color: 'var(--accent)' }}>not consume it.</span>
-          </h2>
-          <p style={{ fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.75, maxWidth: 560, margin: '0 auto' }}>
+
+        {/* 1 — Freedom headline (the lead) */}
+        <section style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '84px 24px 40px', maxWidth: 820, margin: '0 auto' }}>
+          <div className="lp-rise" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 14px', borderRadius: 99, background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(129,140,248,0.4)', fontSize: 12, fontWeight: 600, color: '#c7d2fe', marginBottom: 26 }}>
+            <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block' }} />
+            Engine monitoring 30+ markets · 24/7
+          </div>
+          <h1 className="lp-rise" style={{ ...heroTitle, fontSize: 'clamp(38px, 6.6vw, 64px)', fontWeight: 800, lineHeight: 1.08, marginBottom: 22, letterSpacing: '-0.02em', color: '#fff' }}>
+            Trading should fund your life —<br /><span style={{ color: '#a5b4fc' }}>not consume it.</span>
+          </h1>
+          <p className="lp-rise" style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', lineHeight: 1.75, maxWidth: 580, margin: '0 auto 34px' }}>
             You didn&apos;t come to the markets to be chained to a screen. You came for freedom —
             the time, the confidence, and the calm to build the life you actually want.
             The Bias Pointer hands you all three.
           </p>
-        </div>
+          <div className="lp-rise" style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <a href="#pricing" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '13px 30px', borderRadius: 11, background: 'var(--accent)', color: 'white', fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 8px 28px rgba(99,102,241,0.5)' }}>
+              Start trading with clarity <ArrowRight size={16} />
+            </a>
+            <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '13px 30px', borderRadius: 11, border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 15, fontWeight: 600, textDecoration: 'none', backdropFilter: 'blur(4px)' }}>
+              Sign In
+            </Link>
+          </div>
+        </section>
 
-        <div className="lp-reveal" style={{ position: 'relative', zIndex: 1, maxWidth: 1000, margin: '48px auto 0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
+        {/* 2 — Profitability + animated product scene */}
+        <section style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '28px 24px 96px', maxWidth: 760, margin: '0 auto' }}>
+          <h2 className="lp-reveal" style={{ ...heroTitle, fontSize: 'clamp(30px, 5vw, 46px)', fontWeight: 800, lineHeight: 1.12, marginBottom: 16, letterSpacing: '-0.02em', color: '#fff' }}>
+            Profitability starts here.<br /><span style={{ color: '#a5b4fc' }}>Know the direction. Trade with confidence.</span>
+          </h2>
+          <p className="lp-reveal" style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, maxWidth: 580, margin: '0 auto 44px' }}>
+            MummyTKT&apos;s Bias Pointer is a rules-based forex engine that confirms Daily + H4
+            directional alignment and sends structured bias alerts straight to your Telegram.
+            No screen-watching. No second-guessing. Just clarity — and the freedom to live
+            while the market works for you.
+          </p>
+          <div className="lp-reveal"><HeroScene /></div>
+        </section>
+      </div>
+
+      {/* 3 — Pillars */}
+      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '80px 24px 20px' }}>
+        <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
           {PILLARS.map(({ icon: Icon, title, body }) => (
             <div key={title} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: '26px 22px' }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
@@ -276,15 +257,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '80px 24px 20px' }}>
+      {/* 4 — How it works */}
+      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '70px 24px 20px' }}>
         <div className="lp-reveal" style={{ textAlign: 'center', marginBottom: 44 }}>
-          <h2 style={{ fontSize: 'clamp(26px, 4vw, 34px)', fontWeight: 800, marginBottom: 10, letterSpacing: '-0.02em' }}>
-            Four quiet steps. Zero screen fatigue.
-          </h2>
-          <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
-            Here&apos;s your day on the Bias Pointer — it does the watching, you do the living.
-          </p>
+          <h2 style={{ fontSize: 'clamp(26px, 4vw, 34px)', fontWeight: 800, marginBottom: 10, letterSpacing: '-0.02em' }}>Four quiet steps. Zero screen fatigue.</h2>
+          <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>Here&apos;s your day on the Bias Pointer — it does the watching, you do the living.</p>
         </div>
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
           {STEPS.map(({ n, title, body }) => (
@@ -297,7 +274,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features */}
+      {/* 5 — Features */}
       <section style={{ maxWidth: 940, margin: '0 auto', padding: '60px 24px 72px' }}>
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           {FEATURES.map(({ icon: Icon, title, body }) => (
@@ -312,7 +289,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* 6 — Pricing */}
       <section id="pricing" style={{ maxWidth: 940, margin: '0 auto', padding: '0 24px 80px' }}>
         <div className="lp-reveal" style={{ textAlign: 'center', marginBottom: 40 }}>
           <h2 style={{ fontSize: 32, fontWeight: 800, marginBottom: 10 }}>Simple, transparent pricing</h2>
@@ -320,9 +297,7 @@ export default function LandingPage() {
         </div>
 
         <div className="lp-reveal" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '20px 28px', marginBottom: 24 }}>
-          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
-            Everything included in all plans
-          </p>
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>Everything included in all plans</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 28px' }}>
             {INCLUDES.map(item => (
               <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -335,28 +310,17 @@ export default function LandingPage() {
 
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
           {PLANS.map(plan => (
-            <div key={plan.id} style={{
-              background: plan.highlight ? 'var(--accent)' : 'var(--card)',
-              border: `1px solid ${plan.highlight ? 'var(--accent)' : 'var(--border)'}`,
-              borderRadius: 14, padding: '24px 20px', display: 'flex', flexDirection: 'column',
-              boxShadow: plan.highlight ? '0 8px 32px rgba(99,102,241,0.4)' : undefined, position: 'relative',
-            }}>
+            <div key={plan.id} style={{ background: plan.highlight ? 'var(--accent)' : 'var(--card)', border: `1px solid ${plan.highlight ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 14, padding: '24px 20px', display: 'flex', flexDirection: 'column', boxShadow: plan.highlight ? '0 8px 32px rgba(99,102,241,0.4)' : undefined, position: 'relative' }}>
               {plan.badge && (
-                <div style={{ position: 'absolute', top: 14, right: 14, padding: '3px 10px', borderRadius: 99, background: plan.highlight ? 'rgba(255,255,255,0.2)' : 'var(--accent-bg)', color: plan.highlight ? 'white' : 'var(--accent-hover)', fontSize: 11, fontWeight: 700 }}>
-                  {plan.badge}
-                </div>
+                <div style={{ position: 'absolute', top: 14, right: 14, padding: '3px 10px', borderRadius: 99, background: plan.highlight ? 'rgba(255,255,255,0.2)' : 'var(--accent-bg)', color: plan.highlight ? 'white' : 'var(--accent-hover)', fontSize: 11, fontWeight: 700 }}>{plan.badge}</div>
               )}
               <p style={{ fontSize: 14, fontWeight: 700, color: plan.highlight ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)', marginBottom: 12 }}>{plan.label}</p>
               <div style={{ marginBottom: 4 }}>
                 <span style={{ fontSize: 38, fontWeight: 800, color: plan.highlight ? 'white' : 'var(--text-primary)' }}>${plan.price}</span>
                 <span style={{ fontSize: 13, color: plan.highlight ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', marginLeft: 5 }}>total</span>
               </div>
-              <p style={{ fontSize: 12, color: plan.highlight ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', marginBottom: 22 }}>
-                ${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}
-              </p>
-              <Link href={`/signup?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '10px 16px', borderRadius: 9, marginTop: 'auto', background: plan.highlight ? 'white' : 'var(--accent-bg)', color: plan.highlight ? 'var(--accent)' : 'var(--accent-hover)', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-                Get started
-              </Link>
+              <p style={{ fontSize: 12, color: plan.highlight ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', marginBottom: 22 }}>${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}</p>
+              <Link href={`/signup?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '10px 16px', borderRadius: 9, marginTop: 'auto', background: plan.highlight ? 'white' : 'var(--accent-bg)', color: plan.highlight ? 'var(--accent)' : 'var(--accent-hover)', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>Get started</Link>
             </div>
           ))}
         </div>
