@@ -503,6 +503,19 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         if "paid_at" not in comm_cols:
             conn.execute("ALTER TABLE commissions ADD COLUMN paid_at TEXT")
 
+    # Backup files posted to the owner's private backups channel — so old ones can be auto-deleted
+    if "backup_messages" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
+        conn.execute("""
+            CREATE TABLE backup_messages (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id    TEXT    NOT NULL,
+                message_id INTEGER NOT NULL,
+                file_name  TEXT,
+                sent_at    TEXT    NOT NULL,   -- ISO UTC
+                deleted_at TEXT                -- set once removed from Telegram
+            )
+        """)
+
     # One row per one-off notice already sent (renewal reminders etc.) — prevents repeats
     if "notices_sent" not in tables:
         conn.execute("""

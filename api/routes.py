@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -56,6 +57,7 @@ def _db_write(request: Request):
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _require_owner(request: Request) -> None:
@@ -414,6 +416,55 @@ async def telegram_test(request: Request):
         return {"ok": False, "detail": str(e)}
 
 
+async def _handle_bot_membership(request: Request, config, mcm: dict) -> None:
+    """The bot was added to / changed in / removed from a chat. If the OWNER made it an
+    admin of a channel (with post + delete rights), that channel becomes the backups
+    channel. Anyone else adding the bot to their channel is ignored, so backups can
+    never be redirected to a stranger."""
+    from alerts.telegram import send_alert
+    chat = mcm.get("chat") or {}
+    if chat.get("type") != "channel":
+        return
+    actor = str((mcm.get("from") or {}).get("id", ""))
+    new = mcm.get("new_chat_member") or {}
+    status = new.get("status")
+    chat_id = str(chat.get("id"))
+    title = chat.get("title") or "your channel"
+
+    with _db_write(request) as conn:
+        row = conn.execute("SELECT telegram_chat_id FROM users WHERE role = 'OWNER' LIMIT 1").fetchone()
+        owner_ids = {str(config.telegram_chat_id or ""), str((row[0] if row else "") or "")} - {""}
+        current = conn.execute("SELECT value FROM user_config WHERE key = 'backup_channel_id'").fetchone()
+        current = current[0] if current else None
+
+        if actor not in owner_ids:
+            logger.warning("Ignored bot membership change in channel %s by non-owner %s", chat_id, actor)
+            return
+
+        if status == "administrator" and new.get("can_post_messages") and new.get("can_delete_messages"):
+            conn.execute("INSERT OR REPLACE INTO user_config (key, value, updated_at) "
+                         "VALUES ('backup_channel_id', ?, datetime('now'))", (chat_id,))
+            note_owner = (f"✅ Backups channel connected: “{title}”.\n\nFrom tonight, encrypted backups go there, "
+                          "and anything older than 30 days is deleted automatically (the newest 7 are always kept).")
+            note_channel = "✅ Connected. Daily encrypted backups of MummyTKT's Bias Pointer will appear here."
+        elif status == "administrator":
+            note_owner = (f"Almost there: in “{title}”, give the bot both “Post messages” and “Delete messages” "
+                          "admin permissions, then I'll start using it for backups.")
+            note_channel = None
+        elif status in ("left", "kicked") and current == chat_id:
+            conn.execute("DELETE FROM user_config WHERE key = 'backup_channel_id'")
+            note_owner = (f"The bot was removed from “{title}”. Backups will come to this chat again, "
+                          "and old ones won't be deleted automatically.")
+            note_channel = None
+        else:
+            return
+
+    if config.telegram_enabled:
+        await send_alert(config.telegram_bot_token, config.telegram_chat_id, note_owner)
+        if note_channel:
+            await send_alert(config.telegram_bot_token, chat_id, note_channel)
+
+
 @router.post("/telegram/update")
 async def telegram_update(request: Request):
     """
@@ -433,6 +484,10 @@ async def telegram_update(request: Request):
     try:
         update = await request.json()
     except Exception:
+        return {"ok": True}
+
+    if update.get("my_chat_member"):
+        await _handle_bot_membership(request, config, update["my_chat_member"])
         return {"ok": True}
 
     message = update.get("message") or update.get("edited_message") or {}

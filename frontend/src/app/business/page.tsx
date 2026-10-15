@@ -120,7 +120,11 @@ export default function BusinessPage() {
       const d = await r.json()
       if (!r.ok || d.error) throw new Error(d.error || d.detail || 'Backup failed')
       setBackup({ busy: false, ok: d.integrity_ok, result:
-        `${d.file} · ${d.size_kb} KB · integrity ${d.integrity_ok ? 'OK' : 'FAILED'} · ${d.offsite_sent ? 'encrypted copy sent to your Telegram' : 'off-site copy not sent'}` })
+        `${d.file} · ${d.size_kb} KB · integrity ${d.integrity_ok ? 'OK' : 'FAILED'} · `
+        + (d.offsite_sent
+          ? `encrypted copy sent to ${d.destination === 'channel' ? 'your backups channel' : 'your Telegram chat'}`
+            + (d.old_deleted ? ` · ${d.old_deleted} old backup${d.old_deleted === 1 ? '' : 's'} removed` : '')
+          : 'off-site copy not sent') })
     } catch (e: unknown) {
       setBackup({ busy: false, ok: false, result: e instanceof Error ? e.message : 'Backup failed' })
     }
@@ -271,7 +275,8 @@ export default function BusinessPage() {
             <div style={card}>
               <div style={head}><Database size={14} color="var(--accent-hover)" /><h2 style={h2}>Backups</h2></div>
               <div style={{ padding: '14px 20px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                <p>Automatic every day at 02:30 UTC: a copy on the server (last 7 kept) and an encrypted copy sent to your Telegram.</p>
+                <p>Automatic every day at 02:30 UTC: a copy on the server (last 7 kept) and an encrypted copy sent to Telegram.
+                  With a private backups channel connected, copies older than 30 days are deleted there automatically.</p>
                 <button onClick={runBackup} disabled={backup.busy}
                   style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'white', opacity: backup.busy ? 0.6 : 1 }}>
                   {backup.busy ? <><Loader2 size={12} className="spin" /> Backing up…</> : 'Back up now'}

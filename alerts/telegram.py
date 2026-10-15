@@ -48,18 +48,33 @@ async def send_alert(bot_token: str, chat_id: str, text: str) -> bool:
     return False
 
 
-async def send_document(bot_token: str, chat_id: str, path: str, filename: str, caption: str = "") -> bool:
-    """Send a file (e.g. the encrypted nightly backup) to a Telegram chat."""
+async def send_document(bot_token: str, chat_id: str, path: str, filename: str, caption: str = "") -> int | None:
+    """Send a file (e.g. the encrypted nightly backup) to a Telegram chat.
+    Returns the Telegram message id on success, None on failure."""
     bot = Bot(token=bot_token)
     try:
         with open(path, "rb") as f:
-            await bot.send_document(chat_id=chat_id, document=f, filename=filename,
-                                    caption=caption[:1024], read_timeout=120, write_timeout=120)
+            msg = await bot.send_document(chat_id=chat_id, document=f, filename=filename,
+                                          caption=caption[:1024], read_timeout=120, write_timeout=120)
         logger.info("Document %s sent to chat %s", filename, chat_id)
-        return True
+        return msg.message_id
     except TelegramError as e:
         logger.error("Telegram document send failed: %s", e)
-        return False
+        return None
+
+
+async def delete_message(bot_token: str, chat_id: str, message_id: int) -> tuple[bool, str]:
+    """Delete one of the bot's messages. Returns (ok, error text). A message that is
+    already gone (e.g. deleted by hand) counts as success."""
+    bot = Bot(token=bot_token)
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        return True, ""
+    except TelegramError as e:
+        err = str(e)
+        if "not found" in err.lower():
+            return True, ""
+        return False, err
 
 
 def send_alert_sync(bot_token: str, chat_id: str, text: str) -> bool:
