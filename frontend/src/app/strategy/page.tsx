@@ -184,13 +184,16 @@ function VideoSection() {
 }
 
 export default function StrategyPage() {
+  const { user } = useAuth()
+  const isOwner = user?.role === 'OWNER'
   return (
     <>
-      <TopBar title="Strategy" subtitle="How the engine detects and confirms directional bias" />
+      <TopBar title="Strategy" subtitle={isOwner ? 'How the engine detects and confirms directional bias' : 'Tutorial videos and walkthroughs'} />
       <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         <VideoSection />
 
+        {isOwner && (<>
         <Card title="The 4-Step Confirmation Chain">
           <Step n={1} title="Daily Breakout" body="The engine identifies A-shapes (bearish resistance) and V-shapes (bullish support) on the Daily chart using body-only levels — never wicks. A breakout occurs when a Daily candle closes beyond the most recent A or V body level." />
           <Step n={2} title="Reaction Source Identification" body="After a breakout, the engine identifies up to 4 types of reaction sources: the Daily Breaker level, OC levels inside the pre-breakout range, A/V levels inside the range, and post-breakout OC levels. These become the zones price must retest." />
@@ -275,6 +278,7 @@ export default function StrategyPage() {
             {' '}Alerts confirm Daily + H4 alignment. Entry timing, risk management, and position sizing remain your responsibility.
           </span>
         </div>
+        </>)}
 
       </main>
     </>
