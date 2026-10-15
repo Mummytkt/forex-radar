@@ -93,14 +93,20 @@ function AlertRow({ a, isLast }: { a: AlertItem; isLast: boolean }) {
 export default function HistoryPage() {
   const [page, setPage] = useState(0)
   const [dirFilter, setDirFilter] = useState('')
+  const [pairFilter, setPairFilter] = useState('')
   const limit = 20
 
   const { data } = useSWR<AlertsPage>(
-    `/api/alerts?limit=${limit}&offset=${page * limit}${dirFilter ? `&direction=${dirFilter}` : ''}`,
+    `/api/alerts?limit=${limit}&offset=${page * limit}`
+      + (dirFilter ? `&direction=${dirFilter}` : '')
+      + (pairFilter ? `&instrument=${encodeURIComponent(pairFilter)}` : ''),
     fetcher, { refreshInterval: 60000 }
   )
+  const { data: pairList } = useSWR<{ instruments: string[] }>('/api/alerts/instruments', fetcher, { refreshInterval: 300000 })
 
   const totalPages = data ? Math.ceil(data.total / limit) : 0
+  const filtering = !!(dirFilter || pairFilter)
+  const clearFilters = () => { setDirFilter(''); setPairFilter(''); setPage(0) }
 
   return (
     <>
@@ -110,9 +116,23 @@ export default function HistoryPage() {
         {/* Filter bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {data ? `${data.total} alert${data.total !== 1 ? 's' : ''} total` : 'Loading…'}
+            {data ? `${data.total} alert${data.total !== 1 ? 's' : ''}${filtering ? ' match' : ' total'}` : 'Loading…'}
           </span>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              id="history-pair-filter"
+              aria-label="Filter by pair"
+              value={pairFilter}
+              onChange={e => { setPairFilter(e.target.value); setPage(0) }}
+              style={{
+                padding: '6px 10px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                border: '1px solid', outline: 'none',
+                borderColor: pairFilter ? 'var(--accent)' : 'var(--border)',
+                background: 'var(--card)', color: pairFilter ? 'var(--text-primary)' : 'var(--text-secondary)',
+              }}>
+              <option value="">All pairs</option>
+              {(pairList?.instruments ?? []).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
             {[['', 'All'], ['BULLISH', '↑ Buy'], ['BEARISH', '↓ Sell']].map(([val, label]) => (
               <button key={val} onClick={() => { setDirFilter(val); setPage(0) }}
                 style={{
@@ -134,14 +154,22 @@ export default function HistoryPage() {
           {!data && (
             <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</div>
           )}
-          {data?.items.length === 0 && (
+          {data?.items.length === 0 && (filtering ? (
+            <div style={{ padding: '48px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+              <p style={{ fontWeight: 600 }}>No alerts match this filter.</p>
+              <button onClick={clearFilters}
+                style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'var(--card-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)', cursor: 'pointer' }}>
+                Clear filters
+              </button>
+            </div>
+          ) : (
             <div style={{ padding: '48px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
               <p style={{ fontWeight: 600 }}>No alerts fired yet.</p>
               <p style={{ fontSize: 12, marginTop: 6, color: 'var(--text-muted)' }}>
                 Alerts fire when a Daily breakout, reaction source retest, and H4 confirmation all align.
               </p>
             </div>
-          )}
+          ))}
           {data && data.items.length > 0 && (
             <div className="table-wrap"><table className="data-table">
               <thead>

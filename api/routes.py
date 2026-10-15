@@ -273,6 +273,14 @@ def get_stats(request: Request):
     )
 
 
+@router.get("/alerts/instruments")
+def get_alert_instruments(request: Request):
+    """Distinct pairs that have at least one alert — powers the History pair filter."""
+    with _db(request) as conn:
+        rows = conn.execute("SELECT DISTINCT instrument FROM alerts ORDER BY instrument").fetchall()
+    return {"instruments": [r[0] for r in rows if r[0]]}
+
+
 @router.get("/alerts", response_model=AlertsPage)
 def get_alerts(
     request: Request,
