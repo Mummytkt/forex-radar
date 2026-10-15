@@ -19,7 +19,6 @@ class Config:
     telegram_bot_token: str
     telegram_chat_id: str
     tv_webhook_secret: str           # shared secret validated on every Pine Script webhook
-    twelve_data_api_key: str = ""    # legacy — no longer used by the analysis engine
     db_path: str = "forex_radar.db"
     instruments: list[str] = field(default_factory=list)
     level_tolerance_pips: float = 5.0
@@ -40,7 +39,6 @@ def load_config(env_path: str = ".env") -> Config:
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=_require("TELEGRAM_CHAT_ID"),
         tv_webhook_secret=os.getenv("TV_WEBHOOK_SECRET", ""),
-        twelve_data_api_key=os.getenv("TWELVE_DATA_API_KEY", ""),
         db_path=os.getenv("DB_PATH", "forex_radar.db"),
         instruments=instruments,
         level_tolerance_pips=float(os.getenv("LEVEL_TOLERANCE_PIPS", "5.0")),
