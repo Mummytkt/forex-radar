@@ -1,6 +1,6 @@
 # fly.toml for forex-radar — scheduler + API server
 app = 'forex-radar'
-primary_region = 'lhr'
+primary_region = 'ams'
 
 [build]
 
