@@ -685,6 +685,15 @@ async def admin_backup(request: Request):
     return await run_backup(config.db_path, config)
 
 
+@router.get("/admin/feed-health")
+def admin_feed_health(request: Request):
+    """Owner-only: when TradingView last reported for each instrument."""
+    _require_owner(request)
+    from alerts.feed_monitor import feed_health
+    with _db(request) as conn:
+        return {"instruments": feed_health(conn)}
+
+
 @router.get("/strategy-content")
 def strategy_content(request: Request):
     _require_owner(request)

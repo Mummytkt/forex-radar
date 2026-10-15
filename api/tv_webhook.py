@@ -171,6 +171,17 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     instrument = payload.instrument.replace("/", "").upper()
     event_type = payload.type.upper()
 
+    # Heartbeat for the feed health monitor — any authenticated webhook counts.
+    try:
+        conn.execute(
+            "INSERT INTO webhook_heartbeats (instrument, last_seen_at, last_type) VALUES (?, ?, ?) "
+            "ON CONFLICT(instrument) DO UPDATE SET last_seen_at = excluded.last_seen_at, last_type = excluded.last_type",
+            (instrument, datetime.now(timezone.utc).isoformat(), event_type),
+        )
+        conn.commit()
+    except Exception as exc:  # never block alert processing on the heartbeat
+        logger.warning("Heartbeat write failed for %s: %s", instrument, exc)
+
     logger.info("TV webhook: %s %s", event_type, instrument)
 
     if event_type == "BREAKOUT":

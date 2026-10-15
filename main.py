@@ -26,6 +26,7 @@ from api.app import app as fastapi_app
 from alerts.price_monitor import run_price_check
 from alerts.billing_cycle import run_billing_cycle
 from alerts.backup import run_backup
+from alerts.feed_monitor import run_feed_check
 
 
 def setup_logging(level: str) -> None:
@@ -125,8 +126,17 @@ async def main(dry_run: bool = False) -> None:
         name="Daily database backup (local + encrypted off-site to owner Telegram)",
         misfire_grace_time=3600,
     )
+    scheduler.add_job(
+        run_feed_check,
+        "interval",
+        minutes=30,
+        kwargs={"db_path": config.db_path, "config": config},
+        id="feed_monitor",
+        name="TradingView feed health (warns owner when a pair goes silent)",
+        misfire_grace_time=600,
+    )
     scheduler.start()
-    logger.info("Price monitor + billing cycle + daily backup started")
+    logger.info("Price monitor + billing cycle + daily backup + feed monitor started")
 
     server = uvicorn.Server(
         uvicorn.Config(

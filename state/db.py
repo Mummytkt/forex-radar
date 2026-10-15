@@ -496,4 +496,15 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_pattern_alerts_inst ON entry_pattern_alerts (instrument, is_active)")
 
+    # Last time TradingView sent anything for each instrument — feed health monitor
+    if "webhook_heartbeats" not in tables:
+        conn.execute("""
+            CREATE TABLE webhook_heartbeats (
+                instrument   TEXT PRIMARY KEY,
+                last_seen_at TEXT NOT NULL,      -- ISO UTC of the latest webhook
+                last_type    TEXT,               -- event type of that webhook
+                stale_since  TEXT                -- set when the owner was warned; cleared on recovery
+            )
+        """)
+
     conn.commit()
