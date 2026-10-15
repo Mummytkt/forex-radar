@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Bell, BarChart2, BookOpen, Settings,
-  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2, X, BookMarked, Target, FlaskConical, Gift
+  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2, X, BookMarked, Target, FlaskConical, Gift,
+  Briefcase
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme'
 import { useAuth } from '@/lib/auth'
@@ -42,6 +43,7 @@ const SECTIONS = [
   {
     label: 'Account',
     links: [
+      { href: '/business', icon: Briefcase, label: 'Business', ownerOnly: true },
       { href: '/account', icon: UserCircle2, label: 'Account' },
       { href: '/settings', icon: Settings, label: 'Settings' },
     ],
@@ -115,7 +117,7 @@ export default function Sidebar() {
             }}>
               {section.label}
             </div>
-            {section.links.map(({ href, icon: Icon, label }) => {
+            {section.links.filter(l => !('ownerOnly' in l && l.ownerOnly) || user?.role === 'OWNER').map(({ href, icon: Icon, label }) => {
               const active = href === '/dashboard' ? path === '/dashboard' : path.startsWith(href)
               const displayLabel = href === '/strategy' && user?.role !== 'OWNER' ? 'Tutorials' : label
               return (

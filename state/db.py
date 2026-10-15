@@ -497,6 +497,12 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_pattern_alerts_inst ON entry_pattern_alerts (instrument, is_active)")
 
+    # When the owner paid out a commission (Business page → Mark paid)
+    if "commissions" in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
+        comm_cols = {row[1] for row in conn.execute("PRAGMA table_info(commissions)").fetchall()}
+        if "paid_at" not in comm_cols:
+            conn.execute("ALTER TABLE commissions ADD COLUMN paid_at TEXT")
+
     # One row per one-off notice already sent (renewal reminders etc.) — prevents repeats
     if "notices_sent" not in tables:
         conn.execute("""
