@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Bell, BarChart2, BookOpen, Settings,
-  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2, X, BookMarked, Target, FlaskConical
+  Radio, SlidersHorizontal, Moon, Sun, Activity, LogOut, UserCircle2, X, BookMarked, Target, FlaskConical, Gift
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme'
 import { useAuth } from '@/lib/auth'
@@ -31,6 +31,12 @@ const SECTIONS = [
       { href: '/alerts', icon: Bell, label: 'History' },
       { href: '/price-alerts', icon: Target, label: 'Price Alerts' },
       { href: '/preferences', icon: SlidersHorizontal, label: 'Preferences' },
+    ],
+  },
+  {
+    label: 'Earn',
+    links: [
+      { href: '/affiliate', icon: Gift, label: 'Affiliate' },
     ],
   },
   {

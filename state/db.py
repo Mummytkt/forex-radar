@@ -403,6 +403,75 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     if "timeframe" not in pa_cols:
         conn.execute("ALTER TABLE price_alerts ADD COLUMN timeframe TEXT NOT NULL DEFAULT '5m'")
 
+    # ── Billing + affiliate columns on users ────────────────────────────────
+    user_cols2 = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    for col_def in [
+        "paystack_customer_code TEXT",
+        "paystack_auth_code TEXT",       # saved card token for renewals / trial charge
+        "billing_mode TEXT",             # 'once' | 'auto' | 'trial' | NULL (manual)
+        "renew_plan TEXT",               # plan code to recharge on renewal
+        "renew_amount REAL",             # USD amount to recharge
+        "next_charge_at TEXT",           # when the scheduler should next charge
+        "set_password_token TEXT",       # one-time token to set a password after checkout
+        "referred_by INTEGER",           # affiliate user id that referred this account
+    ]:
+        name = col_def.split()[0]
+        if name not in user_cols2:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col_def}")
+
+    # ── Payments (one row per Paystack transaction) ─────────────────────────
+    if "payments" not in tables:
+        conn.execute("""
+            CREATE TABLE payments (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                reference     TEXT    NOT NULL UNIQUE,
+                email         TEXT    NOT NULL,
+                name          TEXT,
+                plan          TEXT    NOT NULL,
+                billing_mode  TEXT    NOT NULL DEFAULT 'once',
+                amount_usd    REAL    NOT NULL,
+                currency      TEXT    NOT NULL DEFAULT 'USD',
+                duration_days INTEGER NOT NULL,
+                trial         INTEGER NOT NULL DEFAULT 0,
+                referral_code TEXT,
+                status        TEXT    NOT NULL DEFAULT 'pending',  -- pending|paid|failed
+                user_id       INTEGER REFERENCES users(id),
+                created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+                paid_at       TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_ref ON payments (reference)")
+
+    # ── Affiliates (one row per user who joined the programme) ──────────────
+    if "affiliates" not in tables:
+        conn.execute("""
+            CREATE TABLE affiliates (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id       INTEGER NOT NULL UNIQUE REFERENCES users(id),
+                code          TEXT    NOT NULL UNIQUE,   -- share code (also used in the link)
+                paid_customers INTEGER NOT NULL DEFAULT 0,
+                created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_affiliates_code ON affiliates (code)")
+
+    # ── Commissions (one row per earning event) ─────────────────────────────
+    if "commissions" not in tables:
+        conn.execute("""
+            CREATE TABLE commissions (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                affiliate_id  INTEGER NOT NULL REFERENCES affiliates(id),
+                payment_id    INTEGER REFERENCES payments(id),
+                customer_email TEXT,
+                rate          REAL    NOT NULL,          -- 0.10 or 0.15
+                amount_usd    REAL    NOT NULL,
+                status        TEXT    NOT NULL DEFAULT 'pending',  -- pending|available|paid
+                available_at  TEXT,                       -- 7 days after the customer paid
+                created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_commissions_aff ON commissions (affiliate_id)")
+
     # Entry pattern alerts (PCL + Engulfing Sweep at user-set price levels)
     if "entry_pattern_alerts" not in tables:
         conn.execute("""

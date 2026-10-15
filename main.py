@@ -24,6 +24,7 @@ from config import load_config
 from state.db import get_connection, bootstrap_schema
 from api.app import app as fastapi_app
 from alerts.price_monitor import run_price_check
+from alerts.billing_cycle import run_billing_cycle
 
 
 def setup_logging(level: str) -> None:
@@ -94,8 +95,17 @@ async def main(dry_run: bool = False) -> None:
         name="Price level alert monitor",
         misfire_grace_time=60,
     )
+    scheduler.add_job(
+        run_billing_cycle,
+        "interval",
+        hours=6,
+        kwargs={"db_path": config.db_path, "config": config},
+        id="billing_cycle",
+        name="Subscription renewal + trial charge + commission release",
+        misfire_grace_time=600,
+    )
     scheduler.start()
-    logger.info("Price monitor started — checking price levels every 5 minutes")
+    logger.info("Price monitor + billing cycle started")
 
     server = uvicorn.Server(
         uvicorn.Config(

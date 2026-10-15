@@ -31,7 +31,7 @@ const Auth = createContext<AuthCtx>({
 })
 
 const TOKEN_KEY = 'mbp_token'
-const NO_AUTH_PATHS = ['/login', '/join', '/', '/signup']
+const NO_AUTH_PATHS = ['/login', '/join', '/', '/signup', '/checkout']
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return
     if (!authEnabled) return
-    if (NO_AUTH_PATHS.some(p => pathname === p || pathname.startsWith(p + '?'))) return
+    if (NO_AUTH_PATHS.some(p => pathname === p || pathname.startsWith(p + '?') || pathname.startsWith(p + '/'))) return
     if (!user) router.replace('/login')
   }, [loading, authEnabled, user, pathname, router])
 

@@ -354,13 +354,31 @@ export default function LandingPage() {
                 <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 5 }}>total</span>
               </div>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 22 }}>${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}</p>
-              <Link href={`/signup?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '11px 16px', borderRadius: 10, marginTop: 'auto', background: plan.color, color: '#fff', fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>Get started</Link>
+              <Link href={`/checkout?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '11px 16px', borderRadius: 10, marginTop: 'auto', background: plan.color, color: '#fff', fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>Get started</Link>
             </div>
           ))}
         </div>
 
+        {/* Free trial CTA */}
+        <div className="lp-reveal lp-pop" style={{
+          marginTop: 20, borderRadius: 18, padding: '22px 24px',
+          background: 'linear-gradient(100deg, #ec489922, #a855f722)', border: '1px solid #ec489955',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+          boxShadow: '0 18px 44px -26px #ec4899',
+        }}>
+          <div>
+            <p style={{ fontWeight: 800, fontSize: 17, marginBottom: 4 }}>Not ready to commit? <span className="lp-grad3">Try it free for 7 days.</span></p>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              Full access, no charge for a week. Keep it and you&apos;re billed $10/month after — cancel anytime.
+            </p>
+          </div>
+          <Link href="/checkout?plan=TRIAL" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '12px 24px', borderRadius: 11, background: '#ec4899', color: '#fff', fontSize: 14, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            Start free trial <ArrowRight size={16} />
+          </Link>
+        </div>
+
         <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 24 }}>
-          Access is granted manually after payment. You&apos;ll receive login credentials via email once confirmed.
+          Secure checkout by Paystack. Access is activated automatically the moment your payment confirms.
         </p>
       </section>
 
