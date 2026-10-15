@@ -112,6 +112,15 @@ var float  h4c_oc_close1         = na
 var float  h4c_oc_lvl            = na
 var bool   h4c_oc_ready          = false
 
+// Continuation dedup: each level fires at most once per "visit". It re-arms
+// when a new level is set (level-change) OR when price leaves the zone, so a
+// second identical alert cannot fire on the next H4 candle while price just
+// sits at the level.
+var bool   bk_armed              = true
+var float  bk_armed_lvl          = na
+var bool   oc_armed              = true
+var float  oc_armed_lvl          = na
+
 // ── Level origin bar tracking (for extend-right lines) ───────────────────────
 var int    a_origin   = na
 var int    v_origin   = na
@@ -509,24 +518,23 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4c_consec := 0
 
             if not na(h4_breaker_lvl)
+                // Re-arm when a NEW breaker level is established
+                if na(bk_armed_lvl) or bk_armed_lvl != h4_breaker_lvl
+                    bk_armed     := true
+                    bk_armed_lvl := h4_breaker_lvl
                 bool bk_touched = low <= h4_breaker_lvl + tol and high >= h4_breaker_lvl - tol
-                if bo_dir == "bullish" and bk_touched and close > h4_breaker_lvl
+                // Re-arm when price is clear of the zone (so each fresh visit fires once)
+                if not bk_touched
+                    bk_armed := true
+                bool bk_react = bk_armed and bk_touched and ((bo_dir == "bullish" and close > h4_breaker_lvl) or (bo_dir == "bearish" and close < h4_breaker_lvl))
+                if bk_react
                     string bk_type = h4_breaker_orig_fired ? "breaker_cont" : "breaker_origin"
                     if not h4_breaker_orig_fired
                         h4_breaker_orig_fired := true
+                    bk_armed := false
                     if barstate.isrealtime
                         alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
-                              + '","direction":"bullish","cont_type":"' + bk_type + '"'
-                              + ',"breakout_level":' + str.tostring(bo_level)
-                              + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
-                              alert.freq_once_per_bar)
-                if bo_dir == "bearish" and bk_touched and close < h4_breaker_lvl
-                    string bk_type = h4_breaker_orig_fired ? "breaker_cont" : "breaker_origin"
-                    if not h4_breaker_orig_fired
-                        h4_breaker_orig_fired := true
-                    if barstate.isrealtime
-                        alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
-                              + '","direction":"bearish","cont_type":"' + bk_type + '"'
+                              + '","direction":"' + bo_dir + '","cont_type":"' + bk_type + '"'
                               + ',"breakout_level":' + str.tostring(bo_level)
                               + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
                               alert.freq_once_per_bar)
@@ -537,18 +545,20 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             // it's just the second candle of the OC itself. We need price to
             // leave and return, then close beyond on a later H4 candle.
             if h4c_oc_ready and not na(h4c_oc_lvl) and bar_index > h4c_origin
+                // Re-arm when a NEW OC level is established
+                if na(oc_armed_lvl) or oc_armed_lvl != h4c_oc_lvl
+                    oc_armed     := true
+                    oc_armed_lvl := h4c_oc_lvl
                 bool oc_touched = low <= h4c_oc_lvl + tol and high >= h4c_oc_lvl - tol
-                if bo_dir == "bullish" and oc_touched and close > h4c_oc_lvl
+                // Re-arm when price is clear of the zone (so each fresh visit fires once)
+                if not oc_touched
+                    oc_armed := true
+                bool oc_react = oc_armed and oc_touched and ((bo_dir == "bullish" and close > h4c_oc_lvl) or (bo_dir == "bearish" and close < h4c_oc_lvl))
+                if oc_react
+                    oc_armed := false
                     if barstate.isrealtime
                         alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
-                              + '","direction":"bullish","cont_type":"oc_cont"'
-                              + ',"breakout_level":' + str.tostring(bo_level)
-                              + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
-                              alert.freq_once_per_bar)
-                if bo_dir == "bearish" and oc_touched and close < h4c_oc_lvl
-                    if barstate.isrealtime
-                        alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
-                              + '","direction":"bearish","cont_type":"oc_cont"'
+                              + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
                               + ',"breakout_level":' + str.tostring(bo_level)
                               + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
                               alert.freq_once_per_bar)
