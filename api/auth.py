@@ -277,10 +277,16 @@ def list_users(request: Request):
     require_owner(request)
     with _db(request) as conn:
         rows = conn.execute(
-            "SELECT id, email, name, role, plan, plan_expires_at, invite_used, created_at, last_login_at "
+            "SELECT id, email, name, role, plan, plan_expires_at, invite_used, created_at, last_login_at, telegram_chat_id "
             "FROM users ORDER BY created_at ASC"
         ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        # expose only whether Telegram is linked, never the chat id itself
+        d["telegram_linked"] = bool((d.pop("telegram_chat_id", None) or "").strip())
+        out.append(d)
+    return out
 
 
 @auth_router.post("/invite")

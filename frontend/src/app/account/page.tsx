@@ -125,6 +125,7 @@ interface Subscriber {
   id: number; email: string; name: string; role: string; plan: string
   plan_expires_at: string | null; invite_used: number
   created_at: string; last_login_at: string | null
+  telegram_linked?: boolean
 }
 
 function SubscribersSection() {
@@ -276,9 +277,15 @@ function SubscribersSection() {
               <option key={p} value={p}>{PLAN_META[p].label}</option>
             ))}
           </select>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-            {filtered.length} of {users.length}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--bullish)' }} /> Telegram linked
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--bearish)' }} /> Not linked
+            </span>
+            <span>{filtered.length} of {users.length}</span>
+          </div>
         </div>
       )}
 
@@ -315,9 +322,18 @@ function SubscribersSection() {
               {filtered.map(u => (
                 <tr key={u.id}>
                   <td>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || '—'}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{u.email}</div>
-                    {!u.invite_used && !u.last_login_at && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Invite pending</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span
+                        title={u.telegram_linked ? 'Telegram linked — receiving signals' : 'Telegram not linked — not receiving signals'}
+                        style={{
+                          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                          background: u.telegram_linked ? 'var(--bullish)' : 'var(--bearish)',
+                          boxShadow: u.telegram_linked ? '0 0 6px var(--bullish)' : 'none',
+                        }} />
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || '—'}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 15 }}>{u.email}</div>
+                    {!u.invite_used && !u.last_login_at && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600, marginLeft: 15 }}>Invite pending</span>}
                   </td>
                   <td><span style={{ fontSize: 12, fontWeight: 600, color: planColor(u.plan) }}>{planLabel(u.plan)}</span></td>
                   <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(u.created_at)}</span></td>
