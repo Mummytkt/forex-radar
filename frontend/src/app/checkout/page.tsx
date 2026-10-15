@@ -135,6 +135,13 @@ function CheckoutForm() {
       </button>
 
       <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+        By continuing you agree to the{' '}
+        <Link href="/terms" target="_blank" style={{ color: 'var(--accent-hover)', textDecoration: 'none' }}>Terms</Link>,{' '}
+        <Link href="/refunds" target="_blank" style={{ color: 'var(--accent-hover)', textDecoration: 'none' }}>Refund Policy</Link> and{' '}
+        <Link href="/risk" target="_blank" style={{ color: 'var(--accent-hover)', textDecoration: 'none' }}>Risk Disclaimer</Link>.
+        {isTrial ? ' After 7 days your card is charged $10 every 30 days until you turn off auto-renew.' : ''}
+      </p>
+      <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
         Prices in USD. You&apos;ll be charged the equivalent in NGN (shown on the Paystack checkout).
         Payments processed securely by Paystack — card details never touch our servers.
       </p>

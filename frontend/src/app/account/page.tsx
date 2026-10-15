@@ -397,6 +397,106 @@ function SubscribersSection() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Billing (subscribers): auto-renew on/off ─────────────────────────────────
+
+interface BillingInfo {
+  plan: string; plan_expires_at: string | null; auto_renew: boolean; can_turn_on: boolean
+  next_charge_at: string | null; renew_amount_usd: number | null; renew_plan: string | null
+}
+
+function BillingSection() {
+  const { fmtDate } = useTimezone()
+  const [info, setInfo] = useState<BillingInfo | null>(null)
+  const [confirmOff, setConfirmOff] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const load = () => {
+    authFetch('/api/billing/me').then(r => (r.ok ? r.json() : null)).then(setInfo).catch(() => {})
+  }
+  useEffect(load, [])
+
+  const setAutoRenew = async (enabled: boolean) => {
+    if (!enabled && !confirmOff) { setConfirmOff(true); return }
+    setBusy(true); setMsg('')
+    try {
+      const r = await authFetch('/api/billing/auto-renew', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || 'Could not update auto-renew.')
+      setMsg(enabled ? 'Auto-renew is back on.' : 'Auto-renew turned off. You keep access until your plan ends.')
+      setConfirmOff(false)
+      load()
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Could not update auto-renew.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!info || info.plan === 'LIFETIME') return null
+  const ends = info.plan_expires_at ? fmtDate(info.plan_expires_at) : '—'
+
+  return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <h2 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Billing</h2>
+        <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>Auto-renew and your next charge</p>
+      </div>
+      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+        {info.auto_renew ? (
+          <>
+            <p>
+              <strong style={{ color: 'var(--bullish)' }}>Auto-renew is on.</strong>{' '}
+              Your card will be charged <strong style={{ color: 'var(--text-primary)' }}>${info.renew_amount_usd}</strong>
+              {info.next_charge_at ? <> on <strong style={{ color: 'var(--text-primary)' }}>{fmtDate(info.next_charge_at)}</strong></> : null}
+              {info.renew_plan ? <> for {planLabel(info.renew_plan)}</> : null}.
+            </p>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setAutoRenew(false)} disabled={busy}
+                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+                  background: confirmOff ? 'var(--bearish)' : 'var(--bearish-bg)', color: confirmOff ? 'white' : 'var(--bearish)', opacity: busy ? 0.6 : 1 }}>
+                {busy ? 'Saving…' : confirmOff ? 'Confirm: turn off auto-renew' : 'Turn off auto-renew'}
+              </button>
+              {confirmOff && (
+                <button onClick={() => setConfirmOff(false)} style={{ fontSize: 12, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  Keep it on
+                </button>
+              )}
+            </div>
+            {confirmOff && <p style={{ fontSize: 12 }}>You won&apos;t be charged again. You keep full access until {ends}.</p>}
+          </>
+        ) : (
+          <>
+            <p>
+              <strong style={{ color: 'var(--text-primary)' }}>Auto-renew is off.</strong>{' '}
+              Your access ends on <strong style={{ color: 'var(--warning)' }}>{ends}</strong>.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {info.can_turn_on && (
+                <button onClick={() => setAutoRenew(true)} disabled={busy}
+                  style={{ padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: 'white', opacity: busy ? 0.6 : 1 }}>
+                  {busy ? 'Saving…' : 'Turn auto-renew back on'}
+                </button>
+              )}
+              <a href={`/checkout?plan=${info.renew_plan || info.plan || '30DAY'}`}
+                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none', border: '1px solid var(--border)', color: 'var(--text-primary)', background: 'var(--card-hover)' }}>
+                Renew or change plan
+              </a>
+            </div>
+          </>
+        )}
+        {msg && <p style={{ fontSize: 12, color: msg.startsWith('Could') ? 'var(--bearish)' : 'var(--bullish)' }}>{msg}</p>}
+        <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          Payments aren&apos;t refundable. See the <a href="/refunds" style={{ color: 'var(--accent)', textDecoration: 'none' }}>refund policy</a>.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function AccountPage() {
   const { user, authEnabled, refresh, logout } = useAuth()
   const { fmtDate, timezone, setTimezone, abbr } = useTimezone()
@@ -564,6 +664,9 @@ export default function AccountPage() {
             </div>
           </div>
         </div>
+
+        {/* Billing — subscribers */}
+        {user.role !== 'OWNER' && <BillingSection />}
 
         {/* Change password */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>

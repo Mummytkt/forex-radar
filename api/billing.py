@@ -331,6 +331,61 @@ def set_password(body: SetPwBody, request: Request):
     return {"token": token, "user": {"id": u["id"], "email": u["email"], "name": u["name"] or "", "role": u["role"], "plan": u["plan"]}}
 
 
+@router.get("/billing/me")
+def billing_me(request: Request):
+    """The logged-in user's plan, expiry and auto-renew state (Account → Billing)."""
+    uid = _uid(request)
+    if not uid:
+        raise HTTPException(401, "Not authenticated")
+    with _db_write(request) as conn:
+        u = conn.execute(
+            "SELECT role, plan, plan_expires_at, billing_mode, paystack_auth_code, renew_plan, "
+            "renew_amount, next_charge_at FROM users WHERE id = ?", (uid,)).fetchone()
+    if not u:
+        raise HTTPException(404, "Not found")
+    auto = u["billing_mode"] == "auto" and bool(u["paystack_auth_code"])
+    return {
+        "role": u["role"],
+        "plan": u["plan"],
+        "plan_expires_at": u["plan_expires_at"],
+        "auto_renew": auto,
+        "can_turn_on": (not auto) and bool(u["paystack_auth_code"]) and u["plan"] != "LIFETIME",
+        "next_charge_at": u["next_charge_at"] if auto else None,
+        "renew_amount_usd": u["renew_amount"] if auto else None,
+        "renew_plan": u["renew_plan"],
+    }
+
+
+class AutoRenewBody(BaseModel):
+    enabled: bool
+
+
+@router.post("/billing/auto-renew")
+def set_auto_renew(body: AutoRenewBody, request: Request):
+    """Turn auto-renew off (cancel — access continues to the end of the paid period)
+    or back on (only with a card already saved from a previous checkout)."""
+    uid = _uid(request)
+    if not uid:
+        raise HTTPException(401, "Not authenticated")
+    now = datetime.now(timezone.utc).isoformat()
+    with _db_write(request) as conn:
+        u = conn.execute("SELECT plan, plan_expires_at, paystack_auth_code FROM users WHERE id = ?",
+                         (uid,)).fetchone()
+        if not u:
+            raise HTTPException(404, "Not found")
+        if body.enabled:
+            if not u["paystack_auth_code"] or u["plan"] == "LIFETIME":
+                raise HTTPException(400, "Auto-renew needs a card from a checkout. Choose a plan to set it up.")
+            conn.execute(
+                "UPDATE users SET billing_mode = 'auto', next_charge_at = ?, auto_renew_cancelled_at = NULL WHERE id = ?",
+                (u["plan_expires_at"] or now, uid))
+        else:
+            conn.execute(
+                "UPDATE users SET billing_mode = 'once', next_charge_at = NULL, auto_renew_cancelled_at = ? WHERE id = ?",
+                (now, uid))
+    return {"ok": True, "auto_renew": body.enabled}
+
+
 class ClaimBody(BaseModel):
     email: str
     reference: str

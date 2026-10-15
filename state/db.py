@@ -417,6 +417,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         "reset_token TEXT",              # one-time password-reset token
         "reset_token_expires_at TEXT",   # reset token expiry (ISO UTC)
         "pw_changed_at INTEGER",         # epoch secs; tokens issued before this are rejected
+        "auto_renew_cancelled_at TEXT",  # when the subscriber turned auto-renew off (churn tracking)
     ]:
         name = col_def.split()[0]
         if name not in user_cols2:

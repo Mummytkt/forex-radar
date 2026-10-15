@@ -383,7 +383,13 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer style={{ borderTop: '1px solid var(--border)', padding: '24px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+      <footer style={{ borderTop: '1px solid var(--border)', padding: '24px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', lineHeight: 2 }}>
+        <nav aria-label="Legal" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 18px', marginBottom: 6 }}>
+          {[['/terms', 'Terms'], ['/privacy', 'Privacy'], ['/refunds', 'Refunds & Cancellation'], ['/risk', 'Risk Disclaimer']].map(([href, label]) => (
+            <a key={href} href={href} style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600 }}>{label}</a>
+          ))}
+          <a href="mailto:olaomidamilola@gmail.com" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Contact</a>
+        </nav>
         © {year} MummyTKT&apos;s Bias Pointer · For educational purposes only · Not financial advice
       </footer>
     </div>
