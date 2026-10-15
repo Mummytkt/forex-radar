@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth'
 import { useAccent } from '@/lib/useAccent'
 import { PALETTE } from '@/lib/accent'
 import type { InstrumentOverview, Stats, AlertsPage } from '@/lib/types'
+import OnboardingChecklist, { type Onboarding } from '@/components/OnboardingChecklist'
 
 interface Profile {
   telegram_configured: boolean
@@ -43,6 +44,7 @@ export default function OverviewPage() {
   const { data: stats } = useSWR<Stats>('/api/stats', fetcher, { refreshInterval: 30000 })
   const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=5', fetcher, { refreshInterval: 30000 })
   const { data: profile } = useSWR<Profile>('/api/profile', fetcher, { refreshInterval: 60000 })
+  const { data: onboarding } = useSWR<Onboarding>('/api/onboarding', fetcher, { refreshInterval: 60000 })
 
   useEffect(() => {
     const h = new Date().getHours()
@@ -60,10 +62,13 @@ export default function OverviewPage() {
     })
 
   const isOwner = user?.role === 'OWNER'
+  // This user's own Telegram link (not the platform's), so a subscriber who hasn't
+  // linked Telegram is never told their alerts are active.
+  const tgLinked = onboarding?.telegram_linked ?? false
   const steps = [
     { label: 'Engine running', done: true },
     { label: 'Instruments loaded', done: (stats?.total_instruments ?? 0) > 0 },
-    { label: isOwner ? 'Telegram linked' : 'Alerts active', done: profile?.telegram_configured ?? false },
+    { label: 'Telegram linked', done: tgLinked },
     { label: 'First alert fired', done: (profile?.first_alert_at ?? null) !== null },
   ]
 
@@ -71,6 +76,9 @@ export default function OverviewPage() {
     <>
       <TopBar title="Overview" subtitle={today} />
       <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+        {/* First-login setup checklist (subscribers) */}
+        {!isOwner && user && onboarding && <OnboardingChecklist uid={user.id} data={onboarding} />}
 
         {/* Profile status banner */}
         <div style={{
@@ -119,14 +127,12 @@ export default function OverviewPage() {
                 </span>
               </div>
               {/* Telegram / Alerts */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: profile?.telegram_configured ? 'var(--bullish-bg)' : 'var(--card-hover)', border: `1px solid ${profile?.telegram_configured ? 'var(--bullish)30' : 'var(--border)'}` }}>
-                {profile?.telegram_configured
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 99, background: tgLinked ? 'var(--bullish-bg)' : 'var(--card-hover)', border: `1px solid ${tgLinked ? 'var(--bullish)30' : 'var(--border)'}` }}>
+                {tgLinked
                   ? <Wifi size={12} color="var(--bullish)" />
                   : <WifiOff size={12} color="var(--text-muted)" />}
-                <span style={{ fontSize: 12, fontWeight: 600, color: profile?.telegram_configured ? 'var(--bullish)' : 'var(--text-muted)' }}>
-                  {profile?.telegram_configured
-                    ? (isOwner ? 'Telegram linked' : 'Alerts active')
-                    : (isOwner ? 'Telegram not set' : 'Alerts not configured')}
+                <span style={{ fontSize: 12, fontWeight: 600, color: tgLinked ? 'var(--bullish)' : 'var(--text-muted)' }}>
+                  {tgLinked ? 'Telegram linked' : 'Telegram not linked'}
                 </span>
               </div>
               {/* Member since */}

@@ -4,6 +4,7 @@ import { Play, Trash2, Film, Plus, Link } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { markOnboarding } from '@/components/OnboardingChecklist'
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -174,7 +175,7 @@ function VideoSection() {
                     <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{v.title}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => setPlaying(p => p === v.url ? null : v.url)}
+                    <button onClick={() => { markOnboarding(user?.id, 'video'); setPlaying(p => p === v.url ? null : v.url) }}
                       style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, background: playing === v.url ? 'var(--card-hover)' : 'var(--accent-bg)', color: playing === v.url ? 'var(--text-secondary)' : 'var(--accent-hover)', fontWeight: 500 }}>
                       <Play size={11} />{playing === v.url ? 'Minimise' : 'Watch'}
                     </button>

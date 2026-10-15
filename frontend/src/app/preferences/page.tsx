@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { Check, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { markOnboarding } from '@/components/OnboardingChecklist'
 
 function authHeaders(): HeadersInit {
   if (typeof window === 'undefined') return {}
@@ -34,6 +36,9 @@ export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle' })
+
+  const { user } = useAuth()
+  useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
 
   useEffect(() => {
     fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })

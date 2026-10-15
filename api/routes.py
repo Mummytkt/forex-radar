@@ -472,6 +472,27 @@ async def telegram_update(request: Request):
     return {"ok": True}
 
 
+@router.get("/onboarding")
+def onboarding_status(request: Request):
+    """The logged-in user's setup progress for the first-login checklist."""
+    uid = _user_id(request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    with _db(request) as conn:
+        u = conn.execute("SELECT telegram_chat_id, watched_instruments FROM users WHERE id = ?", (uid,)).fetchone()
+        prefs = conn.execute(
+            "SELECT 1 FROM user_config WHERE key IN (?, ?)",
+            (f"pref_alert_external:{uid}", f"pref_alert_internal:{uid}")).fetchone()
+        videos = conn.execute("SELECT value FROM user_config WHERE key = 'tutorial_videos'").fetchone()
+    has_videos = bool(videos and json.loads(videos[0] or "[]"))
+    return {
+        "telegram_linked": bool(u and (u["telegram_chat_id"] or "").strip()),
+        "pairs_chosen": bool(u and u["watched_instruments"]),
+        "alerts_reviewed": bool(prefs),
+        "has_videos": has_videos,
+    }
+
+
 @router.get("/config/instruments")
 def get_config_instruments(request: Request):
     """Return the current monitored instrument list."""
