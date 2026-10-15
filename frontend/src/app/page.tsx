@@ -55,50 +55,64 @@ function useReveal() {
 }
 
 // ── Faint dashboard-mockup background (greyscale product simulation) ──────────
-function MiniBars({ bars }: { bars: number[] }) {
+function MiniBars({ bars, color }: { bars: number[]; color: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 44, marginTop: 10 }}>
-      {bars.map((h, i) => <div key={i} style={{ width: 13, height: `${h}%`, borderRadius: 4, background: 'rgba(129,140,248,0.38)' }} />)}
+      {bars.map((h, i) => <div key={i} style={{ width: 13, height: `${h}%`, borderRadius: 4, background: color }} />)}
     </div>
   )
 }
-function MockPanel({ children, style, cls }: { children: React.ReactNode; style: React.CSSProperties; cls?: string }) {
+function MockPanel({ children, style, cls, bg, border }: { children: React.ReactNode; style: React.CSSProperties; cls?: string; bg: string; border: string }) {
   return (
-    <div className={cls} style={{ position: 'absolute', borderRadius: 16, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', padding: 14, backdropFilter: 'blur(2px)', ...style }}>
+    <div className={cls} style={{ position: 'absolute', borderRadius: 16, background: bg, border: `1px solid ${border}`, padding: 14, backdropFilter: 'blur(2px)', boxShadow: '0 20px 50px -24px rgba(0,0,0,0.5)', ...style }}>
       {children}
     </div>
   )
 }
-function BgDashboardSim() {
-  const lbl: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em', textTransform: 'uppercase' }
-  const big: React.CSSProperties = { fontSize: 22, fontWeight: 800, color: 'rgba(255,255,255,0.55)', marginTop: 4 }
+function BgDashboardSim({ dark }: { dark: boolean }) {
+  const C = dark ? {
+    base: 'linear-gradient(180deg, #0a0c12 0%, #0e1119 45%, #0b0d14 100%)',
+    glow1: 'rgba(99,102,241,0.28)', glow2: 'radial-gradient(circle, rgba(245,158,11,0.16), rgba(236,72,153,0.12) 45%, transparent 72%)',
+    panelBg: 'rgba(255,255,255,0.07)', panelBorder: 'rgba(255,255,255,0.14)',
+    lbl: 'rgba(255,255,255,0.5)', big: 'rgba(255,255,255,0.72)',
+    chart: 'rgba(165,180,252,0.7)', ring: 'rgba(255,255,255,0.1)',
+    scrim: 'radial-gradient(64% 56% at 50% 44%, rgba(6,7,12,0.80) 0%, rgba(6,7,12,0.62) 55%, rgba(6,7,12,0.20) 100%)',
+  } : {
+    base: 'linear-gradient(180deg, #eef1f8 0%, #e6ebf5 45%, #eef1f8 100%)',
+    glow1: 'rgba(99,102,241,0.16)', glow2: 'radial-gradient(circle, rgba(245,158,11,0.12), rgba(236,72,153,0.10) 45%, transparent 72%)',
+    panelBg: 'rgba(255,255,255,0.82)', panelBorder: 'rgba(15,17,32,0.08)',
+    lbl: 'rgba(15,17,32,0.45)', big: 'rgba(15,17,32,0.62)',
+    chart: 'rgba(99,102,241,0.55)', ring: 'rgba(15,17,32,0.08)',
+    scrim: 'radial-gradient(64% 56% at 50% 44%, rgba(238,241,248,0.84) 0%, rgba(238,241,248,0.66) 55%, rgba(238,241,248,0.12) 100%)',
+  }
+  const lbl: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: C.lbl, letterSpacing: '0.04em', textTransform: 'uppercase' }
+  const big: React.CSSProperties = { fontSize: 22, fontWeight: 800, color: C.big, marginTop: 4 }
   return (
     <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
-      {/* neutral slate base + soft colour glows */}
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #0a0c12 0%, #0e1119 45%, #0b0d14 100%)' }} />
-      <div className="lp-drift" style={{ position: 'absolute', left: '-6%', top: '-8%', width: '46%', height: '55%', background: 'radial-gradient(circle, rgba(99,102,241,0.22), transparent 70%)', filter: 'blur(36px)' }} />
-      <div className="lp-drift" style={{ position: 'absolute', right: '-8%', bottom: '-12%', width: '52%', height: '58%', background: 'radial-gradient(circle, rgba(245,158,11,0.12), rgba(236,72,153,0.10) 45%, transparent 72%)', filter: 'blur(40px)' }} />
+      <div style={{ position: 'absolute', inset: 0, background: C.base }} />
+      <div className="lp-drift" style={{ position: 'absolute', left: '-6%', top: '-8%', width: '46%', height: '55%', background: `radial-gradient(circle, ${C.glow1}, transparent 70%)`, filter: 'blur(36px)' }} />
+      <div className="lp-drift" style={{ position: 'absolute', right: '-8%', bottom: '-12%', width: '52%', height: '58%', background: C.glow2, filter: 'blur(40px)' }} />
 
       {/* floating dashboard mock panels (desktop) */}
       <div className="desktop-only" style={{ position: 'absolute', inset: 0 }}>
-        <MockPanel cls="lp-float" style={{ left: '4%', top: '14%', width: 190, transform: 'rotate(-3deg)' }}>
+        <MockPanel cls="lp-float" bg={C.panelBg} border={C.panelBorder} style={{ left: '4%', top: '14%', width: 190, transform: 'rotate(-3deg)' }}>
           <div style={lbl}>Analytics</div>
           <div style={big}>$242.63</div>
-          <MiniBars bars={[64, 42, 80, 52, 70, 48]} />
+          <MiniBars bars={[64, 42, 80, 52, 70, 48]} color={C.chart} />
         </MockPanel>
 
-        <MockPanel cls="lp-float-sl" style={{ right: '5%', top: '12%', width: 210, transform: 'rotate(2deg)' }}>
+        <MockPanel cls="lp-float-sl" bg={C.panelBg} border={C.panelBorder} style={{ right: '5%', top: '12%', width: 210, transform: 'rotate(2deg)' }}>
           <div style={lbl}>Statistics</div>
           <div style={big}>+18.4%</div>
           <svg viewBox="0 0 180 54" style={{ width: '100%', height: 48, marginTop: 8 }}>
-            <polyline points="0,44 30,36 60,40 90,22 120,28 150,12 180,16" fill="none" stroke="rgba(129,140,248,0.5)" strokeWidth="2.5" strokeLinecap="round" />
+            <polyline points="0,44 30,36 60,40 90,22 120,28 150,12 180,16" fill="none" stroke={C.chart} strokeWidth="2.5" strokeLinecap="round" />
           </svg>
         </MockPanel>
 
-        <MockPanel cls="lp-float" style={{ left: '7%', bottom: '12%', width: 170, transform: 'rotate(2deg)', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <MockPanel cls="lp-float" bg={C.panelBg} border={C.panelBorder} style={{ left: '7%', bottom: '12%', width: 170, transform: 'rotate(2deg)', display: 'flex', alignItems: 'center', gap: 14 }}>
           <svg viewBox="0 0 52 52" style={{ width: 52, height: 52, flexShrink: 0 }}>
-            <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
-            <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(129,140,248,0.5)" strokeWidth="6" strokeDasharray="132" strokeDashoffset="30" transform="rotate(-90 26 26)" strokeLinecap="round" />
+            <circle cx="26" cy="26" r="21" fill="none" stroke={C.ring} strokeWidth="6" />
+            <circle cx="26" cy="26" r="21" fill="none" stroke={C.chart} strokeWidth="6" strokeDasharray="132" strokeDashoffset="30" transform="rotate(-90 26 26)" strokeLinecap="round" />
           </svg>
           <div>
             <div style={lbl}>Accuracy</div>
@@ -106,14 +120,14 @@ function BgDashboardSim() {
           </div>
         </MockPanel>
 
-        <MockPanel cls="lp-float-sl" style={{ right: '6%', bottom: '14%', width: 190, transform: 'rotate(-2deg)' }}>
+        <MockPanel cls="lp-float-sl" bg={C.panelBg} border={C.panelBorder} style={{ right: '6%', bottom: '14%', width: 190, transform: 'rotate(-2deg)' }}>
           <div style={lbl}>Win rate</div>
-          <MiniBars bars={[50, 72, 44, 86, 60, 78]} />
+          <MiniBars bars={[50, 72, 44, 86, 60, 78]} color={C.chart} />
         </MockPanel>
       </div>
 
-      {/* readability scrim */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(72% 62% at 50% 44%, rgba(6,7,12,0.55), rgba(6,7,12,0.86))' }} />
+      {/* readability scrim — dark/light at centre (behind text), clear at edges (panels show) */}
+      <div style={{ position: 'absolute', inset: 0, background: C.scrim }} />
     </div>
   )
 }
@@ -171,7 +185,21 @@ export default function LandingPage() {
   useEffect(() => { setYear(new Date().getFullYear()) }, [])
   useReveal()
 
-  const heroTitle: React.CSSProperties = { textShadow: '0 2px 30px rgba(0,0,0,0.55)' }
+  const dark = theme === 'dark'
+  const P = dark ? {
+    band: '#0a0c12', title: '#fff', accent: '#a5b4fc', body: 'rgba(255,255,255,0.78)',
+    badgeBg: 'rgba(99,102,241,0.18)', badgeBorder: 'rgba(129,140,248,0.4)', badgeText: '#c7d2fe',
+    pillarBg: 'rgba(16,18,30,0.6)', pillarBorder: 'rgba(255,255,255,0.1)', pillarIconBg: 'rgba(99,102,241,0.18)', pillarIcon: '#a5b4fc', pillarTitle: '#fff', pillarBody: 'rgba(255,255,255,0.65)',
+    signinBg: 'rgba(255,255,255,0.06)', signinBorder: 'rgba(255,255,255,0.22)', signinText: '#fff',
+    scroll: 'rgba(255,255,255,0.4)',
+  } : {
+    band: '#eef1f8', title: '#0f1120', accent: 'var(--accent)', body: '#48515f',
+    badgeBg: 'rgba(99,102,241,0.1)', badgeBorder: 'rgba(99,102,241,0.3)', badgeText: 'var(--accent)',
+    pillarBg: '#ffffff', pillarBorder: 'rgba(15,17,32,0.08)', pillarIconBg: 'var(--accent-bg)', pillarIcon: 'var(--accent-hover)', pillarTitle: '#0f1120', pillarBody: '#48515f',
+    signinBg: '#ffffff', signinBorder: 'rgba(15,17,32,0.14)', signinText: '#0f1120',
+    scroll: 'rgba(15,17,32,0.4)',
+  }
+  const heroTitle: React.CSSProperties = { textShadow: dark ? '0 2px 30px rgba(0,0,0,0.55)' : 'none' }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text-primary)', overflowX: 'hidden' }}>
@@ -196,19 +224,19 @@ export default function LandingPage() {
       </nav>
 
       {/* Scenic band: freedom hero (fills first screen) + pillars + profitability */}
-      <div style={{ position: 'relative', background: '#0a0c12' }}>
-        <BgDashboardSim />
+      <div style={{ position: 'relative', background: P.band }}>
+        <BgDashboardSim dark={dark} />
 
         {/* 1 — Freedom hero, sized to fill the first view */}
         <section style={{ position: 'relative', zIndex: 2, minHeight: 'calc(100vh - 58px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '56px 24px 40px', maxWidth: 840, margin: '0 auto' }}>
-          <div className="lp-rise" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 14px', borderRadius: 99, background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(129,140,248,0.4)', fontSize: 12, fontWeight: 600, color: '#c7d2fe', marginBottom: 28 }}>
-            <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block' }} />
+          <div className="lp-rise" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 14px', borderRadius: 99, background: P.badgeBg, border: `1px solid ${P.badgeBorder}`, fontSize: 12, fontWeight: 600, color: P.badgeText, marginBottom: 28 }}>
+            <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
             Engine monitoring 30+ markets · 24/7
           </div>
-          <h1 className="lp-rise" style={{ ...heroTitle, fontSize: 'clamp(40px, 7vw, 68px)', fontWeight: 800, lineHeight: 1.06, marginBottom: 24, letterSpacing: '-0.02em', color: '#fff' }}>
-            Trading should fund your life —<br /><span style={{ color: '#a5b4fc' }}>not consume it.</span>
+          <h1 className="lp-rise" style={{ ...heroTitle, fontSize: 'clamp(40px, 7vw, 68px)', fontWeight: 800, lineHeight: 1.06, marginBottom: 24, letterSpacing: '-0.02em', color: P.title }}>
+            Trading should fund your life —<br /><span style={{ color: P.accent }}>not consume it.</span>
           </h1>
-          <p className="lp-rise" style={{ fontSize: 18, color: 'rgba(255,255,255,0.78)', lineHeight: 1.75, maxWidth: 600, margin: '0 auto 38px' }}>
+          <p className="lp-rise" style={{ fontSize: 18, color: P.body, lineHeight: 1.75, maxWidth: 600, margin: '0 auto 38px' }}>
             You didn&apos;t come to the markets to be chained to a screen. You came for freedom —
             the time, the confidence, and the calm to build the life you actually want.
             The Bias Pointer hands you all three.
@@ -217,12 +245,12 @@ export default function LandingPage() {
             <a href="#pricing" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '14px 32px', borderRadius: 11, background: 'var(--accent)', color: 'white', fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 8px 28px rgba(99,102,241,0.5)' }}>
               Start trading with clarity <ArrowRight size={16} />
             </a>
-            <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '14px 32px', borderRadius: 11, border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 15, fontWeight: 600, textDecoration: 'none', backdropFilter: 'blur(4px)' }}>
+            <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '14px 32px', borderRadius: 11, border: `1px solid ${P.signinBorder}`, background: P.signinBg, color: P.signinText, fontSize: 15, fontWeight: 600, textDecoration: 'none', backdropFilter: 'blur(4px)' }}>
               Sign In
             </Link>
           </div>
           {/* scroll cue */}
-          <div className="lp-float" style={{ marginTop: 54, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.4)' }}>
+          <div className="lp-float" style={{ marginTop: 54, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: P.scroll }}>
             <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Scroll</span>
             <ChevronDown size={18} />
           </div>
@@ -232,12 +260,12 @@ export default function LandingPage() {
         <section style={{ position: 'relative', zIndex: 2, maxWidth: 1000, margin: '0 auto', padding: '20px 24px 120px' }}>
           <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
             {PILLARS.map(({ icon: Icon, title, body }) => (
-              <div key={title} style={{ background: 'rgba(16,18,30,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '26px 22px', backdropFilter: 'blur(6px)' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(99,102,241,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                  <Icon size={20} color="#a5b4fc" />
+              <div key={title} style={{ background: P.pillarBg, border: `1px solid ${P.pillarBorder}`, borderRadius: 16, padding: '26px 22px', backdropFilter: 'blur(6px)' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: P.pillarIconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <Icon size={20} color={P.pillarIcon} />
                 </div>
-                <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 9, color: '#fff' }}>{title}</p>
-                <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7 }}>{body}</p>
+                <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 9, color: P.pillarTitle }}>{title}</p>
+                <p style={{ fontSize: 13.5, color: P.pillarBody, lineHeight: 1.7 }}>{body}</p>
               </div>
             ))}
           </div>
@@ -245,10 +273,10 @@ export default function LandingPage() {
 
         {/* 3 — Profitability + animated scene (reached after a scroll) */}
         <section style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '40px 24px 110px', maxWidth: 760, margin: '0 auto' }}>
-          <h2 className="lp-reveal" style={{ ...heroTitle, fontSize: 'clamp(30px, 5vw, 46px)', fontWeight: 800, lineHeight: 1.12, marginBottom: 16, letterSpacing: '-0.02em', color: '#fff' }}>
-            Profitability starts here.<br /><span style={{ color: '#a5b4fc' }}>Know the direction. Trade with confidence.</span>
+          <h2 className="lp-reveal" style={{ ...heroTitle, fontSize: 'clamp(30px, 5vw, 46px)', fontWeight: 800, lineHeight: 1.12, marginBottom: 16, letterSpacing: '-0.02em', color: P.title }}>
+            Profitability starts here.<br /><span style={{ color: P.accent }}>Know the direction. Trade with confidence.</span>
           </h2>
-          <p className="lp-reveal" style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, maxWidth: 580, margin: '0 auto 52px' }}>
+          <p className="lp-reveal" style={{ fontSize: 16, color: P.body, lineHeight: 1.75, maxWidth: 580, margin: '0 auto 52px' }}>
             MummyTKT&apos;s Bias Pointer is a rules-based forex engine that confirms Daily + H4
             directional alignment and sends structured bias alerts straight to your Telegram.
             No screen-watching. No second-guessing. Just clarity — and the freedom to live
