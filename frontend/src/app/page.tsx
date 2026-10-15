@@ -8,17 +8,17 @@ import {
 import { useTheme } from '@/lib/theme'
 
 const PLANS = [
-  { id: '30DAY',   label: '30 Days',   price: 10, monthly: 10, save: null, badge: null,           highlight: false },
-  { id: '6MONTH',  label: '6 Months',  price: 48, monthly: 8,  save: 20,   badge: 'Save 20%',     highlight: false },
-  { id: '9MONTH',  label: '9 Months',  price: 63, monthly: 7,  save: 30,   badge: 'Most Popular', highlight: true  },
-  { id: '12MONTH', label: '12 Months', price: 72, monthly: 6,  save: 40,   badge: 'Best Value',   highlight: false },
+  { id: '30DAY',   label: '30 Days',   price: 10, monthly: 10, save: null, badge: null,           highlight: false, color: '#3b82f6' },
+  { id: '6MONTH',  label: '6 Months',  price: 48, monthly: 8,  save: 20,   badge: 'Save 20%',     highlight: false, color: '#10b981' },
+  { id: '9MONTH',  label: '9 Months',  price: 63, monthly: 7,  save: 30,   badge: 'Most Popular', highlight: true,  color: '#7c3aed' },
+  { id: '12MONTH', label: '12 Months', price: 72, monthly: 6,  save: 40,   badge: 'Best Value',   highlight: false, color: '#f59e0b' },
 ]
 
 const FEATURES = [
-  { icon: TrendingUp, title: 'Daily + H4 Alignment',  body: 'Bias is only confirmed when the Daily and H4 timeframes agree — reducing noise and keeping you on the right side of the market.' },
-  { icon: Bell,       title: 'Telegram Alerts',       body: 'A structured alert lands the moment all confirmation conditions are met. No app to install — it comes straight to your phone.' },
-  { icon: BarChart2,  title: '30+ Instruments',       body: 'All major forex pairs, minors, crosses, gold, indices and select crypto — monitored continuously, 24 hours a day.' },
-  { icon: Shield,     title: 'Rules-Based Engine',    body: 'No discretion, no emotion. Every signal follows a strict confirmation chain built on A-shape, V-shape and OC formations.' },
+  { icon: TrendingUp, color: '#6366f1', title: 'Daily + H4 Alignment',  body: 'Bias is only confirmed when the Daily and H4 timeframes agree — reducing noise and keeping you on the right side of the market.' },
+  { icon: Bell,       color: '#10b981', title: 'Telegram Alerts',       body: 'A structured alert lands the moment all confirmation conditions are met. No app to install — it comes straight to your phone.' },
+  { icon: BarChart2,  color: '#f59e0b', title: '30+ Instruments',       body: 'All major forex pairs, minors, crosses, gold, indices and select crypto — monitored continuously, 24 hours a day.' },
+  { icon: Shield,     color: '#ec4899', title: 'Rules-Based Engine',    body: 'No discretion, no emotion. Every signal follows a strict confirmation chain built on A-shape, V-shape and OC formations.' },
 ]
 
 const INCLUDES = [
@@ -30,16 +30,16 @@ const INCLUDES = [
 ]
 
 const PILLARS = [
-  { icon: Clock,       title: 'Freedom to live',           body: "The engine watches 30+ markets around the clock so you don't have to. Do the school run, hit the gym, show up for your 9–5, be present with family — and only step in when an alert says a setup is ready." },
-  { icon: ShieldCheck, title: 'Confidence to act',         body: 'Trade what you can see, not what you feel. Every alert is backed by a Daily + H4 confirmation chain, so you always know which way the market is leaning before you ever risk a cent.' },
-  { icon: Brain,       title: 'Discipline that protects you', body: 'Beat overtrading at the root. No alert means no trade. A calm, rules-based rhythm replaces the urge to force positions — guarding both your account and your peace of mind.' },
+  { icon: Clock,       color: '#10b981', title: 'Freedom to live',           body: "The engine watches 30+ markets around the clock so you don't have to. Do the school run, hit the gym, show up for your 9–5, be present with family — and only step in when an alert says a setup is ready." },
+  { icon: ShieldCheck, color: '#3b82f6', title: 'Confidence to act',         body: 'Trade what you can see, not what you feel. Every alert is backed by a Daily + H4 confirmation chain, so you always know which way the market is leaning before you ever risk a cent.' },
+  { icon: Brain,       color: '#a855f7', title: 'Discipline that protects you', body: 'Beat overtrading at the root. No alert means no trade. A calm, rules-based rhythm replaces the urge to force positions — guarding both your account and your peace of mind.' },
 ]
 
 const STEPS = [
-  { n: '01', title: 'The engine scans 24/7', body: 'Every pair, every Daily and H4 close — monitored continuously in the background.' },
-  { n: '02', title: 'An alert hits your Telegram', body: 'Only when the full confirmation chain aligns. Clear direction, clear reason.' },
-  { n: '03', title: 'You check for your entry', body: 'Open your chart, look for your entry model at the level, size your risk.' },
-  { n: '04', title: 'Back to your life', body: 'No screen-watching between alerts. The market works while you live.' },
+  { n: '01', color: '#6366f1', title: 'The engine scans 24/7', body: 'Every pair, every Daily and H4 close — monitored continuously in the background.' },
+  { n: '02', color: '#f59e0b', title: 'An alert hits your Telegram', body: 'Only when the full confirmation chain aligns. Clear direction, clear reason.' },
+  { n: '03', color: '#10b981', title: 'You check for your entry', body: 'Open your chart, look for your entry model at the level, size your risk.' },
+  { n: '04', color: '#ec4899', title: 'Back to your life', body: 'No screen-watching between alerts. The market works while you live.' },
 ]
 
 function useReveal() {
@@ -92,6 +92,7 @@ function BgDashboardSim({ dark }: { dark: boolean }) {
       <div style={{ position: 'absolute', inset: 0, background: C.base }} />
       <div className="lp-drift" style={{ position: 'absolute', left: '-6%', top: '-8%', width: '46%', height: '55%', background: `radial-gradient(circle, ${C.glow1}, transparent 70%)`, filter: 'blur(36px)' }} />
       <div className="lp-drift" style={{ position: 'absolute', right: '-8%', bottom: '-12%', width: '52%', height: '58%', background: C.glow2, filter: 'blur(40px)' }} />
+      <div className="lp-drift" style={{ position: 'absolute', left: '28%', top: '34%', width: '44%', height: '48%', background: `radial-gradient(circle, ${dark ? 'rgba(16,185,129,0.14)' : 'rgba(16,185,129,0.10)'}, transparent 70%)`, filter: 'blur(44px)' }} />
 
       {/* floating dashboard mock panels (desktop) */}
       <div className="desktop-only" style={{ position: 'absolute', inset: 0 }}>
@@ -234,7 +235,7 @@ export default function LandingPage() {
             Engine monitoring 30+ markets · 24/7
           </div>
           <h1 className="lp-rise" style={{ ...heroTitle, fontSize: 'clamp(40px, 7vw, 68px)', fontWeight: 800, lineHeight: 1.06, marginBottom: 24, letterSpacing: '-0.02em', color: P.title }}>
-            Trading should fund your life —<br /><span style={{ color: P.accent }}>not consume it.</span>
+            Trading should fund your life —<br /><span className="lp-grad1">not consume it.</span>
           </h1>
           <p className="lp-rise" style={{ fontSize: 18, color: P.body, lineHeight: 1.75, maxWidth: 600, margin: '0 auto 38px' }}>
             You didn&apos;t come to the markets to be chained to a screen. You came for freedom —
@@ -259,10 +260,10 @@ export default function LandingPage() {
         {/* 2 — Pillars, directly under the freedom headline */}
         <section style={{ position: 'relative', zIndex: 2, maxWidth: 1000, margin: '0 auto', padding: '20px 24px 120px' }}>
           <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
-            {PILLARS.map(({ icon: Icon, title, body }) => (
-              <div key={title} style={{ background: P.pillarBg, border: `1px solid ${P.pillarBorder}`, borderRadius: 16, padding: '26px 22px', backdropFilter: 'blur(6px)' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: P.pillarIconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                  <Icon size={20} color={P.pillarIcon} />
+            {PILLARS.map(({ icon: Icon, title, body, color }) => (
+              <div key={title} style={{ background: `${color}1f`, border: `1px solid ${color}55`, borderRadius: 18, padding: '26px 22px', backdropFilter: 'blur(6px)', boxShadow: `0 18px 44px -24px ${color}` }}>
+                <div style={{ width: 46, height: 46, borderRadius: 13, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, boxShadow: `0 8px 20px -6px ${color}` }}>
+                  <Icon size={21} color="#fff" />
                 </div>
                 <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 9, color: P.pillarTitle }}>{title}</p>
                 <p style={{ fontSize: 13.5, color: P.pillarBody, lineHeight: 1.7 }}>{body}</p>
@@ -274,7 +275,7 @@ export default function LandingPage() {
         {/* 3 — Profitability + animated scene (reached after a scroll) */}
         <section style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '40px 24px 110px', maxWidth: 760, margin: '0 auto' }}>
           <h2 className="lp-reveal" style={{ ...heroTitle, fontSize: 'clamp(30px, 5vw, 46px)', fontWeight: 800, lineHeight: 1.12, marginBottom: 16, letterSpacing: '-0.02em', color: P.title }}>
-            Profitability starts here.<br /><span style={{ color: P.accent }}>Know the direction. Trade with confidence.</span>
+            Profitability starts here.<br /><span className="lp-grad2">Know the direction. Trade with confidence.</span>
           </h2>
           <p className="lp-reveal" style={{ fontSize: 16, color: P.body, lineHeight: 1.75, maxWidth: 580, margin: '0 auto 52px' }}>
             MummyTKT&apos;s Bias Pointer is a rules-based forex engine that confirms Daily + H4
@@ -293,9 +294,9 @@ export default function LandingPage() {
           <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>Here&apos;s your day on the Bias Pointer — it does the watching, you do the living.</p>
         </div>
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
-          {STEPS.map(({ n, title, body }) => (
-            <div key={n} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '22px 20px' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent)', marginBottom: 12 }}>{n}</div>
+          {STEPS.map(({ n, title, body, color }) => (
+            <div key={n} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '22px 20px', borderTop: `3px solid ${color}` }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 9, background: `${color}22`, color, fontSize: 13, fontWeight: 800, marginBottom: 12 }}>{n}</div>
               <p style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 7 }}>{title}</p>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{body}</p>
             </div>
@@ -306,10 +307,10 @@ export default function LandingPage() {
       {/* 5 — Features */}
       <section style={{ maxWidth: 940, margin: '0 auto', padding: '60px 24px 72px' }}>
         <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-          {FEATURES.map(({ icon: Icon, title, body }) => (
+          {FEATURES.map(({ icon: Icon, title, body, color }) => (
             <div key={title} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '24px 20px' }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-                <Icon size={18} color="var(--accent-hover)" />
+              <div style={{ width: 40, height: 40, borderRadius: 11, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, boxShadow: `0 8px 20px -6px ${color}` }}>
+                <Icon size={19} color="#fff" />
               </div>
               <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{title}</p>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{body}</p>
@@ -337,19 +338,24 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
+        <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16 }}>
           {PLANS.map(plan => (
-            <div key={plan.id} style={{ background: plan.highlight ? 'var(--accent)' : 'var(--card)', border: `1px solid ${plan.highlight ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 14, padding: '24px 20px', display: 'flex', flexDirection: 'column', boxShadow: plan.highlight ? '0 8px 32px rgba(99,102,241,0.4)' : undefined, position: 'relative' }}>
+            <div key={plan.id} style={{
+              background: `linear-gradient(160deg, ${plan.color}, ${plan.color}cc)`,
+              borderRadius: 18, padding: '26px 22px', display: 'flex', flexDirection: 'column',
+              boxShadow: `0 20px 46px -18px ${plan.color}`, position: 'relative',
+              transform: plan.highlight ? 'scale(1.03)' : undefined,
+            }}>
               {plan.badge && (
-                <div style={{ position: 'absolute', top: 14, right: 14, padding: '3px 10px', borderRadius: 99, background: plan.highlight ? 'rgba(255,255,255,0.2)' : 'var(--accent-bg)', color: plan.highlight ? 'white' : 'var(--accent-hover)', fontSize: 11, fontWeight: 700 }}>{plan.badge}</div>
+                <div style={{ position: 'absolute', top: 14, right: 14, padding: '3px 10px', borderRadius: 99, background: 'rgba(255,255,255,0.25)', color: '#fff', fontSize: 11, fontWeight: 700 }}>{plan.badge}</div>
               )}
-              <p style={{ fontSize: 14, fontWeight: 700, color: plan.highlight ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)', marginBottom: 12 }}>{plan.label}</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.9)', marginBottom: 12 }}>{plan.label}</p>
               <div style={{ marginBottom: 4 }}>
-                <span style={{ fontSize: 38, fontWeight: 800, color: plan.highlight ? 'white' : 'var(--text-primary)' }}>${plan.price}</span>
-                <span style={{ fontSize: 13, color: plan.highlight ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', marginLeft: 5 }}>total</span>
+                <span style={{ fontSize: 40, fontWeight: 800, color: '#fff' }}>${plan.price}</span>
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginLeft: 5 }}>total</span>
               </div>
-              <p style={{ fontSize: 12, color: plan.highlight ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', marginBottom: 22 }}>${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}</p>
-              <Link href={`/signup?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '10px 16px', borderRadius: 9, marginTop: 'auto', background: plan.highlight ? 'white' : 'var(--accent-bg)', color: plan.highlight ? 'var(--accent)' : 'var(--accent-hover)', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>Get started</Link>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.78)', marginBottom: 22 }}>${plan.monthly}/month{plan.save ? ` · ${plan.save}% off` : ''}</p>
+              <Link href={`/signup?plan=${plan.id}`} style={{ display: 'block', textAlign: 'center', padding: '11px 16px', borderRadius: 10, marginTop: 'auto', background: '#fff', color: plan.color, fontSize: 13, fontWeight: 800, textDecoration: 'none' }}>Get started</Link>
             </div>
           ))}
         </div>

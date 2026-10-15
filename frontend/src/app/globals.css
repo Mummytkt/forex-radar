@@ -166,6 +166,11 @@ body {
 .lp-reveal { opacity: 0; transform: translateY(26px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.2,0.7,0.2,1); }
 .lp-reveal.lp-in { opacity: 1; transform: translateY(0); }
 
+/* gradient text — vibrant, reads on light or dark */
+.lp-grad1 { background: linear-gradient(95deg,#818cf8 0%,#c084fc 45%,#f472b6 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; text-shadow: none; }
+.lp-grad2 { background: linear-gradient(95deg,#34d399 0%,#38bdf8 50%,#818cf8 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; text-shadow: none; }
+.lp-grad3 { background: linear-gradient(95deg,#fb923c 0%,#f472b6 55%,#a855f7 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; text-shadow: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .lp-rise, .lp-float, .lp-float-sl, .lp-drift, .lp-glow { animation: none; }
   .lp-draw-path { stroke-dashoffset: 0; animation: none; }
