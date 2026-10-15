@@ -29,6 +29,10 @@ def _request(method: str, path: str, secret_key: str, body: dict | None = None) 
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Authorization", f"Bearer {secret_key}")
     req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
+    # Paystack sits behind Cloudflare, which blocks the default python-urllib
+    # user-agent with a 403 (error 1010). A normal browser-like UA passes.
+    req.add_header("User-Agent", "Mozilla/5.0 (compatible; MummyTKT-BiasPointer/1.0; +https://forex-radar.fly.dev)")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode())
