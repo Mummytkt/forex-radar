@@ -29,6 +29,7 @@ class Config:
     level_tolerance_pips: float = 5.0
     log_level: str = "INFO"
     telegram_enabled: bool = True    # set False for dry-run / testing
+    backup_key: str = ""             # Fernet key; encrypts the daily off-site backup sent to the owner's Telegram
 
 
 def load_config(env_path: str = ".env") -> Config:
@@ -54,6 +55,7 @@ def load_config(env_path: str = ".env") -> Config:
         level_tolerance_pips=float(os.getenv("LEVEL_TOLERANCE_PIPS", "5.0")),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         telegram_enabled=os.getenv("TELEGRAM_ENABLED", "true").lower() != "false",
+        backup_key=os.getenv("BACKUP_KEY", ""),
     )
 
 

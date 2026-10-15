@@ -676,6 +676,15 @@ STRATEGY_CONTENT = {
 }
 
 
+@router.post("/admin/backup")
+async def admin_backup(request: Request):
+    """Owner-only: take a backup now (local copy + encrypted copy to the owner's Telegram)."""
+    _require_owner(request)
+    from alerts.backup import run_backup
+    config = request.app.state.config
+    return await run_backup(config.db_path, config)
+
+
 @router.get("/strategy-content")
 def strategy_content(request: Request):
     _require_owner(request)

@@ -48,6 +48,20 @@ async def send_alert(bot_token: str, chat_id: str, text: str) -> bool:
     return False
 
 
+async def send_document(bot_token: str, chat_id: str, path: str, filename: str, caption: str = "") -> bool:
+    """Send a file (e.g. the encrypted nightly backup) to a Telegram chat."""
+    bot = Bot(token=bot_token)
+    try:
+        with open(path, "rb") as f:
+            await bot.send_document(chat_id=chat_id, document=f, filename=filename,
+                                    caption=caption[:1024], read_timeout=120, write_timeout=120)
+        logger.info("Document %s sent to chat %s", filename, chat_id)
+        return True
+    except TelegramError as e:
+        logger.error("Telegram document send failed: %s", e)
+        return False
+
+
 def send_alert_sync(bot_token: str, chat_id: str, text: str) -> bool:
     """Synchronous wrapper around send_alert for use outside async contexts."""
     return asyncio.run(send_alert(bot_token, chat_id, text))
