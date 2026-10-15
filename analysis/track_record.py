@@ -107,9 +107,12 @@ def compute_track_record(conn, now: Optional[datetime] = None) -> dict:
             if out:
                 evaluated.append(out)
 
+    # Only calls made after price recording began can ever be measured, so only
+    # those count as "running" (still inside their 5-day window).
     running = conn.execute(
-        "SELECT COUNT(*) FROM alerts WHERE alert_classification = 'origin' AND fired_at > ?", (cutoff,)
-    ).fetchone()[0]
+        "SELECT COUNT(*) FROM alerts WHERE alert_classification = 'origin' AND fired_at > ? AND fired_at >= ?",
+        (cutoff, since),
+    ).fetchone()[0] if since else 0
 
     n = len(evaluated)
     enough = n >= MIN_SAMPLE
