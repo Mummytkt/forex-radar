@@ -6,6 +6,7 @@ import {
   Moon, Sun, Clock, Brain, ShieldCheck, Zap, ChevronDown,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme'
+import TrackRecord from '@/components/TrackRecord'
 
 const PLANS = [
   { id: '30DAY',   label: '30 Days',   price: 10, monthly: 10, save: null, badge: null,           highlight: false, color: '#3b82f6' },
@@ -318,6 +319,9 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* 5b — Public track record */}
+      <TrackRecord />
 
       {/* 6 — Pricing */}
       <section id="pricing" style={{ maxWidth: 940, margin: '0 auto', padding: '0 24px 80px' }}>

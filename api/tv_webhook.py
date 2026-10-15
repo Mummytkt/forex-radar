@@ -515,6 +515,14 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
     if price is None:
         return
 
+    # Record the H4 close for the public track record (same time format as alerts.fired_at)
+    try:
+        conn.execute("INSERT INTO price_ticks (instrument, ts, price) VALUES (?, ?, ?)",
+                     (instrument, datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"), price))
+        conn.commit()
+    except Exception as exc:
+        logger.warning("price tick write failed for %s: %s", instrument, exc)
+
     now = datetime.utcnow().isoformat()
 
     # Fetch previous price for crossing detection

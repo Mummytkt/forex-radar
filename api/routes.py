@@ -219,6 +219,20 @@ async def signup_request(body: SignupRequestBody, request: Request):
     return {"ok": True}
 
 
+@router.get("/public/track-record")
+def public_track_record(request: Request):
+    """Public: outcomes of Origin bias calls once they're 5 days old. Cached 10 minutes."""
+    import time as _time
+    from analysis.track_record import compute_track_record
+    cache = getattr(request.app.state, "track_record_cache", None)
+    if cache and _time.time() - cache[0] < 600:
+        return cache[1]
+    with _db(request) as conn:
+        data = compute_track_record(conn)
+    request.app.state.track_record_cache = (_time.time(), data)
+    return data
+
+
 @router.get("/health")
 def health():
     return {"status": "ok", "ts": datetime.now(timezone.utc).isoformat()}

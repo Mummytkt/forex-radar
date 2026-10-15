@@ -497,6 +497,18 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_pattern_alerts_inst ON entry_pattern_alerts (instrument, is_active)")
 
+    # H4 closing prices from TradingView PRICE_UPDATE webhooks — powers the track record
+    if "price_ticks" not in tables:
+        conn.execute("""
+            CREATE TABLE price_ticks (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument TEXT    NOT NULL,
+                ts         TEXT    NOT NULL,   -- naive UTC 'YYYY-MM-DDTHH:MM:SS' (same format as alerts.fired_at)
+                price      REAL    NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_price_ticks_inst_ts ON price_ticks (instrument, ts)")
+
     # Last time TradingView sent anything for each instrument — feed health monitor
     if "webhook_heartbeats" not in tables:
         conn.execute("""

@@ -100,6 +100,9 @@ async def run_feed_check(db_path: str, config) -> None:
             elif stale_since and last > _parse(stale_since):
                 conn.execute("UPDATE webhook_heartbeats SET stale_since = NULL WHERE instrument = ?", (inst,))
                 recovered.append(inst)
+        # Keep ~4 months of H4 price history for the track record
+        conn.execute("DELETE FROM price_ticks WHERE ts < ?",
+                     ((now - timedelta(days=120)).strftime("%Y-%m-%dT%H:%M:%S"),))
         conn.commit()
         total = len(rows)
     except Exception as exc:
