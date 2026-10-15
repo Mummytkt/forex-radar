@@ -51,3 +51,14 @@ async def send_alert(bot_token: str, chat_id: str, text: str) -> bool:
 def send_alert_sync(bot_token: str, chat_id: str, text: str) -> bool:
     """Synchronous wrapper around send_alert for use outside async contexts."""
     return asyncio.run(send_alert(bot_token, chat_id, text))
+
+
+async def get_bot_username(bot_token: str) -> str | None:
+    """Return the bot's @username (without the @), or None on failure."""
+    try:
+        bot = Bot(token=bot_token)
+        me = await bot.get_me()
+        return me.username
+    except TelegramError as e:
+        logger.warning("get_me failed: %s", e)
+        return None

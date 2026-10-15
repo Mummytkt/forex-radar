@@ -297,21 +297,135 @@ def get_alerts(
     )
 
 
+async def _bot_username(request: Request) -> Optional[str]:
+    """Fetch and cache the bot's @username on app.state."""
+    cached = getattr(request.app.state, "bot_username", None)
+    if cached:
+        return cached
+    from alerts.telegram import get_bot_username
+    config = request.app.state.config
+    username = await get_bot_username(config.telegram_bot_token)
+    if username:
+        request.app.state.bot_username = username
+    return username
+
+
+@router.get("/telegram/connection")
+async def telegram_connection(request: Request):
+    """
+    Return the logged-in user's Telegram connection status and a one-click
+    deep link to connect their own Telegram to the bot.
+    """
+    uid = _user_id(request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    with _db_write(request) as conn:
+        row = conn.execute(
+            "SELECT telegram_chat_id, telegram_link_token FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+        chat_id = row["telegram_chat_id"] if row else None
+        token = row["telegram_link_token"] if row else None
+        if not token:
+            import secrets as _secrets
+            token = _secrets.token_urlsafe(12)
+            conn.execute("UPDATE users SET telegram_link_token = ? WHERE id = ?", (token, uid))
+
+    username = await _bot_username(request)
+    link_url = f"https://t.me/{username}?start={token}" if username else None
+
+    return {
+        "connected": bool(chat_id),
+        "link_url": link_url,
+        "bot_username": username,
+    }
+
+
+@router.post("/telegram/disconnect")
+def telegram_disconnect(request: Request):
+    uid = _user_id(request)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    with _db_write(request) as conn:
+        conn.execute("UPDATE users SET telegram_chat_id = NULL WHERE id = ?", (uid,))
+    return {"ok": True}
+
+
 @router.post("/telegram/test")
 async def telegram_test(request: Request):
     config = request.app.state.config
     if not config.telegram_enabled:
         return {"ok": False, "detail": "Telegram disabled"}
+    uid = _user_id(request)
+    with _db(request) as conn:
+        row = conn.execute("SELECT telegram_chat_id FROM users WHERE id = ?", (uid,)).fetchone() if uid else None
+    chat_id = (row["telegram_chat_id"] if row else None) or None
+    if not chat_id:
+        return {"ok": False, "detail": "Your Telegram isn't connected yet. Tap Connect Telegram first."}
     try:
         from alerts.telegram import send_alert
         ok = await send_alert(
             config.telegram_bot_token,
-            config.telegram_chat_id,
-            "✅ <b>Bias Radar — test message</b>\n\nYour Telegram alerts are working correctly.",
+            chat_id,
+            "✅ MummyTKT's Bias Pointer — test message\n\nYour Telegram is connected. You'll receive your alerts here.",
         )
         return {"ok": ok}
     except Exception as e:
         return {"ok": False, "detail": str(e)}
+
+
+@router.post("/telegram/update")
+async def telegram_update(request: Request):
+    """
+    Telegram bot webhook receiver. Handles the /start <token> deep link:
+    links the sender's chat_id to the user account that owns the token.
+    Public route (no JWT) — verified by the secret_token header Telegram sends.
+    """
+    config = request.app.state.config
+
+    # Verify Telegram's secret token header (set via setWebhook) when configured
+    if config.telegram_webhook_secret:
+        sent = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if sent != config.telegram_webhook_secret:
+            raise HTTPException(status_code=401, detail="bad secret")
+
+    try:
+        update = await request.json()
+    except Exception:
+        return {"ok": True}
+
+    message = update.get("message") or update.get("edited_message") or {}
+    text = (message.get("text") or "").strip()
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+
+    if not text.startswith("/start") or chat_id is None:
+        return {"ok": True}
+
+    parts = text.split(maxsplit=1)
+    token = parts[1].strip() if len(parts) > 1 else ""
+    if not token:
+        from alerts.telegram import send_alert
+        await send_alert(config.telegram_bot_token, str(chat_id),
+                         "Open the Connect Telegram button in your dashboard to link your account.")
+        return {"ok": True}
+
+    with _db_write(request) as conn:
+        row = conn.execute(
+            "SELECT id, name FROM users WHERE telegram_link_token = ?", (token,)
+        ).fetchone()
+        if row:
+            conn.execute("UPDATE users SET telegram_chat_id = ? WHERE id = ?", (str(chat_id), row["id"]))
+
+    from alerts.telegram import send_alert
+    if row:
+        greeting = f", {row['name']}" if row["name"] else ""
+        await send_alert(config.telegram_bot_token, str(chat_id),
+                         f"✅ Connected{greeting}! You'll now receive your MummyTKT Bias Pointer alerts here.")
+    else:
+        await send_alert(config.telegram_bot_token, str(chat_id),
+                         "That link has expired. Open Connect Telegram in your dashboard again to get a fresh link.")
+    return {"ok": True}
 
 
 @router.get("/config/instruments")

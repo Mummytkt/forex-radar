@@ -355,6 +355,10 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     if "watched_instruments" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN watched_instruments TEXT")
 
+    # Add per-user Telegram linking token (for the /start deep-link connect flow)
+    if "telegram_link_token" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN telegram_link_token TEXT")
+
     # Add external level tracking to instrument_state
     istate_cols = {row[1] for row in conn.execute("PRAGMA table_info(instrument_state)").fetchall()}
     for col_def in [

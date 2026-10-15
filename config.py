@@ -19,6 +19,7 @@ class Config:
     telegram_bot_token: str
     telegram_chat_id: str
     tv_webhook_secret: str           # shared secret validated on every Pine Script webhook
+    telegram_webhook_secret: str = ""  # secret_token header validated on Telegram bot webhook
     db_path: str = "forex_radar.db"
     instruments: list[str] = field(default_factory=list)
     level_tolerance_pips: float = 5.0
@@ -39,6 +40,7 @@ def load_config(env_path: str = ".env") -> Config:
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=_require("TELEGRAM_CHAT_ID"),
         tv_webhook_secret=os.getenv("TV_WEBHOOK_SECRET", ""),
+        telegram_webhook_secret=os.getenv("TELEGRAM_WEBHOOK_SECRET", ""),
         db_path=os.getenv("DB_PATH", "forex_radar.db"),
         instruments=instruments,
         level_tolerance_pips=float(os.getenv("LEVEL_TOLERANCE_PIPS", "5.0")),

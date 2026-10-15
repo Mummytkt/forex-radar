@@ -181,12 +181,108 @@ function InstrumentManager() {
   )
 }
 
+function TelegramConnect() {
+  const [connected, setConnected] = useState<boolean | null>(null)
+  const [linkUrl, setLinkUrl] = useState<string | null>(null)
+  const [waiting, setWaiting] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<'ok' | 'fail' | null>(null)
+
+  const loadStatus = async () => {
+    try {
+      const r = await apiFetch('/api/telegram/connection')
+      const d = await r.json()
+      setConnected(!!d.connected)
+      setLinkUrl(d.link_url ?? null)
+      return !!d.connected
+    } catch { return false }
+  }
+
+  useEffect(() => { loadStatus() }, [])
+
+  // While waiting for the user to press Start in Telegram, poll for the link.
+  useEffect(() => {
+    if (!waiting) return
+    let tries = 0
+    const id = setInterval(async () => {
+      tries += 1
+      const ok = await loadStatus()
+      if (ok || tries >= 20) { setWaiting(false); clearInterval(id) }
+    }, 3000)
+    return () => clearInterval(id)
+  }, [waiting])
+
+  const handleConnect = () => {
+    if (linkUrl) window.open(linkUrl, '_blank')
+    setWaiting(true)
+  }
+
+  const handleDisconnect = async () => {
+    await apiFetch('/api/telegram/disconnect', { method: 'POST' })
+    setConnected(false)
+    setTestResult(null)
+  }
+
+  const sendTest = async () => {
+    setTesting(true); setTestResult(null)
+    try {
+      const res = await apiFetch('/api/telegram/test', { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      setTestResult(d.ok ? 'ok' : 'fail')
+    } catch { setTestResult('fail') }
+    setTesting(false)
+  }
+
+  const btn: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 8,
+    fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+  }
+
+  return (
+    <div style={{ padding: '18px 20px' }}>
+      {connected === null ? (
+        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading…</span>
+      ) : connected ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--bullish)', fontWeight: 600 }}>
+            <CheckCircle size={15} /> Telegram connected — your alerts arrive in your own chat.
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button onClick={sendTest} disabled={testing} style={{ ...btn, background: 'var(--accent)', color: 'white', opacity: testing ? 0.6 : 1 }}>
+              <Send size={13} /> {testing ? 'Sending…' : 'Send Test Message'}
+            </button>
+            <button onClick={handleDisconnect} style={{ ...btn, background: 'var(--card-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+              Disconnect
+            </button>
+            {testResult === 'ok' && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--bullish)', fontWeight: 500 }}><CheckCircle size={14} /> Delivered</span>}
+            {testResult === 'fail' && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--bearish)' }}><XCircle size={14} /> Failed</span>}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+            Connect your Telegram to receive your alerts. Tap the button below, then press
+            <strong> Start</strong> in the chat that opens. You&apos;ll be linked automatically.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button onClick={handleConnect} disabled={!linkUrl} style={{ ...btn, background: 'var(--accent)', color: 'white', opacity: linkUrl ? 1 : 0.6 }}>
+              <Send size={13} /> Connect Telegram
+            </button>
+            <button onClick={loadStatus} style={{ ...btn, background: 'var(--card-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+              <RefreshCw size={13} /> Refresh
+            </button>
+            {waiting && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Waiting for you to press Start in Telegram…</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { user, refresh } = useAuth()
   const [name, setName] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<'ok' | 'fail' | null>(null)
 
   useEffect(() => {
     // Prefer the account name; fall back to localStorage
@@ -207,16 +303,6 @@ export default function SettingsPage() {
     } catch { /* non-critical — localStorage already saved */ }
     setNameSaved(true)
     setTimeout(() => setNameSaved(false), 2000)
-  }
-
-  const sendTest = async () => {
-    setTesting(true)
-    setTestResult(null)
-    try {
-      const res = await apiFetch('/api/telegram/test', { method: 'POST' })
-      setTestResult(res.ok ? 'ok' : 'fail')
-    } catch { setTestResult('fail') }
-    setTesting(false)
   }
 
   return (
@@ -244,23 +330,8 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        <Section title="Telegram Alerts" desc="Alerts are sent via your bot when all 4 conditions confirm.">
-          <Row label="Bot token" value="configured ✓" note="Set via TELEGRAM_BOT_TOKEN env variable" />
-          <Row label="Chat ID" value="configured ✓" note="Set via TELEGRAM_CHAT_ID env variable" />
-          <Row label="Delivery" value="enabled" note="Alerts fire automatically on H4 confirmation" />
-          <div style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button onClick={sendTest} disabled={testing} style={{
-                display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 8,
-                fontSize: 13, fontWeight: 500, background: 'var(--accent)', color: 'white',
-                border: 'none', cursor: 'pointer', opacity: testing ? 0.6 : 1,
-              }}>
-                <Send size={13} /> {testing ? 'Sending…' : 'Send Test Message'}
-              </button>
-              {testResult === 'ok' && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--bullish)', fontWeight: 500 }}><CheckCircle size={14} /> Delivered</span>}
-              {testResult === 'fail' && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--bearish)' }}><XCircle size={14} /> Failed — check credentials</span>}
-            </div>
-          </div>
+        <Section title="Telegram Alerts" desc="Connect your own Telegram so your alerts arrive in your personal chat.">
+          <TelegramConnect />
         </Section>
 
         <Section title="Engine Configuration" desc="Read-only. Set via .env file.">
