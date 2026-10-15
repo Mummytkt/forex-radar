@@ -42,6 +42,28 @@ function Def({ term, def }: { term: string; def: string }) {
   )
 }
 
+const VARIANT: Record<string, { color: string; bg: string }> = {
+  accent:  { color: 'var(--accent)',  bg: 'var(--accent-bg)' },
+  warning: { color: 'var(--warning)', bg: 'var(--warning-bg)' },
+  bullish: { color: 'var(--bullish)', bg: 'var(--bullish-bg)' },
+}
+
+function BoxGrid({ items }: { items: { label: string; variant: string; desc: string }[] }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      {items.map(({ label, variant, desc }) => {
+        const v = VARIANT[variant] ?? VARIANT.accent
+        return (
+          <div key={label + desc} style={{ background: v.bg, border: `1px solid ${v.color}30`, borderRadius: 10, padding: 16 }}>
+            <p style={{ fontWeight: 700, fontSize: 14, color: v.color, marginBottom: 8 }}>{label}</p>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{desc}</p>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 interface VideoEntry { title: string; url: string }
 
 function toEmbedUrl(url: string): string {
@@ -183,103 +205,83 @@ function VideoSection() {
   )
 }
 
+// ── Strategy methodology (owner-only; fetched from the backend) ───────────────
+
+interface DefItem { term: string; body: string }
+interface BoxItem { label: string; variant: string; desc: string }
+interface StrategyData {
+  chain: { n: number; title: string; body: string }[]
+  formations: DefItem[]
+  h4_classification: BoxItem[]
+  daily_context: { intro: string; items: BoxItem[] }
+  alert_classifications: DefItem[]
+  reaction_sources: DefItem[]
+  disclaimer: string
+}
+
+function StrategyContent() {
+  const [data, setData] = useState<StrategyData | null>(null)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/strategy-content`, { headers: authHdrs() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setData(d))
+      .catch(() => {})
+  }, [])
+
+  if (!data) return null
+
+  return (
+    <>
+      <Card title="The 4-Step Confirmation Chain">
+        {data.chain.map(s => <Step key={s.n} n={s.n} title={s.title} body={s.body} />)}
+      </Card>
+
+      <Card title="Formation Types">
+        {data.formations.map(f => <Def key={f.term} term={f.term} def={f.body} />)}
+      </Card>
+
+      <Card title="H4 Breakout Classification">
+        <BoxGrid items={data.h4_classification} />
+      </Card>
+
+      <Card title="Daily Level Context">
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 16 }}>{data.daily_context.intro}</p>
+        <BoxGrid items={data.daily_context.items} />
+      </Card>
+
+      <Card title="Alert Classifications">
+        {data.alert_classifications.map(a => <Def key={a.term} term={a.term} def={a.body} />)}
+      </Card>
+
+      <Card title="Reaction Source Types">
+        {data.reaction_sources.map(r => <Def key={r.term} term={r.term} def={r.body} />)}
+      </Card>
+
+      <div style={{
+        display: 'flex', gap: 10, padding: '14px 18px', borderRadius: 10,
+        background: 'var(--warning-bg)', border: '1px solid var(--warning-bg)',
+        fontSize: 12, color: 'var(--text-secondary)', alignItems: 'flex-start',
+      }}>
+        <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+        <span style={{ lineHeight: 1.7 }}>
+          <strong style={{ color: 'var(--text-primary)' }}>Directional bias only — not an entry signal.</strong>
+          {' '}{data.disclaimer}
+        </span>
+      </div>
+    </>
+  )
+}
+
 export default function StrategyPage() {
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
   return (
     <>
-      <TopBar title="Strategy" subtitle={isOwner ? 'How the engine detects and confirms directional bias' : 'Tutorial videos and walkthroughs'} />
+      <TopBar title={isOwner ? 'Strategy' : 'Tutorials'} subtitle={isOwner ? 'How the engine detects and confirms directional bias' : 'Tutorial videos and walkthroughs'} />
       <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
-
         <VideoSection />
-
-        {isOwner && (<>
-        <Card title="The 4-Step Confirmation Chain">
-          <Step n={1} title="Daily Breakout" body="The engine identifies A-shapes (bearish resistance) and V-shapes (bullish support) on the Daily chart using body-only levels — never wicks. A breakout occurs when a Daily candle closes beyond the most recent A or V body level." />
-          <Step n={2} title="Reaction Source Identification" body="After a breakout, the engine identifies up to 4 types of reaction sources: the Daily Breaker level, OC levels inside the pre-breakout range, A/V levels inside the range, and post-breakout OC levels. These become the zones price must retest." />
-          <Step n={3} title="Retest Detection" body="When an H4 candle's high or low (including wicks) touches any active reaction source band, the engine flags a retest in progress. The band is the source level ± the configured tolerance (default 5 pips)." />
-          <Step n={4} title="H4 Confirmation" body="With a retest in progress, the engine checks subsequent H4 candles for a qualifying confirmation: (a) an H4 A-shape or V-shape breakout — candle closes beyond the body level of an H4 formation in the breakout direction, or (b) an H4 OC reaction — candle wicks into an H4 OC zone and closes beyond the OC level in the breakout direction. Either confirms Daily + H4 alignment and triggers the alert." />
-        </Card>
-
-        <Card title="Formation Types">
-          <Def term="A-Shape (Bearish resistance)"
-            def="Two consecutive Daily candles where candle 1 is bullish and candle 2 is bearish. The level is candle 1's body high (max of open/close, never the wick)." />
-          <Def term="V-Shape (Bullish support)"
-            def="Two consecutive Daily candles where candle 1 is bearish and candle 2 is bullish. The level is candle 1's body low (min of open/close, never the wick)." />
-          <Def term="OC (Open-Close level)"
-            def="Formed when 2+ consecutive same-direction candles run. The OC level is the close of the first candle in each consecutive pair (the junction price — not the midpoint). A run of 3 candles produces exactly 2 independent OC levels." />
-        </Card>
-
-        <Card title="H4 Breakout Classification">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {[
-              { label: 'External', color: 'var(--accent)', bg: 'var(--accent-bg)', desc: 'The H4 candle closes beyond the outermost H4 formation — the swing boundary. This is the conservative confirmation.' },
-              { label: 'Internal', color: 'var(--warning)', bg: 'var(--warning-bg)', desc: 'The H4 candle closes beyond an inner H4 formation that formed after the outer swing. This is an earlier, more aggressive confirmation.' },
-            ].map(({ label, color, bg, desc }) => (
-              <div key={label} style={{ background: bg, border: `1px solid ${color}30`, borderRadius: 10, padding: 16 }}>
-                <p style={{ fontWeight: 700, fontSize: 14, color, marginBottom: 8 }}>{label}</p>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{desc}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="Daily Level Context">
-          <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 16 }}>
-            Every alert includes a Daily level context tag that tells you where price is relative to the overall swing structure at the time of confirmation.
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {[
-              { label: 'External', color: 'var(--bullish)', bg: 'var(--bullish-bg)', desc: 'Price has reached or broken through the outermost A/V formation that originally bounded the trend. Confirms the move is pushing the extremes of the structure — the strongest context.' },
-              { label: 'Internal', color: 'var(--warning)', bg: 'var(--warning-bg)', desc: 'Price confirmed within the range bounded by prior A/V formations. The bias is valid but price has not yet reached the outer structural boundary.' },
-            ].map(({ label, color, bg, desc }) => (
-              <div key={label} style={{ background: bg, border: `1px solid ${color}30`, borderRadius: 10, padding: 16 }}>
-                <p style={{ fontWeight: 700, fontSize: 14, color, marginBottom: 8 }}>{label}</p>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{desc}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="Alert Classifications">
-          <Def
-            term="Origin"
-            def="The first confirmed bias alert for a setup. Requires the complete 4-step chain: Daily breakout → eligible reaction source → retest of that source → qualifying H4 A/V breakout. After an Origin fires, the engine enters continuation mode for that instrument." />
-          <Def
-            term="Continuation — A/V Break"
-            def="Fires after an Origin, when a subsequent H4 A-shape (bullish direction) or V-shape (bearish direction) formation is broken in the daily breakout direction — without needing a new Daily source retest. Each continuation extends the active bias confirmation. Active until a new opposing Daily breakout occurs." />
-          <Def
-            term="Continuation — H4 Breaker Retest"
-            def="Fires when price retraces into an H4 key level — either the H4 Breaker (the body level of the H4 formation broken in the prior alert, now acting as role-reversed resistance or support) or an H4 A-shape (bearish) / V-shape (bullish) that formed inside the daily range during a retracement. Confirmed when the H4 candle wicks into the level and closes beyond it in the breakout direction. No new Daily retest required." />
-          <Def
-            term="Continuation — H4 OC"
-            def="Fires when two consecutive same-direction H4 candles form an OC level, and price returns to react from the OC midpoint: the H4 candle's range dips into the OC zone and the candle closes beyond the midpoint in the breakout direction. Confirms continuation of the established Daily bias without requiring a new A/V break." />
-        </Card>
-
-        <Card title="Reaction Source Types">
-          {[
-            { label: 'Daily Breaker', desc: 'The original A or V body level that was broken. Price often returns to test it from the other side (role reversal).' },
-            { label: 'OC Inside Range', desc: 'An OC level that formed inside the pre-breakout range, in the direction of the breakout. Filtered to those between the broken level and the nearest swing extreme.' },
-            { label: 'A/V Inside Range', desc: 'After a bearish breakout: A-shapes inside the range. After a bullish breakout: V-shapes inside the range.' },
-            { label: 'Post-Breakout OC', desc: 'Two consecutive same-direction Daily candles after the breakout candle, in the breakout direction. The midpoint of their closes becomes a reaction zone.' },
-          ].map(({ label, desc }) => (
-            <Def key={label} term={label} def={desc} />
-          ))}
-        </Card>
-
-        <div style={{
-          display: 'flex', gap: 10, padding: '14px 18px', borderRadius: 10,
-          background: 'var(--warning-bg)', border: '1px solid var(--warning-bg)',
-          fontSize: 12, color: 'var(--text-secondary)', alignItems: 'flex-start',
-        }}>
-          <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
-          <span style={{ lineHeight: 1.7 }}>
-            <strong style={{ color: 'var(--text-primary)' }}>Directional bias only — not an entry signal.</strong>
-            {' '}Alerts confirm Daily + H4 alignment. Entry timing, risk management, and position sizing remain your responsibility.
-          </span>
-        </div>
-        </>)}
-
+        {isOwner && <StrategyContent />}
       </main>
     </>
   )

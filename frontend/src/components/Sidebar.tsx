@@ -117,6 +117,7 @@ export default function Sidebar() {
             </div>
             {section.links.map(({ href, icon: Icon, label }) => {
               const active = href === '/dashboard' ? path === '/dashboard' : path.startsWith(href)
+              const displayLabel = href === '/strategy' && user?.role !== 'OWNER' ? 'Tutorials' : label
               return (
                 <Link key={href} href={href} onClick={close}
                   style={{
@@ -134,7 +135,7 @@ export default function Sidebar() {
                   onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)' } }}
                 >
                   <Icon size={15} />
-                  {label}
+                  {displayLabel}
                 </Link>
               )
             })}

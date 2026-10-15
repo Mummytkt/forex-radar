@@ -613,6 +613,56 @@ def remove_video(request: Request, url: str = Query(...)):
     return {"ok": True}
 
 
+# ── Strategy content (owner-only) ─────────────────────────────────────────────
+# The methodology text is served only to the owner so it never ships inside the
+# frontend bundle. Subscribers hitting this route get 403 and see no strategy
+# cards at all — only the tutorial videos remain on the page for them.
+
+STRATEGY_CONTENT = {
+    "chain": [
+        {"n": 1, "title": "Daily Breakout", "body": "The engine identifies A-shapes (bearish resistance) and V-shapes (bullish support) on the Daily chart using body-only levels — never wicks. A breakout occurs when a Daily candle closes beyond the most recent A or V body level."},
+        {"n": 2, "title": "Reaction Source Identification", "body": "After a breakout, the engine identifies up to 4 types of reaction sources: the Daily Breaker level, OC levels inside the pre-breakout range, A/V levels inside the range, and post-breakout OC levels. These become the zones price must retest."},
+        {"n": 3, "title": "Retest Detection", "body": "When an H4 candle's high or low (including wicks) touches any active reaction source band, the engine flags a retest in progress. The band is the source level ± the configured tolerance (default 5 pips)."},
+        {"n": 4, "title": "H4 Confirmation", "body": "With a retest in progress, the engine checks subsequent H4 candles for a qualifying confirmation: (a) an H4 A-shape or V-shape breakout — candle closes beyond the body level of an H4 formation in the breakout direction, or (b) an H4 OC reaction — candle wicks into an H4 OC zone and closes beyond the OC level in the breakout direction. Either confirms Daily + H4 alignment and triggers the alert."},
+    ],
+    "formations": [
+        {"term": "A-Shape (Bearish resistance)", "body": "Two consecutive Daily candles where candle 1 is bullish and candle 2 is bearish. The level is candle 1's body high (max of open/close, never the wick)."},
+        {"term": "V-Shape (Bullish support)", "body": "Two consecutive Daily candles where candle 1 is bearish and candle 2 is bullish. The level is candle 1's body low (min of open/close, never the wick)."},
+        {"term": "OC (Open-Close level)", "body": "Formed when 2+ consecutive same-direction candles run. The OC level is the close of the first candle in each consecutive pair (the junction price — not the midpoint). A run of 3 candles produces exactly 2 independent OC levels."},
+    ],
+    "h4_classification": [
+        {"label": "External", "variant": "accent", "desc": "The H4 candle closes beyond the outermost H4 formation — the swing boundary. This is the conservative confirmation."},
+        {"label": "Internal", "variant": "warning", "desc": "The H4 candle closes beyond an inner H4 formation that formed after the outer swing. This is an earlier, more aggressive confirmation."},
+    ],
+    "daily_context": {
+        "intro": "Every alert includes a Daily level context tag that tells you where price is relative to the overall swing structure at the time of confirmation.",
+        "items": [
+            {"label": "External", "variant": "bullish", "desc": "Price has reached or broken through the outermost A/V formation that originally bounded the trend. Confirms the move is pushing the extremes of the structure — the strongest context."},
+            {"label": "Internal", "variant": "warning", "desc": "Price confirmed within the range bounded by prior A/V formations. The bias is valid but price has not yet reached the outer structural boundary."},
+        ],
+    },
+    "alert_classifications": [
+        {"term": "Origin", "body": "The first confirmed bias alert for a setup. Requires the complete 4-step chain: Daily breakout → eligible reaction source → retest of that source → qualifying H4 A/V breakout. After an Origin fires, the engine enters continuation mode for that instrument."},
+        {"term": "Continuation — A/V Break", "body": "Fires after an Origin, when a subsequent H4 A-shape (bullish direction) or V-shape (bearish direction) formation is broken in the daily breakout direction — without needing a new Daily source retest. Each continuation extends the active bias confirmation. Active until a new opposing Daily breakout occurs."},
+        {"term": "Continuation — H4 Breaker Retest", "body": "Fires when price retraces into an H4 key level — either the H4 Breaker (the body level of the H4 formation broken in the prior alert, now acting as role-reversed resistance or support) or an H4 A-shape (bearish) / V-shape (bullish) that formed inside the daily range during a retracement. Confirmed when the H4 candle wicks into the level and closes beyond it in the breakout direction. No new Daily retest required."},
+        {"term": "Continuation — H4 OC", "body": "Fires when two consecutive same-direction H4 candles form an OC level, and price returns to react from the OC midpoint: the H4 candle's range dips into the OC zone and the candle closes beyond the midpoint in the breakout direction. Confirms continuation of the established Daily bias without requiring a new A/V break."},
+    ],
+    "reaction_sources": [
+        {"term": "Daily Breaker", "body": "The original A or V body level that was broken. Price often returns to test it from the other side (role reversal)."},
+        {"term": "OC Inside Range", "body": "An OC level that formed inside the pre-breakout range, in the direction of the breakout. Filtered to those between the broken level and the nearest swing extreme."},
+        {"term": "A/V Inside Range", "body": "After a bearish breakout: A-shapes inside the range. After a bullish breakout: V-shapes inside the range."},
+        {"term": "Post-Breakout OC", "body": "Two consecutive same-direction Daily candles after the breakout candle, in the breakout direction. The midpoint of their closes becomes a reaction zone."},
+    ],
+    "disclaimer": "Alerts confirm Daily + H4 alignment. Entry timing, risk management, and position sizing remain your responsibility.",
+}
+
+
+@router.get("/strategy-content")
+def strategy_content(request: Request):
+    _require_owner(request)
+    return STRATEGY_CONTENT
+
+
 # ── Journal ───────────────────────────────────────────────────────────────────
 
 def _journal_period_clause(period: str) -> tuple[str, list]:
