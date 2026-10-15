@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Radio, TrendingUp, Bell, BarChart2, Shield, ArrowRight, CheckCircle2,
-  Moon, Sun, Clock, Brain, ShieldCheck, Home, Car, Plane, Palmtree, Zap,
+  Moon, Sun, Clock, Brain, ShieldCheck, Zap, ChevronDown,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme'
 
@@ -30,21 +30,9 @@ const INCLUDES = [
 ]
 
 const PILLARS = [
-  {
-    icon: Clock,
-    title: 'Freedom to live',
-    body: "The engine watches 30+ markets around the clock so you don't have to. Do the school run, hit the gym, show up for your 9–5, be present with family — and only step in when an alert says a setup is ready.",
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Confidence to act',
-    body: 'Trade what you can see, not what you feel. Every alert is backed by a Daily + H4 confirmation chain, so you always know which way the market is leaning before you ever risk a cent.',
-  },
-  {
-    icon: Brain,
-    title: 'Discipline that protects you',
-    body: 'Beat overtrading at the root. No alert means no trade. A calm, rules-based rhythm replaces the urge to force positions — guarding both your account and your peace of mind.',
-  },
+  { icon: Clock,       title: 'Freedom to live',           body: "The engine watches 30+ markets around the clock so you don't have to. Do the school run, hit the gym, show up for your 9–5, be present with family — and only step in when an alert says a setup is ready." },
+  { icon: ShieldCheck, title: 'Confidence to act',         body: 'Trade what you can see, not what you feel. Every alert is backed by a Daily + H4 confirmation chain, so you always know which way the market is leaning before you ever risk a cent.' },
+  { icon: Brain,       title: 'Discipline that protects you', body: 'Beat overtrading at the root. No alert means no trade. A calm, rules-based rhythm replaces the urge to force positions — guarding both your account and your peace of mind.' },
 ]
 
 const STEPS = [
@@ -54,7 +42,6 @@ const STEPS = [
   { n: '04', title: 'Back to your life', body: 'No screen-watching between alerts. The market works while you live.' },
 ]
 
-// Reveal-on-scroll: adds .lp-in to any .lp-reveal element as it enters the viewport
 function useReveal() {
   useEffect(() => {
     const els = Array.from(document.querySelectorAll('.lp-reveal'))
@@ -67,56 +54,66 @@ function useReveal() {
   }, [])
 }
 
-// ── Scenic chart + dawn background (pure CSS/SVG — zero bandwidth) ─────────────
-function BgChartSky() {
+// ── Faint dashboard-mockup background (greyscale product simulation) ──────────
+function MiniBars({ bars }: { bars: number[] }) {
   return (
-    <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
-      {/* dawn sky gradient */}
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #080816 0%, #121233 42%, #241a44 68%, #3a2347 100%)' }} />
-      {/* horizon sun glow */}
-      <div className="lp-drift" style={{ position: 'absolute', left: '50%', bottom: '-14%', width: '80%', height: '62%', transform: 'translateX(-50%)', background: 'radial-gradient(circle at 50% 100%, rgba(245,158,11,0.38), rgba(236,72,153,0.20) 42%, transparent 72%)', filter: 'blur(26px)' }} />
-      {/* accent glow */}
-      <div className="lp-drift" style={{ position: 'absolute', left: '8%', top: '6%', width: '46%', height: '52%', background: 'radial-gradient(circle, rgba(99,102,241,0.28), transparent 70%)', filter: 'blur(34px)' }} />
-      {/* chart grid + rising equity curve */}
-      <svg viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        <defs>
-          <pattern id="lpGrid" width="90" height="90" patternUnits="userSpaceOnUse">
-            <path d="M90 0 L0 0 0 90" fill="none" stroke="rgba(255,255,255,0.045)" strokeWidth="1" />
-          </pattern>
-          <linearGradient id="lpBgArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(129,140,248,0.42)" />
-            <stop offset="100%" stopColor="rgba(129,140,248,0)" />
-          </linearGradient>
-        </defs>
-        <rect width="1440" height="600" fill="url(#lpGrid)" />
-        <path d="M0,520 C180,505 300,470 440,432 S720,338 860,300 S1180,176 1440,120 L1440,600 L0,600 Z" fill="url(#lpBgArea)" />
-        <path d="M0,520 C180,505 300,470 440,432 S720,338 860,300 S1180,176 1440,120" fill="none" stroke="rgba(129,140,248,0.65)" strokeWidth="2.5" strokeLinecap="round" />
-        <circle className="lp-glow" cx="1438" cy="120" r="7" fill="#a5b4fc" />
-      </svg>
-      {/* readability scrim */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(70% 60% at 50% 40%, rgba(5,5,16,0.52), rgba(5,5,16,0.80))' }} />
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 44, marginTop: 10 }}>
+      {bars.map((h, i) => <div key={i} style={{ width: 13, height: `${h}%`, borderRadius: 4, background: 'rgba(129,140,248,0.38)' }} />)}
     </div>
   )
 }
-
-// Floating lifestyle motifs (desktop only, kept clear of the headline column)
-function FreedomScenery() {
-  const chips = [
-    { icon: Home,     label: 'Home',   cls: 'lp-float',    left: '4%',  top: '30%' },
-    { icon: Car,      label: 'Freedom',cls: 'lp-float-sl', left: '90%', top: '24%' },
-    { icon: Plane,    label: 'Travel', cls: 'lp-float',    left: '92%', top: '66%' },
-    { icon: Palmtree, label: 'Rest',   cls: 'lp-float-sl', left: '3%',  top: '68%' },
-  ]
+function MockPanel({ children, style, cls }: { children: React.ReactNode; style: React.CSSProperties; cls?: string }) {
   return (
-    <div className="desktop-only" aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 1 }}>
-      {chips.map(({ icon: Icon, label, cls, left, top }) => (
-        <div key={label} className={cls} style={{ position: 'absolute', left, top, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, opacity: 0.42 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-            <Icon size={20} color="#c7d2fe" />
+    <div className={cls} style={{ position: 'absolute', borderRadius: 16, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', padding: 14, backdropFilter: 'blur(2px)', ...style }}>
+      {children}
+    </div>
+  )
+}
+function BgDashboardSim() {
+  const lbl: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em', textTransform: 'uppercase' }
+  const big: React.CSSProperties = { fontSize: 22, fontWeight: 800, color: 'rgba(255,255,255,0.55)', marginTop: 4 }
+  return (
+    <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
+      {/* neutral slate base + soft colour glows */}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #0a0c12 0%, #0e1119 45%, #0b0d14 100%)' }} />
+      <div className="lp-drift" style={{ position: 'absolute', left: '-6%', top: '-8%', width: '46%', height: '55%', background: 'radial-gradient(circle, rgba(99,102,241,0.22), transparent 70%)', filter: 'blur(36px)' }} />
+      <div className="lp-drift" style={{ position: 'absolute', right: '-8%', bottom: '-12%', width: '52%', height: '58%', background: 'radial-gradient(circle, rgba(245,158,11,0.12), rgba(236,72,153,0.10) 45%, transparent 72%)', filter: 'blur(40px)' }} />
+
+      {/* floating dashboard mock panels (desktop) */}
+      <div className="desktop-only" style={{ position: 'absolute', inset: 0 }}>
+        <MockPanel cls="lp-float" style={{ left: '4%', top: '14%', width: 190, transform: 'rotate(-3deg)' }}>
+          <div style={lbl}>Analytics</div>
+          <div style={big}>$242.63</div>
+          <MiniBars bars={[64, 42, 80, 52, 70, 48]} />
+        </MockPanel>
+
+        <MockPanel cls="lp-float-sl" style={{ right: '5%', top: '12%', width: 210, transform: 'rotate(2deg)' }}>
+          <div style={lbl}>Statistics</div>
+          <div style={big}>+18.4%</div>
+          <svg viewBox="0 0 180 54" style={{ width: '100%', height: 48, marginTop: 8 }}>
+            <polyline points="0,44 30,36 60,40 90,22 120,28 150,12 180,16" fill="none" stroke="rgba(129,140,248,0.5)" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </MockPanel>
+
+        <MockPanel cls="lp-float" style={{ left: '7%', bottom: '12%', width: 170, transform: 'rotate(2deg)', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <svg viewBox="0 0 52 52" style={{ width: 52, height: 52, flexShrink: 0 }}>
+            <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
+            <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(129,140,248,0.5)" strokeWidth="6" strokeDasharray="132" strokeDashoffset="30" transform="rotate(-90 26 26)" strokeLinecap="round" />
+          </svg>
+          <div>
+            <div style={lbl}>Accuracy</div>
+            <div style={{ ...big, fontSize: 18 }}>77%</div>
           </div>
-          <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>{label}</span>
-        </div>
-      ))}
+        </MockPanel>
+
+        <MockPanel cls="lp-float-sl" style={{ right: '6%', bottom: '14%', width: 190, transform: 'rotate(-2deg)' }}>
+          <div style={lbl}>Win rate</div>
+          <MiniBars bars={[50, 72, 44, 86, 60, 78]} />
+        </MockPanel>
+      </div>
+
+      {/* readability scrim */}
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(72% 62% at 50% 44%, rgba(6,7,12,0.55), rgba(6,7,12,0.86))' }} />
     </div>
   )
 }
@@ -125,7 +122,7 @@ function FreedomScenery() {
 function HeroScene() {
   return (
     <div style={{ position: 'relative', maxWidth: 680, margin: '0 auto', padding: '0 8px' }}>
-      <div className="lp-rise" style={{ position: 'relative', zIndex: 1, background: 'rgba(16,16,34,0.72)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 30px 80px -20px rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
+      <div className="lp-rise" style={{ position: 'relative', zIndex: 1, background: 'rgba(16,18,30,0.78)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 30px 80px -20px rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#ef4444' }} />
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f59e0b' }} />
@@ -151,14 +148,14 @@ function HeroScene() {
         </div>
       </div>
 
-      <div className="lp-float" style={{ position: 'absolute', zIndex: 2, top: 26, right: -6, maxWidth: 230, background: 'rgba(16,16,34,0.9)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="lp-float" style={{ position: 'absolute', zIndex: 2, top: 26, right: -6, maxWidth: 230, background: 'rgba(16,18,30,0.92)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#4ade80' }}>
           <CheckCircle2 size={14} /> BUY BIAS CONFIRMED
         </div>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>EUR/USD · Daily → H4 aligned</div>
       </div>
 
-      <div className="lp-float-sl" style={{ position: 'absolute', zIndex: 2, bottom: -14, left: -4, maxWidth: 220, background: 'rgba(16,16,34,0.9)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="lp-float-sl" style={{ position: 'absolute', zIndex: 2, bottom: -14, left: -4, maxWidth: 220, background: 'rgba(16,18,30,0.92)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#a5b4fc' }}>
           <Zap size={14} /> ENTRY CONFIRMATION
         </div>
@@ -174,7 +171,7 @@ export default function LandingPage() {
   useEffect(() => { setYear(new Date().getFullYear()) }, [])
   useReveal()
 
-  const heroTitle: React.CSSProperties = { textShadow: '0 2px 30px rgba(0,0,0,0.5)' }
+  const heroTitle: React.CSSProperties = { textShadow: '0 2px 30px rgba(0,0,0,0.55)' }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text-primary)', overflowX: 'hidden' }}>
@@ -198,41 +195,60 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Scenic hero band — contains the freedom headline + the profitability scene */}
-      <div style={{ position: 'relative', background: '#080816' }}>
-        <BgChartSky />
-        <FreedomScenery />
+      {/* Scenic band: freedom hero (fills first screen) + pillars + profitability */}
+      <div style={{ position: 'relative', background: '#0a0c12' }}>
+        <BgDashboardSim />
 
-        {/* 1 — Freedom headline (the lead) */}
-        <section style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '84px 24px 40px', maxWidth: 820, margin: '0 auto' }}>
-          <div className="lp-rise" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 14px', borderRadius: 99, background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(129,140,248,0.4)', fontSize: 12, fontWeight: 600, color: '#c7d2fe', marginBottom: 26 }}>
+        {/* 1 — Freedom hero, sized to fill the first view */}
+        <section style={{ position: 'relative', zIndex: 2, minHeight: 'calc(100vh - 58px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '56px 24px 40px', maxWidth: 840, margin: '0 auto' }}>
+          <div className="lp-rise" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 14px', borderRadius: 99, background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(129,140,248,0.4)', fontSize: 12, fontWeight: 600, color: '#c7d2fe', marginBottom: 28 }}>
             <span className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block' }} />
             Engine monitoring 30+ markets · 24/7
           </div>
-          <h1 className="lp-rise" style={{ ...heroTitle, fontSize: 'clamp(38px, 6.6vw, 64px)', fontWeight: 800, lineHeight: 1.08, marginBottom: 22, letterSpacing: '-0.02em', color: '#fff' }}>
+          <h1 className="lp-rise" style={{ ...heroTitle, fontSize: 'clamp(40px, 7vw, 68px)', fontWeight: 800, lineHeight: 1.06, marginBottom: 24, letterSpacing: '-0.02em', color: '#fff' }}>
             Trading should fund your life —<br /><span style={{ color: '#a5b4fc' }}>not consume it.</span>
           </h1>
-          <p className="lp-rise" style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', lineHeight: 1.75, maxWidth: 580, margin: '0 auto 34px' }}>
+          <p className="lp-rise" style={{ fontSize: 18, color: 'rgba(255,255,255,0.78)', lineHeight: 1.75, maxWidth: 600, margin: '0 auto 38px' }}>
             You didn&apos;t come to the markets to be chained to a screen. You came for freedom —
             the time, the confidence, and the calm to build the life you actually want.
             The Bias Pointer hands you all three.
           </p>
           <div className="lp-rise" style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <a href="#pricing" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '13px 30px', borderRadius: 11, background: 'var(--accent)', color: 'white', fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 8px 28px rgba(99,102,241,0.5)' }}>
+            <a href="#pricing" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '14px 32px', borderRadius: 11, background: 'var(--accent)', color: 'white', fontSize: 15, fontWeight: 700, textDecoration: 'none', boxShadow: '0 8px 28px rgba(99,102,241,0.5)' }}>
               Start trading with clarity <ArrowRight size={16} />
             </a>
-            <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '13px 30px', borderRadius: 11, border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 15, fontWeight: 600, textDecoration: 'none', backdropFilter: 'blur(4px)' }}>
+            <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '14px 32px', borderRadius: 11, border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 15, fontWeight: 600, textDecoration: 'none', backdropFilter: 'blur(4px)' }}>
               Sign In
             </Link>
           </div>
+          {/* scroll cue */}
+          <div className="lp-float" style={{ marginTop: 54, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.4)' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Scroll</span>
+            <ChevronDown size={18} />
+          </div>
         </section>
 
-        {/* 2 — Profitability + animated product scene */}
-        <section style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '28px 24px 96px', maxWidth: 760, margin: '0 auto' }}>
+        {/* 2 — Pillars, directly under the freedom headline */}
+        <section style={{ position: 'relative', zIndex: 2, maxWidth: 1000, margin: '0 auto', padding: '20px 24px 120px' }}>
+          <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
+            {PILLARS.map(({ icon: Icon, title, body }) => (
+              <div key={title} style={{ background: 'rgba(16,18,30,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '26px 22px', backdropFilter: 'blur(6px)' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(99,102,241,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <Icon size={20} color="#a5b4fc" />
+                </div>
+                <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 9, color: '#fff' }}>{title}</p>
+                <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7 }}>{body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* 3 — Profitability + animated scene (reached after a scroll) */}
+        <section style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '40px 24px 110px', maxWidth: 760, margin: '0 auto' }}>
           <h2 className="lp-reveal" style={{ ...heroTitle, fontSize: 'clamp(30px, 5vw, 46px)', fontWeight: 800, lineHeight: 1.12, marginBottom: 16, letterSpacing: '-0.02em', color: '#fff' }}>
             Profitability starts here.<br /><span style={{ color: '#a5b4fc' }}>Know the direction. Trade with confidence.</span>
           </h2>
-          <p className="lp-reveal" style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, maxWidth: 580, margin: '0 auto 44px' }}>
+          <p className="lp-reveal" style={{ fontSize: 16, color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, maxWidth: 580, margin: '0 auto 52px' }}>
             MummyTKT&apos;s Bias Pointer is a rules-based forex engine that confirms Daily + H4
             directional alignment and sends structured bias alerts straight to your Telegram.
             No screen-watching. No second-guessing. Just clarity — and the freedom to live
@@ -242,23 +258,8 @@ export default function LandingPage() {
         </section>
       </div>
 
-      {/* 3 — Pillars */}
-      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '80px 24px 20px' }}>
-        <div className="lp-reveal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
-          {PILLARS.map(({ icon: Icon, title, body }) => (
-            <div key={title} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: '26px 22px' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                <Icon size={20} color="var(--accent-hover)" />
-              </div>
-              <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 9 }}>{title}</p>
-              <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.7 }}>{body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* 4 — How it works */}
-      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '70px 24px 20px' }}>
+      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '84px 24px 20px' }}>
         <div className="lp-reveal" style={{ textAlign: 'center', marginBottom: 44 }}>
           <h2 style={{ fontSize: 'clamp(26px, 4vw, 34px)', fontWeight: 800, marginBottom: 10, letterSpacing: '-0.02em' }}>Four quiet steps. Zero screen fatigue.</h2>
           <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>Here&apos;s your day on the Bias Pointer — it does the watching, you do the living.</p>
