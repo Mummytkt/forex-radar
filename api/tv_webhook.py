@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from alerts.formatter import format_alert, format_entry_alert
+from api.alert_prefs import confirmation_kind, get_alert_prefs
 from alerts.telegram import send_alert
 from config import pip_size_for
 from data.models import (
@@ -88,14 +89,19 @@ def _resolve_chat(config, user_id, chat_id, role, plan, plan_expires_at):
     return config.telegram_chat_id if role == "OWNER" else None
 
 
-async def _deliver_alert(conn, config, instrument: str, alert_text: str) -> None:
-    """Send alert_text to every active user whose watched_instruments includes instrument."""
+async def _deliver_alert(conn, config, instrument: str, alert_text: str,
+                         h4_class: Optional[str] = None) -> None:
+    """Send alert_text to every active user whose watched_instruments includes instrument.
+
+    h4_class is set only for Origin confirmations: each user then receives it only
+    if they allow that type (external/internal). Continuations pass None and
+    always go out."""
     instr_norm = instrument.replace("/", "").upper()
+    kind = confirmation_kind(h4_class) if h4_class is not None else None
     recipients = conn.execute(
-        "SELECT telegram_chat_id, watched_instruments, role, plan, plan_expires_at FROM users "
+        "SELECT id, telegram_chat_id, watched_instruments, role, plan, plan_expires_at FROM users "
         "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
     ).fetchall()
-    sent_any = False
     for rec in recipients:
         if not _subscription_active(rec["role"], rec["plan"], rec["plan_expires_at"]):
             continue  # expired subscriber — no more signals
@@ -105,10 +111,16 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str) -> None
             watched = [w.replace("/", "").upper() for w in _json.loads(raw)]
             if instr_norm not in watched:
                 continue
+        if kind and not get_alert_prefs(conn, rec["id"], rec["role"])[kind]:
+            continue  # user switched this confirmation type off
         await send_alert(config.telegram_bot_token, rec["telegram_chat_id"], alert_text)
-        sent_any = True
-    # Fallback: no users with chat IDs → use global config chat ID
-    if not sent_any and config.telegram_chat_id:
+
+    # Fallback only when nobody has linked Telegram at all. Recipients filtered
+    # out by their own choices must stay filtered, never rerouted.
+    if not recipients and config.telegram_chat_id:
+        owner = conn.execute("SELECT id FROM users WHERE role = 'OWNER' LIMIT 1").fetchone()
+        if kind and not get_alert_prefs(conn, owner[0] if owner else None, "OWNER")[kind]:
+            return
         await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
 
 
@@ -415,7 +427,8 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
     logger.info("%s CONFIRMED %s (h4_class=%s) — alert stored", instrument, direction.value, payload.h4_class)
 
     if config.telegram_enabled:
-        await _deliver_alert(conn, config, instrument, alert_text)
+        await _deliver_alert(conn, config, instrument, alert_text,
+                             h4_class=confirmation_kind(payload.h4_class))
 
 
 _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {

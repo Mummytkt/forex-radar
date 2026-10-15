@@ -14,6 +14,8 @@ import io
 
 from fastapi.responses import StreamingResponse
 
+from api.alert_prefs import get_alert_prefs, set_alert_pref
+
 from api.schemas import (
     InstrumentOverview, Stats, AlertItem, AlertsPage,
     InstrumentDetail, InstrumentsUpdate,
@@ -509,31 +511,24 @@ def update_user_instruments(request: Request, body: InstrumentsUpdate):
 
 @router.get("/preferences", response_model=AlertPreferences)
 def get_preferences(request: Request):
-    """Return the owner's alert-type delivery preferences."""
+    """Return the logged-in user's own choice of which Origin confirmation
+    types (external / internal) reach their Telegram."""
+    user = getattr(request.state, "user", None)
     with _db(request) as conn:
-        ext = conn.execute("SELECT value FROM user_config WHERE key = 'pref_alert_external'").fetchone()
-        int_ = conn.execute("SELECT value FROM user_config WHERE key = 'pref_alert_internal'").fetchone()
-    return AlertPreferences(
-        alertExternal=(ext[0] if ext else "1") == "1",
-        alertInternal=(int_[0] if int_ else "0") == "1",
-    )
+        prefs = get_alert_prefs(conn, user["id"] if user else None, user["role"] if user else None)
+    return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"])
 
 
 @router.patch("/preferences")
 def update_preferences(request: Request, body: AlertPreferencesUpdate):
-    """Persist alert-type delivery preferences (controls what Telegram receives)."""
-    _require_owner(request)
+    """Save the logged-in user's own delivery choices. Affects only their Telegram."""
+    user = getattr(request.state, "user", None)
+    uid = user["id"] if user else None
     with _db_write(request) as conn:
         if body.alertExternal is not None:
-            conn.execute(
-                "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('pref_alert_external', ?, datetime('now'))",
-                ("1" if body.alertExternal else "0",),
-            )
+            set_alert_pref(conn, uid, "external", body.alertExternal)
         if body.alertInternal is not None:
-            conn.execute(
-                "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES ('pref_alert_internal', ?, datetime('now'))",
-                ("1" if body.alertInternal else "0",),
-            )
+            set_alert_pref(conn, uid, "internal", body.alertInternal)
     return {"ok": True}
 
 
