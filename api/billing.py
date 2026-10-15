@@ -28,6 +28,7 @@ from pydantic import BaseModel
 
 from api.auth import hash_pw, create_token
 from api import paystack
+from api.exchange_rate import get_ngn_rate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -187,7 +188,8 @@ async def start_checkout(body: CheckoutBody, request: Request):
 
     # Convert USD to the correct subunit amount for the charge currency
     if config.paystack_currency == "NGN":
-        amount_subunits = round(usd * config.paystack_ngn_rate * 100)  # kobo
+        ngn_rate = await asyncio.to_thread(get_ngn_rate, config)
+        amount_subunits = round(usd * ngn_rate * 100)  # kobo
     else:
         amount_subunits = round(usd * 100)  # cents
 

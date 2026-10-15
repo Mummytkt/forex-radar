@@ -107,17 +107,17 @@ function InputField({ label, value, onChange, placeholder, type = 'text' }: {
   )
 }
 
-function planLabel(plan: string) {
-  if (plan === 'LIFETIME') return 'Lifetime Access'
-  if (plan === '30DAY') return '30-day Access'
-  return 'Trial'
+const PLAN_META: Record<string, { label: string; color: string }> = {
+  TRIAL:   { label: 'Free Trial',    color: 'var(--text-muted)' },
+  '30DAY': { label: '30 Days',       color: 'var(--accent-hover)' },
+  '6MONTH':{ label: '6 Months',      color: '#10b981' },
+  '9MONTH':{ label: '9 Months',      color: '#7c3aed' },
+  '12MONTH':{ label: '12 Months',    color: '#f59e0b' },
+  LIFETIME:{ label: 'Lifetime',      color: 'var(--bullish)' },
 }
 
-function planColor(plan: string) {
-  if (plan === 'LIFETIME') return 'var(--bullish)'
-  if (plan === '30DAY') return 'var(--accent-hover)'
-  return 'var(--text-muted)'
-}
+function planLabel(plan: string) { return PLAN_META[plan]?.label ?? plan }
+function planColor(plan: string) { return PLAN_META[plan]?.color ?? 'var(--text-secondary)' }
 
 // ── Subscribers section (owner only) ─────────────────────────────────────────
 
@@ -273,7 +273,7 @@ function SubscribersSection() {
                   <td>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || '—'}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{u.email}</div>
-                    {!u.invite_used && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Invite pending</span>}
+                    {!u.invite_used && !u.last_login_at && <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>Invite pending</span>}
                   </td>
                   <td><span style={{ fontSize: 12, fontWeight: 600, color: planColor(u.plan) }}>{planLabel(u.plan)}</span></td>
                   <td><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(u.created_at)}</span></td>

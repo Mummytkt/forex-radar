@@ -21,6 +21,7 @@ from datetime import datetime, timezone, timedelta
 
 from api import paystack
 from api.billing import PLANS, link_and_maybe_credit
+from api.exchange_rate import get_ngn_rate
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,8 @@ async def run_billing_cycle(db_path: str, config) -> None:
             conn.commit()
 
             if config.paystack_currency == "NGN":
-                charge_subunits = round(amount * config.paystack_ngn_rate * 100)
+                ngn_rate = await asyncio.to_thread(get_ngn_rate, config)
+                charge_subunits = round(amount * ngn_rate * 100)
             else:
                 charge_subunits = round(amount * 100)
 
