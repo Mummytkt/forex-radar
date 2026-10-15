@@ -138,6 +138,16 @@ function WinRing({ rate }: { rate: number }) {
   )
 }
 
+// Pips consistent with the recorded result: a loss always reads negative, a
+// win always positive, regardless of the raw entry→exit sign. Keeps the row,
+// the totals and the equity curve from ever disagreeing with the result badge.
+function resultPips(e: { pips: number | null; result: string }): number | null {
+  if (e.pips == null) return null
+  if (e.result === 'loss') return -Math.abs(e.pips)
+  if (e.result === 'win') return Math.abs(e.pips)
+  return e.pips
+}
+
 // ── Equity curve ──────────────────────────────────────────────────────────────
 function EquityCurve({ entries }: { entries: Entry[] }) {
   const pts = useMemo(() => {
@@ -161,11 +171,7 @@ function EquityCurve({ entries }: { entries: Entry[] }) {
   const cumulative: number[] = []
   let sum = 0
   for (const p of pts) {
-    // Honour the result field: if marked as a loss, negate the pips regardless
-    // of how they were entered. Wins use absolute value to avoid double-negatives.
-    const raw = p.pips!
-    const contribution = p.result === 'loss' ? -Math.abs(raw) : p.result === 'win' ? Math.abs(raw) : raw
-    sum += contribution
+    sum += resultPips(p) ?? 0
     cumulative.push(sum)
   }
 
@@ -473,11 +479,14 @@ function TradeRow({ entry, onView, onEdit, onDelete, onResultChange }: {
         </div>
       )}
       <div style={{ width: 60, textAlign: 'right', flexShrink: 0 }}>
-        {entry.pips != null ? (
-          <span style={{ fontSize: 13, fontWeight: 700, color: entry.pips >= 0 ? 'var(--bullish)' : 'var(--bearish)' }}>
-            {entry.pips >= 0 ? '+' : ''}{entry.pips}
-          </span>
-        ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
+        {(() => {
+          const sp = resultPips(entry)
+          return sp != null ? (
+            <span style={{ fontSize: 13, fontWeight: 700, color: sp >= 0 ? 'var(--bullish)' : 'var(--bearish)' }}>
+              {sp >= 0 ? '+' : ''}{sp}
+            </span>
+          ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+        })()}
         {entry.rr_ratio != null && <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{entry.rr_ratio.toFixed(1)}R</p>}
       </div>
       <ResultPicker entry={entry} onResultChange={onResultChange} />
@@ -546,7 +555,7 @@ function TradeDetailModal({ entry, onClose, onEdit }: { entry: Entry; onClose: (
           <DetailRow label="Stop Loss" value={entry.stop_loss} />
           <DetailRow label="Take Profit" value={entry.take_profit} />
           <DetailRow label="Exit Price" value={entry.exit_price} />
-          <DetailRow label="Pips" value={entry.pips != null ? `${entry.pips >= 0 ? '+' : ''}${entry.pips}` : null} />
+          <DetailRow label="Pips" value={(() => { const sp = resultPips(entry); return sp != null ? `${sp >= 0 ? '+' : ''}${sp}` : null })()} />
           <DetailRow label="R:R Ratio" value={entry.rr_ratio != null ? `${entry.rr_ratio}R` : null} />
           {(entry.amount_risked != null || entry.amount_aimed != null) && <>
             <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-hover)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14, marginBottom: 4 }}>Money</p>
@@ -918,10 +927,10 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
     const missed = closed.filter(e => e.result === 'missed').length
     const open = entries.filter(e => e.result === 'open').length
     const decided = closed.filter(e => e.result === 'win' || e.result === 'loss')
-    const totalPips = closed.reduce((s, e) => s + (e.pips ?? 0), 0)
+    const totalPips = closed.reduce((s, e) => s + (resultPips(e) ?? 0), 0)
     const avgPips = closed.length ? totalPips / closed.length : 0
     const winRate = decided.length ? (wins / decided.length) * 100 : 0
-    const bestPips = closed.filter(e => e.pips != null).reduce((m, e) => Math.max(m, e.pips!), -Infinity)
+    const bestPips = closed.filter(e => e.pips != null).reduce((m, e) => Math.max(m, resultPips(e)!), -Infinity)
     const rrArr = closed.filter(e => e.rr_ratio != null).map(e => e.rr_ratio!)
     const avgRR = rrArr.length ? rrArr.reduce((s, v) => s + v, 0) / rrArr.length : null
     const riskedEntries = closed.filter(e => e.amount_risked != null && e.amount_aimed != null)
@@ -1030,7 +1039,7 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
     const rows = entries.map(e => [
       e.trade_date, e.instrument, e.direction.toUpperCase(), e.result.toUpperCase(),
       e.entry_price ?? '', e.stop_loss ?? '', e.take_profit ?? '', e.exit_price ?? '',
-      e.pips ?? '', e.rr_ratio ?? '',
+      resultPips(e) ?? '', e.rr_ratio ?? '',
       e.amount_risked ?? '', e.amount_aimed ?? '',
       SETUP_LABELS[e.setup_type] || e.setup_type,
       e.setup_type_notes ?? '',
@@ -1059,7 +1068,7 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
         <td class="${e.direction}">${e.direction.toUpperCase()}</td>
         <td>${e.entry_price ?? '—'}</td>
         <td>${e.exit_price ?? '—'}</td>
-        <td class="${e.pips != null ? (e.pips >= 0 ? 'win' : 'loss') : ''}">${e.pips != null ? (e.pips >= 0 ? '+' : '') + e.pips : '—'}</td>
+        <td class="${(() => { const sp = resultPips(e); return sp != null ? (sp >= 0 ? 'win' : 'loss') : '' })()}">${(() => { const sp = resultPips(e); return sp != null ? (sp >= 0 ? '+' : '') + sp : '—' })()}</td>
         <td>${e.rr_ratio != null ? e.rr_ratio + 'R' : '—'}</td>
         <td>${e.h4_break_type ?? '—'}</td>
         <td class="${e.result}">${(RESULT_LABEL[e.result] || e.result).toUpperCase()}</td>
@@ -1189,7 +1198,7 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
             </div>
             {stats.hasPnl ? (
               <>
-                <div style={{ fontSize: 30, fontWeight: 800, color: stats.netPnl >= 0 ? 'var(--bullish)' : 'var(--bearish)', lineHeight: 1 }}>{stats.netPnl >= 0 ? '+' : ''}${Math.abs(stats.netPnl).toFixed(0)}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: stats.netPnl >= 0 ? 'var(--bullish)' : 'var(--bearish)', lineHeight: 1 }}>{stats.netPnl >= 0 ? '+' : '−'}${Math.abs(stats.netPnl).toFixed(0)}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{stats.totalPips >= 0 ? '+' : ''}{stats.totalPips.toFixed(1)} pips</div>
               </>
             ) : (
