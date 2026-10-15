@@ -531,7 +531,12 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                               + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
                               alert.freq_once_per_bar)
 
-            if h4c_oc_ready and not na(h4c_oc_lvl)
+            // OC continuation: only fires on H4 bars AFTER the OC was established
+            // (bar_index > h4c_origin). The formation bar itself always "closes
+            // beyond" the OC level by construction — that's not a reaction,
+            // it's just the second candle of the OC itself. We need price to
+            // leave and return, then close beyond on a later H4 candle.
+            if h4c_oc_ready and not na(h4c_oc_lvl) and bar_index > h4c_origin
                 bool oc_touched = low <= h4c_oc_lvl + tol and high >= h4c_oc_lvl - tol
                 if bo_dir == "bullish" and oc_touched and close > h4c_oc_lvl
                     if barstate.isrealtime
