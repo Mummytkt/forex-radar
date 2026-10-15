@@ -10,22 +10,23 @@
 // Detects two entry confirmations that fire ONLY after the companion Bias
 // Pointer has registered an active bias in the same direction:
 //
-//   1. MummyTKT's PCL (Sweep without close break)
+//   1. MummyTKT's PCL (Sweep without close break) — measured on BODY edges
 //      Bearish: a bearish candle wicks through the previous bullish candle's
 //               body low, but closes AT OR ABOVE that body low (wick sweeps,
 //               body holds).
 //      Bullish: a bullish candle wicks through the previous bearish candle's
 //               body high, but closes AT OR BELOW that body high.
 //
-//   2. Engulfing Sweep (Sweep WITH close break)
-//      Bearish: a bearish candle sweeps the previous bullish candle's body
-//               low AND closes below it.
-//      Bullish: a bullish candle sweeps the previous bearish candle's body
-//               high AND closes above it.
+//   2. Engulfing Sweep (Full engulf of the swept candle) — measured on FULL high/low
+//      Bearish: a bearish candle wicks ABOVE the previous bullish candle's
+//               HIGH (sweep), then closes BELOW that candle's LOW with its
+//               body — fully engulfing the candle it swept.
+//      Bullish: a bullish candle wicks BELOW the previous bearish candle's
+//               LOW (sweep), then closes ABOVE that candle's HIGH with its body.
 //
 // Backend gating: an ENTRY_CONFIRMATION webhook only fires a Telegram message
 // when the pair has an active bias in the matching direction, and price is
-// within tolerance of the key reaction level. All other sweeps are ignored.
+// within tolerance of the user's watched level. All other sweeps are ignored.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Entry Confirmations", overlay=true, max_bars_back=200)
@@ -34,42 +35,42 @@ indicator("MummyTKT Entry Confirmations", overlay=true, max_bars_back=200)
 string wh_secret   = input.string("", "Webhook Secret",
      tooltip="Paste your TV_WEBHOOK_SECRET value here")
 bool   detect_pcl  = input.bool(true, "Detect PCL (sweep without close break)",
-     tooltip="Fires when a candle sweeps the previous opposite candle's body but closes back inside it")
-bool   detect_eng  = input.bool(true, "Detect Engulfing Sweep (sweep with close break)",
-     tooltip="Fires when a candle sweeps and closes beyond the previous opposite candle's body")
+     tooltip="Fires when a candle sweeps the previous opposite candle's BODY edge but closes back inside it")
+bool   detect_eng  = input.bool(true, "Detect Engulfing Sweep (full engulf of the swept candle)",
+     tooltip="Fires when a candle wicks past one of the previous candle's extremes and the body closes beyond the opposite extreme")
 
 color  bull_col    = input.color(color.new(color.green, 20), "Bullish marker colour", group="Markers")
 color  bear_col    = input.color(color.new(color.red,   20), "Bearish marker colour", group="Markers")
 
-// ── Candle body helpers ──────────────────────────────────────────────────────
+// ── Candle helpers ────────────────────────────────────────────────────────────
 prev_body_high = math.max(open[1], close[1])
 prev_body_low  = math.min(open[1], close[1])
+prev_high      = high[1]
+prev_low       = low[1]
 prev_bullish   = close[1] > open[1]
 prev_bearish   = close[1] < open[1]
 
 curr_bullish   = close > open
 curr_bearish   = close < open
 
-// ── Bearish patterns (previous bullish, current bearish, swept the low) ──────
-bearish_sweep     = prev_bullish and curr_bearish and (low < prev_body_low)
-bearish_pcl       = bearish_sweep and (close >= prev_body_low) and detect_pcl
-bearish_engulfing = bearish_sweep and (close <  prev_body_low) and detect_eng
+// ── PCL — wick sweeps the previous candle's BODY edge, body closes back inside ─
+bearish_pcl = prev_bullish and curr_bearish and (low  < prev_body_low)  and (close >= prev_body_low)  and detect_pcl
+bullish_pcl = prev_bearish and curr_bullish and (high > prev_body_high) and (close <= prev_body_high) and detect_pcl
 
-// ── Bullish patterns (previous bearish, current bullish, swept the high) ─────
-bullish_sweep     = prev_bearish and curr_bullish and (high > prev_body_high)
-bullish_pcl       = bullish_sweep and (close <= prev_body_high) and detect_pcl
-bullish_engulfing = bullish_sweep and (close >  prev_body_high) and detect_eng
+// ── Engulfing Sweep — wick sweeps one FULL extreme, body closes beyond the other
+bearish_engulfing = prev_bullish and curr_bearish and (high > prev_high) and (close < prev_low)  and detect_eng
+bullish_engulfing = prev_bearish and curr_bullish and (low  < prev_low)  and (close > prev_high) and detect_eng
 
 // ── Fire webhook alerts (on confirmed candle close only) ─────────────────────
 if barstate.isconfirmed
     if bearish_pcl
         alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"pcl","direction":"bearish","timeframe":"' + timeframe.period + '","price":' + str.tostring(close) + ',"swept_level":' + str.tostring(prev_body_low) + '}', alert.freq_once_per_bar_close)
     if bearish_engulfing
-        alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"engulfing_sweep","direction":"bearish","timeframe":"' + timeframe.period + '","price":' + str.tostring(close) + ',"swept_level":' + str.tostring(prev_body_low) + '}', alert.freq_once_per_bar_close)
+        alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"engulfing_sweep","direction":"bearish","timeframe":"' + timeframe.period + '","price":' + str.tostring(close) + ',"swept_level":' + str.tostring(prev_high) + '}', alert.freq_once_per_bar_close)
     if bullish_pcl
         alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"pcl","direction":"bullish","timeframe":"' + timeframe.period + '","price":' + str.tostring(close) + ',"swept_level":' + str.tostring(prev_body_high) + '}', alert.freq_once_per_bar_close)
     if bullish_engulfing
-        alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"engulfing_sweep","direction":"bullish","timeframe":"' + timeframe.period + '","price":' + str.tostring(close) + ',"swept_level":' + str.tostring(prev_body_high) + '}', alert.freq_once_per_bar_close)
+        alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"engulfing_sweep","direction":"bullish","timeframe":"' + timeframe.period + '","price":' + str.tostring(close) + ',"swept_level":' + str.tostring(prev_low) + '}', alert.freq_once_per_bar_close)
 
 // ── Chart markers ────────────────────────────────────────────────────────────
 plotshape(bearish_pcl,       title="Bearish PCL",             location=location.abovebar, color=bear_col, style=shape.labeldown, text="PCL",  textcolor=color.white, size=size.tiny)
