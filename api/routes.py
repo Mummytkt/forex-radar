@@ -241,6 +241,34 @@ def health():
     return {"status": "ok", "ts": datetime.now(timezone.utc).isoformat()}
 
 
+@router.get("/chart-board")
+def chart_board(request: Request):
+    """Live Chart Board: each pair's latest 4H chart snapshot (stage + levels), sent
+    by the Bias Pointer with every H4 close. The owner sees every platform pair;
+    a subscriber sees only the pairs they receive alerts on (all, if no list saved)."""
+    config = request.app.state.config
+    pairs = [i.replace("/", "").upper() for i in config.instruments]
+    user = getattr(request.state, "user", None)
+    with _db(request) as conn:
+        if user and user.get("role") != "OWNER":
+            row = conn.execute("SELECT watched_instruments FROM users WHERE id = ?", (user.get("id"),)).fetchone()
+            if row and row[0]:
+                mine = {w.replace("/", "").upper() for w in json.loads(row[0])}
+                pairs = [p for p in pairs if p in mine]
+        rows = {r["instrument"]: r for r in conn.execute(
+            "SELECT instrument, snapshot, price, updated_at FROM chart_snapshots").fetchall()}
+    board = []
+    for p in pairs:
+        r = rows.get(p)
+        board.append({
+            "instrument": p,
+            "snapshot": json.loads(r["snapshot"]) if r else None,
+            "price": r["price"] if r else None,
+            "updated_at": r["updated_at"] if r else None,
+        })
+    return {"pairs": board}
+
+
 @router.get("/overview", response_model=list[InstrumentOverview])
 def get_overview(request: Request):
     config = request.app.state.config

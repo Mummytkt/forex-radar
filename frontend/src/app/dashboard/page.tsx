@@ -13,6 +13,7 @@ import { useAccent } from '@/lib/useAccent'
 import { PALETTE } from '@/lib/accent'
 import type { InstrumentOverview, Stats, AlertsPage } from '@/lib/types'
 import OnboardingChecklist, { type Onboarding } from '@/components/OnboardingChecklist'
+import LiveChartBoard from '@/components/LiveChartBoard'
 
 interface Profile {
   telegram_configured: boolean
@@ -172,6 +173,8 @@ export default function OverviewPage() {
           <StatCard label="Retests In Progress" value={stats?.retests_in_progress ?? '—'} icon={Zap} iconColor="var(--warning)" sub="Awaiting H4 confirm" />
           <StatCard label="Alerts Fired" value={stats?.total_alerts ?? '—'} icon={Bell} iconColor="var(--bullish)" sub={stats ? `${stats.alerts_today} today` : undefined} />
         </div>
+
+        <LiveChartBoard />
 
         <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 

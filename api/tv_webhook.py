@@ -15,6 +15,7 @@ Event types received from Pine:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import hmac
@@ -124,6 +125,23 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
         if kind and not get_alert_prefs(conn, owner[0] if owner else None, "OWNER")[kind]:
             return
         await send_alert(config.telegram_bot_token, config.telegram_chat_id, alert_text)
+
+
+# TradingView gives up on a webhook after a few seconds and marks it "failed"
+# (even though it was processed). Telegram sends to many subscribers can take
+# longer, so they run after the reply instead of before it.
+_bg_tasks: set = set()
+
+
+def _in_background(coro) -> None:
+    task = asyncio.get_running_loop().create_task(coro)
+    _bg_tasks.add(task)
+
+    def _done(t):
+        _bg_tasks.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            logger.error("Background Telegram delivery failed: %r", t.exception())
+    task.add_done_callback(_done)
 
 
 # ── Pydantic model for incoming Pine payloads ─────────────────────────────────
@@ -495,8 +513,8 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
     logger.info("%s CONFIRMED %s (h4_class=%s) — alert stored", instrument, direction.value, payload.h4_class)
 
     if config.telegram_enabled:
-        await _deliver_alert(conn, config, instrument, alert_text,
-                             h4_class=confirmation_kind(payload.h4_class))
+        _in_background(_deliver_alert(conn, config, instrument, alert_text,
+                             h4_class=confirmation_kind(payload.h4_class)))
 
 
 _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
@@ -551,7 +569,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     logger.info("%s H4_CONTINUATION %s (cont_type=%s) — alert stored", instrument, direction.value, cont_type)
 
     if config.telegram_enabled:
-        await _deliver_alert(conn, config, instrument, alert_text)
+        _in_background(_deliver_alert(conn, config, instrument, alert_text))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
@@ -662,7 +680,7 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
         logger.info("%s price alert triggered — %s @ %s (id=%d)", instrument, condition, alert_price, alert_id)
 
         if config.telegram_enabled and chat_id:
-            await send_alert(config.telegram_bot_token, chat_id, text)
+            _in_background(send_alert(config.telegram_bot_token, chat_id, text))
 
 
 async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
@@ -751,7 +769,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
                     instrument, direction, pattern, price, alert_id, alert_price, tol_pips)
 
         if config.telegram_enabled and chat_id:
-            await send_alert(config.telegram_bot_token, chat_id, alert_text)
+            _in_background(send_alert(config.telegram_bot_token, chat_id, alert_text))
 
 
 def _handle_invalidated(conn, instrument: str) -> None:
