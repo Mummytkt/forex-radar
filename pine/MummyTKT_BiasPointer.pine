@@ -729,10 +729,11 @@ else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
 else if h4_bo_fired
     _state_txt := "CONFIRMED | " + bo_dir + " | realigning"
-// The H4 steps only mean something on the 4H chart; other timeframes would run
-// them on the wrong candles, so say so instead of showing a misleading state.
-if timeframe.period != "240"
-    _state_txt := "Bias Pointer state: open the 4H chart"
+// Off the 4H chart, show only what the DAILY candles decided (direction and the
+// broken level) — the H4 steps would run on the wrong candles there.
+bool _is_4h = timeframe.period == "240"
+if not _is_4h
+    _state_txt := na(bo_dir) ? "DAILY | no breakout" : "DAILY | BREAKOUT | " + bo_dir + " @ " + str.tostring(bo_level, "#.#####") + " | check 4H"
 
 // ── Price feed + chart snapshot — fires at every realtime H4 close ───────────
 // Powers dashboard price-level alerts and the server's copy of this chart's
@@ -764,6 +765,8 @@ else if bo_dir == "bullish"
     _lbl_col := bull_lbl_col
 else if bo_dir == "bearish"
     _lbl_col := bear_lbl_col
+if not _is_4h
+    _lbl_col := na(bo_dir) ? color.new(color.gray, 20) : bo_dir == "bullish" ? bull_lbl_col : bear_lbl_col
 
 var label _state_lbl = na
 label.delete(_state_lbl)
