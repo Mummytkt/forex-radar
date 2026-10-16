@@ -563,6 +563,18 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_price_ticks_inst_ts ON price_ticks (instrument, ts)")
 
+    # Latest chart snapshot per instrument (stage + every level on the 4H chart),
+    # sent with each PRICE_UPDATE. Source of truth for what the chart shows.
+    if "chart_snapshots" not in tables:
+        conn.execute("""
+            CREATE TABLE chart_snapshots (
+                instrument TEXT PRIMARY KEY,
+                snapshot   TEXT NOT NULL,      -- JSON from the Pine script
+                price      REAL,
+                updated_at TEXT NOT NULL       -- ISO UTC
+            )
+        """)
+
     # Last time TradingView sent anything for each instrument — feed health monitor
     if "webhook_heartbeats" not in tables:
         conn.execute("""

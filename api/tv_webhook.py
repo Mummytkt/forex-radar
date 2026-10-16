@@ -144,6 +144,14 @@ class TVWebhookPayload(BaseModel):
     pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "engulfing_sweep"
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
+    snapshot: Optional[dict] = None    # PRICE_UPDATE: chart stage + levels (Bias Pointer 2026-10-16+)
+
+
+# Bias Pointer events are only meaningful from the 4H chart. Alerts created on any
+# other timeframe run the H4 logic on the wrong candles, so they are ignored.
+BIAS_EVENTS = {"BREAKOUT", "RETEST", "RETEST_CANCELLED", "CONFIRMED", "INVALIDATED",
+               "H4_CONTINUATION", "PRICE_UPDATE"}
+BIAS_TIMEFRAME = "240"
 
 
 def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
@@ -222,10 +230,16 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 
     logger.info("TV webhook: %s %s", event_type, instrument)
 
+    # Older scripts send no timeframe; accept those as before.
+    if event_type in BIAS_EVENTS and payload.timeframe and payload.timeframe != BIAS_TIMEFRAME:
+        logger.warning("TV webhook ignored: %s %s came from a %s chart, not 4H",
+                       event_type, instrument, payload.timeframe)
+        return {"status": "ignored", "reason": "not a 4H chart"}
+
     if event_type == "BREAKOUT":
         await _handle_breakout(conn, config, instrument, payload)
     elif event_type == "RETEST":
-        _handle_retest(conn, instrument, payload)
+        _handle_retest(conn, config, instrument, payload)
     elif event_type == "RETEST_CANCELLED":
         _handle_retest_cancelled(conn, instrument)
     elif event_type == "CONFIRMED":
@@ -245,6 +259,37 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 
 
 # ── Event handlers ────────────────────────────────────────────────────────────
+
+def _ensure_breakout(conn, config, instrument: str, direction: Direction,
+                     level: Optional[float], event: str) -> DailyBreakout:
+    """The active breakout this event belongs to.
+
+    The chart is the source of truth. If the server has no breakout, or holds one
+    in the other direction / at a different level (a BREAKOUT or INVALIDATED
+    webhook was missed — e.g. sent while delivery was down), replace it from the
+    event's own data so the alert and the dashboard never show the wrong setup.
+    """
+    breakout = get_active_breakout(conn, instrument)
+    tol = config.level_tolerance_pips * pip_size_for(instrument)
+    if breakout is not None and breakout.direction == direction and (
+            level is None or abs(breakout.broken_level - level) <= tol):
+        return breakout
+    if breakout is not None:
+        logger.warning("%s %s %s doesn't match the stored %s breakout @ %.5f — resyncing from the chart",
+                       instrument, event, direction.value, breakout.direction.value, breakout.broken_level)
+        deactivate_reaction_sources_for_breakout(conn, breakout.db_id)
+    deactivate_all_breakouts(conn, instrument)
+    breakout = DailyBreakout(
+        instrument=instrument,
+        direction=direction,
+        broken_level=level if level is not None else 0.0,
+        broken_type=FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE,
+        breakout_ts=datetime.utcnow(),
+    )
+    breakout.db_id = insert_breakout(conn, breakout)
+    logger.info("%s breakout record created from %s payload", instrument, event)
+    return breakout
+
 
 async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
     direction = Direction(payload.direction)
@@ -298,30 +343,18 @@ async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayl
     logger.info("%s BREAKOUT %s @ %.5f (breakout_id=%d)", instrument, payload.direction, payload.level, breakout_id)
 
 
-def _handle_retest(conn, instrument: str, payload: TVWebhookPayload) -> None:
+def _handle_retest(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
     state = get_instrument_state(conn, instrument)
 
-    # Auto-create breakout record if missing (alert set up after the breakout fired)
-    if state is None or state.active_breakout_id is None:
-        if payload.breakout_level is None or payload.direction is None:
-            logger.warning("%s RETEST received but no active breakout and no breakout_level — ignored", instrument)
-            return
-        direction = Direction(payload.direction)
-        broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
-        deactivate_all_breakouts(conn, instrument)
-        breakout = DailyBreakout(
-            instrument=instrument,
-            direction=direction,
-            broken_level=payload.breakout_level,
-            broken_type=broken_type,
-            breakout_ts=datetime.utcnow(),
-        )
-        breakout_id = insert_breakout(conn, breakout)
-        logger.info("%s auto-created breakout record from RETEST payload", instrument)
-        state = get_instrument_state(conn, instrument)
-        active_breakout_id = breakout_id
-    else:
+    if payload.direction is not None:
+        # Creates or resyncs the breakout record when the server missed it
+        active_breakout_id = _ensure_breakout(conn, config, instrument, Direction(payload.direction),
+                                              payload.breakout_level, "RETEST").db_id
+    elif state is not None and state.active_breakout_id is not None:
         active_breakout_id = state.active_breakout_id
+    else:
+        logger.warning("%s RETEST received but no active breakout and no direction — ignored", instrument)
+        return
 
     # Look up existing reaction source for the active breakout direction
     sources = get_active_reaction_sources(conn, instrument)
@@ -368,24 +401,10 @@ def _handle_retest_cancelled(conn, instrument: str) -> None:
 async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
     direction = Direction(payload.direction)
 
-    # Get the active breakout from DB — if missing (e.g. alert was set up after
-    # the breakout happened), auto-create it from the CONFIRMED payload so the
-    # alert still fires correctly.
-    breakout = get_active_breakout(conn, instrument)
-    if breakout is None:
-        bl = payload.breakout_level or payload.h4_level or 0.0
-        broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
-        deactivate_all_breakouts(conn, instrument)
-        breakout = DailyBreakout(
-            instrument=instrument,
-            direction=direction,
-            broken_level=bl,
-            broken_type=broken_type,
-            breakout_ts=datetime.utcnow(),
-        )
-        breakout_id = insert_breakout(conn, breakout)
-        breakout.db_id = breakout_id
-        logger.info("%s auto-created breakout record from CONFIRMED payload", instrument)
+    # The breakout this confirmation belongs to — created or resynced from the
+    # payload if the server missed the BREAKOUT webhook.
+    breakout = _ensure_breakout(conn, config, instrument, direction,
+                                payload.breakout_level or payload.h4_level, "CONFIRMED")
 
     # Ensure the matching reaction source exists in DB
     src_type = _source_type_from_str(payload.source)
@@ -493,21 +512,8 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     cont_type = payload.cont_type or "breakout_cont"
     classification = _CONT_TYPE_TO_CLASSIFICATION.get(cont_type, AlertClassification.H4_BREAKOUT_CONT)
 
-    breakout = get_active_breakout(conn, instrument)
-    if breakout is None:
-        bl = payload.breakout_level or payload.h4_level or 0.0
-        broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
-        deactivate_all_breakouts(conn, instrument)
-        breakout = DailyBreakout(
-            instrument=instrument,
-            direction=direction,
-            broken_level=bl,
-            broken_type=broken_type,
-            breakout_ts=datetime.utcnow(),
-        )
-        breakout_id = insert_breakout(conn, breakout)
-        breakout.db_id = breakout_id
-        logger.info("%s auto-created breakout record from H4_CONTINUATION payload", instrument)
+    breakout = _ensure_breakout(conn, config, instrument, direction,
+                                payload.breakout_level or payload.h4_level, "H4_CONTINUATION")
 
     now = datetime.utcnow()
     h4_level = payload.h4_level or (payload.breakout_level or breakout.broken_level)
@@ -560,6 +566,18 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
         conn.commit()
     except Exception as exc:
         logger.warning("price tick write failed for %s: %s", instrument, exc)
+
+    if payload.snapshot is not None:
+        try:
+            conn.execute(
+                "INSERT INTO chart_snapshots (instrument, snapshot, price, updated_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(instrument) DO UPDATE SET snapshot = excluded.snapshot, price = excluded.price, "
+                "updated_at = excluded.updated_at",
+                (instrument, _json.dumps(payload.snapshot), price, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+        except Exception as exc:
+            logger.warning("chart snapshot write failed for %s: %s", instrument, exc)
 
     now = datetime.utcnow().isoformat()
 

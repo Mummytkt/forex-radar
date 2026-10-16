@@ -22,6 +22,12 @@
 //             valid on later candles — any later H4 close beyond the H4 A/V
 //             confirms it — and only fails on an H4 close back through the zone.
 //            Backend uses it to check subscriber price-level alerts.
+// 2026-10-16 (b): daily candles read with lookahead_on (history no longer a day
+//             late after a paste); pip sizes match the server's table; every
+//             webhook carries "timeframe"; PRICE_UPDATE carries a chart snapshot
+//             (stage + all levels); "moved away first" can't be inherited from
+//             the previous breakout; External/Internal is judged against the
+//             CURRENT reaction's start (also after a failed reaction restarts).
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=500)
@@ -76,16 +82,49 @@ f_tf_str(opt) =>
 bool show_daily_on_tf = timeframe.in_seconds() <= timeframe.in_seconds(f_tf_str(daily_lbl_max_tf))
 bool show_h4_on_tf    = timeframe.in_seconds() <= timeframe.in_seconds(f_tf_str(h4_lbl_max_tf))
 
-float pip = syminfo.mintick * 10.0
+// Pip size per market — must match pip_size_for() in config.py on the server.
+// mintick × 10 is only right for forex; indices/crypto/oil use the server's table.
+f_pip(string t) =>
+    switch t
+        "XAUUSD"  => 0.10
+        "XAGUSD"  => 0.01
+        "BTCUSD"  => 10.0
+        "ETHUSD"  => 1.0
+        "SOLUSD"  => 0.05
+        "BNBUSD"  => 0.10
+        "XRPUSD"  => 0.0002
+        "ADAUSD"  => 0.00005
+        "DOGEUSD" => 0.00002
+        "LTCUSD"  => 0.02
+        "WTIUSD"  => 0.05
+        "US30"    => 10.0
+        "NAS100"  => 5.0
+        "SPX500"  => 2.0
+        "UK100"   => 3.0
+        "GER40"   => 5.0
+        "JPN225"  => 10.0
+        => str.endswith(t, "JPY") ? 0.01 : 0.0001
+
+float pip = f_pip(syminfo.ticker)
 float tol = float(tol_pips) * pip
+
+// Every webhook carries the chart timeframe so the server can ignore alerts that
+// were accidentally created on a non-4H chart.
+f_hdr(string t) =>
+    '{"secret":"' + wh_secret + '","type":"' + t + '","timeframe":"' + timeframe.period + '","instrument":"' + syminfo.ticker
+f_num(float x) =>
+    na(x) ? "null" : str.tostring(x)
 
 // ── Daily OHLCV ───────────────────────────────────────────────────────────────
 // close[1]/open[1] = just-completed daily bar; close[2]/open[2] = bar before that
 // Using timeframe.change("D") instead of manual time tracking — more reliable in v6
-float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_off)
-float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_off)
-float d_open1 = request.security(syminfo.tickerid, "D", open[2],  lookahead=barmerge.lookahead_off)
-float d_close1= request.security(syminfo.tickerid, "D", close[2], lookahead=barmerge.lookahead_off)
+// lookahead_on + [1] is TradingView's non-repainting form: every H4 bar of day N
+// sees day N-1 (and N-2), on history AND live. lookahead_off + [1] made history
+// lag one extra day, so after each paste the last daily close was never checked.
+float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_on)
+float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
+float d_open1 = request.security(syminfo.tickerid, "D", open[2],  lookahead=barmerge.lookahead_on)
+float d_close1= request.security(syminfo.tickerid, "D", close[2], lookahead=barmerge.lookahead_on)
 
 // ── Persistent state ──────────────────────────────────────────────────────────
 var float  a_lvl      = na
@@ -98,13 +137,12 @@ var bool   retest_on  = false
 var string retest_src = na
 var float  h4_a_lvl   = na
 var float  h4_v_lvl   = na
-var bool   h4_a_pre   = false
-var bool   h4_v_pre   = false
 var int    pb_consec  = 0
 var float  pb_close1  = na
 var float  pb_oc_lvl  = na   // most recent post-breakout OC (for the label)
 var array<float> pb_ocs = array.new<float>()   // every completed post-breakout OC
 var float  retest_lvl = na   // level of the zone price is currently reacting from
+var int    retest_bar = na   // bar the current reaction started on (External vs Internal)
 var bool   just_broke = false
 
 // ── H4 continuation state ─────────────────────────────────────────────────────
@@ -180,7 +218,7 @@ if new_daily
             h4c_oc_lvl            := na
             h4c_oc_ready          := false
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"INVALIDATED","instrument":"' + syminfo.ticker + '"}',
+                alert(f_hdr("INVALIDATED") + '"}',
                       alert.freq_once_per_bar)
 
         if bo_dir == "bearish" and not na(a_lvl) and d_close > a_lvl + tol
@@ -207,7 +245,7 @@ if new_daily
             h4c_oc_lvl            := na
             h4c_oc_ready          := false
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"INVALIDATED","instrument":"' + syminfo.ticker + '"}',
+                alert(f_hdr("INVALIDATED") + '"}',
                       alert.freq_once_per_bar)
 
     // ── Bullish breakout ──────────────────────────────────────────────────
@@ -238,7 +276,7 @@ if new_daily
             h4c_oc_lvl            := na
             h4c_oc_ready          := false
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"BREAKOUT","instrument":"' + syminfo.ticker
+                alert(f_hdr("BREAKOUT")
                       + '","direction":"bullish","level":' + str.tostring(bo_level) + '}',
                       alert.freq_once_per_bar)
 
@@ -270,7 +308,7 @@ if new_daily
             h4c_oc_lvl            := na
             h4c_oc_ready          := false
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"BREAKOUT","instrument":"' + syminfo.ticker
+                alert(f_hdr("BREAKOUT")
                       + '","direction":"bearish","level":' + str.tostring(bo_level) + '}',
                       alert.freq_once_per_bar)
 
@@ -310,21 +348,21 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     if new_a
         h4_a_lvl   := math.max(open[1], close[1])
         h4a_origin := bar_index
-        h4_a_pre   := not retest_on
 
     bool new_v = h4_bear1 and h4_bull0
     if new_v
         h4_v_lvl   := math.min(open[1], close[1])
         h4v_origin := bar_index
-        h4_v_pre   := not retest_on
 
     // ── Establishment tracking ────────────────────────────────────────────
+    // Read BEFORE this bar updates it: "an EARLIER H4 bar closed beyond the band".
+    // (est_above[1] leaked the previous breakout's flag onto the bar of a new
+    // same-direction breakout, letting it count as a retest without moving away.)
+    bool was_est = (bo_dir == "bullish") ? est_above : est_below
     if bo_dir == "bullish" and close > band_hi
         est_above := true
     if bo_dir == "bearish" and close < band_lo
         est_below := true
-
-    bool was_est = (bo_dir == "bullish") ? est_above[1] : est_below[1]
 
     // ── Zone 1: Post-Breakout OCs ─────────────────────────────────────────
     // Every completed post-breakout OC stays eligible until an opposing daily
@@ -371,37 +409,40 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_src := na
             retest_lvl := na
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"RETEST_CANCELLED","instrument":"' + syminfo.ticker + '"}',
+                alert(f_hdr("RETEST_CANCELLED") + '"}',
                       alert.freq_once_per_bar)
 
     // ── RETEST detection ──────────────────────────────────────────────────
     if not retest_on and not h4_bo_fired
         if pb_oc_zone and was_est
             retest_on  := true
+            retest_bar := bar_index
             retest_src := "post_breakout_oc"
             retest_lvl := pb_hit
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
+                alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
                       + ',"breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(pb_hit) + '}',
                       alert.freq_once_per_bar)
         else if db_zone and was_est
             retest_on  := true
+            retest_bar := bar_index
             retest_src := "daily_breaker"
             retest_lvl := bo_level
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
+                alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"daily_breaker"'
                       + ',"breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(bo_level) + '}',
                       alert.freq_once_per_bar)
         else if ir_zone and was_est
             retest_on  := true
+            retest_bar := bar_index
             retest_src := "inside_range"
             retest_lvl := bo_level
             if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
+                alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"inside_range"'
                       + ',"breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(bo_level) + '}',
@@ -414,7 +455,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
 
         if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
-            string h4_cls = h4_a_pre ? "external" : "internal"
+            string h4_cls = h4a_origin <= retest_bar ? "external" : "internal"
             if not h4_bo_fired
                 h4_bo_fired           := true
                 h4_aligned            := true
@@ -428,7 +469,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
                 if barstate.isrealtime
-                    alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
+                    alert(f_hdr("CONFIRMED")
                           + '","direction":"bullish","source":"' + retest_src
                           + '","h4_class":"' + h4_cls
                           + '","breakout_level":' + str.tostring(bo_level)
@@ -446,7 +487,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4c_oc_ready          := false
                 confirmed_this_bar    := true
                 if barstate.isrealtime
-                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                    alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"breakout_cont"'
                           + ',"breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
@@ -456,7 +497,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_lvl := na
 
         if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
-            string h4_cls = h4_v_pre ? "external" : "internal"
+            string h4_cls = h4v_origin <= retest_bar ? "external" : "internal"
             if not h4_bo_fired
                 h4_bo_fired           := true
                 h4_aligned            := true
@@ -470,7 +511,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
                 if barstate.isrealtime
-                    alert('{"secret":"' + wh_secret + '","type":"CONFIRMED","instrument":"' + syminfo.ticker
+                    alert(f_hdr("CONFIRMED")
                           + '","direction":"bearish","source":"' + retest_src
                           + '","h4_class":"' + h4_cls
                           + '","breakout_level":' + str.tostring(bo_level)
@@ -488,7 +529,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4c_oc_ready          := false
                 confirmed_this_bar    := true
                 if barstate.isrealtime
-                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                    alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"breakout_cont"'
                           + ',"breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
@@ -520,7 +561,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4c_oc_ready          := false
                 cont_acted            := true
                 if barstate.isrealtime
-                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                    alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"breakout_cont"'
                           + ',"breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
@@ -536,7 +577,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4c_oc_ready          := false
                 cont_acted            := true
                 if barstate.isrealtime
-                    alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                    alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"breakout_cont"'
                           + ',"breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
@@ -572,7 +613,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                         h4_breaker_orig_fired := true
                     bk_armed := false
                     if barstate.isrealtime
-                        alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                        alert(f_hdr("H4_CONTINUATION")
                               + '","direction":"' + bo_dir + '","cont_type":"' + bk_type + '"'
                               + ',"breakout_level":' + str.tostring(bo_level)
                               + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
@@ -596,16 +637,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if oc_react
                     oc_armed := false
                     if barstate.isrealtime
-                        alert('{"secret":"' + wh_secret + '","type":"H4_CONTINUATION","instrument":"' + syminfo.ticker
+                        alert(f_hdr("H4_CONTINUATION")
                               + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
                               + ',"breakout_level":' + str.tostring(bo_level)
                               + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
                               alert.freq_once_per_bar)
-
-// ── Price feed — powers dashboard price-level alerts ─────────────────────────
-if barstate.isconfirmed and barstate.isrealtime
-    alert('{"secret":"' + wh_secret + '","type":"PRICE_UPDATE","instrument":"' + syminfo.ticker
-          + '","price":' + str.tostring(close) + '}', alert.freq_once_per_bar)
 
 // ── Visual overlays ───────────────────────────────────────────────────────────
 
@@ -693,6 +729,28 @@ else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
 else if h4_bo_fired
     _state_txt := "CONFIRMED | " + bo_dir + " | realigning"
+// The H4 steps only mean something on the 4H chart; other timeframes would run
+// them on the wrong candles, so say so instead of showing a misleading state.
+if timeframe.period != "240"
+    _state_txt := "Bias Pointer state: open the 4H chart"
+
+// ── Price feed + chart snapshot — fires at every realtime H4 close ───────────
+// Powers dashboard price-level alerts and the server's copy of this chart's
+// state and levels (so the dashboard matches the chart even for setups that
+// formed before the script was pasted).
+string _stage = na(bo_dir) ? "idle" : retest_on ? "retest" : not h4_bo_fired ? "breakout" : h4_aligned ? "confirmed_aligned" : "confirmed_realigning"
+if barstate.isconfirmed and barstate.isrealtime
+    alert(f_hdr("PRICE_UPDATE")
+          + '","price":' + str.tostring(close)
+          + ',"snapshot":{"stage":"' + _stage + '"'
+          + ',"bias":' + (na(bo_dir) ? "null" : '"' + bo_dir + '"')
+          + ',"retest_source":' + (na(retest_src) ? "null" : '"' + retest_src + '"')
+          + ',"breakout_level":' + f_num(bo_level)
+          + ',"d_a":' + f_num(a_lvl) + ',"d_v":' + f_num(v_lvl)
+          + ',"d_oc":' + f_num(pb_oc_lvl) + ',"d_oc_count":' + str.tostring(array.size(pb_ocs))
+          + ',"h4_a":' + f_num(h4_a_lvl) + ',"h4_v":' + f_num(h4_v_lvl)
+          + ',"h4_bk":' + f_num(h4_breaker_lvl) + ',"h4_oc":' + f_num(h4c_oc_lvl) + '}}',
+          alert.freq_once_per_bar)
 
 
 color _lbl_col = color.new(color.gray, 20)

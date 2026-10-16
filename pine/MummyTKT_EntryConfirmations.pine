@@ -7,8 +7,8 @@
 // Create ONE alert per instrument: condition = "Any alert() function call"
 //                                   webhook  = https://forex-radar.fly.dev/api/tv-webhook
 //
-// Detects two entry confirmations that fire ONLY after the companion Bias
-// Pointer has registered an active bias in the same direction:
+// Detects two entry confirmations (no bias gating — the user chooses where to
+// watch in Price Alerts -> Entry Pattern Alerts):
 //
 //   1. MummyTKT's PCL (Sweep without close break) — measured on BODY edges
 //      Bearish: a bearish candle wicks through the previous bullish candle's
@@ -24,9 +24,9 @@
 //      Bullish: a bullish candle wicks BELOW the previous bearish candle's
 //               LOW (sweep), then closes ABOVE that candle's HIGH with its body.
 //
-// Backend gating: an ENTRY_CONFIRMATION webhook only fires a Telegram message
-// when the pair has an active bias in the matching direction, and price is
-// within tolerance of the user's watched level. All other sweeps are ignored.
+// Backend: an ENTRY_CONFIRMATION webhook only sends a Telegram message when a
+// user has an active entry alert on this pair in the same direction and the
+// pattern's close is within that alert's tolerance. All other sweeps are ignored.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Entry Confirmations", overlay=true, max_bars_back=200)
