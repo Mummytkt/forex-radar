@@ -16,6 +16,7 @@ Event types received from Pine:
 from __future__ import annotations
 
 import hashlib
+import os
 import hmac
 import logging
 from datetime import datetime, timezone
@@ -153,6 +154,10 @@ def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
     return ReactionSourceType.DAILY_BREAKER
 
 
+# TradingView's published webhook source addresses (support article "About webhooks").
+TRADINGVIEW_IPS = {"52.89.214.238", "34.212.75.30", "54.218.53.128", "52.32.178.7"}
+
+
 async def _warn_owner_rejected(conn, config) -> None:
     """Tell the owner (at most once a day) that TradingView messages are being refused,
     so a secret mismatch can never silently stop every signal."""
@@ -174,6 +179,17 @@ async def _warn_owner_rejected(conn, config) -> None:
 async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     config = request.app.state.config
     conn   = request.app.state.conn
+
+    # Source check: TradingView sends webhooks only from its published addresses.
+    # "observe" (default) logs the address; "enforce" refuses anything else.
+    ip = request.headers.get("fly-client-ip") or (request.client.host if request.client else "")
+    from_tv = ip in TRADINGVIEW_IPS
+    mode = os.getenv("TV_IP_ALLOWLIST", "observe").lower()
+    logger.info("TV webhook source %s (tradingview=%s, mode=%s)", ip, from_tv, mode)
+    if mode == "enforce" and not from_tv:
+        logger.warning("TV webhook refused: source %s is not a TradingView address", ip)
+        await _warn_owner_rejected(conn, config)
+        raise HTTPException(status_code=403, detail="Source not allowed")
 
     # Verify the shared secret. A fingerprint (length + hash prefix, never the value)
     # of what TradingView sent is logged so a mismatch can be diagnosed.
