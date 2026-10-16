@@ -35,3 +35,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Rulebook build intermediates
+docs/rulebook/_img/
