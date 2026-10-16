@@ -6,7 +6,14 @@ import { API_BASE } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useTimezone } from '@/lib/timezone'
 
-interface Update { id: number; title: string; body: string; sent_telegram: number; created_at: string }
+interface Update { id: number; title: string; body: string; sent_telegram: number; audience: string | null; created_at: string }
+
+const PLAN_LABELS: [string, string][] = [
+  ['TRIAL', 'Free trial'], ['30DAY', '30 days'], ['6MONTH', '6 months'],
+  ['9MONTH', '9 months'], ['12MONTH', '12 months'], ['LIFETIME', 'Lifetime'],
+]
+const planName = (code: string) => PLAN_LABELS.find(p => p[0] === code)?.[1] ?? code
+const audienceLabel = (aud: string | null) => (aud ? aud.split(',').map(planName).join(', ') : 'all subscribers')
 
 export const UNREAD_KEY = '/api/announcements/unread'
 
@@ -40,6 +47,9 @@ export default function UpdatesSection() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [toTelegram, setToTelegram] = useState(false)
+  const [plans, setPlans] = useState<string[]>([])          // empty = all subscribers
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [tgCounts, setTgCounts] = useState<Record<string, number>>({})
   const [posting, setPosting] = useState(false)
   const [msg, setMsg] = useState('')
   const [confirmDel, setConfirmDel] = useState<number | null>(null)
@@ -50,6 +60,7 @@ export default function UpdatesSection() {
     const d = await r.json()
     setItems(d.items)
     setSeenBefore(d.last_read_id)
+    if (d.plan_counts) { setCounts(d.plan_counts); setTgCounts(d.plan_telegram || {}) }
     // Mark everything shown as read; keep the "New" tags for this visit.
     const newest = d.items[0]?.id ?? 0
     if (!isOwner && newest > d.last_read_id) {
@@ -63,13 +74,14 @@ export default function UpdatesSection() {
   const post = async () => {
     setPosting(true); setMsg('')
     try {
-      const r = await api('/api/announcements', { method: 'POST', body: JSON.stringify({ title, body, send_telegram: toTelegram }) })
+      const r = await api('/api/announcements', { method: 'POST', body: JSON.stringify({ title, body, plans, send_telegram: toTelegram }) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.detail || 'Could not post the update.')
-      setTitle(''); setBody(''); setToTelegram(false)
+      setTitle(''); setBody(''); setToTelegram(false); setPlans([])
+      const who = audienceLabel(d.audience)
       setMsg(toTelegram
-        ? `Posted, and sent to ${d.telegram_sent} of ${d.telegram_targets} subscriber${d.telegram_targets === 1 ? '' : 's'} on Telegram.`
-        : 'Posted. Subscribers will see a badge on Tutorials.')
+        ? `Posted to ${who}, and sent to ${d.telegram_sent} of ${d.telegram_targets} on Telegram.`
+        : `Posted to ${who}. They'll see a badge on Tutorials & Updates.`)
       load()
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Could not post the update.')
@@ -103,10 +115,36 @@ export default function UpdatesSection() {
           <input id="update-title" value={title} onChange={e => setTitle(e.target.value)} maxLength={120} placeholder="Title, e.g. New tutorial: H4 breaker retests" style={input} />
           <textarea id="update-body" value={body} onChange={e => setBody(e.target.value)} maxLength={3500} rows={4}
             placeholder="Your message. Links (YouTube, TradingView) become clickable." style={{ ...input, resize: 'vertical', lineHeight: 1.6 }} />
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Send to</p>
+            <div role="group" aria-label="Audience" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {[['', 'All subscribers', Object.values(counts).reduce((a, b) => a + b, 0)] as const,
+                ...PLAN_LABELS.map(([code, label]) => [code, label, counts[code] ?? 0] as const)].map(([code, label, n]) => {
+                const on = code === '' ? plans.length === 0 : plans.includes(code)
+                return (
+                  <button key={code || 'all'} type="button" aria-pressed={on}
+                    onClick={() => setPlans(cur => code === '' ? [] : (cur.includes(code) ? cur.filter(c => c !== code) : [...cur, code]))}
+                    style={{ padding: '5px 11px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid',
+                      borderColor: on ? 'var(--accent)' : 'var(--border)', background: on ? 'var(--accent)' : 'transparent',
+                      color: on ? 'white' : 'var(--text-secondary)' }}>
+                    {label} <span style={{ opacity: 0.75, fontWeight: 500 }}>({n})</span>
+                  </button>
+                )
+              })}
+            </div>
+            {(() => {
+              const sel = plans.length ? plans : PLAN_LABELS.map(p => p[0])
+              const inApp = sel.reduce((a, c) => a + (counts[c] ?? 0), 0)
+              const onTg = sel.reduce((a, c) => a + (tgCounts[c] ?? 0), 0)
+              return <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
+                Reaches {inApp} active subscriber{inApp === 1 ? '' : 's'} in the app · {onTg} with Telegram linked
+              </p>
+            })()}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <label htmlFor="update-tg" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)', cursor: 'pointer' }}>
               <input id="update-tg" type="checkbox" checked={toTelegram} onChange={e => setToTelegram(e.target.checked)} />
-              Also send to subscribers&apos; Telegram
+              Also send to their Telegram
             </label>
             <button onClick={post} disabled={posting || !title.trim() || !body.trim()}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: 'var(--accent)', color: 'white', opacity: posting || !title.trim() || !body.trim() ? 0.55 : 1 }}>
@@ -120,7 +158,7 @@ export default function UpdatesSection() {
       <div>
         {items === null && <p style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-secondary)' }}>Loading…</p>}
         {items && items.length === 0 && (
-          <p style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-muted)' }}>No updates yet. What you post here appears on every subscriber&apos;s Tutorials page.</p>
+          <p style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-muted)' }}>No updates yet. What you post here appears on your subscribers&apos; Tutorials &amp; Updates page.</p>
         )}
         {items?.map(u => {
           const isNew = !isOwner && u.id > seenBefore
@@ -133,7 +171,7 @@ export default function UpdatesSection() {
                     {isNew && <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', padding: '2px 7px', borderRadius: 999, background: 'var(--accent)', color: 'white' }}>NEW</span>}
                   </div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {fmtDate(u.created_at)}{isOwner && u.sent_telegram ? ' · also sent to Telegram' : ''}
+                    {fmtDate(u.created_at)}{isOwner ? ` · to ${audienceLabel(u.audience)}` : ''}{isOwner && u.sent_telegram ? ' · also sent to Telegram' : ''}
                   </span>
                 </div>
                 {isOwner && (

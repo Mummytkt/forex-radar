@@ -132,7 +132,7 @@ export default function Sidebar() {
             </div>
             {section.links.filter(l => !('ownerOnly' in l && l.ownerOnly) || user?.role === 'OWNER').map(({ href, icon: Icon, label }) => {
               const active = href === '/dashboard' ? path === '/dashboard' : path.startsWith(href)
-              const displayLabel = href === '/strategy' && user?.role !== 'OWNER' ? 'Tutorials' : label
+              const displayLabel = href === '/strategy' && user?.role !== 'OWNER' ? 'Tutorials & Updates' : label
               return (
                 <Link key={href} href={href} onClick={close}
                   style={{

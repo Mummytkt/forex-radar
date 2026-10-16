@@ -512,9 +512,15 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
                 title         TEXT    NOT NULL,
                 body          TEXT    NOT NULL,
                 sent_telegram INTEGER NOT NULL DEFAULT 0,
-                created_at    TEXT    NOT NULL   -- ISO UTC
+                created_at    TEXT    NOT NULL,  -- ISO UTC
+                audience      TEXT               -- NULL = everyone; else plan codes "TRIAL,30DAY"
             )
         """)
+    else:
+        ann_cols = {row[1] for row in conn.execute("PRAGMA table_info(announcements)").fetchall()}
+        if "audience" not in ann_cols:
+            # NULL = every subscriber; otherwise comma-separated plan codes, e.g. "TRIAL,30DAY"
+            conn.execute("ALTER TABLE announcements ADD COLUMN audience TEXT")
     if "announcement_reads" not in existing:
         conn.execute("""
             CREATE TABLE announcement_reads (
