@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Play, Trash2, Film, Plus, Link } from 'lucide-react'
+import { Play, Trash2, Film, Plus, Link, FileText, Download } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -221,6 +221,57 @@ interface StrategyData {
   disclaimer: string
 }
 
+// Owner-only PDFs, fetched with the auth header and saved from a blob so the file
+// is never at a public URL.
+const DOCS = [
+  { key: 'rulebook', title: 'Strategy Rulebook', desc: 'Every rule, numbered, with a picture of each condition.', file: 'MummyTKT_Strategy_Rulebook.pdf' },
+  { key: 'storybook', title: 'The Candle Twins', desc: 'The same strategy as a children’s storybook (ages 7–10).', file: 'The_Candle_Twins_Storybook.pdf' },
+]
+
+function StrategyDocs() {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  const download = async (d: typeof DOCS[number]) => {
+    setBusy(d.key); setError('')
+    try {
+      const res = await fetch(`${API_BASE}/api/strategy-docs/${d.key}`, { headers: authHdrs() })
+      if (!res.ok) throw new Error('Download failed')
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url; a.download = d.file
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch {
+      setError('Couldn’t download that file. Please try again.')
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <Card title="Strategy Documents">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {DOCS.map(d => (
+          <div key={d.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: '1 1 220px' }}>
+              <FileText size={16} color="var(--accent-hover)" style={{ flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{d.title}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{d.desc}</p>
+              </div>
+            </div>
+            <button onClick={() => download(d)} disabled={busy !== null}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', opacity: busy !== null && busy !== d.key ? 0.5 : 1 }}>
+              <Download size={12} />{busy === d.key ? 'Downloading…' : 'Download PDF'}
+            </button>
+          </div>
+        ))}
+        {error && <p style={{ fontSize: 12, color: 'var(--bearish)' }}>{error}</p>}
+        <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Only you can see these. Subscribers don’t have access.</p>
+      </div>
+    </Card>
+  )
+}
+
 function StrategyContent() {
   const [data, setData] = useState<StrategyData | null>(null)
 
@@ -235,6 +286,8 @@ function StrategyContent() {
 
   return (
     <>
+      <StrategyDocs />
+
       <Card title="The 4-Step Confirmation Chain">
         {data.chain.map(s => <Step key={s.n} n={s.n} title={s.title} body={s.body} />)}
       </Card>

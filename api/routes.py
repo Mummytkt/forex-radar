@@ -5,6 +5,7 @@ import logging
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Query
@@ -13,7 +14,7 @@ from pydantic import BaseModel
 import csv
 import io
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from api.alert_prefs import get_alert_prefs, set_alert_pref
 
@@ -788,6 +789,25 @@ def admin_feed_health(request: Request):
 def strategy_content(request: Request):
     _require_owner(request)
     return STRATEGY_CONTENT
+
+
+# Owner-only strategy PDFs (built by docs/rulebook/build_*.py). Fixed allowlist: the
+# path never comes from the request.
+_DOCS_DIR = Path(__file__).resolve().parent.parent / "docs" / "rulebook"
+STRATEGY_DOCS = {
+    "rulebook": "MummyTKT_Strategy_Rulebook.pdf",
+    "storybook": "The_Candle_Twins_Storybook.pdf",
+}
+
+
+@router.get("/strategy-docs/{doc}")
+def strategy_doc(doc: str, request: Request):
+    _require_owner(request)
+    name = STRATEGY_DOCS.get(doc)
+    if not name or not (_DOCS_DIR / name).is_file():
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return FileResponse(_DOCS_DIR / name, media_type="application/pdf", filename=name,
+                        headers={"Cache-Control": "no-store"})
 
 
 # ── Journal ───────────────────────────────────────────────────────────────────

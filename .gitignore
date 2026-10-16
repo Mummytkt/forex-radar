@@ -38,3 +38,4 @@ htmlcov/
 
 # Rulebook build intermediates
 docs/rulebook/_img/
+docs/rulebook/_img_story/
