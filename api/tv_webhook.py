@@ -15,6 +15,7 @@ Event types received from Pine:
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 from datetime import datetime, timezone
@@ -152,6 +153,21 @@ def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
     return ReactionSourceType.DAILY_BREAKER
 
 
+async def _warn_owner_rejected(conn, config) -> None:
+    """Tell the owner (at most once a day) that TradingView messages are being refused,
+    so a secret mismatch can never silently stop every signal."""
+    try:
+        from alerts.reminders import notify_once
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        await notify_once(
+            conn, config, f"tv_rejected:{day}", config.telegram_chat_id,
+            "⚠️ TradingView messages are being REJECTED by the server (webhook secret doesn't match), "
+            "so no bias alerts can come through.\n\nThe Webhook Secret in your TradingView indicator settings "
+            "must match the server's TV_WEBHOOK_SECRET. Ask Claude to check the server logs.")
+    except Exception as exc:
+        logger.warning("Could not warn owner about rejected webhooks: %s", exc)
+
+
 # ── Main endpoint ─────────────────────────────────────────────────────────────
 
 @router.post("/tv-webhook")
@@ -159,13 +175,19 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     config = request.app.state.config
     conn   = request.app.state.conn
 
-    # Verify shared secret. Fail closed: with no secret configured, nobody can post.
-    if not config.tv_webhook_secret:
-        logger.error("TV webhook rejected: TV_WEBHOOK_SECRET is not configured")
-        raise HTTPException(status_code=503, detail="Webhook not configured")
-    if not hmac.compare_digest((payload.secret or "").encode(), config.tv_webhook_secret.encode()):
-        logger.warning("TV webhook rejected: bad secret (instrument=%s)", payload.instrument)
-        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    # Verify the shared secret. A fingerprint (length + hash prefix, never the value)
+    # of what TradingView sent is logged so a mismatch can be diagnosed.
+    got = payload.secret or ""
+    fp = f"len={len(got)} sha256={hashlib.sha256(got.encode()).hexdigest()[:12]}"
+    if config.tv_webhook_secret:
+        if not hmac.compare_digest(got.encode(), config.tv_webhook_secret.encode()):
+            logger.warning("TV webhook rejected: bad secret (instrument=%s, received %s)", payload.instrument, fp)
+            await _warn_owner_rejected(conn, config)
+            raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    else:
+        # No secret configured on the server: accept (as before 2026-10-15) so signals
+        # never stop silently, but log loudly until TV_WEBHOOK_SECRET is set.
+        logger.warning("TV webhook accepted WITHOUT secret check — TV_WEBHOOK_SECRET is empty (received %s)", fp)
 
     # Normalise instrument name: "USD/CHF" → "USDCHF"
     instrument = payload.instrument.replace("/", "").upper()
