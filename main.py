@@ -37,6 +37,10 @@ def setup_logging(level: str) -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+    # httpx logs every request URL at INFO, and Telegram URLs contain the bot
+    # token — keep it out of the logs (warnings/errors still show).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 async def main(dry_run: bool = False) -> None:
