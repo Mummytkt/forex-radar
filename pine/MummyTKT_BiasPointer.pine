@@ -17,6 +17,10 @@
 //   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
 //
 // v5 change: added PRICE_UPDATE event — fires at every realtime H4 close.
+// 2026-10-16: every completed post-breakout daily OC is watched (not just the
+//             latest) until an opposing breakout; a daily-zone reaction stays
+//             valid on later candles — any later H4 close beyond the H4 A/V
+//             confirms it — and only fails on an H4 close back through the zone.
 //            Backend uses it to check subscriber price-level alerts.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -98,7 +102,9 @@ var bool   h4_a_pre   = false
 var bool   h4_v_pre   = false
 var int    pb_consec  = 0
 var float  pb_close1  = na
-var float  pb_oc_lvl  = na
+var float  pb_oc_lvl  = na   // most recent post-breakout OC (for the label)
+var array<float> pb_ocs = array.new<float>()   // every completed post-breakout OC
+var float  retest_lvl = na   // level of the zone price is currently reacting from
 var bool   just_broke = false
 
 // ── H4 continuation state ─────────────────────────────────────────────────────
@@ -162,6 +168,8 @@ if new_daily
             pb_consec := 0
             pb_close1 := na
             pb_oc_lvl := na
+            array.clear(pb_ocs)
+            retest_lvl := na
             h4_bo_fired           := false
             h4_breaker_orig_fired := false
             h4_breaker_lvl        := na
@@ -187,6 +195,8 @@ if new_daily
             pb_consec := 0
             pb_close1 := na
             pb_oc_lvl := na
+            array.clear(pb_ocs)
+            retest_lvl := na
             h4_bo_fired           := false
             h4_breaker_orig_fired := false
             h4_breaker_lvl        := na
@@ -215,6 +225,8 @@ if new_daily
             pb_consec := 0
             pb_close1 := na
             pb_oc_lvl := na
+            array.clear(pb_ocs)
+            retest_lvl := na
             just_broke:= true
             h4_bo_fired           := false
             h4_breaker_orig_fired := false
@@ -245,6 +257,8 @@ if new_daily
             pb_consec := 0
             pb_close1 := na
             pb_oc_lvl := na
+            array.clear(pb_ocs)
+            retest_lvl := na
             just_broke:= true
             h4_bo_fired           := false
             h4_breaker_orig_fired := false
@@ -273,6 +287,9 @@ if new_daily
                 pb_close1 := d_close
             else if pb_consec >= 2
                 pb_oc_lvl  := pb_close1
+                array.push(pb_ocs, pb_close1)
+                if array.size(pb_ocs) > 30
+                    array.shift(pb_ocs)
                 poc_origin := bar_index
                 pb_close1  := d_close
         else
@@ -309,12 +326,24 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
 
     bool was_est = (bo_dir == "bullish") ? est_above[1] : est_below[1]
 
-    // ── Zone 1: Post-Breakout OC ──────────────────────────────────────────
-    bool pb_oc_valid = not na(pb_oc_lvl) and ((bo_dir == "bullish" and pb_oc_lvl > band_hi) or (bo_dir == "bearish" and pb_oc_lvl < band_lo))
-    bool pb_oc_zone  = pb_oc_valid and low <= pb_oc_lvl + tol and high >= pb_oc_lvl - tol
+    // ── Zone 1: Post-Breakout OCs ─────────────────────────────────────────
+    // Every completed post-breakout OC stays eligible until an opposing daily
+    // breakout. Use the deepest one this H4 bar reacts from (lowest for a buy,
+    // highest for a sell) whose close hasn't gone through it.
+    float pb_hit = na
+    if array.size(pb_ocs) > 0
+        for i = 0 to array.size(pb_ocs) - 1
+            float oc = array.get(pb_ocs, i)
+            bool beyond  = (bo_dir == "bullish" and oc > band_hi) or (bo_dir == "bearish" and oc < band_lo)
+            bool touched = low <= oc + tol and high >= oc - tol
+            bool held    = bo_dir == "bullish" ? close >= oc - tol : close <= oc + tol
+            if beyond and touched and held
+                if na(pb_hit) or (bo_dir == "bullish" ? oc < pb_hit : oc > pb_hit)
+                    pb_hit := oc
+    bool pb_oc_zone = not na(pb_hit)
 
     // ── Zone 2: Daily Breaker ─────────────────────────────────────────────
-    bool db_zone = low <= band_hi and high >= band_lo
+    bool db_zone = low <= band_hi and high >= band_lo and (bo_dir == "bullish" ? close >= band_lo : close <= band_hi)
 
     // ── Zone 3: Inside Range ──────────────────────────────────────────────
     bool ir_zone = false
@@ -323,20 +352,44 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     if bo_dir == "bearish" and not na(a_lvl)
         ir_zone := close > band_hi and close < a_lvl - tol
 
+    // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
+    // A reaction stays valid on later candles: any later H4 close beyond the
+    // H4 A/V level still confirms it. It fails only when an H4 candle closes
+    // back through the zone on the wrong side; then the next zone price
+    // reaches (checked just below, on this same bar) takes over.
+    if retest_on
+        bool failed = false
+        if retest_src == "post_breakout_oc"
+            failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
+        else if retest_src == "daily_breaker"
+            failed := bo_dir == "bullish" ? close < band_lo : close > band_hi
+        else if retest_src == "inside_range"
+            failed := bo_dir == "bullish" ? (not na(v_lvl) and close < v_lvl - tol) : (not na(a_lvl) and close > a_lvl + tol)
+
+        if failed
+            retest_on  := false
+            retest_src := na
+            retest_lvl := na
+            if barstate.isrealtime
+                alert('{"secret":"' + wh_secret + '","type":"RETEST_CANCELLED","instrument":"' + syminfo.ticker + '"}',
+                      alert.freq_once_per_bar)
+
     // ── RETEST detection ──────────────────────────────────────────────────
     if not retest_on and not h4_bo_fired
         if pb_oc_zone and was_est
             retest_on  := true
             retest_src := "post_breakout_oc"
+            retest_lvl := pb_hit
             if barstate.isrealtime
                 alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
                       + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
                       + ',"breakout_level":' + str.tostring(bo_level)
-                      + ',"source_level":' + str.tostring(pb_oc_lvl) + '}',
+                      + ',"source_level":' + str.tostring(pb_hit) + '}',
                       alert.freq_once_per_bar)
         else if db_zone and was_est
             retest_on  := true
             retest_src := "daily_breaker"
+            retest_lvl := bo_level
             if barstate.isrealtime
                 alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
                       + '","direction":"' + bo_dir + '","source":"daily_breaker"'
@@ -346,6 +399,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         else if ir_zone and was_est
             retest_on  := true
             retest_src := "inside_range"
+            retest_lvl := bo_level
             if barstate.isrealtime
                 alert('{"secret":"' + wh_secret + '","type":"RETEST","instrument":"' + syminfo.ticker
                       + '","direction":"' + bo_dir + '","source":"inside_range"'
@@ -353,28 +407,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                       + ',"source_level":' + str.tostring(bo_level) + '}',
                       alert.freq_once_per_bar)
 
-    // ── RETEST_CANCELLED ──────────────────────────────────────────────────
-    if retest_on
-        bool still_in_zone = false
-        if retest_src == "post_breakout_oc"
-            still_in_zone := pb_oc_zone
-        else if retest_src == "daily_breaker"
-            still_in_zone := db_zone
-        else if retest_src == "inside_range"
-            still_in_zone := ir_zone
-
-        if not still_in_zone
-            retest_on  := false
-            retest_src := na
-            if barstate.isrealtime
-                alert('{"secret":"' + wh_secret + '","type":"RETEST_CANCELLED","instrument":"' + syminfo.ticker + '"}',
-                      alert.freq_once_per_bar)
-
     // ── H4 CONFIRMED ──────────────────────────────────────────────────────
     bool confirmed_this_bar = false
 
     if retest_on
-        float src_lvl = retest_src == "post_breakout_oc" ? pb_oc_lvl : bo_level
+        float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
 
         if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
             string h4_cls = h4_a_pre ? "external" : "internal"
@@ -416,6 +453,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na
+            retest_lvl := na
 
         if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
             string h4_cls = h4_v_pre ? "external" : "internal"
@@ -457,6 +495,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na
+            retest_lvl := na
 
     // ── H4 Continuation block ─────────────────────────────────────────────
     if h4_bo_fired
@@ -611,7 +650,7 @@ if barstate.islast
         if not na(v_lvl)
             _v_lbl   := label.new(lbl_x, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.lime,   45), textcolor=color.black, size=size.small)
         if not na(pb_oc_lvl)
-            _poc_lbl := label.new(lbl_x, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
+            _poc_lbl := label.new(lbl_x, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####") + (array.size(pb_ocs) > 1 ? "  (" + str.tostring(array.size(pb_ocs)) + " watched)" : ""), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
     if show_h4_lbls and show_h4_on_tf
         if not na(h4_a_lvl)
             _h4a_lbl := label.new(lbl_x, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.red,    72), textcolor=color.white, size=size.small)
