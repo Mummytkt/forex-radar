@@ -9,6 +9,16 @@ import {
 import { useTheme } from '@/lib/theme'
 import { useAuth } from '@/lib/auth'
 import { useSidebar } from './LayoutShell'
+import useSWR from 'swr'
+import { API_BASE } from '@/lib/api'
+import { UNREAD_KEY } from './UpdatesSection'
+
+// Never redirects on failure: the badge is optional, the page must not break.
+const quietFetch = (url: string) => {
+  const t = typeof window !== 'undefined' ? localStorage.getItem('mbp_token') : null
+  return fetch(`${API_BASE}${url}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null)
+}
 
 const SECTIONS = [
   {
@@ -54,6 +64,9 @@ export default function Sidebar() {
   const path = usePathname()
   const { theme, toggle } = useTheme()
   const { user, authEnabled, logout } = useAuth()
+  const { data: unreadData } = useSWR<{ unread: number } | null>(
+    user && user.role !== 'OWNER' ? UNREAD_KEY : null, quietFetch, { refreshInterval: 60000 })
+  const unread = unreadData?.unread ?? 0
   const { open, close } = useSidebar()
 
   return (
@@ -138,6 +151,11 @@ export default function Sidebar() {
                 >
                   <Icon size={15} />
                   {displayLabel}
+                  {href === '/strategy' && unread > 0 && (
+                    <span aria-label={`${unread} new update${unread === 1 ? '' : 's'}`} style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: 'var(--bearish)', color: 'white', fontSize: 10.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {unread > 9 ? '9+' : unread}
+                    </span>
+                  )}
                 </Link>
               )
             })}

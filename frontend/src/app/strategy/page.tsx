@@ -5,6 +5,7 @@ import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { markOnboarding } from '@/components/OnboardingChecklist'
+import UpdatesSection from '@/components/UpdatesSection'
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -279,8 +280,9 @@ export default function StrategyPage() {
   const isOwner = user?.role === 'OWNER'
   return (
     <>
-      <TopBar title={isOwner ? 'Strategy' : 'Tutorials'} subtitle={isOwner ? 'How the engine detects and confirms directional bias' : 'Tutorial videos and walkthroughs'} />
+      <TopBar title={isOwner ? 'Strategy' : 'Tutorials'} subtitle={isOwner ? 'How the engine detects and confirms directional bias' : 'Updates, tutorial videos and walkthroughs'} />
       <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <UpdatesSection />
         <VideoSection />
         {isOwner && <StrategyContent />}
       </main>

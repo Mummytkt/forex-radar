@@ -503,6 +503,26 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         if "paid_at" not in comm_cols:
             conn.execute("ALTER TABLE commissions ADD COLUMN paid_at TEXT")
 
+    # Owner → subscriber updates (Tutorials page) and each user's read position
+    existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "announcements" not in existing:
+        conn.execute("""
+            CREATE TABLE announcements (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                title         TEXT    NOT NULL,
+                body          TEXT    NOT NULL,
+                sent_telegram INTEGER NOT NULL DEFAULT 0,
+                created_at    TEXT    NOT NULL   -- ISO UTC
+            )
+        """)
+    if "announcement_reads" not in existing:
+        conn.execute("""
+            CREATE TABLE announcement_reads (
+                user_id      INTEGER PRIMARY KEY,
+                last_read_id INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
     # Backup files posted to the owner's private backups channel — so old ones can be auto-deleted
     if "backup_messages" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
         conn.execute("""

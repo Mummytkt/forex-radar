@@ -4,6 +4,16 @@ import { Menu } from 'lucide-react'
 import { isForexOpen } from '@/lib/utils'
 import { useTimezone, getAbbrStr } from '@/lib/timezone'
 import { useSidebar } from './LayoutShell'
+import useSWR from 'swr'
+import { useAuth } from '@/lib/auth'
+import { API_BASE } from '@/lib/api'
+import { UNREAD_KEY } from './UpdatesSection'
+
+const quietFetch = (url: string) => {
+  const t = typeof window !== 'undefined' ? localStorage.getItem('mbp_token') : null
+  return fetch(`${API_BASE}${url}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null)
+}
 
 interface Props {
   title: string
@@ -15,6 +25,10 @@ export default function TopBar({ title, subtitle }: Props) {
   const [forexOpen, setForexOpen] = useState(false)
   const { timezone } = useTimezone()
   const { toggle } = useSidebar()
+  const { user } = useAuth()
+  const { data: unreadData } = useSWR<{ unread: number } | null>(
+    user && user.role !== 'OWNER' ? UNREAD_KEY : null, quietFetch, { refreshInterval: 60000 })
+  const hasUnread = (unreadData?.unread ?? 0) > 0
 
   useEffect(() => {
     const tick = () => {
@@ -50,10 +64,12 @@ export default function TopBar({ title, subtitle }: Props) {
           color: 'var(--text-primary)',
           cursor: 'pointer',
           alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
+          flexShrink: 0, position: 'relative',
         }}
+        aria-label={hasUnread ? 'Menu (new updates)' : 'Menu'}
       >
         <Menu size={16} />
+        {hasUnread && <span style={{ position: 'absolute', top: 5, right: 5, width: 8, height: 8, borderRadius: '50%', background: 'var(--bearish)', boxShadow: '0 0 0 2px var(--card)' }} />}
       </button>
       <div>
         <h1 style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', lineHeight: 1.2 }}>{title}</h1>
