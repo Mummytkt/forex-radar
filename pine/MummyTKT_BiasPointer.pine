@@ -1021,13 +1021,6 @@ if barstate.islast
             f_draw_lvl(show_inn, s_nhit, s_nhi, f_dirw(s_ndir) + "Inner internal high" + (s_ndir == "bull" and not s_nhif ? forming : ""), c_nh, s_nh, w_inn)
             f_draw_lvl(show_inn, s_nlot, s_nlo, f_dirw(s_ndir) + "Inner internal low" + (s_ndir == "bear" and not s_nlof ? forming : ""), c_nl, s_nl, w_inn)
 
-// ── Per-bar state markers ─────────────────────────────────────────────────────
-plotchar(retest_on and barstate.isconfirmed,
-     "Retest Active", "◆", location.abovebar, color.orange, size=size.tiny)
-plotchar(h4_bo_fired and h4_aligned and barstate.isconfirmed,
-     "H4 Aligned", "▲", location.belowbar, color.new(color.blue, 40), size=size.tiny)
-
-
 // ── State label — shows script's current understanding at the latest bar ──────
 string _state_txt = "IDLE - no breakout detected"
 if not na(bo_dir) and not h4_bo_fired and retest_on
