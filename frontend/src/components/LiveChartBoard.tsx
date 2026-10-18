@@ -21,6 +21,13 @@ interface Snapshot {
   h4_v: number | null
   h4_bk: number | null
   h4_oc: number | null
+  level_type?: 'external' | 'internal' | 'inner_internal' | null
+  ext_hi?: number | null
+  ext_lo?: number | null
+  int_hi?: number | null
+  int_lo?: number | null
+  inn_hi?: number | null
+  inn_lo?: number | null
 }
 interface BoardRow { instrument: string; snapshot: Snapshot | null; price: number | null; updated_at: string | null }
 
@@ -33,6 +40,9 @@ const STAGE: Record<Snapshot['stage'], string> = {
 }
 const SOURCE: Record<string, string> = {
   post_breakout_oc: 'Post-breakout OC', daily_breaker: 'Daily Breaker', inside_range: 'Inside Range',
+}
+const LEVEL_TYPE: Record<string, string> = {
+  external: 'External', internal: 'Internal', inner_internal: 'Inner internal',
 }
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -124,6 +134,7 @@ export default function LiveChartBoard() {
                     <div style={{ fontSize: 11, fontWeight: 600, color: dirCol, marginTop: 2 }}>
                       {s.bias ? (s.bias === 'bullish' ? 'Buy · ' : 'Sell · ') : ''}{STAGE[s.stage]}
                       {s.stage === 'retest' && s.retest_source ? ` (${SOURCE[s.retest_source] ?? s.retest_source})` : ''}
+                      {s.level_type && s.stage !== 'idle' ? ` · ${LEVEL_TYPE[s.level_type] ?? s.level_type} break` : ''}
                     </div>
                   ) : (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Waiting for the next H4 close</div>
@@ -131,6 +142,12 @@ export default function LiveChartBoard() {
                 </div>
                 {s && (
                   <div style={{ flex: '1 1 260px', display: 'flex', flexWrap: 'wrap', gap: '3px 12px', fontSize: 11.5, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                    <Level name="Ext.H" v={fmt(i, s.ext_hi ?? null)} />
+                    <Level name="Ext.L" v={fmt(i, s.ext_lo ?? null)} />
+                    <Level name="Int.H" v={fmt(i, s.int_hi ?? null)} />
+                    <Level name="Int.L" v={fmt(i, s.int_lo ?? null)} />
+                    <Level name="Inn.H" v={fmt(i, s.inn_hi ?? null)} />
+                    <Level name="Inn.L" v={fmt(i, s.inn_lo ?? null)} />
                     <Level name="D.A" v={fmt(i, s.d_a)} />
                     <Level name="D.V" v={fmt(i, s.d_v)} />
                     {s.d_oc !== null && <Level name="D.OC" v={fmt(i, s.d_oc) + (s.d_oc_count > 1 ? ` (${s.d_oc_count} watched)` : '')} />}

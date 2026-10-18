@@ -7,11 +7,12 @@
 //                                   webhook  = https://forex-radar.fly.dev/api/tv-webhook
 //
 // Event types:
-//   BREAKOUT         — Daily candle closed beyond most-recent A/V formation body
+//   BREAKOUT         — Daily candle closed beyond an external, internal or inner
+//                      internal high/low (level_type says which)
 //   RETEST           — H4 entered a reaction source zone
 //   RETEST_CANCELLED — H4 moved away from zone without H4 confirmation
 //   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
-//   INVALIDATED      — Daily close moved beyond the OPPOSITE range boundary
+//   INVALIDATED      — no longer sent: a break the other way is a new BREAKOUT
 //   H4_CONTINUATION  — H4 continuation event after Origin has fired
 //                      cont_type: breakout_cont | breaker_origin | breaker_cont | oc_cont
 //   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
@@ -28,9 +29,15 @@
 //             (stage + all levels); "moved away first" can't be inherited from
 //             the previous breakout; External/Internal is judged against the
 //             CURRENT reaction's start (also after a failed reaction restarts).
+// 2026-10-18: daily bias comes from market structure — external, internal and
+//             inner internal highs/lows (wick levels, body-close breaks, no
+//             tolerance). The most recent break on any layer is the breakout;
+//             its level is the breaker and the rest of that range is the
+//             inside-range zone. D.A/D.V are wick levels and only the one in line
+//             with the bias is shown (D.V for buys, D.A for sells).
 // ─────────────────────────────────────────────────────────────────────────────
 
-indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=500)
+indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
 string wh_secret       = input.string("", "Webhook Secret",
@@ -66,6 +73,32 @@ color  bull_lbl_col     = input.color(color.new(color.green, 60), "Bullish state
 color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state label color",
      tooltip="Background color of the state label when direction is bearish (BREAKOUT / awaiting retest)",
      group="Labels")
+
+// ── Daily structure levels (external / internal / inner internal) ───────────
+const string GS1 = "External levels"
+const string GS2 = "Internal levels"
+const string GS3 = "Inner internal levels"
+bool   show_ext = input.bool(true, "Show external", group = GS1)
+color  c_eh  = input.color(#E0E0E0, "External high", group = GS1, inline = "eh")
+string s_eh  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "eh")
+color  c_el  = input.color(#E0E0E0, "External low ", group = GS1, inline = "el")
+string s_el  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "el")
+int    w_ext = input.int(2, "Line width", minval = 1, maxval = 4, group = GS1)
+bool   show_int = input.bool(true, "Show internal", group = GS2)
+color  c_ih  = input.color(#9E9E9E, "Internal high", group = GS2, inline = "ih")
+string s_ih  = input.string("Dotted", "", options = ["Solid", "Dashed", "Dotted"], group = GS2, inline = "ih")
+color  c_il  = input.color(#9E9E9E, "Internal low ", group = GS2, inline = "il")
+string s_il  = input.string("Dotted", "", options = ["Solid", "Dashed", "Dotted"], group = GS2, inline = "il")
+int    w_int = input.int(1, "Line width", minval = 1, maxval = 4, group = GS2)
+bool   show_inn = input.bool(true, "Show inner internal", group = GS3)
+color  c_nh  = input.color(#FFB74D, "Inner internal high", group = GS3, inline = "nh")
+string s_nh  = input.string("Dashed", "", options = ["Solid", "Dashed", "Dotted"], group = GS3, inline = "nh")
+color  c_nl  = input.color(#FFB74D, "Inner internal low ", group = GS3, inline = "nl")
+string s_nl  = input.string("Dashed", "", options = ["Solid", "Dashed", "Dotted"], group = GS3, inline = "nl")
+int    w_inn = input.int(1, "Line width", minval = 1, maxval = 4, group = GS3)
+
+f_style(string st) =>
+    st == "Dashed" ? line.style_dashed : st == "Dotted" ? line.style_dotted : line.style_solid
 
 // ── Timeframe visibility helpers ──────────────────────────────────────────────
 f_tf_str(opt) =>
@@ -115,22 +148,358 @@ f_hdr(string t) =>
 f_num(float x) =>
     na(x) ? "null" : str.tostring(x)
 
-// ── Daily OHLCV ───────────────────────────────────────────────────────────────
-// close[1]/open[1] = just-completed daily bar; close[2]/open[2] = bar before that
-// Using timeframe.change("D") instead of manual time tracking — more reliable in v6
-// lookahead_on + [1] is TradingView's non-repainting form: every H4 bar of day N
-// sees day N-1 (and N-2), on history AND live. lookahead_off + [1] made history
-// lag one extra day, so after each paste the last daily close was never checked.
+// ── Daily market structure (external / internal / inner internal) ─────────────
+// Runs on DAILY candles through request.security, so it reads the same on the
+// 4H chart as on the Daily chart. Levels are wick highs/lows; a break is a daily
+// body CLOSE beyond a level (no tolerance). Each layer follows the same rules:
+//   • first level: close above an A shape (after a later candle traded below the
+//     A's bearish candle) → the lowest point since the A is the low; mirror for V
+//   • while a side is "still forming" it follows price; it is fixed once price
+//     closes beyond the A/V it pulled back from
+//   • close beyond the fixed high/low → new pair in that direction;
+//     close beyond the opposite level → direction flips
+//   • internal lives inside the external range, inner internal inside the
+//     internal range; a layer resets whenever the layer above it changes
+// The most recent break on ANY layer is the daily breakout the H4 steps use.
+
+f_lowest(int from_bar) =>
+    float m = low
+    int mb = bar_index
+    int n = math.min(bar_index - from_bar, 1500)
+    for i = 0 to n
+        if low[i] < m
+            m := low[i]
+            mb := bar_index - i
+    [m, mb]
+
+f_highest(int from_bar) =>
+    float m = high
+    int mb = bar_index
+    int n = math.min(bar_index - from_bar, 1500)
+    for i = 0 to n
+        if high[i] > m
+            m := high[i]
+            mb := bar_index - i
+    [m, mb]
+
+f_bt(int b) =>
+    time[bar_index - b]
+
+type Layer
+    string dir = "none"
+    float  hi = na
+    int    hi_bar = na
+    int    hi_t = na
+    float  lo = na
+    int    lo_bar = na
+    int    lo_t = na
+    bool   hi_fixed = false
+    bool   lo_fixed = false
+    float  pb_hi = na
+    float  pb_lo = na
+
+method set_hi(Layer s, float v, int b) =>
+    s.hi := v
+    s.hi_bar := b
+    s.hi_t := f_bt(b)
+
+method set_lo(Layer s, float v, int b) =>
+    s.lo := v
+    s.lo_bar := b
+    s.lo_t := f_bt(b)
+
+method reset(Layer s) =>
+    s.dir := "none"
+    s.hi := na
+    s.lo := na
+    s.hi_fixed := false
+    s.lo_fixed := false
+    s.pb_hi := na
+    s.pb_lo := na
+
+// One daily candle of structure logic inside [blo, bhi].
+// Returns [changed, broken level]; changed = a break redefined this layer.
+method step(Layer s, float blo, float bhi, float lA, int lAb, bool lAok, float lV, int lVb, bool lVok) =>
+    bool  ev   = false
+    float blvl = na
+    if s.dir == "none"
+        if not na(lA) and lAok and close > lA
+            [m, mb] = f_lowest(lAb)
+            if m > blo and m < bhi
+                s.dir := "bull"
+                s.set_lo(m, mb)
+                s.set_hi(high, bar_index)
+                s.hi_fixed := false
+                s.pb_lo := lV
+                ev := true
+                blvl := lA
+        else if not na(lV) and lVok and close < lV
+            [m, mb] = f_highest(lVb)
+            if m > blo and m < bhi
+                s.dir := "bear"
+                s.set_hi(m, mb)
+                s.set_lo(low, bar_index)
+                s.lo_fixed := false
+                s.pb_hi := lA
+                ev := true
+                blvl := lV
+    else if s.dir == "bull"
+        if close < s.lo
+            blvl := s.lo
+            s.dir := "bear"
+            s.set_lo(low, bar_index)
+            s.lo_fixed := false
+            s.pb_hi := lA
+            ev := true
+        else if s.hi_fixed and close > s.hi
+            blvl := s.hi
+            [m, mb] = f_lowest(s.hi_bar)
+            s.set_lo(m, mb)
+            s.set_hi(high, bar_index)
+            s.hi_fixed := false
+            s.pb_lo := lV
+            ev := true
+        else
+            if not s.hi_fixed and high > s.hi
+                s.set_hi(high, bar_index)
+            if not s.hi_fixed and not na(s.pb_lo) and close < s.pb_lo
+                s.hi_fixed := true
+    else if s.dir == "bear"
+        if close > s.hi
+            blvl := s.hi
+            s.dir := "bull"
+            s.set_hi(high, bar_index)
+            s.hi_fixed := false
+            s.pb_lo := lV
+            ev := true
+        else if s.lo_fixed and close < s.lo
+            blvl := s.lo
+            [m, mb] = f_highest(s.lo_bar)
+            s.set_hi(m, mb)
+            s.set_lo(low, bar_index)
+            s.lo_fixed := false
+            s.pb_hi := lA
+            ev := true
+        else
+            if not s.lo_fixed and low < s.lo
+                s.set_lo(low, bar_index)
+            if not s.lo_fixed and not na(s.pb_hi) and close > s.pb_hi
+                s.lo_fixed := true
+    [ev, blvl]
+
+method on_new_A(Layer s, float a) =>
+    if s.dir == "bear" and not s.lo_fixed and na(s.pb_hi)
+        s.pb_hi := a
+
+method on_new_V(Layer s, float v) =>
+    if s.dir == "bull" and not s.hi_fixed and na(s.pb_lo)
+        s.pb_lo := v
+
+f_structure() =>
+    // External layer
+    var string e_dir = "none"
+    var float  e_hi = na
+    var int    e_hi_bar = na
+    var int    e_hi_t = na
+    var float  e_lo = na
+    var int    e_lo_bar = na
+    var int    e_lo_t = na
+    var bool   e_hif = false
+    var bool   e_lof = false
+    var float  e_pbh = na
+    var float  e_pbl = na
+    var Layer  intl = Layer.new()
+    var Layer  innr = Layer.new()
+    // Latest unbroken A / V shapes (wick levels)
+    var float  lastA = na
+    var int    lastA_bar = na
+    var float  lastA_bear_lo = na
+    var bool   lastA_ok = false
+    var float  lastV = na
+    var int    lastV_bar = na
+    var float  lastV_bull_hi = na
+    var bool   lastV_ok = false
+    // D.A / D.V shown on the chart (latest A / V shape, wick)
+    var float  da = na
+    var int    da_t = na
+    var float  dv = na
+    var int    dv_t = na
+    // Most recent break on any layer
+    var int    b_cnt = 0
+    var string b_dir = "none"
+    var float  b_lvl = na
+    var string b_layer = "none"
+    var float  b_opp = na
+
+    bool  ext_ev = false
+    float e_blvl = na
+
+    // 1. External
+    if e_dir == "none"
+        if not na(lastA) and close > lastA
+            e_blvl := lastA
+            [m, mb] = f_lowest(lastA_bar)
+            e_lo := m, e_lo_bar := mb, e_lo_t := f_bt(mb)
+            e_hi := high, e_hi_bar := bar_index, e_hi_t := time
+            e_dir := "bull", e_hif := false
+            ext_ev := true
+        else if not na(lastV) and close < lastV
+            e_blvl := lastV
+            [m, mb] = f_highest(lastV_bar)
+            e_hi := m, e_hi_bar := mb, e_hi_t := f_bt(mb)
+            e_lo := low, e_lo_bar := bar_index, e_lo_t := time
+            e_dir := "bear", e_lof := false
+            ext_ev := true
+    else if e_dir == "bull"
+        if close < e_lo
+            e_blvl := e_lo
+            e_dir := "bear"
+            e_lo := low, e_lo_bar := bar_index, e_lo_t := time
+            e_lof := false
+            ext_ev := true
+        else if e_hif and close > e_hi
+            e_blvl := e_hi
+            [m, mb] = f_lowest(e_hi_bar)
+            e_lo := m, e_lo_bar := mb, e_lo_t := f_bt(mb)
+            e_hi := high, e_hi_bar := bar_index, e_hi_t := time
+            e_hif := false
+            ext_ev := true
+        else
+            if not e_hif and high > e_hi
+                e_hi := high, e_hi_bar := bar_index, e_hi_t := time
+            if not e_hif and not na(e_pbl) and close < e_pbl
+                e_hif := true
+    else if e_dir == "bear"
+        if close > e_hi
+            e_blvl := e_hi
+            e_dir := "bull"
+            e_hi := high, e_hi_bar := bar_index, e_hi_t := time
+            e_hif := false
+            ext_ev := true
+        else if e_lof and close < e_lo
+            e_blvl := e_lo
+            [m, mb] = f_highest(e_lo_bar)
+            e_hi := m, e_hi_bar := mb, e_hi_t := f_bt(mb)
+            e_lo := low, e_lo_bar := bar_index, e_lo_t := time
+            e_lof := false
+            ext_ev := true
+        else
+            if not e_lof and low < e_lo
+                e_lo := low, e_lo_bar := bar_index, e_lo_t := time
+            if not e_lof and not na(e_pbh) and close > e_pbh
+                e_lof := true
+
+    if ext_ev
+        e_pbh := na, e_pbl := na
+        intl.reset()
+        innr.reset()
+        b_cnt += 1
+        b_dir := e_dir == "bull" ? "bullish" : "bearish"
+        b_lvl := e_blvl
+        b_layer := "external"
+        b_opp := e_dir == "bull" ? e_lo : e_hi
+
+    // 2. Internal, then inner internal
+    if not na(lastA) and not lastA_ok and low < lastA_bear_lo
+        lastA_ok := true
+    if not na(lastV) and not lastV_ok and high > lastV_bull_hi
+        lastV_ok := true
+
+    if not ext_ev and e_dir != "none"
+        [iev, ilvl] = intl.step(e_lo, e_hi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
+        if iev
+            innr.reset()
+            b_cnt += 1
+            b_dir := intl.dir == "bull" ? "bullish" : "bearish"
+            b_lvl := ilvl
+            b_layer := "internal"
+            b_opp := intl.dir == "bull" ? intl.lo : intl.hi
+        else if intl.dir != "none"
+            [nev, nlvl] = innr.step(intl.lo, intl.hi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
+            if nev
+                b_cnt += 1
+                b_dir := innr.dir == "bull" ? "bullish" : "bearish"
+                b_lvl := nlvl
+                b_layer := "inner_internal"
+                b_opp := innr.dir == "bull" ? innr.lo : innr.hi
+
+    // Clear broken shapes / external pullback triggers
+    if not na(lastA) and close > lastA
+        lastA := na
+    if not na(lastV) and close < lastV
+        lastV := na
+    if not na(e_pbh) and close > e_pbh
+        e_pbh := na
+    if not na(e_pbl) and close < e_pbl
+        e_pbl := na
+
+    // 3. Register new A / V shapes
+    bool isA = close[1] > open[1] and close < open
+    bool isV = close[1] < open[1] and close > open
+    if isA
+        lastA := math.max(high, high[1])
+        lastA_bar := high >= high[1] ? bar_index : bar_index - 1
+        lastA_bear_lo := low
+        lastA_ok := false
+        da := lastA, da_t := f_bt(lastA_bar)
+        if e_dir != "none"
+            e_pbh := lastA
+        intl.on_new_A(lastA)
+        innr.on_new_A(lastA)
+    if isV
+        lastV := math.min(low, low[1])
+        lastV_bar := low <= low[1] ? bar_index : bar_index - 1
+        lastV_bull_hi := high
+        lastV_ok := false
+        dv := lastV, dv_t := f_bt(lastV_bar)
+        if e_dir != "none"
+            e_pbl := lastV
+        intl.on_new_V(lastV)
+        innr.on_new_V(lastV)
+
+    // Copy layer fields into series so they can be read one candle back
+    string i_dir = intl.dir
+    float  i_hi  = intl.hi
+    float  i_lo  = intl.lo
+    bool   i_hif = intl.hi_fixed
+    bool   i_lof = intl.lo_fixed
+    int    i_hit = intl.hi_t
+    int    i_lot = intl.lo_t
+    string n_dir = innr.dir
+    float  n_hi  = innr.hi
+    float  n_lo  = innr.lo
+    bool   n_hif = innr.hi_fixed
+    bool   n_lof = innr.lo_fixed
+    int    n_hit = innr.hi_t
+    int    n_lot = innr.lo_t
+    // [1] + lookahead_on = state after the last COMPLETED daily candle (no repaint)
+    [e_dir[1], e_hi[1], e_lo[1], e_hif[1], e_lof[1], e_hi_t[1], e_lo_t[1],
+     i_dir[1], i_hi[1], i_lo[1], i_hif[1], i_lof[1], i_hit[1], i_lot[1],
+     n_dir[1], n_hi[1], n_lo[1], n_hif[1], n_lof[1], n_hit[1], n_lot[1],
+     b_cnt[1], b_dir[1], b_lvl[1], b_layer[1], b_opp[1],
+     da[1], da_t[1], dv[1], dv_t[1]]
+
+[s_edir, s_ehi, s_elo, s_ehif, s_elof, s_ehit, s_elot,
+ s_idir, s_ihi, s_ilo, s_ihif, s_ilof, s_ihit, s_ilot,
+ s_ndir, s_nhi, s_nlo, s_nhif, s_nlof, s_nhit, s_nlot,
+ s_bcnt, s_bdir, s_blvl, s_blayer, s_bopp,
+ s_da, s_da_t, s_dv, s_dv_t] = request.security(syminfo.tickerid, "D", f_structure(), lookahead=barmerge.lookahead_on)
+
+// ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
+// lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
+// next day, on history and live (non-repainting).
 float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_on)
 float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
-float d_open1 = request.security(syminfo.tickerid, "D", open[2],  lookahead=barmerge.lookahead_on)
-float d_close1= request.security(syminfo.tickerid, "D", close[2], lookahead=barmerge.lookahead_on)
+
+f_layer_name(string l) =>
+    l == "external" ? "External" : l == "internal" ? "Internal" : l == "inner_internal" ? "Inner internal" : ""
 
 // ── Persistent state ──────────────────────────────────────────────────────────
-var float  a_lvl      = na
-var float  v_lvl      = na
 var string bo_dir     = na
 var float  bo_level   = na
+var string bo_layer   = na   // which level broke: external | internal | inner_internal
+var float  bo_opp     = na   // other side of the range that was just broken
+var int    last_bcnt  = 0
 var bool   est_above  = false
 var bool   est_below  = false
 var bool   retest_on  = false
@@ -166,172 +535,78 @@ var bool   oc_armed              = true
 var float  oc_armed_lvl          = na
 
 // ── Level origin bar tracking (for extend-right lines) ───────────────────────
-var int    a_origin   = na
-var int    v_origin   = na
 var int    poc_origin = na
 var int    h4a_origin = na
 var int    h4v_origin = na
 var int    bk_origin  = na
 var int    h4c_origin = na
 
-// ── Daily block ───────────────────────────────────────────────────────────────
+// ── Daily breakout: the most recent break on any structure layer ─────────────
 bool new_daily = timeframe.change("D")
 if new_daily
-    just_broke  := false
+    just_broke := false
 
-    bool d_bull = d_close  >= d_open
-    bool d_bear = d_close  <  d_open
-    bool p_bull = d_close1 >= d_open1
-    bool p_bear = d_close1 <  d_open1
+if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
+    last_bcnt := s_bcnt
+    bo_dir    := s_bdir
+    bo_level  := s_blvl
+    bo_layer  := s_blayer
+    bo_opp    := s_bopp
+    est_above := false
+    est_below := false
+    retest_on := false
+    retest_src:= na
+    h4_a_lvl  := na
+    h4_v_lvl  := na
+    pb_consec := 0
+    pb_close1 := na
+    pb_oc_lvl := na
+    array.clear(pb_ocs)
+    retest_lvl := na
+    just_broke:= true
+    h4_bo_fired           := false
+    h4_breaker_orig_fired := false
+    h4_breaker_lvl        := na
+    h4_invalid_lvl        := na
+    h4_aligned            := false
+    h4c_consec            := 0
+    h4c_oc_close1         := na
+    h4c_oc_lvl            := na
+    h4c_oc_ready          := false
+    if barstate.isrealtime
+        alert(f_hdr("BREAKOUT")
+              + '","direction":"' + bo_dir + '","level_type":"' + bo_layer
+              + '","level":' + str.tostring(bo_level)
+              + ',"range_level":' + f_num(bo_opp) + '}',
+              alert.freq_once_per_bar)
 
-    // ── Daily formation detection ─────────────────────────────────────────
-    if p_bull and d_bear
-        a_lvl    := math.max(d_open1, d_close1)
-        a_origin := bar_index
-    if p_bear and d_bull
-        v_lvl    := math.min(d_open1, d_close1)
-        v_origin := bar_index
+// ── Post-breakout OC tracking ─────────────────────────────────────────────────
+if new_daily and not na(bo_dir) and not just_broke
+    bool d_bull = d_close >= d_open
+    bool d_bear = d_close <  d_open
+    bool pb_match = false
+    if bo_dir == "bullish"
+        pb_match := d_bull and d_close > bo_level
+    else
+        pb_match := d_bear and d_close < bo_level
+    if pb_match
+        pb_consec := pb_consec + 1
+        if pb_consec == 1
+            pb_close1 := d_close
+        else if pb_consec >= 2
+            pb_oc_lvl  := pb_close1
+            array.push(pb_ocs, pb_close1)
+            if array.size(pb_ocs) > 30
+                array.shift(pb_ocs)
+            poc_origin := bar_index
+            pb_close1  := d_close
+    else
+        pb_consec := 0
 
-    // ── INVALIDATED ───────────────────────────────────────────────────────
-    if not na(bo_dir) and not na(bo_level)
-        if bo_dir == "bullish" and not na(v_lvl) and d_close < v_lvl - tol
-            bo_dir    := na
-            bo_level  := na
-            est_above := false
-            est_below := false
-            retest_on := false
-            retest_src:= na
-            h4_a_lvl  := na
-            h4_v_lvl  := na
-            pb_consec := 0
-            pb_close1 := na
-            pb_oc_lvl := na
-            array.clear(pb_ocs)
-            retest_lvl := na
-            h4_bo_fired           := false
-            h4_breaker_orig_fired := false
-            h4_breaker_lvl        := na
-            h4_invalid_lvl        := na
-            h4_aligned            := false
-            h4c_consec            := 0
-            h4c_oc_close1         := na
-            h4c_oc_lvl            := na
-            h4c_oc_ready          := false
-            if barstate.isrealtime
-                alert(f_hdr("INVALIDATED") + '"}',
-                      alert.freq_once_per_bar)
-
-        if bo_dir == "bearish" and not na(a_lvl) and d_close > a_lvl + tol
-            bo_dir    := na
-            bo_level  := na
-            est_above := false
-            est_below := false
-            retest_on := false
-            retest_src:= na
-            h4_a_lvl  := na
-            h4_v_lvl  := na
-            pb_consec := 0
-            pb_close1 := na
-            pb_oc_lvl := na
-            array.clear(pb_ocs)
-            retest_lvl := na
-            h4_bo_fired           := false
-            h4_breaker_orig_fired := false
-            h4_breaker_lvl        := na
-            h4_invalid_lvl        := na
-            h4_aligned            := false
-            h4c_consec            := 0
-            h4c_oc_close1         := na
-            h4c_oc_lvl            := na
-            h4c_oc_ready          := false
-            if barstate.isrealtime
-                alert(f_hdr("INVALIDATED") + '"}',
-                      alert.freq_once_per_bar)
-
-    // ── Bullish breakout ──────────────────────────────────────────────────
-    if not na(a_lvl) and d_close > a_lvl + tol
-        bool is_new_bo = na(bo_dir) or bo_dir != "bullish" or math.abs(bo_level - a_lvl) > tol
-        if is_new_bo
-            bo_dir    := "bullish"
-            bo_level  := a_lvl
-            est_above := false
-            est_below := false
-            retest_on := false
-            retest_src:= na
-            h4_a_lvl  := na
-            h4_v_lvl  := na
-            pb_consec := 0
-            pb_close1 := na
-            pb_oc_lvl := na
-            array.clear(pb_ocs)
-            retest_lvl := na
-            just_broke:= true
-            h4_bo_fired           := false
-            h4_breaker_orig_fired := false
-            h4_breaker_lvl        := na
-            h4_invalid_lvl        := na
-            h4_aligned            := false
-            h4c_consec            := 0
-            h4c_oc_close1         := na
-            h4c_oc_lvl            := na
-            h4c_oc_ready          := false
-            if barstate.isrealtime
-                alert(f_hdr("BREAKOUT")
-                      + '","direction":"bullish","level":' + str.tostring(bo_level) + '}',
-                      alert.freq_once_per_bar)
-
-    // ── Bearish breakout ──────────────────────────────────────────────────
-    if not na(v_lvl) and d_close < v_lvl - tol
-        bool is_new_bo = na(bo_dir) or bo_dir != "bearish" or math.abs(bo_level - v_lvl) > tol
-        if is_new_bo
-            bo_dir    := "bearish"
-            bo_level  := v_lvl
-            est_above := false
-            est_below := false
-            retest_on := false
-            retest_src:= na
-            h4_a_lvl  := na
-            h4_v_lvl  := na
-            pb_consec := 0
-            pb_close1 := na
-            pb_oc_lvl := na
-            array.clear(pb_ocs)
-            retest_lvl := na
-            just_broke:= true
-            h4_bo_fired           := false
-            h4_breaker_orig_fired := false
-            h4_breaker_lvl        := na
-            h4_invalid_lvl        := na
-            h4_aligned            := false
-            h4c_consec            := 0
-            h4c_oc_close1         := na
-            h4c_oc_lvl            := na
-            h4c_oc_ready          := false
-            if barstate.isrealtime
-                alert(f_hdr("BREAKOUT")
-                      + '","direction":"bearish","level":' + str.tostring(bo_level) + '}',
-                      alert.freq_once_per_bar)
-
-    // ── Post-breakout OC tracking ─────────────────────────────────────────
-    if not na(bo_dir) and not just_broke
-        bool pb_match = false
-        if bo_dir == "bullish"
-            pb_match := d_bull and d_close > bo_level
-        else
-            pb_match := d_bear and d_close < bo_level
-        if pb_match
-            pb_consec := pb_consec + 1
-            if pb_consec == 1
-                pb_close1 := d_close
-            else if pb_consec >= 2
-                pb_oc_lvl  := pb_close1
-                array.push(pb_ocs, pb_close1)
-                if array.size(pb_ocs) > 30
-                    array.shift(pb_ocs)
-                poc_origin := bar_index
-                pb_close1  := d_close
-        else
-            pb_consec := 0
+// D.A / D.V (wick levels): only the one in line with the last breakout is
+// monitored — D.V in a bullish bias, D.A in a bearish bias.
+float a_lvl = bo_dir == "bullish" ? na : s_da
+float v_lvl = bo_dir == "bearish" ? na : s_dv
 
 // ── H4 block ──────────────────────────────────────────────────────────────────
 if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
@@ -385,10 +660,12 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
 
     // ── Zone 3: Inside Range ──────────────────────────────────────────────
     bool ir_zone = false
-    if bo_dir == "bullish" and not na(v_lvl)
-        ir_zone := close < band_lo and close > v_lvl + tol
-    if bo_dir == "bearish" and not na(a_lvl)
-        ir_zone := close > band_hi and close < a_lvl - tol
+    // Back inside the range that was just broken (between the breaker and the
+    // other side of that range) without closing through the other side.
+    if bo_dir == "bullish" and not na(bo_opp)
+        ir_zone := close < band_lo and close > bo_opp + tol
+    if bo_dir == "bearish" and not na(bo_opp)
+        ir_zone := close > band_hi and close < bo_opp - tol
 
     // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
     // A reaction stays valid on later candles: any later H4 close beyond the
@@ -402,7 +679,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         else if retest_src == "daily_breaker"
             failed := bo_dir == "bullish" ? close < band_lo : close > band_hi
         else if retest_src == "inside_range"
-            failed := bo_dir == "bullish" ? (not na(v_lvl) and close < v_lvl - tol) : (not na(a_lvl) and close > a_lvl + tol)
+            failed := not na(bo_opp) and (bo_dir == "bullish" ? close < bo_opp - tol : close > bo_opp + tol)
 
         if failed
             retest_on  := false
@@ -422,7 +699,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
-                      + ',"breakout_level":' + str.tostring(bo_level)
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(pb_hit) + '}',
                       alert.freq_once_per_bar)
         else if db_zone and was_est
@@ -433,7 +710,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"daily_breaker"'
-                      + ',"breakout_level":' + str.tostring(bo_level)
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(bo_level) + '}',
                       alert.freq_once_per_bar)
         else if ir_zone and was_est
@@ -444,7 +721,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"inside_range"'
-                      + ',"breakout_level":' + str.tostring(bo_level)
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(bo_level) + '}',
                       alert.freq_once_per_bar)
 
@@ -489,7 +766,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"breakout_cont"'
-                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
                           alert.freq_once_per_bar)
             retest_on  := false
@@ -531,7 +808,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"breakout_cont"'
-                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
                           alert.freq_once_per_bar)
             retest_on  := false
@@ -563,7 +840,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"breakout_cont"'
-                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
                           alert.freq_once_per_bar)
             if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
@@ -579,7 +856,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"breakout_cont"'
-                          + ',"breakout_level":' + str.tostring(bo_level)
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
                           alert.freq_once_per_bar)
 
@@ -615,7 +892,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                     if barstate.isrealtime
                         alert(f_hdr("H4_CONTINUATION")
                               + '","direction":"' + bo_dir + '","cont_type":"' + bk_type + '"'
-                              + ',"breakout_level":' + str.tostring(bo_level)
+                              + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                               + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
                               alert.freq_once_per_bar)
 
@@ -639,7 +916,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                     if barstate.isrealtime
                         alert(f_hdr("H4_CONTINUATION")
                               + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
-                              + ',"breakout_level":' + str.tostring(bo_level)
+                              + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                               + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
                               alert.freq_once_per_bar)
 
@@ -697,10 +974,10 @@ if barstate.islast
         if not na(h4c_oc_lvl)
             _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
     if show_lvl_lines
-        if not na(a_lvl)          and not na(a_origin)
-            _a_line   := line.new(a_origin,   a_lvl,          bar_index, a_lvl,          extend=extend.right, color=daily_line_col, width=1)
-        if not na(v_lvl)          and not na(v_origin)
-            _v_line   := line.new(v_origin,   v_lvl,          bar_index, v_lvl,          extend=extend.right, color=daily_line_col, width=1)
+        if not na(a_lvl)          and not na(s_da_t)
+            _a_line   := line.new(s_da_t,     a_lvl,          time,      a_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
+        if not na(v_lvl)          and not na(s_dv_t)
+            _v_line   := line.new(s_dv_t,     v_lvl,          time,      v_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
         if not na(pb_oc_lvl)      and not na(poc_origin)
             _poc_line := line.new(poc_origin, pb_oc_lvl,      bar_index, pb_oc_lvl,      extend=extend.right, color=daily_line_col, width=1)
         if not na(h4_a_lvl)       and not na(h4a_origin)
@@ -711,6 +988,38 @@ if barstate.islast
             _bk_line  := line.new(bk_origin,  h4_breaker_lvl, bar_index, h4_breaker_lvl, extend=extend.right, color=h4_line_col,    width=1)
         if not na(h4c_oc_lvl)     and not na(h4c_origin)
             _h4c_line := line.new(h4c_origin, h4c_oc_lvl,     bar_index, h4c_oc_lvl,     extend=extend.right, color=h4_line_col,    width=1)
+
+// ── Daily structure levels on the chart ──────────────────────────────────────
+var array<line>  _st_lines  = array.new<line>()
+var array<label> _st_labels = array.new<label>()
+
+f_draw_lvl(bool show, int t1, float y, string txt, color c, string st, int w) =>
+    if show and not na(y) and not na(t1)
+        int t2 = time + 5 * timeframe.in_seconds() * 1000
+        array.push(_st_lines, line.new(t1, y, t2, y, xloc = xloc.bar_time, color = c, style = f_style(st), width = w))
+        array.push(_st_labels, label.new(bar_index + 6, y, txt + "  " + str.tostring(y, format.mintick),
+          style = label.style_label_left, color = color.new(color.black, 100), textcolor = c, size = size.small))
+
+f_dirw(string d) =>
+    d == "bull" ? "Bullish " : "Bearish "
+
+if barstate.islast
+    for ln in _st_lines
+        line.delete(ln)
+    for lb in _st_labels
+        label.delete(lb)
+    array.clear(_st_lines)
+    array.clear(_st_labels)
+    if show_daily_on_tf and s_edir != "none" and not na(s_edir)
+        string forming = " (still forming)"
+        f_draw_lvl(show_ext, s_ehit, s_ehi, f_dirw(s_edir) + "External high" + (s_edir == "bull" and not s_ehif ? forming : ""), c_eh, s_eh, w_ext)
+        f_draw_lvl(show_ext, s_elot, s_elo, f_dirw(s_edir) + "External low" + (s_edir == "bear" and not s_elof ? forming : ""), c_el, s_el, w_ext)
+        if s_idir != "none"
+            f_draw_lvl(show_int, s_ihit, s_ihi, f_dirw(s_idir) + "Internal high" + (s_idir == "bull" and not s_ihif ? forming : ""), c_ih, s_ih, w_int)
+            f_draw_lvl(show_int, s_ilot, s_ilo, f_dirw(s_idir) + "Internal low" + (s_idir == "bear" and not s_ilof ? forming : ""), c_il, s_il, w_int)
+        if s_ndir != "none"
+            f_draw_lvl(show_inn, s_nhit, s_nhi, f_dirw(s_ndir) + "Inner internal high" + (s_ndir == "bull" and not s_nhif ? forming : ""), c_nh, s_nh, w_inn)
+            f_draw_lvl(show_inn, s_nlot, s_nlo, f_dirw(s_ndir) + "Inner internal low" + (s_ndir == "bear" and not s_nlof ? forming : ""), c_nl, s_nl, w_inn)
 
 // ── Per-bar state markers ─────────────────────────────────────────────────────
 plotchar(retest_on and barstate.isconfirmed,
@@ -724,7 +1033,7 @@ string _state_txt = "IDLE - no breakout detected"
 if not na(bo_dir) and not h4_bo_fired and retest_on
     _state_txt := (bo_dir == "bullish" ? "Bullish" : "Bearish") + " Retest | " + retest_src
 else if not na(bo_dir) and not h4_bo_fired
-    _state_txt := "BREAKOUT | " + bo_dir + " | awaiting retest"
+    _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest"
 else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
 else if h4_bo_fired
@@ -733,7 +1042,7 @@ else if h4_bo_fired
 // broken level) — the H4 steps would run on the wrong candles there.
 bool _is_4h = timeframe.period == "240"
 if not _is_4h
-    _state_txt := na(bo_dir) ? "DAILY | no breakout" : "DAILY | BREAKOUT | " + bo_dir + " @ " + str.tostring(bo_level, "#.#####") + " | check 4H"
+    _state_txt := na(bo_dir) ? "DAILY | no breakout" : "DAILY | BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") @ " + str.tostring(bo_level, "#.#####") + " | check 4H"
 
 // ── Price feed + chart snapshot — fires at every realtime H4 close ───────────
 // Powers dashboard price-level alerts and the server's copy of this chart's
@@ -747,6 +1056,10 @@ if barstate.isconfirmed and barstate.isrealtime
           + ',"bias":' + (na(bo_dir) ? "null" : '"' + bo_dir + '"')
           + ',"retest_source":' + (na(retest_src) ? "null" : '"' + retest_src + '"')
           + ',"breakout_level":' + f_num(bo_level)
+          + ',"level_type":' + (na(bo_layer) ? "null" : '"' + bo_layer + '"')
+          + ',"ext_hi":' + f_num(s_ehi) + ',"ext_lo":' + f_num(s_elo)
+          + ',"int_hi":' + f_num(s_idir == "none" ? na : s_ihi) + ',"int_lo":' + f_num(s_idir == "none" ? na : s_ilo)
+          + ',"inn_hi":' + f_num(s_ndir == "none" ? na : s_nhi) + ',"inn_lo":' + f_num(s_ndir == "none" ? na : s_nlo)
           + ',"d_a":' + f_num(a_lvl) + ',"d_v":' + f_num(v_lvl)
           + ',"d_oc":' + f_num(pb_oc_lvl) + ',"d_oc_count":' + str.tostring(array.size(pb_ocs))
           + ',"h4_a":' + f_num(h4_a_lvl) + ',"h4_v":' + f_num(h4_v_lvl)
@@ -770,5 +1083,5 @@ if not _is_4h
 
 var label _state_lbl = na
 label.delete(_state_lbl)
-string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " D.A=" + str.tostring(a_lvl, "#.#####") + " D.V=" + str.tostring(v_lvl, "#.#####") + " D.OC=" + str.tostring(pb_oc_lvl, "#.#####") + " H4.A=" + str.tostring(h4_a_lvl, "#.#####") + " H4.V=" + str.tostring(h4_v_lvl, "#.#####") + " H4.BK=" + str.tostring(h4_breaker_lvl, "#.#####") + " H4.OC=" + str.tostring(h4c_oc_lvl, "#.#####")
+string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " (" + f_layer_name(bo_layer) + ") range=" + str.tostring(bo_opp, "#.#####") + " D.A=" + str.tostring(a_lvl, "#.#####") + " D.V=" + str.tostring(v_lvl, "#.#####") + " D.OC=" + str.tostring(pb_oc_lvl, "#.#####") + " H4.A=" + str.tostring(h4_a_lvl, "#.#####") + " H4.V=" + str.tostring(h4_v_lvl, "#.#####") + " H4.BK=" + str.tostring(h4_breaker_lvl, "#.#####") + " H4.OC=" + str.tostring(h4c_oc_lvl, "#.#####")
 _state_lbl := label.new(bar_index, high, _state_txt, style=label.style_label_down, color=_lbl_col, textcolor=color.white, size=size.small, tooltip=_tip)

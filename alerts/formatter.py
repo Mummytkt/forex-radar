@@ -39,10 +39,13 @@ _BROKEN_TYPE_NAMES: dict[FormationType, str] = {
 
 # ── Context label ────────────────────────────────────────────────────────────
 
+_LEVEL_TYPE_NAMES = {"external": "External", "internal": "Internal", "inner_internal": "Inner internal"}
+
+
 def _context_line(alert: AlertRecord) -> str:
+    """Which daily structure level the breakout broke (external / internal / inner internal)."""
     ctx = getattr(alert, "daily_level_context", "internal")
-    label = "External" if ctx == "external" else "Internal"
-    return f"Daily level context: {label}"
+    return f"Daily breakout level: {_LEVEL_TYPE_NAMES.get(ctx, 'Internal')}"
 
 
 # ── Price / timestamp helpers ─────────────────────────────────────────────────
@@ -375,6 +378,8 @@ def _format_h4_breaker_origin(alert: AlertRecord) -> str:
         "",
         f"Reason: {reason}",
         "",
+        _context_line(alert),
+        "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
         "— TradingView Feed",
@@ -417,6 +422,8 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
         "",
         f"Reason: A new H4 breakout in the {direction_lower} direction has extended the active Daily "
         f"{direction_lower} bias. The overall direction remains intact.",
+        "",
+        _context_line(alert),
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
@@ -470,6 +477,8 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
         "",
         f"Reason: {reason}",
         "",
+        _context_line(alert),
+        "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
         "— TradingView Feed",
@@ -514,6 +523,8 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
         "",
         f"Reason: Price rejected from an H4 {direction_lower} OC level at {level_str}, "
         f"confirming continuation of the active Daily {direction_lower} bias.",
+        "",
+        _context_line(alert),
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",

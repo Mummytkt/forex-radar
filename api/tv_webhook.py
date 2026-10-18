@@ -6,7 +6,8 @@ breakouts, retests, and H4 confirmations are detected. This replaces the
 Twelve Data polling scheduler with TradingView's own chart data.
 
 Event types received from Pine:
-  BREAKOUT        — Daily candle closed beyond A/V formation level (+ tol pips)
+  BREAKOUT        — Daily candle closed beyond an external / internal / inner internal
+                    high or low (level_type); a break the other way replaces it
   RETEST          — H4 wick touched the Daily Breaker band
   RETEST_CANCELLED — H4 moved away from the band without H4 confirmation
   CONFIRMED       — H4 closed beyond an H4 A/V level → fires Telegram alert
@@ -163,6 +164,8 @@ class TVWebhookPayload(BaseModel):
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
     snapshot: Optional[dict] = None    # PRICE_UPDATE: chart stage + levels (Bias Pointer 2026-10-16+)
+    level_type: Optional[str] = None   # which daily level broke: external | internal | inner_internal (2026-10-18+)
+    range_level: Optional[float] = None  # BREAKOUT: the other side of the range that was broken
 
 
 # Bias Pointer events are only meaningful from the 4H chart. Alerts created on any
@@ -358,7 +361,8 @@ async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayl
         retest_started_h4_ts=None,
     ))
 
-    logger.info("%s BREAKOUT %s @ %.5f (breakout_id=%d)", instrument, payload.direction, payload.level, breakout_id)
+    logger.info("%s BREAKOUT %s %s @ %.5f (breakout_id=%d)", instrument, payload.level_type or "", payload.direction,
+                payload.level, breakout_id)
 
 
 def _handle_retest(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
@@ -489,6 +493,7 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
         h4_event=h4_event,
         fired_at=now,
         classification=AlertClassification.ORIGIN,
+        daily_level_context=payload.level_type or "internal",
     )
 
     alert_text = format_alert(alert_record)
@@ -546,6 +551,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         classification=classification,
         h4_oc_level=h4_level if classification == AlertClassification.H4_OC_CONT else None,
         h4_breaker_level=h4_level if classification != AlertClassification.H4_OC_CONT else None,
+        daily_level_context=payload.level_type or "internal",
     )
 
     alert_text = format_alert(alert_record)

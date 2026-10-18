@@ -188,10 +188,15 @@ def make_images():
     im["giants"] = scene("giants", [(1, 9, 0.5, 8, 1.4), None] + little, sx=1.05,
         bubbles=[(0, 8.8, "I'm ONE whole day!", (0.4, 1.0)), (5, 5.25, "We're the six Little Twins\nof that same day.", (-0.6, 3.6))],
         ylim=(0, 10.6), xpad=(1.3, 1.6))
-    im["breakout"] = scene("breakout", [(1, 5.6, 0.6, 5, G), (5, 5.3, 2.6, 3, G), (3, 6.0, 2.8, 5.2, G), (5.0, 7.9, 4.7, 7.4, G)], sx=1.8,
-        levels=[(5, "Giant rooftop", SKY, 0)], mats=[(4.6, 5.4, "wiggle mat")],
-        bubbles=[(2, 5.95, "Shirt still on the mat.\nNot yet!", (-1.6, 2.6)), (3, 7.85, "PAST the mat.\nBREAKOUT!", (-0.5, 1.4))],
-        ylim=(0.2, 10.2), xpad=(1.4, 3.6), speed=[1])
+    im["breakout"] = scene("breakout", [(1, 5.6, 0.6, 5, G), (5, 5.3, 2.6, 3, G), (3, 6.3, 2.8, 5.2, G), (5.0, 7.9, 4.7, 7.4, G)], sx=1.8,
+        levels=[(5.6, "a Giant roof (fingertip)", SKY, 0)],
+        bubbles=[(2, 6.25, "My arm went past,\nbut my shirt didn't.\nNot yet!", (-1.6, 2.4)), (3, 7.85, "My SHIRT closed above.\nBREAKOUT!", (-0.4, 1.4))],
+        ylim=(0.2, 10.2), xpad=(1.4, 3.8), speed=[1])
+    im["house"] = scene("house", [(2.0, 5.0, 1.2, 4.6, G), (4.6, 9.0, 4.4, 8.6, G), (8.6, 8.8, 3.2, 3.6, G), (3.6, 7.4, 3.4, 7.0, G),
+                                  (7.0, 7.1, 4.4, 4.8, G), (4.8, 6.2, 4.6, 5.9, G)], sx=1.5,
+        levels=[(9.0, "Big House roof", SKY, 1), (7.4, "Room roof", "#8a5cf6", 3), (6.2, "Cupboard roof", "#ff7a59", 5),
+                (4.4, "Cupboard floor", "#ff7a59", 4), (3.2, "Room floor", "#8a5cf6", 2), (1.2, "Big House floor", SKY, 0)],
+        ylim=(0.4, 10.2), xpad=(1.4, 4.6), speed=[2, 4])
     im["trampoline"] = scene("trampoline", [(5.1, 5.6, 4.9, 5.3, L), (5.3, 6.8, 5.2, 6.6, L), (6.6, 6.8, 5.8, 6.0, L), (6.0, 6.1, 4.8, 5.6, L)], sx=1.6,
         levels=[(5, "Trampoline", SKY)], mats=[(4.6, 5.4, "wiggle mat")],
         bubbles=[(0, 5.55, "Still sitting on it.\nDoesn't count yet.", (-0.3, 2.2)), (1, 6.75, "I closed above the mat:\nwent out to play!", (0.7, 1.9)),
@@ -202,8 +207,8 @@ def make_images():
         bubbles=[(0, 3.0, "Breakout day.\nI don't start a stone.", (1.4, -1.6))],
         ylim=(0.6, 10.4), xpad=(1.4, 3.2))
     im["spots"] = scene("spots", [(9.6, 9.8, 8.9, 9.0, L), (9.0, 9.1, 6.8, 7.3, L)], sx=1.6,
-        levels=[(8.2, "stone 2", GREEN_D), (7, "stone 1", GREEN_D), (5, "Trampoline", SKY), (2, "valley floor", RED_D)],
-        mats=[(7.8, 8.6, ""), (6.6, 7.4, ""), (4.6, 5.4, ""), (2.4, 4.6, "inside the old house")],
+        levels=[(8.2, "stone 2", GREEN_D), (7, "stone 1", GREEN_D), (5, "Trampoline", SKY), (2, "other side of the house", RED_D)],
+        mats=[(7.8, 8.6, ""), (6.6, 7.4, ""), (4.6, 5.4, ""), (2.4, 4.6, "inside the house that broke")],
         bubbles=[(1, 6.85, "I touched stone 2 AND stone 1.\nThe deepest one counts:\nstone 1!", (3.0, -2.6))],
         ylim=(1.2, 10.6), xpad=(1.4, 5.2), speed=[1])
     im["hold"] = scene("hold", [(8.2, 8.3, 6.9, 7.5, L), (7.5, 8.2, 7.5, 8.0, L), (8.0, 8.1, 6.0, 6.2, L), (6.2, 6.3, 4.9, 5.6, L)], sx=1.6,
@@ -235,12 +240,12 @@ def make_images():
         bubbles=[(0, 7.45, "I closed below the floor\nand its mat: WOBBLE!\n(no bell)", (1.6, -0.6)), (3, 8.65, "Back above the new rooftop:\nENCORE!", (0.4, 0.8))],
         ylim=(6.4, 10.2), xpad=(1.4, 5.6), speed=[0, 2])
     im["gameover"] = scene("gameover", [(2.5, 4.7, 2.3, 4.5, G), (4.5, 4.6, 3.3, 3.5, G), (3.5, 6.8, 3.4, 6.5, G), (6.5, 6.6, 4.0, 4.2, G), (4.2, 4.3, 2.3, 2.6, G)], sx=1.8,
-        levels=[(4.5, "Giant rooftop", SKY, 0), (3.5, "newest valley floor", RED_D, 1)], mats=[(3.1, 3.9, "")],
-        bubbles=[(2, 6.75, "BREAKOUT!", (-0.6, 1.3)), (3, 6.6, "Back in the old house.\nStill OK!", (0.9, 1.6)),
-                 (4, 2.35, "Below the floor AND its mat.\nGAME OVER.", (2.2, -0.9))],
+        levels=[(4.5, "Trampoline (the broken roof)", SKY, 0), (3.3, "other side of the house", RED_D, 1)],
+        bubbles=[(2, 6.75, "BREAKOUT!", (-0.6, 1.3)), (3, 6.6, "Back inside the house.\nStill OK!", (0.9, 1.6)),
+                 (4, 2.35, "My shirt closed below the floor:\nNEW GAME, going DOWN!", (2.2, -0.9))],
         ylim=(0.6, 9.6), xpad=(1.4, 4.2), speed=[1, 3, 4])
     im["mirror"] = scene("mirror", [(8, 8.3, 3.6, 4, G), (4, 6.3, 3.8, 6, G), (6, 6.1, 2.4, 2.8, G)], sx=1.9,
-        levels=[(4, "Giant valley floor", RED_D, 0)], mats=[(3.6, 4.4, "")],
+        levels=[(4, "a Giant floor (toe)", RED_D, 0)],
         bubbles=[(2, 2.45, "My turn! Everything flips.\nBREAKOUT DOWN!", (2.3, 0.0))],
         ylim=(1.2, 9.0), xpad=(1.4, 4.4), speed=[0, 2])
     im["peek"] = scene("peek", [(6, 6.4, 2.6, 3, 1.0), (3, 7.2, 2.8, 5.6, 1.0)], sx=2.0,
@@ -294,7 +299,8 @@ def chapters():
             "Grown-ups call it an <b>A-shape</b>, and it acts like a ceiling. Prices bump into it from below.",
             "When Bella slides and Ben climbs <b>right after her</b>, they make a <b>valley</b>, like the letter V.",
             "The valley floor sits at the <b>bottom of Bella's shirt</b>, where she closed. That's a <b>V-shape</b>, and it acts like a floor.",
-            "Twins always use the <b>newest</b> rooftop and the <b>newest</b> valley.",
+            "Little Twins always use the <b>newest</b> rooftop and the <b>newest</b> valley.",
+            "Giant Twins (you'll meet them soon) measure their rooftop from the <b>highest fingertip</b> of the pair, and their valley from the <b>lowest toe</b>.",
         ]),
         ("The Hand-off Step", GREEN_D, "handoff", [
             "Sometimes two Bens climb <b>one after the other</b>, like a relay race.",
@@ -309,16 +315,23 @@ def chapters():
             "The highest Little fingertip is the Giant's High. The lowest Little toe is the Giant's Low. Same day, same moves, just different sizes.",
             "<b>Giants decide the direction. Little Twins find the moment.</b>",
         ]),
+        ("The Big House, the Rooms and the Cupboards", "#8a5cf6", "house", [
+            "The Giant Twins live in a <b>Big House</b>. Its floor is the lowest spot a Giant's toe reached before Ben broke out through a rooftop. Grown-ups call it the <b>external low</b>.",
+            "While the Giants keep climbing, the roof keeps rising with them. It's <b>still being built</b>. When a Giant slides back down past the last valley, the roof is finished. That's the <b>external high</b>.",
+            "Inside the Big House there are <b>Rooms</b>, with their own roofs and floors, built in exactly the same way. Grown-ups say <b>internal</b> highs and lows.",
+            "Inside a Room there are little <b>Cupboards</b>, built the same way again. Grown-ups say <b>inner internal</b>.",
+            "When the Big House breaks, its Rooms are cleared out and built again. When a Room breaks, its Cupboards are cleared out too.",
+        ]),
         ("The Great Breakout", SKY, "breakout", [
-            "Every rooftop has a cushion around it called the <b>Wiggle Mat</b>. It's 5 <b>pips</b> thick on each side. (Pips are the tiniest steps a price can take.)",
-            "A Giant Ben climbs and pokes his arm past the rooftop. His shirt finishes... still on the mat. <b>Not yet!</b>",
-            "The next Giant Ben climbs higher. At the Closing Bell his shirt is <b>above the rooftop AND past the Wiggle Mat</b>.",
+            "A Giant Ben climbs and pokes his arm past a roof. At the Closing Bell his shirt finishes... still below it. <b>Not yet!</b>",
+            "The next Giant Ben climbs higher. At the Closing Bell his <b>shirt is above the roof</b>.",
             "<b>BREAKOUT!</b> Now Candle Town knows the direction: <b>UP</b>.",
-            "Remember, it's the newest breakout that matters. If a Giant later breaks out the other way, the old game is forgotten.",
+            "It can be the roof or floor of the <b>Big House</b>, a <b>Room</b> or a <b>Cupboard</b>. The <b>newest</b> breakout is the one that matters, and grown-ups' alerts say which one it was.",
             "A breakout is not a trade yet. It's the <b>start</b> of the adventure.",
         ]),
         ("The Old Ceiling Becomes a Trampoline", "#ff7a59", "trampoline", [
-            "Here's some magic. The rooftop that got broken flips into a <b>Trampoline</b>! The old ceiling is now a floor to bounce on. Grown-ups call it the <b>Daily Breaker</b>.",
+            "Here's some magic. The roof that got broken flips into a <b>Trampoline</b>! The old ceiling is now a floor to bounce on. Grown-ups call it the <b>Daily Breaker</b>.",
+            "The trampoline has a cushion around it called the <b>Wiggle Mat</b>. It's 5 <b>pips</b> thick on each side. (Pips are the tiniest steps a price can take.)",
             "But first, the Little Twins must <b>go out to play</b>. A Little Twin has to close <b>above the Trampoline's Wiggle Mat</b>.",
             "A twin still sitting on the trampoline hasn't left, so it doesn't count.",
             "Only after they've gone out to play can a twin come back for a <b>bounce</b>. That's when it's a real <b>visit</b>.",
@@ -327,13 +340,13 @@ def chapters():
             "After the breakout day, more Giant Bens may keep climbing. Each pair that climbs one after the other makes a <b>Stepping Stone</b>. That's a Giant hand-off step.",
             "Both Giants in the pair must close <b>above the breakout line</b>. The stone must also sit <b>clear of the Trampoline's mat</b>.",
             "The breakout day itself doesn't get to start a stone.",
-            "Candle Town keeps <b>every</b> stepping stone it finds, and watches them all, until a Giant breaks out the other way.",
+            "Candle Town keeps <b>every</b> stepping stone it finds, and watches them all, until the next Giant breakout.",
         ]),
         ("The Safe Spots", SKY, "spots", [
             "Now the Little Twins go looking for a safe place to land. Bella slides down... and stretches her leg to touch a Wiggle Mat.",
             "If her toe (or shirt) touches a safe spot's mat, and her shirt <b>doesn't close through it</b>, she has made a <b>visit</b>. Grown-ups call it a <b>reaction</b>.",
             "There are three kinds of safe spots. Candle Town checks them in this order:",
-            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> The <b>Trampoline</b>. <b>3.</b> <b>Inside the old house</b>: her shirt closes below the trampoline's mat but still above the valley floor's mat.",
+            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> The <b>Trampoline</b>. <b>3.</b> <b>Inside the house that just broke</b>: her shirt closes below the trampoline's mat but still above the other side of that house.",
             "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
         ]),
         ("Hold On Tight!", "#ff7a59", "hold", [
@@ -366,19 +379,18 @@ def chapters():
             "Sometimes the Little Twins slip. A twin closes <b>below the little valley floor and its mat</b>, the one that was there at the last bell.",
             "That's a <b>Wobble</b>. They're out of line. No bell rings for a wobble.",
             "But if a later twin climbs back and closes <b>above the newest little rooftop</b>, ENCORE! The climb is back on.",
-            "Encore Bells keep ringing like this until a Giant breaks out the other way, or the game ends.",
+            "Encore Bells keep ringing like this until the next Giant breakout.",
         ]),
-        ("Uh-oh! Game Over", RED_D, "gameover", [
-            "Giants can slide back <b>into the old house</b>, below the trampoline. That's okay! That's where visits happen.",
-            "But if a Giant's shirt closes <b>below the newest Giant valley floor AND past its Wiggle Mat</b>, the game is <b>OVER</b>. Grown-ups call it <b>invalidated</b>.",
-            "No more bells. Candle Town waits for the next Giant breakout to start a brand-new game.",
-            "A breakout the <b>other way</b> also starts a new game.",
+        ("A Brand-New Game", RED_D, "gameover", [
+            "Giants can slide back <b>inside the house that just broke</b>, below the trampoline. That's okay! That's where visits happen.",
+            "But if a Giant's shirt closes past the <b>other side</b> of that house (or past any floor of the Big House, a Room or a Cupboard), that's a <b>breakout the other way</b>.",
+            "The old game ends and a <b>brand-new game</b> begins, going DOWN. Any new Giant breakout starts a new game.",
         ]),
         ("Bella's Turn: The Mirror World", RED_D, "mirror", [
             "Everything you learned works for Bella too. Just flip it upside down, like a mirror!",
-            "A Giant Bella's shirt closes <b>below the newest valley floor, past the mat</b>. BREAKOUT DOWN!",
+            "A Giant Bella's shirt closes <b>below a floor</b> of the Big House, a Room or a Cupboard. BREAKOUT DOWN!",
             "The broken floor becomes a <b>ceiling</b>. Stepping stones are made by two Giant Bellas sliding one after the other.",
-            "The Golden Bell rings when a Little Twin closes <b>below the newest little valley floor</b>. Game over if a Giant closes <b>above the newest Giant rooftop</b> past its mat.",
+            "The Golden Bell rings when a Little Twin closes <b>below the newest little valley floor</b>. A Giant closing <b>above a roof</b> starts a new game going up.",
         ]),
         ("The Tiny Twins' Secret Signals: Peek-and-Hold", "#8a5cf6", "peek", [
             "Now meet the <b>Tiny Twins</b>. They take just one or two hours each (grown-ups say <b>H1</b> and <b>H2</b>). They help grown-ups pick the exact moment to step in.",
@@ -404,11 +416,11 @@ def chapters():
 
 MORAL = [
     "<b>A trade is READY when the story goes in this order:</b>",
-    "<b>1.</b> A <b>Giant</b> twin's shirt closes past the rooftop <b>and</b> its Wiggle Mat. Breakout!",
-    "<b>2.</b> A <b>Little</b> twin visits a <b>safe spot</b> (a stepping stone, the trampoline, or inside the old house) and doesn't close through it.",
+    "<b>1.</b> A <b>Giant</b> twin's shirt closes past a roof or floor of the Big House, a Room or a Cupboard. Breakout!",
+    "<b>2.</b> A <b>Little</b> twin visits a <b>safe spot</b> (a stepping stone, the trampoline, or inside the house that just broke) and doesn't close through it.",
     "<b>3.</b> A Little twin's shirt closes past the <b>newest little rooftop</b>. The <b>Golden Bell</b> rings!",
     "<b>4.</b> At <b>your spot</b>, a Tiny twin shows a <b>Peek-and-Hold</b> or a <b>Big Hug</b>.",
-    "<b>It is NOT safe, and the game is over, when</b> a Giant's shirt closes past the newest valley floor and its mat (for Bella: past the newest rooftop and its mat).",
+    "<b>The game changes when</b> a Giant's shirt closes past the other side of the house. Then a brand-new game starts the other way.",
     "<b>And always remember:</b> arms and legs can wiggle all they like. Only <b>shirts</b> count, and only when the <b>bell</b> rings.",
 ]
 
@@ -482,11 +494,12 @@ def build():
              ("Shirt", "candle body (open to close)"),
              ("Stretchy arms and legs", "upper and lower wicks (to the high and low)"),
              ("Closing Bell", "candle close; nothing is judged before it"),
-             ("Rooftop / Valley floor", "A-shape / V-shape level (from bodies)"),
+             ("Rooftop / Valley floor", "A-shape / V-shape level (Giants: wicks; Little twins: bodies)"),
+             ("Big House / Room / Cupboard", "external / internal / inner internal highs and lows (Daily)"),
              ("Hand-off Step", "OC level (close of candle 1 = open of candle 2)"),
              ("Giant / Little / Tiny Twins", "Daily / H4 / H1 and H2 candles"),
-             ("Wiggle Mat", "tolerance band (5 pips; entry alerts 20 pips)"),
-             ("Great Breakout", "Daily close beyond the last A/V-shape + tolerance"),
+             ("Wiggle Mat", "tolerance band on the H4 zones (5 pips; entry alerts 20 pips)"),
+             ("Great Breakout", "Daily close beyond an external, internal or inner internal high/low"),
              ("Trampoline", "Daily Breaker (the broken level)"),
              ("Stepping Stones", "post-breakout Daily OCs (all watched)"),
              ("Visit", "reaction / retest of a Daily zone"),
@@ -494,7 +507,7 @@ def build():
              ("Outside / Inside roof", "External / Internal H4 break"),
              ("Encore Bell", "continuation alert"),
              ("Wobble", "H4 out of alignment"),
-             ("Game Over", "invalidation"),
+             ("Brand-new game", "the next Daily breakout replaces the setup"),
              ("Peek-and-Hold / Big Hug", "PCL / Engulfing Sweep entry patterns")]
     cell = ParagraphStyle("cell", fontName="Kid", fontSize=9.6, leading=12.5, textColor=colors.HexColor(INK))
     tbl = Table([[Paragraph(f"<b>{a}</b>", cell), Paragraph(b, cell)] for a, b in gloss], colWidths=[62 * mm, W - 62 * mm])
