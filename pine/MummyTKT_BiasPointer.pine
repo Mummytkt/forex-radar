@@ -63,13 +63,13 @@ color  daily_line_col  = input.color(color.new(color.gray, 20), "Daily line colo
 color  h4_line_col     = input.color(color.new(color.gray, 40), "H4 line color",
      tooltip="Color for H4.A / H4.V / H4.OC / H4.BK lines",
      group="Labels")
-string daily_lbl_max_tf = input.string("Daily", "Daily labels visible on",
+string daily_lbl_max_tf = input.string("Daily", "Daily labels & lines visible on",
      options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
-     tooltip="Daily level labels appear on this timeframe and all lower timeframes. E.g. choose Weekly to also see them on the weekly chart.",
+     tooltip="Daily level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Weekly to also see them on the weekly chart.",
      group="Labels")
-string h4_lbl_max_tf    = input.string("4H",    "H4 labels visible on",
+string h4_lbl_max_tf    = input.string("4H",    "H4 labels & lines visible on",
      options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
-     tooltip="H4 level labels appear on this timeframe and all lower timeframes. E.g. choose Daily to also see them on the daily chart.",
+     tooltip="H4 level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Daily to also see them on the daily chart.",
      group="Labels")
 color  bull_lbl_col     = input.color(color.new(color.green, 60), "Bullish state label color",
      tooltip="Background color of the state label when direction is bullish (BREAKOUT / awaiting retest)",
@@ -975,19 +975,19 @@ if barstate.islast
         if not na(h4c_oc_lvl)
             _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
     if show_lvl_lines
-        if not na(a_lvl)          and not na(s_da_t)
+        if show_daily_on_tf and not na(a_lvl)          and not na(s_da_t)
             _a_line   := line.new(s_da_t,     a_lvl,          time,      a_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
-        if not na(v_lvl)          and not na(s_dv_t)
+        if show_daily_on_tf and not na(v_lvl)          and not na(s_dv_t)
             _v_line   := line.new(s_dv_t,     v_lvl,          time,      v_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
-        if not na(pb_oc_lvl)      and not na(poc_origin)
+        if show_daily_on_tf and not na(pb_oc_lvl)      and not na(poc_origin)
             _poc_line := line.new(poc_origin, pb_oc_lvl,      bar_index, pb_oc_lvl,      extend=extend.right, color=daily_line_col, width=1)
-        if not na(h4_a_lvl)       and not na(h4a_origin)
+        if show_h4_on_tf and not na(h4_a_lvl)       and not na(h4a_origin)
             _h4a_line := line.new(h4a_origin, h4_a_lvl,       bar_index, h4_a_lvl,       extend=extend.right, color=h4_line_col,    width=1)
-        if not na(h4_v_lvl)       and not na(h4v_origin)
+        if show_h4_on_tf and not na(h4_v_lvl)       and not na(h4v_origin)
             _h4v_line := line.new(h4v_origin, h4_v_lvl,       bar_index, h4_v_lvl,       extend=extend.right, color=h4_line_col,    width=1)
-        if not na(h4_breaker_lvl) and not na(bk_origin)
+        if show_h4_on_tf and not na(h4_breaker_lvl) and not na(bk_origin)
             _bk_line  := line.new(bk_origin,  h4_breaker_lvl, bar_index, h4_breaker_lvl, extend=extend.right, color=h4_line_col,    width=1)
-        if not na(h4c_oc_lvl)     and not na(h4c_origin)
+        if show_h4_on_tf and not na(h4c_oc_lvl)     and not na(h4c_origin)
             _h4c_line := line.new(h4c_origin, h4c_oc_lvl,     bar_index, h4c_oc_lvl,     extend=extend.right, color=h4_line_col,    width=1)
 
 // ── Daily structure levels on the chart ──────────────────────────────────────
