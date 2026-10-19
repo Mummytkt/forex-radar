@@ -370,8 +370,8 @@ def chapters():
         ]),
         ("Encore Bells!", GREEN_D, "encore1", [
             "After the Golden Bell, the Little Twins keep climbing. Every new good bounce rings an <b>Encore Bell</b>. Grown-ups call these <b>continuations</b>.",
-            "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. If a later twin touches it (within its mat) and closes <b>above</b> it, ENCORE!",
-            "<b>The little hand-off step.</b> When two Little Bens climb one after the other, they make a little step. If a <b>later</b> twin touches it and closes above, ENCORE!",
+            "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. If a later twin <b>starts above it</b>, comes down to touch it (within its mat) and closes <b>above</b> it, ENCORE!",
+            "<b>The little hand-off step.</b> When two Little Bens climb one after the other, they make a little step. If a <b>later</b> twin starts above it, touches it and closes above, ENCORE! (A twin climbing up through it from below doesn't count.)",
             "Each visit to a spot rings <b>once</b>. The twins must leave and come back to ring it again.",
         ]),
         (None, None, "encore2", []),
