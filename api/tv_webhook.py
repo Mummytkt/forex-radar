@@ -176,6 +176,7 @@ class TVWebhookPayload(BaseModel):
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
     snapshot: Optional[dict] = None    # PRICE_UPDATE: chart stage + levels (Bias Pointer 2026-10-16+)
+    source_kind: Optional[str] = None  # inside_range reactions: "v_shape" | "a_shape" | "oc"
     level_type: Optional[str] = None   # which daily level broke: external | internal | inner_internal | sub_internal
     range_level: Optional[float] = None  # BREAKOUT: the other side of the range that was broken
 
@@ -187,11 +188,11 @@ BIAS_EVENTS = {"BREAKOUT", "RETEST", "RETEST_CANCELLED", "CONFIRMED", "INVALIDAT
 BIAS_TIMEFRAME = "240"
 
 
-def _source_type_from_str(source: Optional[str]) -> ReactionSourceType:
+def _source_type_from_str(source: Optional[str], kind: Optional[str] = None) -> ReactionSourceType:
     if source == "post_breakout_oc":
         return ReactionSourceType.POST_BREAKOUT_DAILY_OC
     if source == "inside_range":
-        return ReactionSourceType.AV_INSIDE_RANGE
+        return ReactionSourceType.OC_INSIDE_RANGE if kind == "oc" else ReactionSourceType.AV_INSIDE_RANGE
     return ReactionSourceType.DAILY_BREAKER
 
 
@@ -441,12 +442,14 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
                                 payload.breakout_level or payload.h4_level, "CONFIRMED")
 
     # Ensure the matching reaction source exists in DB
-    src_type = _source_type_from_str(payload.source)
+    src_type = _source_type_from_str(payload.source, payload.source_kind)
     sources = get_active_reaction_sources(conn, instrument)
-    source = next((s for s in sources if s.source_type == src_type), None)
+    pip_size = pip_size_for(instrument)
+    tol_val = config.level_tolerance_pips * pip_size
+    # Same kind of source AND (when the chart says which level) the same level
+    source = next((s for s in sources if s.source_type == src_type and (
+        payload.source_level is None or abs(s.level - payload.source_level) <= tol_val)), None)
     if source is None:
-        pip_size = pip_size_for(instrument)
-        tol_val = config.level_tolerance_pips * pip_size
         src_lvl = payload.source_level or payload.breakout_level or breakout.broken_level
         source = ReactionSource(
             instrument=instrument,

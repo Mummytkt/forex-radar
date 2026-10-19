@@ -346,7 +346,7 @@ def chapters():
             "Now the Little Twins go looking for a safe place to land. Bella slides down... and stretches her leg to touch a Wiggle Mat.",
             "If her toe (or shirt) touches the safe spot's <b>exact line</b> (almost touching doesn't count), and her shirt <b>doesn't close through it</b>, she has made a <b>visit</b>. Grown-ups call it a <b>reaction</b>.",
             "There are three kinds of safe spots. Candle Town checks them in this order:",
-            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> The <b>Trampoline</b>. <b>3.</b> <b>Inside the house that just broke</b>: her shirt closes below the trampoline's mat but still above the other side of that house.",
+            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> The <b>Trampoline</b>. <b>3.</b> A <b>valley floor or hand-off step inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
             "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
         ]),
         ("Hold On Tight!", "#ff7a59", "hold", [
@@ -417,7 +417,7 @@ def chapters():
 MORAL = [
     "<b>A trade is READY when the story goes in this order:</b>",
     "<b>1.</b> A <b>Giant</b> twin's shirt closes past the roof or floor of the newest house. Breakout!",
-    "<b>2.</b> A <b>Little</b> twin visits a <b>safe spot</b> (a stepping stone, the trampoline, or inside the house that just broke) and doesn't close through it.",
+    "<b>2.</b> A <b>Little</b> twin visits a <b>safe spot</b> (a stepping stone, the trampoline, or a Giant valley floor or hand-off step inside the house that just broke) and doesn't close through it.",
     "<b>3.</b> A Little twin's shirt closes past the <b>newest little rooftop</b>. The <b>Golden Bell</b> rings!",
     "<b>4.</b> At <b>your spot</b>, a Tiny twin shows a <b>Peek-and-Hold</b> or a <b>Big Hug</b>.",
     "<b>The game changes when</b> a Giant's shirt closes past the other side of the house. Then a brand-new game starts the other way.",

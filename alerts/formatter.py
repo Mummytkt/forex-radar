@@ -25,8 +25,8 @@ from data.models import (
 
 _SOURCE_NAMES: dict[ReactionSourceType, str] = {
     ReactionSourceType.DAILY_BREAKER:          "Daily Breaker",
-    ReactionSourceType.OC_INSIDE_RANGE:        "OC inside Daily range",
-    ReactionSourceType.AV_INSIDE_RANGE:        "Inside Daily Range",
+    ReactionSourceType.OC_INSIDE_RANGE:        "Daily OC inside the range",
+    ReactionSourceType.AV_INSIDE_RANGE:        "Daily V/A-shape inside the range",
     ReactionSourceType.POST_BREAKOUT_DAILY_OC: "Post-Breakout OC",
 }
 
@@ -114,15 +114,12 @@ def _format_origin(alert: AlertRecord) -> str:
         )
 
     source_name = _SOURCE_NAMES[source.source_type]
+    if source.source_type == ReactionSourceType.AV_INSIDE_RANGE:
+        source_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape inside the range"
     source_level_str = _fmt_level(instrument, source.level)
 
     source_desc = _source_description(source.source_type, direction_lower, source_name)
-
-    # Inside Range has no specific level — the zone is the whole range
-    if source.source_type == ReactionSourceType.AV_INSIDE_RANGE:
-        source_header = f"Daily reaction source: {source_name}"
-    else:
-        source_header = f"Daily reaction source: {source_name} @ {source_level_str}"
+    source_header = f"Daily reaction source: {source_name} @ {source_level_str}"
 
     classification_label = (
         "External" if h4.classification == BreakoutClassification.EXTERNAL else "Internal"
@@ -555,9 +552,9 @@ def _source_description(
         )
     if source_type == ReactionSourceType.AV_INSIDE_RANGE:
         return (
-            f"Price retraced back into the Daily range after the breakout. "
-            f"The setup remained active — the range held and the reaction inside it "
-            f"led to the confirming H4 breakout."
+            f"After the Daily breakout, price came back into the range that was broken "
+            f"and reacted from a {source_name} level. "
+            f"The reaction led to the confirming H4 breakout."
         )
     if source_type == ReactionSourceType.POST_BREAKOUT_DAILY_OC:
         return (
@@ -589,7 +586,7 @@ def _reason_origin(
         )
     if source_type == ReactionSourceType.AV_INSIDE_RANGE:
         return (
-            f"Price retraced into the Daily range and the reaction produced a qualifying "
+            f"The reaction from a Daily level inside the range produced a qualifying "
             f"{classification_lower} {direction_lower} H4 breakout, "
             f"aligning the Daily and H4 directions."
         )

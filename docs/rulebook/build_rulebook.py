@@ -293,14 +293,14 @@ def make_rules(im):
          "The chart label shows the newest one, e.g. “D.OC 10704.99 (3 watched)”.", im["postoc"]),
         ("D. Reaction zones (until the Origin)", "What counts as a reaction",
          f"An H4 candle reacts from a zone when its <b>wick reaches the level exactly</b> (a near miss doesn't count) and its close doesn't go through it. Zones are checked in this order:",
-         "1) the deepest post-breakout OC touched · 2) the Daily Breaker · 3) back inside the range that was just broken (above its low)",
-         "1) the highest post-breakout OC touched · 2) the Daily Breaker · 3) back inside the range that was just broken (below its high)",
-         "The reaction is reported with its source: Post-Breakout OC, Daily Breaker, or Inside Range. It doesn't matter which zone price reaches first.",
+         "1) the deepest post-breakout OC touched · 2) the Daily Breaker · 3) a Daily V-shape or Daily bullish OC level inside the range that was just broken",
+         "1) the highest post-breakout OC touched · 2) the Daily Breaker · 3) a Daily A-shape or Daily bearish OC level inside the range that was just broken",
+         "The reaction is reported with its source and level: Post-Breakout OC, Daily Breaker, or the Daily V/A-shape or OC inside the range. Simply being back inside the range is not a reaction. It doesn't matter which zone price reaches first.",
          im["zones3"]),
         ("D. Reaction zones (until the Origin)", "A reaction stays alive until it fails",
          "Once price has reacted, the reaction stays valid on <b>later candles</b>. It only <b>fails</b> when an H4 candle closes back through the zone "
          "on the wrong side. Then the next zone price reaches takes over.",
-         f"Fails on an H4 close below the zone (OC − {T}, breaker zone, or range bottom)", f"Fails on an H4 close above the zone (OC + {T}, breaker zone, or range top)",
+         f"Fails on an H4 close below the zone (the level − {T}, or the breaker zone)", f"Fails on an H4 close above the zone (the level + {T}, or the breaker zone)",
          "A candle that simply doesn't touch the zone any more does NOT cancel the reaction.", im["persist"]),
         ("E. H4 confirmation", "The Origin alert",
          "While a reaction is alive, an H4 candle <b>closes beyond the most recent H4 A-shape</b> (buy) or <b>V-shape</b> (sell). "
