@@ -42,6 +42,10 @@
 //             H4 Breaker / H4 OC continuations only count a candle that OPENS on
 //             the bias side of the level (a climb through it from below — or a
 //             drop through it from above for sells — is not a rejection).
+//             Reactions must touch the level exactly (no ±tolerance on the
+//             touch). H4 is out of line on a close beyond the LATEST H4 V (buy)
+//             / A (sell); that drops every H4 OC until H4 breaks back in line,
+//             and an H4 OC closed through against the bias is dropped.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -665,7 +669,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         for i = 0 to array.size(pb_ocs) - 1
             float oc = array.get(pb_ocs, i)
             bool beyond  = (bo_dir == "bullish" and oc > band_hi) or (bo_dir == "bearish" and oc < band_lo)
-            bool touched = low <= oc + tol and high >= oc - tol
+            bool touched = low <= oc and high >= oc
             bool held    = bo_dir == "bullish" ? close >= oc - tol : close <= oc + tol
             if beyond and touched and held
                 if na(pb_hit) or (bo_dir == "bullish" ? oc < pb_hit : oc > pb_hit)
@@ -673,7 +677,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     bool pb_oc_zone = not na(pb_hit)
 
     // ── Zone 2: Daily Breaker ─────────────────────────────────────────────
-    bool db_zone = low <= band_hi and high >= band_lo and (bo_dir == "bullish" ? close >= band_lo : close <= band_hi)
+    bool db_zone = low <= bo_level and high >= bo_level and (bo_dir == "bullish" ? close >= band_lo : close <= band_hi)
 
     // ── Zone 3: Inside Range ──────────────────────────────────────────────
     bool ir_zone = false
@@ -834,13 +838,18 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
 
     // ── H4 Continuation block ─────────────────────────────────────────────
     if h4_bo_fired
-        if h4_aligned and not na(h4_invalid_lvl)
-            if bo_dir == "bullish" and close < h4_invalid_lvl - tol
-                h4_aligned := false
-                h4c_consec := 0
-            if bo_dir == "bearish" and close > h4_invalid_lvl + tol
-                h4_aligned := false
-                h4c_consec := 0
+        // Out of line: an H4 break AGAINST the daily bias — a close below the
+        // latest H4 V-shape in a buy, above the latest H4 A-shape in a sell
+        // (same test as a confirmation, no tolerance). Every H4 OC is dropped;
+        // tracking restarts when H4 breaks back in the bias direction.
+        if h4_aligned
+            bool against = (bo_dir == "bullish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl) or (bo_dir == "bearish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl)
+            if against
+                h4_aligned    := false
+                h4c_consec    := 0
+                h4c_oc_close1 := na
+                h4c_oc_lvl    := na
+                h4c_oc_ready  := false
 
         bool cont_acted = false
         if not h4_aligned and not retest_on
@@ -896,7 +905,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if na(bk_armed_lvl) or bk_armed_lvl != h4_breaker_lvl
                     bk_armed     := true
                     bk_armed_lvl := h4_breaker_lvl
-                bool bk_touched = low <= h4_breaker_lvl + tol and high >= h4_breaker_lvl - tol
+                bool bk_touched = low <= h4_breaker_lvl and high >= h4_breaker_lvl
                 // Re-arm when price is clear of the zone (so each fresh visit fires once)
                 if not bk_touched
                     bk_armed := true
@@ -926,12 +935,18 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if na(oc_armed_lvl) or oc_armed_lvl != h4c_oc_lvl
                     oc_armed     := true
                     oc_armed_lvl := h4c_oc_lvl
-                bool oc_touched = low <= h4c_oc_lvl + tol and high >= h4c_oc_lvl - tol
+                // Reaction must reach the level exactly (no tolerance band)
+                bool oc_touched = low <= h4c_oc_lvl and high >= h4c_oc_lvl
                 // Re-arm when price is clear of the zone (so each fresh visit fires once)
                 if not oc_touched
                     oc_armed := true
                 // Same rule as the breaker: open on the bias side, dip in, close beyond.
                 bool oc_react = oc_armed and oc_touched and ((bo_dir == "bullish" and open >= h4c_oc_lvl and close > h4c_oc_lvl) or (bo_dir == "bearish" and open <= h4c_oc_lvl and close < h4c_oc_lvl))
+                // An OC closed through against the bias is dead: stop watching it
+                bool oc_dead = (bo_dir == "bullish" and close < h4c_oc_lvl) or (bo_dir == "bearish" and close > h4c_oc_lvl)
+                if oc_dead
+                    h4c_oc_lvl   := na
+                    h4c_oc_ready := false
                 if oc_react
                     oc_armed := false
                     if barstate.isrealtime
