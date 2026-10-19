@@ -333,7 +333,7 @@ export default function StrategyPage() {
   const isOwner = user?.role === 'OWNER'
   return (
     <>
-      <TopBar title={isOwner ? 'Strategy' : 'Tutorials & Updates'} subtitle={isOwner ? 'How the engine detects and confirms directional bias' : 'Updates, tutorial videos and walkthroughs'} />
+      <TopBar title={isOwner ? 'Strategy' : 'Playbook'} subtitle={isOwner ? 'How the engine detects and confirms directional bias' : 'Updates, tutorial videos and walkthroughs'} />
       <main style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <UpdatesSection />
         <VideoSection />

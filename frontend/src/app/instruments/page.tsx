@@ -90,7 +90,7 @@ export default function InstrumentsPage() {
 
   return (
     <>
-      <TopBar title="Instruments" subtitle={`${total} instruments under surveillance`} />
+      <TopBar title="Markets" subtitle={`${total} instruments under surveillance`} />
       <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Summary chips */}

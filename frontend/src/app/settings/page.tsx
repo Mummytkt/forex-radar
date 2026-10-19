@@ -315,7 +315,7 @@ export default function SettingsPage() {
           <InstrumentManager />
         </Section>
 
-        <Section title="Profile" desc="Your display name shown on the Overview greeting.">
+        <Section title="Profile" desc="Your display name shown on the Bias Board greeting.">
           <div style={{ padding: '16px 20px' }}>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', flex: '1 1 200px', minWidth: 0 }}>

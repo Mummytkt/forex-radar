@@ -717,7 +717,7 @@ export default function PriceAlertsPage() {
   return (
     <>
       <TopBar
-        title="Price Alerts"
+        title="Level Watch"
         subtitle="Get notified when price hits your level or an entry pattern forms there"
       />
       <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -725,7 +725,7 @@ export default function PriceAlertsPage() {
         {/* ── Top-level tab switcher ────────────────────────────────── */}
         <div style={{ display: 'inline-flex', gap: 4, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, alignSelf: 'flex-start' }}>
           {([
-            ['price', 'Price Alerts', Target],
+            ['price', 'Level Alerts', Target],
             ['entry', 'Entry Pattern Alerts', Zap],
           ] as const).map(([val, lbl, Icon]) => (
             <button

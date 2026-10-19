@@ -59,7 +59,7 @@ function SuccessInner() {
       const d = await r.json()
       if (!r.ok || !d.token) throw new Error(d.detail || 'Could not set password.')
       localStorage.setItem('mbp_token', d.token)
-      router.replace('/dashboard')
+      router.replace('/hub')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setBusy(false)

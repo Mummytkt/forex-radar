@@ -42,7 +42,7 @@ export default function OnboardingChecklist({ uid, data }: { uid: number; data: 
     { done: data.pairs_chosen, title: 'Choose your pairs', body: 'Only get alerts for the markets you trade.',
       action: { href: '/settings', label: 'Choose pairs' } },
     { done: data.alerts_reviewed || reviewed, title: 'Pick which confirmations you want', body: 'External, internal, or both.',
-      action: { href: '/preferences', label: 'Open Preferences' } },
+      action: { href: '/preferences', label: 'Open Alert Filters' } },
     ...(data.has_videos ? [{ done: watched, title: 'Watch the intro video', body: 'See how a bias call is built, start to finish.',
       action: { href: '/strategy', label: 'Watch' } }] : []),
   ]

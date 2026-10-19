@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_KEY, t)
     setToken(t)
     setUser(u)
-    router.replace('/dashboard')
+    router.replace('/hub')
   }
 
   const logout = () => {

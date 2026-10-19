@@ -49,7 +49,7 @@ export default function ClaimPage() {
       if (!r.ok) throw new Error(d.detail || 'Could not set your password.')
       try { localStorage.setItem('mbp_token', d.token) } catch {}
       setDone(true)
-      setTimeout(() => { window.location.href = '/dashboard' }, 1200)
+      setTimeout(() => { window.location.href = '/hub' }, 1200)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not set your password.')
     } finally {

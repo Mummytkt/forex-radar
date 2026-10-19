@@ -78,7 +78,7 @@ export default function OverviewPage() {
 
   return (
     <>
-      <TopBar title="Overview" subtitle={today} />
+      <TopBar title="Bias Board" subtitle={today} />
       <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
         {/* First-login setup checklist (subscribers) */}

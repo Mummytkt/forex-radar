@@ -72,7 +72,7 @@ export default function PreferencesPage() {
 
   return (
     <>
-      <TopBar title="Preferences" subtitle="Choose which bias confirmations reach your Telegram" />
+      <TopBar title="Alert Filters" subtitle="Choose which bias confirmations reach your Telegram" />
       <main className="page-padded" style={{ flex: 1, padding: '24px', maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Telegram delivery */}
@@ -143,7 +143,7 @@ export default function PreferencesPage() {
           <div style={{ minWidth: 0, flex: '1 1 260px' }}>
             <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Pairs</h2>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.6 }}>
-              Pick which pairs reach your Telegram in Settings. To filter what you see in History, use the Buy / Sell filter on the History page.
+              Pick which pairs reach your Telegram in Settings. To filter what you see in the Signal Log, use its Buy / Sell filter.
             </p>
           </div>
           <Link href="/settings" style={{

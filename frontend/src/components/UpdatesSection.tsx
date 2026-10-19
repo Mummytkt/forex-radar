@@ -81,7 +81,7 @@ export default function UpdatesSection() {
       const who = audienceLabel(d.audience)
       setMsg(toTelegram
         ? `Posted to ${who}, and sent to ${d.telegram_sent} of ${d.telegram_targets} on Telegram.`
-        : `Posted to ${who}. They'll see a badge on Tutorials & Updates.`)
+        : `Posted to ${who}. They'll see a badge on the Playbook.`)
       load()
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Could not post the update.')
@@ -158,7 +158,7 @@ export default function UpdatesSection() {
       <div>
         {items === null && <p style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-secondary)' }}>Loading…</p>}
         {items && items.length === 0 && (
-          <p style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-muted)' }}>No updates yet. What you post here appears on your subscribers&apos; Tutorials &amp; Updates page.</p>
+          <p style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-muted)' }}>No updates yet. What you post here appears on your subscribers&apos; Playbook page.</p>
         )}
         {items?.map(u => {
           const isNew = !isOwner && u.id > seenBefore

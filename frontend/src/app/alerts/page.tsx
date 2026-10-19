@@ -110,7 +110,7 @@ export default function HistoryPage() {
 
   return (
     <>
-      <TopBar title="Alert History" subtitle="Every notification delivered to your Telegram" />
+      <TopBar title="Signal Log" subtitle="Every notification delivered to your Telegram" />
       <main className="page-padded" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
         {/* Filter bar */}
