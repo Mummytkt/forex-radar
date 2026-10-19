@@ -38,7 +38,7 @@ const STAGE: Record<Snapshot['stage'], string> = {
   breakout: 'Breakout · awaiting retest',
   retest: 'Retest in progress',
   confirmed_aligned: 'Confirmed · H4 aligned',
-  confirmed_realigning: 'Confirmed · realigning',
+  confirmed_realigning: 'OUT OF LINE · H4 alerts paused',
 }
 const SOURCE: Record<string, string> = {
   post_breakout_oc: 'Post-breakout OC', daily_breaker: 'Daily Breaker', inside_range: 'Inside Range',
@@ -51,6 +51,7 @@ const FILTERS = [
   { key: 'retest', label: 'Retest' },
   { key: 'breakout', label: 'Awaiting retest' },
   { key: 'confirmed', label: 'Confirmed' },
+  { key: 'out', label: 'Out of line' },
   { key: 'bullish', label: 'Buys' },
   { key: 'bearish', label: 'Sells' },
 ]
@@ -77,7 +78,8 @@ export default function LiveChartBoard() {
       const s = r.snapshot
       if (filter === 'all') return true
       if (!s) return false
-      if (filter === 'confirmed') return s.stage.startsWith('confirmed')
+      if (filter === 'confirmed') return s.stage === 'confirmed_aligned'
+      if (filter === 'out') return s.stage === 'confirmed_realigning'
       if (filter === 'bullish' || filter === 'bearish') return s.bias === filter
       return s.stage === filter
     })

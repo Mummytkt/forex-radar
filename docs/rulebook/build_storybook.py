@@ -506,7 +506,7 @@ def build():
              ("Golden Bell", "Origin alert (first H4 confirmation)"),
              ("Outside / Inside roof", "External / Internal H4 break"),
              ("Encore Bell", "continuation alert"),
-             ("Wobble", "H4 out of alignment"),
+             ("Wobble", "H4 out of line (chart label: OUT OF LINE)"),
              ("Brand-new game", "the next Daily breakout replaces the setup"),
              ("Peek-and-Hold / Big Hug", "PCL / Engulfing Sweep entry patterns")]
     cell = ParagraphStyle("cell", fontName="Kid", fontSize=9.6, leading=12.5, textColor=colors.HexColor(INK))

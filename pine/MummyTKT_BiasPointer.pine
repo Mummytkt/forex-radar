@@ -88,7 +88,7 @@ color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state
 const string GLC = "Label colors (use the opacity slider to fade them)"
 color  retest_lbl_col   = input.color(color.orange, "State label: Retest", group = GLC)
 color  conf_lbl_col     = input.color(color.teal,   "State label: Confirmed · H4 aligned", group = GLC)
-color  realign_lbl_col  = input.color(color.blue,   "State label: Confirmed · realigning", group = GLC)
+color  realign_lbl_col  = input.color(color.blue,   "State label: OUT OF LINE (H4 against daily)", group = GLC)
 color  idle_lbl_col     = input.color(color.new(color.gray, 20), "State label: no breakout", group = GLC)
 color  da_lbl_col       = input.color(color.new(color.red,    55), "D.A", group = GLC, inline = "dl")
 color  dv_lbl_col       = input.color(color.new(color.lime,   45), "D.V", group = GLC, inline = "dl")
@@ -1060,7 +1060,7 @@ else if not na(bo_dir) and not h4_bo_fired
 else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
 else if h4_bo_fired
-    _state_txt := "CONFIRMED | " + bo_dir + " | realigning"
+    _state_txt := "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · H4 alerts paused until H4 breaks " + bo_dir + " again"
 // Off the 4H chart, show only what the DAILY candles decided (direction and the
 // broken level) — the H4 steps would run on the wrong candles there.
 bool _is_4h = timeframe.period == "240"

@@ -61,6 +61,9 @@ export default function OverviewPage() {
       const o = { RETEST_IN_PROGRESS: 0, BREAKOUT_ACTIVE: 1, IDLE: 2 }
       return o[a.state] - o[b.state]
     })
+  // The chart's own view (sent at every H4 close) says when H4 is out of line
+  const { data: board } = useSWR<{ pairs: { instrument: string; snapshot: { stage: string } | null }[] }>('/api/chart-board', fetcher, { refreshInterval: 60000 })
+  const outOfLine = new Set((board?.pairs ?? []).filter(p => p.snapshot?.stage === 'confirmed_realigning').map(p => p.instrument))
 
   const isOwner = user?.role === 'OWNER'
   // This user's own Telegram link (not the platform's), so a subscriber who hasn't
@@ -219,6 +222,9 @@ export default function OverviewPage() {
                           )}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                          {outOfLine.has(inst.instrument.replace('/', '').toUpperCase()) && (
+                            <span style={{ color: 'var(--warning)', fontWeight: 600 }}>H4 out of line · alerts paused · </span>
+                          )}
                           {inst.active_sources_count > 0 ? `${inst.active_sources_count} sources` : 'No sources'} · {timeAgo(inst.last_updated)}
                         </div>
                       </div>

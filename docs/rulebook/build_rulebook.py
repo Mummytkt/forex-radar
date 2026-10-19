@@ -206,9 +206,8 @@ def make_images():
         notes=[(1, 19.0, "completing candle\ncan't trigger it", MUTED), (2, 17.6, "later candle wicks in, closes above\n→ continuation", GREEN, (2.7, 16.3))],
         labels=["C1", "C2", "later"], ylim=(15.8, 19.6))
     im["realign"] = chart("realign", [(17.0, 17.1, 14.8, 15.0), (15.0, 15.7, 14.9, 15.6), (15.6, 15.7, 15.1, 15.2), (15.2, 16.1, 15.1, 15.95)],
-        levels=[(16.4, "H4 V-shape at the last confirmation", MUTED), (15.6, "latest H4 A-shape", RED, 1)],
-        zones=[(15.9, 16.9, "", FAIL)],
-        notes=[(0, 14.25, "closes below V-shape − 5 pips\n→ out of alignment (no alert)", RED), (3, 16.0, "closes above\n→ continuation", GREEN, (3.0, 17.0))],
+        levels=[(16.4, "latest H4 V-shape", MUTED), (15.6, "latest H4 A-shape", RED, 1)],
+        notes=[(0, 14.25, "closes below the latest V-shape\n→ OUT OF LINE (no alert)", RED), (3, 16.0, "closes above\n→ continuation", GREEN, (3.0, 17.0))],
         labels=["H4", "H4", "H4", "H4"], ylim=(13.8, 17.5))
     im["invalid"] = chart("invalid", [(12, 15, 11.5, 14.6), (14.6, 14.8, 12.0, 12.4), (12.4, 13.6, 11.8, 13.2), (13.2, 13.3, 9.6, 9.8)],
         levels=[(13.5, "breakout level", ACCENT), (10.5, "other side of the broken range", RED)],
@@ -332,11 +331,11 @@ def make_rules(im):
          "The candle that completes the OC can't trigger it, and a candle climbing up through it from below (falling through it from above, for sells) "
          "is not a rejection. An H4 OC that a candle closes through against the bias is dropped. Each visit alerts once.", im["h4oc"]),
         ("F. Continuations (after the Origin)", "Breakout continuation after a pullback",
-         "If an H4 candle closes against the bias beyond the <b>latest</b> H4 V-shape (buy) or A-shape (sell), H4 is <b>out of alignment</b> "
+         "If an H4 candle closes against the bias beyond the <b>latest</b> H4 V-shape (buy) or A-shape (sell), H4 is <b>out of line</b> (the chart label says OUT OF LINE) "
          "and every H4 OC is dropped. The next H4 close beyond the latest H4 A/V-shape in the bias direction fires a continuation and OC tracking starts fresh.",
-         "Out of alignment on a close below the latest H4 V-shape; back in on a close above the latest H4 A-shape",
-         "Out of alignment on a close above the latest H4 A-shape; back in on a close below the latest H4 V-shape",
-         "Going out of alignment sends no alert. It only resets the H4 structure.", im["realign"]),
+         "Out of line on a close below the latest H4 V-shape; back in on a close above the latest H4 A-shape",
+         "Out of line on a close above the latest H4 A-shape; back in on a close below the latest H4 V-shape",
+         "Going out of line sends no alert. While out of line no H4 OC or H4 Breaker alerts fire, and the dashboard shows the pair as OUT OF LINE.", im["realign"]),
         ("G. A new breakout", "When the setup changes",
          "Pulling back into the range is not a cancellation — that's where reactions happen. The setup only changes at the "
          "<b>next Daily breakout</b> on any layer, in either direction.",
