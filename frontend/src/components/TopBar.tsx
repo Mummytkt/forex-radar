@@ -133,7 +133,7 @@ export default function TopBar({ title, subtitle }: Props) {
             {groups.map(g => (
               <div key={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '4px 0' }}>
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', padding: '4px 10px' }}>{g.label}</div>
-                {g.items.map(({ href, icon: Icon, label }) => {
+                {g.items.map(({ href, icon: Icon, label, color }) => {
                   const active = href === '/dashboard' ? path === '/dashboard' : path.startsWith(href)
                   return (
                     <Link key={href} href={href} style={{
@@ -142,7 +142,7 @@ export default function TopBar({ title, subtitle }: Props) {
                       color: active ? 'var(--accent-hover)' : 'var(--text-secondary)',
                       background: active ? 'var(--accent-bg)' : 'transparent',
                     }}>
-                      <Icon size={14} /> {label}
+                      <Icon size={14} color={color} /> {label}
                       {href === '/strategy' && unread > 0 && (
                         <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: 'var(--bearish)', color: 'white', fontSize: 10.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                           {unread > 9 ? '9+' : unread}

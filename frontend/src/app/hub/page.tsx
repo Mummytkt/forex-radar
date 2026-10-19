@@ -19,37 +19,35 @@ function greeting(): string {
 function Card({ item, group, detail, badge, featured }: { item: NavItem; group: string; detail?: string | null; badge?: number; featured?: boolean }) {
   const Icon = item.icon
   return (
-    <Link href={item.href} className="hub-card" style={{
+    <Link href={item.href} className={`hub-card${featured ? ' hub-featured' : ''}`} style={{
+      ['--c' as string]: item.color,
       gridColumn: featured ? 'span 2' : undefined,
-      display: 'flex', flexDirection: 'column', gap: 12, padding: featured ? '22px 22px 20px' : '18px 18px 16px',
-      borderRadius: 14, textDecoration: 'none', position: 'relative',
-      background: featured ? 'linear-gradient(135deg, var(--accent-bg), var(--card))' : 'var(--card)',
-      border: `1px solid ${featured ? 'var(--accent)' : 'var(--border)'}`,
-      minHeight: featured ? 150 : 132,
-    }}>
+      display: 'flex', flexDirection: 'column', gap: 12, padding: featured ? '24px 24px 22px' : '20px 18px 18px',
+      borderRadius: 18, textDecoration: 'none', position: 'relative',
+      minHeight: featured ? 156 : 140,
+    } as React.CSSProperties}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{
-          width: featured ? 42 : 36, height: featured ? 42 : 36, borderRadius: 11,
-          background: featured ? 'var(--accent)' : 'var(--accent-bg)',
+        <span className="hub-icon" style={{
+          width: featured ? 46 : 40, height: featured ? 46 : 40, borderRadius: 13,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Icon size={featured ? 20 : 17} color={featured ? 'white' : 'var(--accent-hover)'} />
+          <Icon size={featured ? 21 : 18} color="#fff" />
         </span>
         {badge ? (
           <span style={{ minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999, background: 'var(--bearish)', color: 'white', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             {badge > 9 ? '9+' : badge}
           </span>
         ) : (
-          <ArrowUpRight size={16} color="var(--text-muted)" className="hub-arrow" />
+          <ArrowUpRight size={17} className="hub-arrow" />
         )}
       </div>
       <div>
-        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 3 }}>{group}</div>
-        <div style={{ fontWeight: 700, fontSize: featured ? 18 : 15, color: 'var(--text-primary)' }}>{item.label}</div>
-        <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{item.desc}</div>
+        <div className="hub-group" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{group}</div>
+        <div className="hub-title" style={{ fontWeight: 800, fontSize: featured ? 19 : 15.5, letterSpacing: '-0.01em' }}>{item.label}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 5, lineHeight: 1.55 }}>{item.desc}</div>
       </div>
       {detail && (
-        <div style={{ marginTop: 'auto', fontSize: 11.5, fontWeight: 600, color: 'var(--accent-hover)' }}>{detail}</div>
+        <div className="hub-detail" style={{ marginTop: 'auto', fontSize: 11.5, fontWeight: 700 }}>{detail}</div>
       )}
     </Link>
   )
@@ -80,12 +78,19 @@ export default function HubPage() {
   return (
     <>
       <TopBar title="Home" subtitle="Everything in one place" />
-      <main className="page-padded" style={{ flex: 1, padding: '28px 28px 40px', display: 'flex', flexDirection: 'column', gap: 26, maxWidth: 1180, width: '100%', margin: '0 auto' }}>
+      <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+        {/* Soft background glows, like the landing page */}
+        <div className="hub-glow lp-drift" style={{ left: '-8%', top: '-10%', width: '42%', height: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.22), transparent 70%)' }} />
+        <div className="hub-glow lp-drift" style={{ right: '-10%', top: '20%', width: '40%', height: '55%', background: 'radial-gradient(circle, rgba(236,72,153,0.12), rgba(245,158,11,0.08) 45%, transparent 72%)' }} />
+        <div className="hub-glow lp-drift" style={{ left: '25%', bottom: '-15%', width: '45%', height: '45%', background: 'radial-gradient(circle, rgba(16,185,129,0.10), transparent 70%)' }} />
+      <main className="page-padded" style={{ position: 'relative', zIndex: 1, padding: '30px 28px 44px', display: 'flex', flexDirection: 'column', gap: 26, maxWidth: 1180, width: '100%', margin: '0 auto' }}>
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            {hello}{name ? `, ${name}` : ''}
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            {hello}, <span className="lp-grad1">{name || 'trader'}</span>
           </h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>Where would you like to go?</p>
+          <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginTop: 6 }}>
+            Where would you like to go? <span className="lp-grad2" style={{ fontWeight: 600 }}>Know the direction. Trade with confidence.</span>
+          </p>
         </div>
 
         <div className="hub-grid">
@@ -101,6 +106,7 @@ export default function HubPage() {
           )))}
         </div>
       </main>
+      </div>
     </>
   )
 }
