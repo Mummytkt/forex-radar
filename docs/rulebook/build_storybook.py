@@ -236,8 +236,8 @@ def make_images():
         bubbles=[(1, 9.65, "We made the step together.", (-0.6, 1.2)), (2, 8.65, "I came LATER, touched it,\nclosed above: ENCORE!", (1.6, -1.5))],
         ylim=(6.4, 11.4), xpad=(1.4, 4.0), speed=[2], size=(7.4, 3.0))
     im["wobble"] = scene("wobble", [(9.2, 9.3, 7.4, 7.6, L), (7.6, 8.1, 7.5, 8.0, L), (8.0, 8.1, 7.6, 7.7, L), (7.7, 8.7, 7.6, 8.5, L)], sx=1.6,
-        levels=[(8.4, "little valley floor (from the last bell)", RED_D), (8.0, "new little rooftop", SKY, 1)], mats=[(8.0, 8.8, "")],
-        bubbles=[(0, 7.45, "I closed below the floor\nand its mat: WOBBLE!\n(no bell)", (1.6, -0.6)), (3, 8.65, "Back above the new rooftop:\nENCORE!", (0.4, 0.8))],
+        levels=[(8.4, "newest little valley floor", RED_D), (8.0, "new little rooftop", SKY, 1)],
+        bubbles=[(0, 7.45, "I closed below the newest\nlittle floor: WOBBLE!\n(no bell)", (1.6, -0.6)), (3, 8.65, "Back above the new rooftop:\nENCORE!", (0.4, 0.8))],
         ylim=(6.4, 10.2), xpad=(1.4, 5.6), speed=[0, 2])
     im["gameover"] = scene("gameover", [(2.5, 4.7, 2.3, 4.5, G), (4.5, 4.6, 3.3, 3.5, G), (3.5, 6.8, 3.4, 6.5, G), (6.5, 6.6, 4.0, 4.2, G), (4.2, 4.3, 2.3, 2.6, G)], sx=1.8,
         levels=[(4.5, "Trampoline (the broken roof)", SKY, 0), (3.3, "other side of the house", RED_D, 1)],
@@ -376,8 +376,8 @@ def chapters():
         ]),
         (None, None, "encore2", []),
         ("The Wobble", "#ff7a59", "wobble", [
-            "Sometimes the Little Twins slip. A twin closes <b>below the newest little valley floor</b>. That's a Wobble, and every little hand-off step is forgotten.",
-            "That's a <b>Wobble</b>. They're out of line. No bell rings for a wobble.",
+            "Sometimes the Little Twins slip. A twin closes <b>below the newest little valley floor</b>.",
+            "That's a <b>Wobble</b>. They're out of line, and every little hand-off step is forgotten. No bell rings for a wobble.",
             "But if a later twin climbs back and closes <b>above the newest little rooftop</b>, ENCORE! The climb is back on.",
             "Encore Bells keep ringing like this until the next Giant breakout.",
         ]),
