@@ -758,7 +758,7 @@ def remove_video(request: Request, url: str = Query(...)):
 
 STRATEGY_CONTENT = {
     "chain": [
-        {"n": 1, "title": "Daily Breakout", "body": "The Daily chart is read as market structure with three layers: external highs and lows (the range that matters most), internal highs and lows inside it, and inner internal highs and lows inside the internal range. Levels are wick highs and lows. A breakout is a Daily candle BODY closing beyond any of these levels — no tolerance. The most recent break on any layer sets the bias and the level it broke becomes the Daily Breaker."},
+        {"n": 1, "title": "Daily Breakout", "body": "The Daily chart is read as market structure with four nested layers: external highs and lows (the range that matters most), internal highs and lows inside it, inner internal highs and lows inside the internal range, and sub-internal highs and lows inside the inner internal range. Levels are wick highs and lows. A breakout is a Daily candle BODY closing beyond any of these levels — no tolerance. The most recent break on any layer sets the bias and the level it broke becomes the Daily Breaker."},
         {"n": 2, "title": "Reaction Source Identification", "body": "After a breakout, price is watched at three kinds of reaction source: a retest of the Daily Breaker, a reaction inside the range that was just broken (between the breaker and the other side of that range), and post-breakout Daily OC levels. Only reactions in the breakout direction count."},
         {"n": 3, "title": "Retest Detection", "body": "When an H4 candle's high or low (including wicks) touches any active reaction source band, the engine flags a retest in progress. The band is the source level ± the configured tolerance (default 5 pips)."},
         {"n": 4, "title": "H4 Confirmation", "body": "With a retest in progress, the engine checks subsequent H4 candles for a qualifying confirmation: (a) an H4 A-shape or V-shape breakout — candle closes beyond the body level of an H4 formation in the breakout direction, or (b) an H4 OC reaction — candle wicks into an H4 OC zone and closes beyond the OC level in the breakout direction. Either confirms Daily + H4 alignment and triggers the alert."},
@@ -778,6 +778,7 @@ STRATEGY_CONTENT = {
             {"label": "External", "variant": "bullish", "desc": "The outer range. The external low is the lowest point before price closed above an A shape (mirror for the high). The side in the move's direction keeps following price (still forming) until price pulls back by closing beyond the last A/V it came from, then it is fixed."},
             {"label": "Internal", "variant": "warning", "desc": "Highs and lows built by the same rules inside the external range — the swings of the pullback. They reset whenever an external level breaks."},
             {"label": "Inner internal", "variant": "warning", "desc": "Highs and lows built by the same rules inside the internal range. They reset whenever an internal level breaks."},
+            {"label": "Sub-internal", "variant": "warning", "desc": "Highs and lows built by the same rules inside the inner internal range, so a full structure inside it is never missed. They reset whenever an inner internal level breaks."},
         ],
     },
     "alert_classifications": [
@@ -787,7 +788,7 @@ STRATEGY_CONTENT = {
         {"term": "Continuation — H4 OC", "body": "Fires when two consecutive same-direction H4 candles form an OC level, and price returns to react from the OC midpoint: the H4 candle's range dips into the OC zone and the candle closes beyond the midpoint in the breakout direction. Confirms continuation of the established Daily bias without requiring a new A/V break."},
     ],
     "reaction_sources": [
-        {"term": "Daily Breaker", "body": "The external, internal or inner internal level the Daily close broke. Price often returns to test it from the other side (role reversal)."},
+        {"term": "Daily Breaker", "body": "The external, internal, inner internal or sub-internal level the Daily close broke. Price often returns to test it from the other side (role reversal)."},
         {"term": "Inside Range", "body": "Price back inside the range that was just broken — between the Daily Breaker and the other side of that range — reacting in the breakout direction. It fails if a candle closes through the other side."},
         {"term": "Post-Breakout OC", "body": "Two consecutive same-direction Daily candles after the breakout candle, in the breakout direction. The midpoint of their closes becomes a reaction zone."},
     ],

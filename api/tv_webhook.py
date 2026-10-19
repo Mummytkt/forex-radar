@@ -164,7 +164,7 @@ class TVWebhookPayload(BaseModel):
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
     snapshot: Optional[dict] = None    # PRICE_UPDATE: chart stage + levels (Bias Pointer 2026-10-16+)
-    level_type: Optional[str] = None   # which daily level broke: external | internal | inner_internal (2026-10-18+)
+    level_type: Optional[str] = None   # which daily level broke: external | internal | inner_internal | sub_internal
     range_level: Optional[float] = None  # BREAKOUT: the other side of the range that was broken
 
 

@@ -21,13 +21,15 @@ interface Snapshot {
   h4_v: number | null
   h4_bk: number | null
   h4_oc: number | null
-  level_type?: 'external' | 'internal' | 'inner_internal' | null
+  level_type?: 'external' | 'internal' | 'inner_internal' | 'sub_internal' | null
   ext_hi?: number | null
   ext_lo?: number | null
   int_hi?: number | null
   int_lo?: number | null
   inn_hi?: number | null
   inn_lo?: number | null
+  sub_hi?: number | null
+  sub_lo?: number | null
 }
 interface BoardRow { instrument: string; snapshot: Snapshot | null; price: number | null; updated_at: string | null }
 
@@ -42,7 +44,7 @@ const SOURCE: Record<string, string> = {
   post_breakout_oc: 'Post-breakout OC', daily_breaker: 'Daily Breaker', inside_range: 'Inside Range',
 }
 const LEVEL_TYPE: Record<string, string> = {
-  external: 'External', internal: 'Internal', inner_internal: 'Inner internal',
+  external: 'External', internal: 'Internal', inner_internal: 'Inner internal', sub_internal: 'Sub-internal',
 }
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -148,6 +150,8 @@ export default function LiveChartBoard() {
                     <Level name="Int.L" v={fmt(i, s.int_lo ?? null)} />
                     <Level name="Inn.H" v={fmt(i, s.inn_hi ?? null)} />
                     <Level name="Inn.L" v={fmt(i, s.inn_lo ?? null)} />
+                    <Level name="Sub.H" v={fmt(i, s.sub_hi ?? null)} />
+                    <Level name="Sub.L" v={fmt(i, s.sub_lo ?? null)} />
                     <Level name="D.A" v={fmt(i, s.d_a)} />
                     <Level name="D.V" v={fmt(i, s.d_v)} />
                     {s.d_oc !== null && <Level name="D.OC" v={fmt(i, s.d_oc) + (s.d_oc_count > 1 ? ` (${s.d_oc_count} watched)` : '')} />}

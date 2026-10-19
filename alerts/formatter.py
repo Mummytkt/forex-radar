@@ -39,7 +39,8 @@ _BROKEN_TYPE_NAMES: dict[FormationType, str] = {
 
 # ── Context label ────────────────────────────────────────────────────────────
 
-_LEVEL_TYPE_NAMES = {"external": "External", "internal": "Internal", "inner_internal": "Inner internal"}
+_LEVEL_TYPE_NAMES = {"external": "External", "internal": "Internal", "inner_internal": "Inner internal",
+                     "sub_internal": "Sub-internal"}
 
 
 def _context_line(alert: AlertRecord) -> str:
