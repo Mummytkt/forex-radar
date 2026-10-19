@@ -485,7 +485,6 @@ f_structure() =>
 [s_cdir, s_chi, s_clo, s_chif, s_clof, s_chit, s_clot,
  s_bcnt, s_bdir, s_blvl, s_bopp,
  s_da, s_da_t, s_dv, s_dv_t] = request.security(syminfo.tickerid, "D", f_structure(), lookahead=barmerge.lookahead_on)
-lookahead=barmerge.lookahead_on)
 
 // ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
 // lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
