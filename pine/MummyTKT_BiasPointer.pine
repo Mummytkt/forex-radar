@@ -77,6 +77,19 @@ color  bull_lbl_col     = input.color(color.new(color.green, 60), "Bullish state
 color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state label color",
      tooltip="Background color of the state label when direction is bearish (BREAKOUT / awaiting retest)",
      group="Labels")
+// Label colours — each picker has an opacity slider
+const string GLC = "Label colors (use the opacity slider to fade them)"
+color  retest_lbl_col   = input.color(color.orange, "State label: Retest", group = GLC)
+color  conf_lbl_col     = input.color(color.teal,   "State label: Confirmed · H4 aligned", group = GLC)
+color  realign_lbl_col  = input.color(color.blue,   "State label: Confirmed · realigning", group = GLC)
+color  idle_lbl_col     = input.color(color.new(color.gray, 20), "State label: no breakout", group = GLC)
+color  da_lbl_col       = input.color(color.new(color.red,    55), "D.A", group = GLC, inline = "dl")
+color  dv_lbl_col       = input.color(color.new(color.lime,   45), "D.V", group = GLC, inline = "dl")
+color  doc_lbl_col      = input.color(color.new(color.purple, 45), "D.OC", group = GLC, inline = "dl")
+color  h4a_lbl_col      = input.color(color.new(color.red,    72), "H4.A", group = GLC, inline = "hl")
+color  h4v_lbl_col      = input.color(color.new(color.lime,   65), "H4.V", group = GLC, inline = "hl")
+color  h4bk_lbl_col     = input.color(color.new(color.orange, 25), "H4.BK", group = GLC, inline = "hl")
+color  h4oc_lbl_col     = input.color(color.new(color.teal,   45), "H4.OC", group = GLC, inline = "hl")
 
 // ── Daily structure lines (most recent external high / low) ─────────────────
 const string GS1 = "External levels"
@@ -960,20 +973,20 @@ if barstate.islast
     int lbl_x = bar_index + 20
     if show_daily_lbls and show_daily_on_tf
         if not na(a_lvl)
-            _a_lbl   := label.new(lbl_x, a_lvl,     "D.A  " + str.tostring(a_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.red,    55), textcolor=color.white, size=size.small)
+            _a_lbl   := label.new(lbl_x, a_lvl,     "D.A  " + str.tostring(a_lvl,     "#.#####"), style=label.style_label_left, color=da_lbl_col, textcolor=color.white, size=size.small)
         if not na(v_lvl)
-            _v_lbl   := label.new(lbl_x, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.lime,   45), textcolor=color.black, size=size.small)
+            _v_lbl   := label.new(lbl_x, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=dv_lbl_col, textcolor=color.black, size=size.small)
         if not na(pb_oc_lvl)
-            _poc_lbl := label.new(lbl_x, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####") + (array.size(pb_ocs) > 1 ? "  (" + str.tostring(array.size(pb_ocs)) + " watched)" : ""), style=label.style_label_left, color=color.new(color.purple, 45), textcolor=color.white, size=size.small)
+            _poc_lbl := label.new(lbl_x, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####") + (array.size(pb_ocs) > 1 ? "  (" + str.tostring(array.size(pb_ocs)) + " watched)" : ""), style=label.style_label_left, color=doc_lbl_col, textcolor=color.white, size=size.small)
     if show_h4_lbls and show_h4_on_tf
         if not na(h4_a_lvl)
-            _h4a_lbl := label.new(lbl_x, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.red,    72), textcolor=color.white, size=size.small)
+            _h4a_lbl := label.new(lbl_x, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=h4a_lbl_col, textcolor=color.white, size=size.small)
         if not na(h4_v_lvl)
-            _h4v_lbl := label.new(lbl_x, h4_v_lvl,       "H4.V  " + str.tostring(h4_v_lvl,       "#.#####"), style=label.style_label_left, color=color.new(color.lime,   65), textcolor=color.black, size=size.small)
+            _h4v_lbl := label.new(lbl_x, h4_v_lvl,       "H4.V  " + str.tostring(h4_v_lvl,       "#.#####"), style=label.style_label_left, color=h4v_lbl_col, textcolor=color.black, size=size.small)
         if not na(h4_breaker_lvl)
-            _bk_lbl  := label.new(lbl_x, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=color.new(color.orange, 25), textcolor=color.white, size=size.small)
+            _bk_lbl  := label.new(lbl_x, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=h4bk_lbl_col, textcolor=color.white, size=size.small)
         if not na(h4c_oc_lvl)
-            _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=color.new(color.teal,   45), textcolor=color.white, size=size.small)
+            _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=h4oc_lbl_col, textcolor=color.white, size=size.small)
     if show_lvl_lines
         if show_daily_on_tf and not na(a_lvl)          and not na(s_da_t)
             _a_line   := line.new(s_da_t,     a_lvl,          time,      a_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
@@ -1053,19 +1066,19 @@ if barstate.isconfirmed and barstate.isrealtime
           alert.freq_once_per_bar)
 
 
-color _lbl_col = color.new(color.gray, 20)
+color _lbl_col = idle_lbl_col
 if retest_on
-    _lbl_col := color.orange
+    _lbl_col := retest_lbl_col
 else if h4_bo_fired and h4_aligned
-    _lbl_col := color.teal
+    _lbl_col := conf_lbl_col
 else if h4_bo_fired
-    _lbl_col := color.blue
+    _lbl_col := realign_lbl_col
 else if bo_dir == "bullish"
     _lbl_col := bull_lbl_col
 else if bo_dir == "bearish"
     _lbl_col := bear_lbl_col
 if not _is_4h
-    _lbl_col := na(bo_dir) ? color.new(color.gray, 20) : bo_dir == "bullish" ? bull_lbl_col : bear_lbl_col
+    _lbl_col := na(bo_dir) ? idle_lbl_col : bo_dir == "bullish" ? bull_lbl_col : bear_lbl_col
 
 var label _state_lbl = na
 label.delete(_state_lbl)
