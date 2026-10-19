@@ -39,6 +39,9 @@
 //             ONE most-recent external high/low: structures form inside the
 //             current range at any depth (same rules) and only the newest pair
 //             is drawn; its latest break is the daily breakout.
+//             H4 Breaker / H4 OC continuations only count a candle that OPENS on
+//             the bias side of the level (a climb through it from below — or a
+//             drop through it from above for sells — is not a rejection).
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -897,7 +900,10 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 // Re-arm when price is clear of the zone (so each fresh visit fires once)
                 if not bk_touched
                     bk_armed := true
-                bool bk_react = bk_armed and bk_touched and ((bo_dir == "bullish" and close > h4_breaker_lvl) or (bo_dir == "bearish" and close < h4_breaker_lvl))
+                // A rejection comes INTO the level from the bias side: for a buy the
+                // candle opens at/above it, dips in and closes above (mirror for sells).
+                // A candle climbing up through it from below is not a rejection.
+                bool bk_react = bk_armed and bk_touched and ((bo_dir == "bullish" and open >= h4_breaker_lvl and close > h4_breaker_lvl) or (bo_dir == "bearish" and open <= h4_breaker_lvl and close < h4_breaker_lvl))
                 if bk_react
                     string bk_type = h4_breaker_orig_fired ? "breaker_cont" : "breaker_origin"
                     if not h4_breaker_orig_fired
@@ -924,7 +930,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 // Re-arm when price is clear of the zone (so each fresh visit fires once)
                 if not oc_touched
                     oc_armed := true
-                bool oc_react = oc_armed and oc_touched and ((bo_dir == "bullish" and close > h4c_oc_lvl) or (bo_dir == "bearish" and close < h4c_oc_lvl))
+                // Same rule as the breaker: open on the bias side, dip in, close beyond.
+                bool oc_react = oc_armed and oc_touched and ((bo_dir == "bullish" and open >= h4c_oc_lvl and close > h4c_oc_lvl) or (bo_dir == "bearish" and open <= h4c_oc_lvl and close < h4c_oc_lvl))
                 if oc_react
                     oc_armed := false
                     if barstate.isrealtime
