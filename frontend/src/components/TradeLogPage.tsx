@@ -1107,7 +1107,7 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <TopBar title={config.pageTitle} />
 
-      <main style={{ flex: 1, padding: '20px 24px', maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <main style={{ flex: 1, width: '100%', padding: '20px 24px' }}>
 
         {/* ── Page header ── */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>

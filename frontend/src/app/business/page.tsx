@@ -141,7 +141,7 @@ export default function BusinessPage() {
   return (
     <>
       <TopBar title="Business" subtitle="Revenue, subscribers, payouts and platform health" />
-      <main className="page-padded" style={{ flex: 1, padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1100 }}>
+      <main className="page-padded" style={{ flex: 1, width: '100%', padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
         {error && <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--bearish-bg)', color: 'var(--bearish)', fontSize: 13 }}>{error}</div>}
 
         {/* Headline numbers */}

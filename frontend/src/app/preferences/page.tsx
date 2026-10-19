@@ -73,7 +73,7 @@ export default function PreferencesPage() {
   return (
     <>
       <TopBar title="Alert Filters" subtitle="Choose which bias confirmations reach your Telegram" />
-      <main className="page-padded" style={{ flex: 1, padding: '24px', maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main className="page-padded" style={{ flex: 1, width: '100%', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Telegram delivery */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>

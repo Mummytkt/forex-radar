@@ -77,7 +77,7 @@ export default function AffiliatePage() {
   return (
     <>
       <TopBar title="Refer & Earn" subtitle="Earn a share of every subscriber you bring in" />
-      <main style={{ flex: 1, padding: '24px', maxWidth: 860, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main style={{ flex: 1, width: '100%', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {!data && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>}
 

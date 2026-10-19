@@ -309,7 +309,7 @@ export default function SettingsPage() {
   return (
     <>
       <TopBar title="Settings" subtitle="Instruments, account, and engine configuration" />
-      <main className="page-padded" style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main className="page-padded" style={{ flex: 1, width: '100%', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         <Section title="My Instruments" desc="Select which pairs you want to receive alerts for. Your choices are private and don't affect other users.">
           <InstrumentManager />

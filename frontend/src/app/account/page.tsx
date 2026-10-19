@@ -577,7 +577,7 @@ export default function AccountPage() {
     return (
       <>
         <TopBar title="Account" subtitle="Your sign-in details and access" />
-        <main style={{ flex: 1, padding: '24px', maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <main style={{ flex: 1, width: '100%', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           <SetupForm onDone={() => { setSetupDone(true); window.location.reload() }} />
         </main>
       </>
@@ -601,7 +601,7 @@ export default function AccountPage() {
   return (
     <>
       <TopBar title="Account" subtitle="Your sign-in details and current access" />
-      <main className="page-padded" style={{ flex: 1, padding: '24px', maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <main className="page-padded" style={{ flex: 1, width: '100%', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Account details + Plan */}
         <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
