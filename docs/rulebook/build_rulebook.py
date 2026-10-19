@@ -31,7 +31,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
 HERE = Path(__file__).resolve().parent
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "19 October 2026 · matches the Bias Pointer script with Daily market structure (most recent External high / low, 19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "19 October 2026 · matches the Bias Pointer script with Daily market structure (most recent External high / low) and bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -322,14 +322,15 @@ def make_rules(im):
         ("F. Continuations (after the Origin)", "H4 Breaker retest",
          f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. When a later H4 candle <b>wicks into it (± {T}) and closes beyond it</b> "
          "in the bias direction, a continuation fires.",
-         "Wick into the H4 breaker, close above it", "Wick into the H4 breaker, close below it",
+         "Candle opens at/above the H4 breaker, wicks into it, closes above it", "Candle opens at/below the H4 breaker, wicks into it, closes below it",
          "The first one is labelled “Breaker origin”, later ones “Breaker continuation”. Each visit alerts once; price must leave the zone before the next.",
          im["breaker"]),
         ("F. Continuations (after the Origin)", "H4 OC continuation",
          f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. When a <b>later</b> H4 candle wicks into it (± {T}) and closes beyond it, "
          "a continuation fires.",
-         "Wick into the H4 OC, close above it", "Wick into the H4 OC, close below it",
-         "The candle that completes the OC can't trigger it. Each visit alerts once.", im["h4oc"]),
+         "Candle opens at/above the H4 OC, wicks into it, closes above it", "Candle opens at/below the H4 OC, wicks into it, closes below it",
+         "The candle that completes the OC can't trigger it, and a candle climbing up through it from below (falling through it from above, for sells) "
+         "is not a rejection. Each visit alerts once.", im["h4oc"]),
         ("F. Continuations (after the Origin)", "Breakout continuation after a pullback",
          f"If H4 closes against the bias beyond the H4 V-shape (buy) or A-shape (sell) in place at the last confirmation (by more than {T}), "
          "H4 is <b>out of alignment</b>. The next H4 close beyond the latest H4 A/V-shape in the bias direction fires a continuation.",
