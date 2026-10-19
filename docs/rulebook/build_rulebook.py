@@ -31,7 +31,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
 HERE = Path(__file__).resolve().parent
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "19 October 2026 · matches the Bias Pointer script with Daily market structure (most recent External high / low) and bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "19 October 2026 · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -293,7 +293,7 @@ def make_rules(im):
          f"The breakout candle itself doesn't count as candle 1. An OC must sit clear of the breaker zone (beyond ± {T}). "
          "The chart label shows the newest one, e.g. “D.OC 10704.99 (3 watched)”.", im["postoc"]),
         ("D. Reaction zones (until the Origin)", "What counts as a reaction",
-         f"An H4 candle reacts from a zone when its <b>wick enters the zone (± {T})</b> and its close doesn't go through it. Zones are checked in this order:",
+         f"An H4 candle reacts from a zone when its <b>wick reaches the level exactly</b> (a near miss doesn't count) and its close doesn't go through it. Zones are checked in this order:",
          "1) the deepest post-breakout OC touched · 2) the Daily Breaker · 3) back inside the range that was just broken (above its low)",
          "1) the highest post-breakout OC touched · 2) the Daily Breaker · 3) back inside the range that was just broken (below its high)",
          "The reaction is reported with its source: Post-Breakout OC, Daily Breaker, or Inside Range. It doesn't matter which zone price reaches first.",
@@ -320,22 +320,22 @@ def make_rules(im):
          "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
          "Continuation alerts always reach subscribers, whatever their External/Internal preference.", im["noneworigin"]),
         ("F. Continuations (after the Origin)", "H4 Breaker retest",
-         f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. When a later H4 candle <b>wicks into it (± {T}) and closes beyond it</b> "
+         f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. When a later H4 candle <b>wicks exactly onto it and closes beyond it</b> "
          "in the bias direction, a continuation fires.",
          "Candle opens at/above the H4 breaker, wicks into it, closes above it", "Candle opens at/below the H4 breaker, wicks into it, closes below it",
          "The first one is labelled “Breaker origin”, later ones “Breaker continuation”. Each visit alerts once; price must leave the zone before the next.",
          im["breaker"]),
         ("F. Continuations (after the Origin)", "H4 OC continuation",
-         f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. When a <b>later</b> H4 candle wicks into it (± {T}) and closes beyond it, "
+         f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. When a <b>later</b> H4 candle wicks exactly onto it and closes beyond it, "
          "a continuation fires.",
          "Candle opens at/above the H4 OC, wicks into it, closes above it", "Candle opens at/below the H4 OC, wicks into it, closes below it",
          "The candle that completes the OC can't trigger it, and a candle climbing up through it from below (falling through it from above, for sells) "
-         "is not a rejection. Each visit alerts once.", im["h4oc"]),
+         "is not a rejection. An H4 OC that a candle closes through against the bias is dropped. Each visit alerts once.", im["h4oc"]),
         ("F. Continuations (after the Origin)", "Breakout continuation after a pullback",
-         f"If H4 closes against the bias beyond the H4 V-shape (buy) or A-shape (sell) in place at the last confirmation (by more than {T}), "
-         "H4 is <b>out of alignment</b>. The next H4 close beyond the latest H4 A/V-shape in the bias direction fires a continuation.",
-         "Out of alignment below the H4 V-shape; back in on a close above the latest H4 A-shape",
-         "Out of alignment above the H4 A-shape; back in on a close below the latest H4 V-shape",
+         "If an H4 candle closes against the bias beyond the <b>latest</b> H4 V-shape (buy) or A-shape (sell), H4 is <b>out of alignment</b> "
+         "and every H4 OC is dropped. The next H4 close beyond the latest H4 A/V-shape in the bias direction fires a continuation and OC tracking starts fresh.",
+         "Out of alignment on a close below the latest H4 V-shape; back in on a close above the latest H4 A-shape",
+         "Out of alignment on a close above the latest H4 A-shape; back in on a close below the latest H4 V-shape",
          "Going out of alignment sends no alert. It only resets the H4 structure.", im["realign"]),
         ("G. A new breakout", "When the setup changes",
          "Pulling back into the range is not a cancellation — that's where reactions happen. The setup only changes at the "
@@ -381,7 +381,7 @@ GLOSSARY = [
     ("Origin", "The first H4 confirmation of a Daily breakout. One per breakout."),
     ("Continuation", "Every later H4 confirmation in the same direction, until the next Daily breakout."),
     ("H4 External / Internal", "Whether the H4 A/V-shape that broke formed before or after the reaction began."),
-    ("Tolerance", "The ± band around a level (default 5 pips on the Bias Pointer, 20 pips for entry alerts)."),
+    ("Tolerance", "The ± band (default 5 pips) used for moving away from the breaker and for a reaction failing; touches must be exact. Entry alerts use 20 pips."),
     ("Next breakout", "Any later Daily break replaces the setup; a break the other way flips the bias."),
 ]
 

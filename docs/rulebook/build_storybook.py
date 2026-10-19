@@ -344,7 +344,7 @@ def chapters():
         ]),
         ("The Safe Spots", SKY, "spots", [
             "Now the Little Twins go looking for a safe place to land. Bella slides down... and stretches her leg to touch a Wiggle Mat.",
-            "If her toe (or shirt) touches a safe spot's mat, and her shirt <b>doesn't close through it</b>, she has made a <b>visit</b>. Grown-ups call it a <b>reaction</b>.",
+            "If her toe (or shirt) touches the safe spot's <b>exact line</b> (almost touching doesn't count), and her shirt <b>doesn't close through it</b>, she has made a <b>visit</b>. Grown-ups call it a <b>reaction</b>.",
             "There are three kinds of safe spots. Candle Town checks them in this order:",
             "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> The <b>Trampoline</b>. <b>3.</b> <b>Inside the house that just broke</b>: her shirt closes below the trampoline's mat but still above the other side of that house.",
             "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
@@ -370,13 +370,13 @@ def chapters():
         ]),
         ("Encore Bells!", GREEN_D, "encore1", [
             "After the Golden Bell, the Little Twins keep climbing. Every new good bounce rings an <b>Encore Bell</b>. Grown-ups call these <b>continuations</b>.",
-            "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. If a later twin <b>starts above it</b>, comes down to touch it (within its mat) and closes <b>above</b> it, ENCORE!",
+            "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. If a later twin <b>starts above it</b>, comes down to touch its exact line and closes <b>above</b> it, ENCORE!",
             "<b>The little hand-off step.</b> When two Little Bens climb one after the other, they make a little step. If a <b>later</b> twin starts above it, touches it and closes above, ENCORE! (A twin climbing up through it from below doesn't count.)",
             "Each visit to a spot rings <b>once</b>. The twins must leave and come back to ring it again.",
         ]),
         (None, None, "encore2", []),
         ("The Wobble", "#ff7a59", "wobble", [
-            "Sometimes the Little Twins slip. A twin closes <b>below the little valley floor and its mat</b>, the one that was there at the last bell.",
+            "Sometimes the Little Twins slip. A twin closes <b>below the newest little valley floor</b>. That's a Wobble, and every little hand-off step is forgotten.",
             "That's a <b>Wobble</b>. They're out of line. No bell rings for a wobble.",
             "But if a later twin climbs back and closes <b>above the newest little rooftop</b>, ENCORE! The climb is back on.",
             "Encore Bells keep ringing like this until the next Giant breakout.",
@@ -498,7 +498,7 @@ def build():
              ("Newest house (roof / floor)", "the most recent External high / low (Daily)"),
              ("Hand-off Step", "OC level (close of candle 1 = open of candle 2)"),
              ("Giant / Little / Tiny Twins", "Daily / H4 / H1 and H2 candles"),
-             ("Wiggle Mat", "tolerance band on the H4 zones (5 pips; entry alerts 20 pips)"),
+             ("Wiggle Mat", "tolerance band for moving away and for a visit failing (5 pips; entry alerts 20 pips); touches must be exact"),
              ("Great Breakout", "Daily close beyond the most recent External high/low"),
              ("Trampoline", "Daily Breaker (the broken level)"),
              ("Stepping Stones", "post-breakout Daily OCs (all watched)"),
