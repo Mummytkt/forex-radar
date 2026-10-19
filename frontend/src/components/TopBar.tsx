@@ -117,6 +117,16 @@ export default function TopBar({ title, subtitle }: Props) {
         }}>{timeStr}</span>
       </div>
 
+      {/* Light / dark switch — one click, on every page */}
+      <button
+        onClick={toggle}
+        style={{ ...pillBtn, padding: '0 9px' }}
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {theme === 'dark' ? <Sun size={15} color="#fbbf24" /> : <Moon size={15} color="#6366f1" />}
+      </button>
+
       {/* Jump to */}
       <div style={{ position: 'relative', zIndex: 35 }}>
         <button onClick={() => setMenu(menu === 'jump' ? null : 'jump')} style={pillBtn} aria-label={unread > 0 ? 'Jump to (new updates)' : 'Jump to'}>
@@ -181,10 +191,6 @@ export default function TopBar({ title, subtitle }: Props) {
               <span className={forexOpen ? 'pulse' : ''} style={{ width: 7, height: 7, borderRadius: '50%', background: forexOpen ? 'var(--bullish)' : 'var(--bearish)', display: 'inline-block' }} />
               FX {forexOpen ? 'Open' : 'Closed'} · Crypto Open · {timeStr}
             </span>
-            <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--card-hover)', color: 'var(--text-secondary)', fontSize: 12.5 }}>
-              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
-              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            </button>
             {authEnabled && user && (
               <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--bearish)', fontSize: 12.5 }}>
                 <LogOut size={13} /> Sign out
