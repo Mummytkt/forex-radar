@@ -194,8 +194,8 @@ def make_images():
         ylim=(0.2, 10.2), xpad=(1.4, 3.8), speed=[1])
     im["house"] = scene("house", [(2.0, 5.0, 1.2, 4.6, G), (4.6, 9.0, 4.4, 8.6, G), (8.6, 8.8, 3.2, 3.6, G), (3.6, 7.4, 3.4, 7.0, G),
                                   (7.0, 7.1, 4.4, 4.8, G), (4.8, 6.2, 4.6, 5.9, G)], sx=1.5,
-        levels=[(9.0, "Big House roof", SKY, 1), (7.4, "Room roof", "#8a5cf6", 3), (6.2, "Cupboard roof", "#ff7a59", 5),
-                (4.4, "Cupboard floor", "#ff7a59", 4), (3.2, "Room floor", "#8a5cf6", 2), (1.2, "Big House floor", SKY, 0)],
+        levels=[(9.0, "Big House roof", "#b4a6dc", 1), (7.4, "smaller house roof", "#b4a6dc", 3), (6.2, "NEWEST house roof", SKY, 5),
+                (4.4, "NEWEST house floor", SKY, 4), (3.2, "smaller house floor", "#b4a6dc", 2), (1.2, "Big House floor", "#b4a6dc", 0)],
         ylim=(0.4, 10.2), xpad=(1.4, 4.6), speed=[2, 4])
     im["trampoline"] = scene("trampoline", [(5.1, 5.6, 4.9, 5.3, L), (5.3, 6.8, 5.2, 6.6, L), (6.6, 6.8, 5.8, 6.0, L), (6.0, 6.1, 4.8, 5.6, L)], sx=1.6,
         levels=[(5, "Trampoline", SKY)], mats=[(4.6, 5.4, "wiggle mat")],
@@ -315,19 +315,18 @@ def chapters():
             "The highest Little fingertip is the Giant's High. The lowest Little toe is the Giant's Low. Same day, same moves, just different sizes.",
             "<b>Giants decide the direction. Little Twins find the moment.</b>",
         ]),
-        ("The Big House, the Rooms, the Cupboards and the Drawers", "#8a5cf6", "house", [
+        ("Houses Inside Houses", "#8a5cf6", "house", [
             "The Giant Twins live in a <b>Big House</b>. Its floor is the lowest spot a Giant's toe reached before Ben broke out through a rooftop. Grown-ups call it the <b>external low</b>.",
             "While the Giants keep climbing, the roof keeps rising with them. It's <b>still being built</b>. When a Giant slides back down past the last valley, the roof is finished. That's the <b>external high</b>.",
-            "Inside the Big House there are <b>Rooms</b>, with their own roofs and floors, built in exactly the same way. Grown-ups say <b>internal</b> highs and lows.",
-            "Inside a Room there are little <b>Cupboards</b>, built the same way again. Grown-ups say <b>inner internal</b>.",
-            "And inside a Cupboard there are tiny <b>Drawers</b>, built the same way once more, so no little adventure is missed. Grown-ups say <b>sub-internal</b>.",
-            "When the Big House breaks, its Rooms are cleared out and built again. When a Room breaks, its Cupboards are cleared out, and when a Cupboard breaks, its Drawers are cleared too.",
+            "Inside the Big House, a <b>smaller house</b> can be built in exactly the same way. And inside that one, an even smaller one, as small as you like!",
+            "Candle Town only paints the <b>newest</b> house on the wall. Its roof and floor are called the <b>External high and low</b>.",
+            "When a house breaks, every house inside it disappears, and the house around it is the one that counts again.",
         ]),
         ("The Great Breakout", SKY, "breakout", [
             "A Giant Ben climbs and pokes his arm past a roof. At the Closing Bell his shirt finishes... still below it. <b>Not yet!</b>",
             "The next Giant Ben climbs higher. At the Closing Bell his <b>shirt is above the roof</b>.",
             "<b>BREAKOUT!</b> Now Candle Town knows the direction: <b>UP</b>.",
-            "It can be the roof or floor of the <b>Big House</b>, a <b>Room</b>, a <b>Cupboard</b> or a <b>Drawer</b>. The <b>newest</b> breakout is the one that matters, and grown-ups' alerts say which one it was.",
+            "It is always the roof or floor of the <b>newest house</b>. The newest breakout is the one that matters.",
             "A breakout is not a trade yet. It's the <b>start</b> of the adventure.",
         ]),
         ("The Old Ceiling Becomes a Trampoline", "#ff7a59", "trampoline", [
@@ -384,12 +383,12 @@ def chapters():
         ]),
         ("A Brand-New Game", RED_D, "gameover", [
             "Giants can slide back <b>inside the house that just broke</b>, below the trampoline. That's okay! That's where visits happen.",
-            "But if a Giant's shirt closes past the <b>other side</b> of that house (or past any floor of the Big House, a Room, a Cupboard or a Drawer), that's a <b>breakout the other way</b>.",
+            "But if a Giant's shirt closes past the <b>other side</b> of that house (the newest house's floor), that's a <b>breakout the other way</b>.",
             "The old game ends and a <b>brand-new game</b> begins, going DOWN. Any new Giant breakout starts a new game.",
         ]),
         ("Bella's Turn: The Mirror World", RED_D, "mirror", [
             "Everything you learned works for Bella too. Just flip it upside down, like a mirror!",
-            "A Giant Bella's shirt closes <b>below a floor</b> of the Big House, a Room, a Cupboard or a Drawer. BREAKOUT DOWN!",
+            "A Giant Bella's shirt closes <b>below the newest house's floor</b>. BREAKOUT DOWN!",
             "The broken floor becomes a <b>ceiling</b>. Stepping stones are made by two Giant Bellas sliding one after the other.",
             "The Golden Bell rings when a Little Twin closes <b>below the newest little valley floor</b>. A Giant closing <b>above a roof</b> starts a new game going up.",
         ]),
@@ -417,7 +416,7 @@ def chapters():
 
 MORAL = [
     "<b>A trade is READY when the story goes in this order:</b>",
-    "<b>1.</b> A <b>Giant</b> twin's shirt closes past a roof or floor of the Big House, a Room, a Cupboard or a Drawer. Breakout!",
+    "<b>1.</b> A <b>Giant</b> twin's shirt closes past the roof or floor of the newest house. Breakout!",
     "<b>2.</b> A <b>Little</b> twin visits a <b>safe spot</b> (a stepping stone, the trampoline, or inside the house that just broke) and doesn't close through it.",
     "<b>3.</b> A Little twin's shirt closes past the <b>newest little rooftop</b>. The <b>Golden Bell</b> rings!",
     "<b>4.</b> At <b>your spot</b>, a Tiny twin shows a <b>Peek-and-Hold</b> or a <b>Big Hug</b>.",
@@ -496,11 +495,11 @@ def build():
              ("Stretchy arms and legs", "upper and lower wicks (to the high and low)"),
              ("Closing Bell", "candle close; nothing is judged before it"),
              ("Rooftop / Valley floor", "A-shape / V-shape level (Giants: wicks; Little twins: bodies)"),
-             ("Big House / Room / Cupboard / Drawer", "external / internal / inner internal / sub-internal highs and lows (Daily)"),
+             ("Newest house (roof / floor)", "the most recent External high / low (Daily)"),
              ("Hand-off Step", "OC level (close of candle 1 = open of candle 2)"),
              ("Giant / Little / Tiny Twins", "Daily / H4 / H1 and H2 candles"),
              ("Wiggle Mat", "tolerance band on the H4 zones (5 pips; entry alerts 20 pips)"),
-             ("Great Breakout", "Daily close beyond a high/low on any of the four layers"),
+             ("Great Breakout", "Daily close beyond the most recent External high/low"),
              ("Trampoline", "Daily Breaker (the broken level)"),
              ("Stepping Stones", "post-breakout Daily OCs (all watched)"),
              ("Visit", "reaction / retest of a Daily zone"),

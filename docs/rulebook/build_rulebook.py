@@ -31,7 +31,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
 HERE = Path(__file__).resolve().parent
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "18 October 2026 · matches the Bias Pointer script with Daily market structure (external / internal / inner internal / sub-internal, 19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "19 October 2026 · matches the Bias Pointer script with Daily market structure (most recent External high / low, 19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -164,10 +164,9 @@ def make_images():
         notes=[(4, 16.3, "close above the A\n→ bullish break", GREEN, (2.4, 17.3)), (8, 13.7, "close below the V\n→ pullback", RED)],
         labels=["", "A", "", "", "break", "", "", "V", "pullback"], ylim=(10.6, 19.6), size=(7.2, 3.2))
     im["layers"] = chart("layers", [(19, 19.5, 17.5, 17.8), (17.8, 18.0, 15.5, 15.8), (15.8, 16.2, 13.2, 13.6), (13.6, 15.4, 13.0, 15.1),
-                                    (15.1, 17.2, 14.9, 16.9), (16.9, 17.0, 15.3, 15.6), (15.6, 16.6, 15.4, 16.4),
-                                    (16.4, 16.5, 15.9, 16.0), (16.0, 16.45, 15.95, 16.35)],
-        levels=[(20, "External high", INK), (17.2, "Internal high", MUTED, 4), (16.6, "Inner internal high", ACCENT, 6),
-                (15.3, "Inner internal low", ACCENT, 5), (15.9, "Sub-internal low", GREEN, 7), (13.0, "Internal low", MUTED, 3), (10.5, "External low", INK)],
+                                    (15.1, 17.2, 14.9, 16.9), (16.9, 17.0, 15.3, 15.6), (15.6, 16.6, 15.4, 16.4)],
+        levels=[(20, "earlier structure high", MUTED), (17.2, "earlier structure high", MUTED, 4), (16.6, "most recent External high", ACCENT, 6),
+                (15.3, "most recent External low", ACCENT, 5), (13.0, "earlier structure low", MUTED, 3), (10.5, "earlier structure low", MUTED)],
         ylim=(9.8, 20.8), size=(7.2, 3.2))
     im["zone"] = chart("zone", [(13.6, 14.3, 13.4, 14.1), (14.1, 15.7, 14.0, 15.5), (15.5, 15.8, 14.7, 14.9), (14.9, 15.0, 13.7, 14.3)],
         levels=[(13.5, "Daily Breaker (broken level)", ACCENT)], zones=[(13.0, 14.0, "breaker zone", ZONE)],
@@ -243,7 +242,7 @@ def make_rules(im):
          "A candle is <b>bullish</b> (up) when it closes at or above its open, and <b>bearish</b> (down) when it closes below its open. "
          "The <b>body</b> runs between open and close; the <b>wicks</b> are the high and low beyond the body.",
          "Close ≥ open", "Close &lt; open",
-         "H4 levels and the entry patterns use candle <b>bodies</b>. Daily structure levels (external, internal, inner internal, sub-internal, D.A and D.V) use <b>wicks</b>.", im["anatomy"]),
+         "H4 levels and the entry patterns use candle <b>bodies</b>. Daily structure levels (the External high and low, D.A and D.V) use <b>wicks</b>.", im["anatomy"]),
         ("A. Candle basics", "Closes, not wicks",
          "A level is only broken when a candle <b>body closes</b> beyond it. A wick that pokes through and closes back never counts as a break.",
          "Broken when a candle closes above the level", "Broken when a candle closes below the level",
@@ -269,19 +268,19 @@ def make_rules(im):
          "Bullish: the external low is fixed; the external high follows new highs until a Daily close below the last V-shape",
          "Bearish: the external high is fixed; the external low follows new lows until a Daily close above the last A-shape",
          "A Daily close beyond the fixed level makes a new pair in the same direction. A close beyond the other level flips the direction.", im["external"]),
-        ("C. Daily bias", "Internal, inner internal and sub-internal levels",
-         "Inside the external range, the swings of the pullback build <b>internal</b> highs and lows by the same rules. Inside the internal range, "
-         "smaller swings build <b>inner internal</b> highs and lows, and inside those, <b>sub-internal</b> highs and lows. A swing only counts once a later candle has traded beyond the candle that formed "
-         "the A/V-shape (below the A's down candle, above the V's up candle) before the break.",
-         "Each layer is labelled Bullish or Bearish by its own last break",
-         "Each layer resets when the layer above it breaks (internal ← external, inner internal ← internal, sub-internal ← inner internal)",
-         "The Bias Pointer draws all eight levels with their direction, e.g. “Bullish External low” or “Bearish Internal low (still forming)”.", im["layers"]),
+        ("C. Daily bias", "Structures inside the range",
+         "While price is inside the current range, a <b>new structure can form inside it</b> by the same rules — a swing only counts once a later candle "
+         "has traded beyond the candle that formed the A/V-shape (below the A's down candle, above the V's up candle) before the break. "
+         "The new one becomes the <b>most recent External high and low</b>. This can repeat at any depth.",
+         "When the most recent structure breaks, every structure inside it is dropped and the one around it counts again",
+         "The Bias Pointer draws only the most recent pair, e.g. “Bullish External low” or “Bearish External low (still forming)”",
+         "A close beyond an older, wider level is also beyond every newer one inside it, so the most recent pair is always the first to break.", im["layers"]),
         ("C. Daily bias", "Daily breakout",
-         "A Daily candle <b>body closes beyond any</b> external, internal, inner internal or sub-internal high or low. No tolerance is used for this. "
+         "A Daily candle <b>body closes beyond the most recent External high or low</b>. No tolerance is used for this. "
          "The <b>most recent break on any layer</b> sets the direction of the bias, and the level it broke is the Daily Breaker.",
-         "Daily close above any structure high (any layer)", "Daily close below any structure low (any layer)",
+         "Daily close above the most recent External high", "Daily close below the most recent External low",
          "A wick through a level is not a break. The breakout alone is not a trade signal — it starts the setup. "
-         "Every alert names the level that broke: “Daily breakout level: External / Internal / Inner internal / Sub-internal”.", im["breakout"]),
+         "A wick through a level is not a break. The breakout alone is not a trade signal — it starts the setup.", im["breakout"]),
         ("C. Daily bias", "The Daily Breaker and moving away first",
          f"The broken level becomes the <b>Daily Breaker</b>: former resistance becomes support (or the reverse). Its zone is the level ± {T}. "
          "Before any retest counts, an H4 candle must first <b>close beyond the zone</b> — proving price moved away.",
@@ -373,8 +372,8 @@ def make_rules(im):
 
 GLOSSARY = [
     ("Bias", "The direction (buy or sell) the Daily breakout sets."),
-    ("Breakout", "A Daily candle body closing beyond an external, internal, inner internal or sub-internal high (buy) or low (sell)."),
-    ("External / Internal / Inner internal / Sub-internal (Daily)", "The four nested layers of Daily highs and lows: the outer range, the swings inside it, the swings inside those, and the swings inside those."),
+    ("Breakout", "A Daily candle body closing beyond the most recent External high (buy) or low (sell)."),
+    ("External high / low (Daily)", "The most recent structure's high and low. Smaller structures can form inside the range at any depth; the newest one counts."),
     ("Daily Breaker", "The broken level, now acting as support (buy) or resistance (sell)."),
     ("OC", "Open/Close level: where the first of two same-direction candles closed and the second opened."),
     ("Reaction / Retest", "An H4 candle's wick entering a Daily zone without closing through it."),

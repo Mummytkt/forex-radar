@@ -7,8 +7,8 @@
 //                                   webhook  = https://forex-radar.fly.dev/api/tv-webhook
 //
 // Event types:
-//   BREAKOUT         — Daily candle closed beyond an external, internal or inner
-//                      internal high/low (level_type says which)
+//   BREAKOUT         — Daily candle closed beyond the most recent external
+//                      high/low (level_type "external")
 //   RETEST           — H4 entered a reaction source zone
 //   RETEST_CANCELLED — H4 moved away from zone without H4 confirmation
 //   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
@@ -35,9 +35,10 @@
 //             its level is the breaker and the rest of that range is the
 //             inside-range zone. D.A/D.V are wick levels and only the one in line
 //             with the bias is shown (D.V for buys, D.A for sells).
-// 2026-10-19: fourth layer — sub-internal highs/lows inside the inner internal
-//             range, same rules; its breaks are daily breakouts too. Retest and
-//             H4-aligned chart markers removed.
+// 2026-10-19: retest and H4-aligned chart markers removed. Layers replaced by
+//             ONE most-recent external high/low: structures form inside the
+//             current range at any depth (same rules) and only the newest pair
+//             is drawn; its latest break is the daily breakout.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -77,35 +78,14 @@ color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state
      tooltip="Background color of the state label when direction is bearish (BREAKOUT / awaiting retest)",
      group="Labels")
 
-// ── Daily structure levels (external / internal / inner internal) ───────────
+// ── Daily structure lines (most recent external high / low) ─────────────────
 const string GS1 = "External levels"
-const string GS2 = "Internal levels"
-const string GS3 = "Inner internal levels"
-bool   show_ext = input.bool(true, "Show external", group = GS1)
+bool   show_ext = input.bool(true, "Show external high / low", group = GS1)
 color  c_eh  = input.color(#E0E0E0, "External high", group = GS1, inline = "eh")
 string s_eh  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "eh")
 color  c_el  = input.color(#E0E0E0, "External low ", group = GS1, inline = "el")
 string s_el  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "el")
 int    w_ext = input.int(2, "Line width", minval = 1, maxval = 4, group = GS1)
-bool   show_int = input.bool(true, "Show internal", group = GS2)
-color  c_ih  = input.color(#9E9E9E, "Internal high", group = GS2, inline = "ih")
-string s_ih  = input.string("Dotted", "", options = ["Solid", "Dashed", "Dotted"], group = GS2, inline = "ih")
-color  c_il  = input.color(#9E9E9E, "Internal low ", group = GS2, inline = "il")
-string s_il  = input.string("Dotted", "", options = ["Solid", "Dashed", "Dotted"], group = GS2, inline = "il")
-int    w_int = input.int(1, "Line width", minval = 1, maxval = 4, group = GS2)
-bool   show_inn = input.bool(true, "Show inner internal", group = GS3)
-color  c_nh  = input.color(#FFB74D, "Inner internal high", group = GS3, inline = "nh")
-string s_nh  = input.string("Dashed", "", options = ["Solid", "Dashed", "Dotted"], group = GS3, inline = "nh")
-color  c_nl  = input.color(#FFB74D, "Inner internal low ", group = GS3, inline = "nl")
-string s_nl  = input.string("Dashed", "", options = ["Solid", "Dashed", "Dotted"], group = GS3, inline = "nl")
-int    w_inn = input.int(1, "Line width", minval = 1, maxval = 4, group = GS3)
-const string GS4 = "Sub-internal levels"
-bool   show_sub = input.bool(true, "Show sub-internal", group = GS4)
-color  c_sh  = input.color(#4FC3F7, "Sub-internal high", group = GS4, inline = "sh")
-string s_sh  = input.string("Dotted", "", options = ["Solid", "Dashed", "Dotted"], group = GS4, inline = "sh")
-color  c_sl  = input.color(#4FC3F7, "Sub-internal low ", group = GS4, inline = "sl")
-string s_sl  = input.string("Dotted", "", options = ["Solid", "Dashed", "Dotted"], group = GS4, inline = "sl")
-int    w_sub = input.int(1, "Line width", minval = 1, maxval = 4, group = GS4)
 
 f_style(string st) =>
     st == "Dashed" ? line.style_dashed : st == "Dotted" ? line.style_dotted : line.style_solid
@@ -158,20 +138,21 @@ f_hdr(string t) =>
 f_num(float x) =>
     na(x) ? "null" : str.tostring(x)
 
-// ── Daily market structure (external / internal / inner internal) ─────────────
+// ── Daily market structure: the most recent external high / low ─────────────
 // Runs on DAILY candles through request.security, so it reads the same on the
 // 4H chart as on the Daily chart. Levels are wick highs/lows; a break is a daily
-// body CLOSE beyond a level (no tolerance). Each layer follows the same rules:
-//   • first level: close above an A shape (after a later candle traded below the
-//     A's bearish candle) → the lowest point since the A is the low; mirror for V
+// body CLOSE beyond a level (no tolerance). Every structure follows the same rules:
+//   • first level: close above an A shape (inside a range: only after a later
+//     candle traded below the A's bearish candle) → the lowest point since the A
+//     is the low; mirror for V
 //   • while a side is "still forming" it follows price; it is fixed once price
 //     closes beyond the A/V it pulled back from
 //   • close beyond the fixed high/low → new pair in that direction;
 //     close beyond the opposite level → direction flips
-//   • internal lives inside the external range, inner internal inside the
-//     internal range, sub-internal inside the inner internal range; a layer
-//     resets whenever the layer above it changes
-// The most recent break on ANY layer is the daily breakout the H4 steps use.
+//   • a new structure can form inside the current range at any depth; a break
+//     drops every structure inside the one that broke
+// Only the MOST RECENT structure is drawn (as the external high/low), and its
+// most recent break — on whichever structure — is the daily breakout.
 
 f_lowest(int from_bar) =>
     float m = low
@@ -307,7 +288,7 @@ method on_new_V(Layer s, float v) =>
         s.pb_lo := v
 
 f_structure() =>
-    // External layer
+    // Outer structure
     var string e_dir = "none"
     var float  e_hi = na
     var int    e_hi_bar = na
@@ -319,9 +300,8 @@ f_structure() =>
     var bool   e_lof = false
     var float  e_pbh = na
     var float  e_pbl = na
-    var Layer  intl = Layer.new()
-    var Layer  innr = Layer.new()
-    var Layer  subl = Layer.new()
+    // Structures inside it, outermost first; the last one is the most recent
+    var array<Layer> stack = array.new<Layer>()
     // Latest unbroken A / V shapes (wick levels)
     var float  lastA = na
     var int    lastA_bar = na
@@ -336,17 +316,16 @@ f_structure() =>
     var int    da_t = na
     var float  dv = na
     var int    dv_t = na
-    // Most recent break on any layer
+    // Most recent break on any structure
     var int    b_cnt = 0
     var string b_dir = "none"
     var float  b_lvl = na
-    var string b_layer = "none"
     var float  b_opp = na
 
     bool  ext_ev = false
     float e_blvl = na
 
-    // 1. External
+    // 1. Outer structure
     if e_dir == "none"
         if not na(lastA) and close > lastA
             e_blvl := lastA
@@ -403,50 +382,51 @@ f_structure() =>
 
     if ext_ev
         e_pbh := na, e_pbl := na
-        intl.reset()
-        innr.reset()
-        subl.reset()
+        array.clear(stack)
         b_cnt += 1
         b_dir := e_dir == "bull" ? "bullish" : "bearish"
         b_lvl := e_blvl
-        b_layer := "external"
         b_opp := e_dir == "bull" ? e_lo : e_hi
 
-    // 2. Internal, then inner internal
+    // 2. Structures inside it, from the outside in. A break drops everything
+    //    inside the structure that broke; if nothing broke, look for a new
+    //    structure inside the most recent range.
     if not na(lastA) and not lastA_ok and low < lastA_bear_lo
         lastA_ok := true
     if not na(lastV) and not lastV_ok and high > lastV_bull_hi
         lastV_ok := true
 
     if not ext_ev and e_dir != "none"
-        [iev, ilvl] = intl.step(e_lo, e_hi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
-        if iev
-            innr.reset()
-            subl.reset()
-            b_cnt += 1
-            b_dir := intl.dir == "bull" ? "bullish" : "bearish"
-            b_lvl := ilvl
-            b_layer := "internal"
-            b_opp := intl.dir == "bull" ? intl.lo : intl.hi
-        else if intl.dir != "none"
-            [nev, nlvl] = innr.step(intl.lo, intl.hi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
-            if nev
-                subl.reset()
-                b_cnt += 1
-                b_dir := innr.dir == "bull" ? "bullish" : "bearish"
-                b_lvl := nlvl
-                b_layer := "inner_internal"
-                b_opp := innr.dir == "bull" ? innr.lo : innr.hi
-            else if innr.dir != "none"
-                [sev, slvl] = subl.step(innr.lo, innr.hi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
-                if sev
+        float blo = e_lo
+        float bhi = e_hi
+        bool broke = false
+        int n = array.size(stack)
+        if n > 0
+            for k = 0 to n - 1
+                Layer L = array.get(stack, k)
+                [ev, lvl] = L.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
+                if ev
+                    while array.size(stack) > k + 1
+                        array.pop(stack)
+                    broke := true
                     b_cnt += 1
-                    b_dir := subl.dir == "bull" ? "bullish" : "bearish"
-                    b_lvl := slvl
-                    b_layer := "sub_internal"
-                    b_opp := subl.dir == "bull" ? subl.lo : subl.hi
+                    b_dir := L.dir == "bull" ? "bullish" : "bearish"
+                    b_lvl := lvl
+                    b_opp := L.dir == "bull" ? L.lo : L.hi
+                    break
+                blo := L.lo
+                bhi := L.hi
+        if not broke and array.size(stack) < 30
+            Layer nl = Layer.new()
+            [nev, nlvl] = nl.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
+            if nev
+                array.push(stack, nl)
+                b_cnt += 1
+                b_dir := nl.dir == "bull" ? "bullish" : "bearish"
+                b_lvl := nlvl
+                b_opp := nl.dir == "bull" ? nl.lo : nl.hi
 
-    // Clear broken shapes / external pullback triggers
+    // Clear broken shapes / outer pullback triggers
     if not na(lastA) and close > lastA
         lastA := na
     if not na(lastV) and close < lastV
@@ -467,9 +447,8 @@ f_structure() =>
         da := lastA, da_t := f_bt(lastA_bar)
         if e_dir != "none"
             e_pbh := lastA
-        intl.on_new_A(lastA)
-        innr.on_new_A(lastA)
-        subl.on_new_A(lastA)
+        for L in stack
+            L.on_new_A(lastA)
     if isV
         lastV := math.min(low, low[1])
         lastV_bar := low <= low[1] ? bar_index : bar_index - 1
@@ -478,46 +457,35 @@ f_structure() =>
         dv := lastV, dv_t := f_bt(lastV_bar)
         if e_dir != "none"
             e_pbl := lastV
-        intl.on_new_V(lastV)
-        innr.on_new_V(lastV)
-        subl.on_new_V(lastV)
+        for L in stack
+            L.on_new_V(lastV)
 
-    // Copy layer fields into series so they can be read one candle back
-    string i_dir = intl.dir
-    float  i_hi  = intl.hi
-    float  i_lo  = intl.lo
-    bool   i_hif = intl.hi_fixed
-    bool   i_lof = intl.lo_fixed
-    int    i_hit = intl.hi_t
-    int    i_lot = intl.lo_t
-    string n_dir = innr.dir
-    float  n_hi  = innr.hi
-    float  n_lo  = innr.lo
-    bool   n_hif = innr.hi_fixed
-    bool   n_lof = innr.lo_fixed
-    int    n_hit = innr.hi_t
-    int    n_lot = innr.lo_t
-    string u_dir = subl.dir
-    float  u_hi  = subl.hi
-    float  u_lo  = subl.lo
-    bool   u_hif = subl.hi_fixed
-    bool   u_lof = subl.lo_fixed
-    int    u_hit = subl.hi_t
-    int    u_lot = subl.lo_t
+    // 4. The most recent structure (what the chart shows as External high / low)
+    string c_dir = e_dir
+    float  c_hi  = e_hi
+    float  c_lo  = e_lo
+    bool   c_hif = e_hif
+    bool   c_lof = e_lof
+    int    c_hit = e_hi_t
+    int    c_lot = e_lo_t
+    if array.size(stack) > 0
+        Layer cur = array.last(stack)
+        c_dir := cur.dir
+        c_hi  := cur.hi
+        c_lo  := cur.lo
+        c_hif := cur.hi_fixed
+        c_lof := cur.lo_fixed
+        c_hit := cur.hi_t
+        c_lot := cur.lo_t
     // [1] + lookahead_on = state after the last COMPLETED daily candle (no repaint)
-    [e_dir[1], e_hi[1], e_lo[1], e_hif[1], e_lof[1], e_hi_t[1], e_lo_t[1],
-     i_dir[1], i_hi[1], i_lo[1], i_hif[1], i_lof[1], i_hit[1], i_lot[1],
-     n_dir[1], n_hi[1], n_lo[1], n_hif[1], n_lof[1], n_hit[1], n_lot[1],
-     u_dir[1], u_hi[1], u_lo[1], u_hif[1], u_lof[1], u_hit[1], u_lot[1],
-     b_cnt[1], b_dir[1], b_lvl[1], b_layer[1], b_opp[1],
+    [c_dir[1], c_hi[1], c_lo[1], c_hif[1], c_lof[1], c_hit[1], c_lot[1],
+     b_cnt[1], b_dir[1], b_lvl[1], b_opp[1],
      da[1], da_t[1], dv[1], dv_t[1]]
 
-[s_edir, s_ehi, s_elo, s_ehif, s_elof, s_ehit, s_elot,
- s_idir, s_ihi, s_ilo, s_ihif, s_ilof, s_ihit, s_ilot,
- s_ndir, s_nhi, s_nlo, s_nhif, s_nlof, s_nhit, s_nlot,
- s_udir, s_uhi, s_ulo, s_uhif, s_ulof, s_uhit, s_ulot,
- s_bcnt, s_bdir, s_blvl, s_blayer, s_bopp,
+[s_cdir, s_chi, s_clo, s_chif, s_clof, s_chit, s_clot,
+ s_bcnt, s_bdir, s_blvl, s_bopp,
  s_da, s_da_t, s_dv, s_dv_t] = request.security(syminfo.tickerid, "D", f_structure(), lookahead=barmerge.lookahead_on)
+lookahead=barmerge.lookahead_on)
 
 // ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
 // lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
@@ -584,7 +552,7 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     last_bcnt := s_bcnt
     bo_dir    := s_bdir
     bo_level  := s_blvl
-    bo_layer  := s_blayer
+    bo_layer  := "external"
     bo_opp    := s_bopp
     est_above := false
     est_below := false
@@ -1044,19 +1012,10 @@ if barstate.islast
         label.delete(lb)
     array.clear(_st_lines)
     array.clear(_st_labels)
-    if show_daily_on_tf and s_edir != "none" and not na(s_edir)
+    if show_daily_on_tf and not na(s_cdir) and s_cdir != "none"
         string forming = " (still forming)"
-        f_draw_lvl(show_ext, s_ehit, s_ehi, f_dirw(s_edir) + "External high" + (s_edir == "bull" and not s_ehif ? forming : ""), c_eh, s_eh, w_ext)
-        f_draw_lvl(show_ext, s_elot, s_elo, f_dirw(s_edir) + "External low" + (s_edir == "bear" and not s_elof ? forming : ""), c_el, s_el, w_ext)
-        if s_idir != "none"
-            f_draw_lvl(show_int, s_ihit, s_ihi, f_dirw(s_idir) + "Internal high" + (s_idir == "bull" and not s_ihif ? forming : ""), c_ih, s_ih, w_int)
-            f_draw_lvl(show_int, s_ilot, s_ilo, f_dirw(s_idir) + "Internal low" + (s_idir == "bear" and not s_ilof ? forming : ""), c_il, s_il, w_int)
-        if s_ndir != "none"
-            f_draw_lvl(show_inn, s_nhit, s_nhi, f_dirw(s_ndir) + "Inner internal high" + (s_ndir == "bull" and not s_nhif ? forming : ""), c_nh, s_nh, w_inn)
-            f_draw_lvl(show_inn, s_nlot, s_nlo, f_dirw(s_ndir) + "Inner internal low" + (s_ndir == "bear" and not s_nlof ? forming : ""), c_nl, s_nl, w_inn)
-        if s_udir != "none"
-            f_draw_lvl(show_sub, s_uhit, s_uhi, f_dirw(s_udir) + "Sub-internal high" + (s_udir == "bull" and not s_uhif ? forming : ""), c_sh, s_sh, w_sub)
-            f_draw_lvl(show_sub, s_ulot, s_ulo, f_dirw(s_udir) + "Sub-internal low" + (s_udir == "bear" and not s_ulof ? forming : ""), c_sl, s_sl, w_sub)
+        f_draw_lvl(show_ext, s_chit, s_chi, f_dirw(s_cdir) + "External high" + (s_cdir == "bull" and not s_chif ? forming : ""), c_eh, s_eh, w_ext)
+        f_draw_lvl(show_ext, s_clot, s_clo, f_dirw(s_cdir) + "External low" + (s_cdir == "bear" and not s_clof ? forming : ""), c_el, s_el, w_ext)
 
 // ── State label — shows script's current understanding at the latest bar ──────
 string _state_txt = "IDLE - no breakout detected"
@@ -1087,10 +1046,7 @@ if barstate.isconfirmed and barstate.isrealtime
           + ',"retest_source":' + (na(retest_src) ? "null" : '"' + retest_src + '"')
           + ',"breakout_level":' + f_num(bo_level)
           + ',"level_type":' + (na(bo_layer) ? "null" : '"' + bo_layer + '"')
-          + ',"ext_hi":' + f_num(s_ehi) + ',"ext_lo":' + f_num(s_elo)
-          + ',"int_hi":' + f_num(s_idir == "none" ? na : s_ihi) + ',"int_lo":' + f_num(s_idir == "none" ? na : s_ilo)
-          + ',"inn_hi":' + f_num(s_ndir == "none" ? na : s_nhi) + ',"inn_lo":' + f_num(s_ndir == "none" ? na : s_nlo)
-          + ',"sub_hi":' + f_num(s_udir == "none" ? na : s_uhi) + ',"sub_lo":' + f_num(s_udir == "none" ? na : s_ulo)
+          + ',"ext_hi":' + f_num(s_chi) + ',"ext_lo":' + f_num(s_clo)
           + ',"d_a":' + f_num(a_lvl) + ',"d_v":' + f_num(v_lvl)
           + ',"d_oc":' + f_num(pb_oc_lvl) + ',"d_oc_count":' + str.tostring(array.size(pb_ocs))
           + ',"h4_a":' + f_num(h4_a_lvl) + ',"h4_v":' + f_num(h4_v_lvl)
