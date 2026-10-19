@@ -80,9 +80,9 @@ export default function HubPage() {
       <TopBar title="Home" subtitle="Everything in one place" />
       <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
         {/* Soft background glows, like the landing page */}
-        <div className="hub-glow lp-drift" style={{ left: '-8%', top: '-10%', width: '42%', height: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.22), transparent 70%)' }} />
-        <div className="hub-glow lp-drift" style={{ right: '-10%', top: '20%', width: '40%', height: '55%', background: 'radial-gradient(circle, rgba(236,72,153,0.12), rgba(245,158,11,0.08) 45%, transparent 72%)' }} />
-        <div className="hub-glow lp-drift" style={{ left: '25%', bottom: '-15%', width: '45%', height: '45%', background: 'radial-gradient(circle, rgba(16,185,129,0.10), transparent 70%)' }} />
+        <div className="hub-glow lp-drift" style={{ left: '-8%', top: '-10%', width: '42%', height: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.12), transparent 70%)' }} />
+        <div className="hub-glow lp-drift" style={{ right: '-10%', top: '20%', width: '40%', height: '55%', background: 'radial-gradient(circle, rgba(236,72,153,0.07), rgba(245,158,11,0.05) 45%, transparent 72%)' }} />
+        <div className="hub-glow lp-drift" style={{ left: '25%', bottom: '-15%', width: '45%', height: '45%', background: 'radial-gradient(circle, rgba(16,185,129,0.06), transparent 70%)' }} />
       <main className="page-padded" style={{ position: 'relative', zIndex: 1, padding: '30px 28px 44px', display: 'flex', flexDirection: 'column', gap: 26, maxWidth: 1180, width: '100%', margin: '0 auto' }}>
         <div>
           <h2 style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
