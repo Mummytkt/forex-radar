@@ -161,12 +161,9 @@ async def post_announcement(body: PostBody, request: Request):
 
     sent = 0
     if chats and config.telegram_enabled:
-        from alerts.telegram import send_alert
+        from alerts.telegram import send_many
         msg = f"📣 {title}\n\n{text}\n\nOn the platform: {config.frontend_url}/strategy"
-        for chat in chats:
-            if await send_alert(config.telegram_bot_token, chat, msg):
-                sent += 1
-            await asyncio.sleep(0.05)  # stay well under Telegram's rate limit
+        sent = await send_many(config.telegram_bot_token, chats, msg)  # paced under Telegram's limit
     return {"id": new_id, "audience": audience, "telegram_sent": sent, "telegram_targets": len(chats)}
 
 

@@ -106,6 +106,7 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
         "SELECT id, telegram_chat_id, watched_instruments, role, plan, plan_expires_at FROM users "
         "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
     ).fetchall()
+    chats: list[str] = []
     for rec in recipients:
         if not _subscription_active(rec["role"], rec["plan"], rec["plan_expires_at"]):
             continue  # expired subscriber — no more signals
@@ -117,7 +118,18 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
                 continue
         if kind and not get_alert_prefs(conn, rec["id"], rec["role"])[kind]:
             continue  # user switched this confirmation type off
-        await send_alert(config.telegram_bot_token, rec["telegram_chat_id"], alert_text)
+        chats.append(rec["telegram_chat_id"])
+
+    # Many chats at once, paced under Telegram's limit (see alerts/telegram.py)
+    sem = asyncio.Semaphore(20)
+
+    async def _one(chat_id: str) -> bool:
+        async with sem:
+            return await send_alert(config.telegram_bot_token, chat_id, alert_text)
+
+    if chats:
+        results = await asyncio.gather(*(_one(c) for c in chats))
+        logger.info("%s alert delivered to %d/%d chats", instrument, sum(1 for r in results if r), len(chats))
 
     # Fallback only when nobody has linked Telegram at all. Recipients filtered
     # out by their own choices must stay filtered, never rerouted.
