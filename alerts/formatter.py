@@ -97,20 +97,17 @@ def _format_origin(alert: AlertRecord) -> str:
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
-    broken_type_name = _BROKEN_TYPE_NAMES.get(breakout.broken_type, breakout.broken_type.value)
     breakout_level_str = _fmt_level(instrument, breakout.broken_level)
 
     if direction == Direction.BEARISH:
         breakout_desc = (
-            f"Price broke and closed below the body level of the most recent "
-            f"Daily {broken_type_name} key level @ {breakout_level_str}. "
-            f"This is the most recent confirmed Daily breakout."
+            f"A Daily candle closed below the most recent External low "
+            f"@ {breakout_level_str}. This is the most recent confirmed Daily breakout."
         )
     else:
         breakout_desc = (
-            f"Price broke and closed above the body level of the most recent "
-            f"Daily {broken_type_name} key level @ {breakout_level_str}. "
-            f"This is the most recent confirmed Daily breakout."
+            f"A Daily candle closed above the most recent External high "
+            f"@ {breakout_level_str}. This is the most recent confirmed Daily breakout."
         )
 
     source_name = _SOURCE_NAMES[source.source_type]

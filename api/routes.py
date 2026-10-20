@@ -760,17 +760,17 @@ STRATEGY_CONTENT = {
     "chain": [
         {"n": 1, "title": "Daily Breakout", "body": "The Daily chart is read as market structure. A structure's high and low are wick levels built by fixed rules, and a new structure can form inside the current range at any depth. Only the most recent one counts, shown as the External high and low. A breakout is a Daily candle BODY closing beyond it — no tolerance — and the level it broke becomes the Daily Breaker."},
         {"n": 2, "title": "Reaction Source Identification", "body": "After a breakout, price is watched at three kinds of reaction source: a retest of the Daily Breaker, a Daily V-shape (A-shape for sells) or Daily OC level inside the range that was just broken, and post-breakout Daily OC levels. Only reactions in the breakout direction count."},
-        {"n": 3, "title": "Retest Detection", "body": "When an H4 candle's high or low (including wicks) touches any active reaction source band, the engine flags a retest in progress. The band is the source level ± the configured tolerance (default 5 pips)."},
-        {"n": 4, "title": "H4 Confirmation", "body": "With a retest in progress, the engine checks subsequent H4 candles for a qualifying confirmation: (a) an H4 A-shape or V-shape breakout — candle closes beyond the body level of an H4 formation in the breakout direction, or (b) an H4 OC reaction — candle wicks into an H4 OC zone and closes beyond the OC level in the breakout direction. Either confirms Daily + H4 alignment and triggers the alert."},
+        {"n": 3, "title": "Retest Detection", "body": "Price must first move away (an H4 close more than 5 pips beyond the Daily Breaker). Then an H4 wick has to touch a reaction level exactly and hold. A close through the level (beyond a 5-pip allowance) means the reaction failed, and the engine waits for the next one."},
+        {"n": 4, "title": "H4 Confirmation", "body": "While a reaction holds, the first H4 candle that closes beyond the latest H4 A-shape (buys) or V-shape (sells) body level confirms Daily + H4 alignment. This is the Origin alert, one per Daily breakout."},
     ],
     "formations": [
-        {"term": "A-Shape (Bearish resistance)", "body": "Two consecutive Daily candles where candle 1 is bullish and candle 2 is bearish. The level is the highest wick of the two candles. In a bearish bias the latest one is shown as D.A."},
-        {"term": "V-Shape (Bullish support)", "body": "Two consecutive Daily candles where candle 1 is bearish and candle 2 is bullish. The level is the lowest wick of the two candles. In a bullish bias the latest one is shown as D.V."},
+        {"term": "A-Shape (Bearish resistance)", "body": "A bullish candle followed by a bearish candle. On the Daily the level is the highest wick of the two (shown as D.A in a bearish bias). On the H4 it is the body high of the bullish candle."},
+        {"term": "V-Shape (Bullish support)", "body": "A bearish candle followed by a bullish candle. On the Daily the level is the lowest wick of the two (shown as D.V in a bullish bias). On the H4 it is the body low of the bearish candle."},
         {"term": "OC (Open-Close level)", "body": "Formed when 2+ consecutive same-direction candles run. The OC level is the close of the first candle in each consecutive pair (the junction price — not the midpoint). A run of 3 candles produces exactly 2 independent OC levels."},
     ],
     "h4_classification": [
-        {"label": "External", "variant": "accent", "desc": "The H4 candle closes beyond the outermost H4 formation — the swing boundary. This is the conservative confirmation."},
-        {"label": "Internal", "variant": "warning", "desc": "The H4 candle closes beyond an inner H4 formation that formed after the outer swing. This is an earlier, more aggressive confirmation."},
+        {"label": "External", "variant": "accent", "desc": "The H4 A-shape (V-shape for sells) that was broken already existed before the reaction started at the Daily level. A failed reaction that restarts at the same level keeps that start; a reaction at a different Daily level starts fresh."},
+        {"label": "Internal", "variant": "warning", "desc": "The H4 A-shape (V-shape for sells) that was broken formed after the reaction started. Each subscriber chooses whether they receive External Origins, Internal Origins or both; continuations always come through."},
     ],
     "daily_context": {
         "intro": "The Daily breakout always comes from the most recent External high or low.",
@@ -780,15 +780,15 @@ STRATEGY_CONTENT = {
         ],
     },
     "alert_classifications": [
-        {"term": "Origin", "body": "The first confirmed bias alert for a setup. Requires the complete 4-step chain: Daily breakout → eligible reaction source → retest of that source → qualifying H4 A/V breakout. After an Origin fires, the engine enters continuation mode for that instrument."},
-        {"term": "Continuation — A/V Break", "body": "Fires after an Origin, when a subsequent H4 A-shape (bullish direction) or V-shape (bearish direction) formation is broken in the daily breakout direction — without needing a new Daily source retest. Each continuation extends the active bias confirmation. Active until a new opposing Daily breakout occurs."},
-        {"term": "Continuation — H4 Breaker Retest", "body": "Fires when price retraces into an H4 key level — either the H4 Breaker (the body level of the H4 formation broken in the prior alert, now acting as role-reversed resistance or support) or an H4 A-shape (bearish) / V-shape (bullish) that formed inside the daily range during a retracement. Confirmed when the H4 candle wicks into the level and closes beyond it in the breakout direction. No new Daily retest required."},
-        {"term": "Continuation — H4 OC", "body": "Fires when two consecutive same-direction H4 candles form an OC level, and price returns to react from the OC midpoint: the H4 candle's range dips into the OC zone and the candle closes beyond the midpoint in the breakout direction. Confirms continuation of the established Daily bias without requiring a new A/V break."},
+        {"term": "Origin", "body": "The first confirmed bias alert for a setup. Requires the complete 4-step chain: Daily breakout → eligible reaction source → retest of that source → qualifying H4 A/V breakout. After an Origin fires, the engine enters continuation mode for that instrument until the next Daily breakout."},
+        {"term": "Continuation — H4 Breaker Retest", "body": "The H4 A/V broken at the Origin becomes the H4 Breaker. When price comes back, the H4 candle must open on the bias side, wick exactly to the level and close beyond it. The first time is the H4 Breaker Origin; each later visit (after price moves away) is an H4 Breaker Continuation."},
+        {"term": "Continuation — H4 OC", "body": "Two H4 candles in a row in the Daily direction form an H4 OC. After each H4 breakout in the Daily direction, every OC of that breakout's leg (from its swing low/high) and any formed after it is watched. A later candle that opens on the bias side, wicks exactly to an OC and closes beyond it sends one alert naming the furthest OC reached; those OCs are then used up. An OC closed through against the bias is dropped; all are dropped when H4 breaks the other way or a new Daily breakout forms."},
+        {"term": "Out of line → back in line", "body": "An H4 close beyond the latest H4 V (buys) or A (sells) puts H4 out of line with the Daily: no alert, an OUT OF LINE tag on the chart and dashboard, and every H4 OC is dropped. H4 comes back in line only after a fresh Daily reaction followed by an H4 break in the Daily direction, which sends the “H4 back in line with the Daily” continuation."},
     ],
     "reaction_sources": [
         {"term": "Daily Breaker", "body": "The External high or low the Daily close broke. Price often returns to test it from the other side (role reversal)."},
         {"term": "Inside Range", "body": "A Daily V-shape (A-shape for sells) or Daily OC level that sits inside the range that was just broken — between the Daily Breaker and the other side of that range. The H4 wick must reach that exact level and hold. Simply being back inside the range does not count. It fails if a candle closes through that level."},
-        {"term": "Post-Breakout OC", "body": "Two consecutive same-direction Daily candles after the breakout candle, in the breakout direction. The midpoint of their closes becomes a reaction zone."},
+        {"term": "Post-Breakout OC", "body": "Two consecutive Daily candles in the breakout direction after the breakout. The level is where the first one closed. The H4 wick must reach that exact level and hold."},
     ],
     "disclaimer": "Alerts confirm Daily + H4 alignment. Entry timing, risk management, and position sizing remain your responsibility.",
 }
