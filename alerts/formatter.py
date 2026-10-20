@@ -409,18 +409,45 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
             f"continuing the established bearish bias."
         )
 
-    lines = [
-        f"{bias_label} — {instrument}",
-        "H4 Breakout Continuation",
-        "",
-        f"Daily breakout: {direction_label} (active)",
-        "",
-        f"H4 breakout @ {level_str}",
-        desc,
-        "",
-        f"Reason: A new H4 breakout in the {direction_lower} direction has extended the active Daily "
-        f"{direction_lower} bias. The overall direction remains intact.",
-        "",
+    src = alert.reaction_source
+    if src is not None:
+        # H4 back in line: it had broken against the daily bias, price then
+        # reacted at a daily level and H4 broke back in the daily direction.
+        src_name = _SOURCE_NAMES.get(src.source_type, "Daily level")
+        if src.source_type == ReactionSourceType.AV_INSIDE_RANGE:
+            src_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape inside the range"
+        src_str = _fmt_level(instrument, src.level)
+        lines = [
+            f"{bias_label} — {instrument}",
+            "H4 back in line with the Daily",
+            "",
+            f"Daily breakout: {direction_label} (active)",
+            "",
+            f"Daily reaction source: {src_name} @ {src_str}",
+            f"H4 had broken against the Daily {direction_lower} bias. Price then reacted at this Daily level.",
+            "",
+            f"H4 breakout @ {level_str}",
+            desc,
+            "",
+            f"Reason: The reaction from the {src_name} brought H4 back in line with the Daily "
+            f"{direction_lower} bias.",
+            "",
+        ]
+    else:
+        lines = [
+            f"{bias_label} — {instrument}",
+            "H4 Breakout Continuation",
+            "",
+            f"Daily breakout: {direction_label} (active)",
+            "",
+            f"H4 breakout @ {level_str}",
+            desc,
+            "",
+            f"Reason: A new H4 breakout in the {direction_lower} direction has extended the active Daily "
+            f"{direction_lower} bias. The overall direction remains intact.",
+            "",
+        ]
+    lines += [
         _context_line(alert),
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",

@@ -308,8 +308,9 @@ def make_rules(im):
          "H4 close above the most recent H4 A-shape level", "H4 close below the most recent H4 V-shape level",
          "The candle that forms an A/V-shape can't also break it. The alert names the reaction source and the H4 level broken.", im["origin"]),
         ("E. H4 confirmation", "External and internal breaks",
-         "The script always uses the most recent H4 A/V-shape. It is <b>External</b> if it formed <b>before</b> the reaction started, "
-         "and <b>Internal</b> if it formed <b>after</b>.",
+         "The script always uses the most recent H4 A/V-shape. It is <b>External</b> if it formed <b>before</b> price first reacted at the Daily level "
+         "that confirms, and <b>Internal</b> if it formed <b>after</b>. If a reaction fails and price comes back to the <b>same</b> level, the first "
+         "reaction there still counts as the start; a reaction at a <b>different</b> Daily level starts fresh.",
          "External: the last A-shape before price reached the Daily zone · Internal: a new A-shape formed during the reaction",
          "External: the last V-shape before price reached the Daily zone · Internal: a new V-shape formed during the reaction",
          "Each subscriber chooses in Preferences whether External and/or Internal Origins reach their Telegram.", im["extint"]),
@@ -332,9 +333,11 @@ def make_rules(im):
          "is not a rejection. An H4 OC that a candle closes through against the bias is dropped. Each visit alerts once.", im["h4oc"]),
         ("F. Continuations (after the Origin)", "Breakout continuation after a pullback",
          "If an H4 candle closes against the bias beyond the <b>latest</b> H4 V-shape (buy) or A-shape (sell), H4 is <b>out of line</b> (the chart label says OUT OF LINE) "
-         "and every H4 OC is dropped. The next H4 close beyond the latest H4 A/V-shape in the bias direction fires a continuation and OC tracking starts fresh.",
-         "Out of line on a close below the latest H4 V-shape; back in on a close above the latest H4 A-shape",
-         "Out of line on a close above the latest H4 A-shape; back in on a close below the latest H4 V-shape",
+         "and every H4 OC is dropped. To come back in line, price must first <b>react at a Daily level again</b> (the Daily Breaker, a Daily V/A-shape "
+         "or OC inside the range, or a post-breakout Daily OC — same rules as before the Origin). Then an H4 close beyond the latest H4 A/V-shape in the "
+         "bias direction fires the continuation, naming that Daily level, and OC tracking starts fresh.",
+         "Out of line on a close below the latest H4 V-shape; back in after a Daily reaction plus a close above the latest H4 A-shape",
+         "Out of line on a close above the latest H4 A-shape; back in after a Daily reaction plus a close below the latest H4 V-shape",
          "Going out of line sends no alert. While out of line no H4 OC or H4 Breaker alerts fire, and the dashboard shows the pair as OUT OF LINE.", im["realign"]),
         ("G. A new breakout", "When the setup changes",
          "Pulling back into the range is not a cancellation — that's where reactions happen. The setup only changes at the "

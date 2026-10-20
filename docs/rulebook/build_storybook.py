@@ -364,7 +364,8 @@ def chapters():
         ]),
         ("Outside Roof or Inside Roof?", "#8a5cf6", "inout", [
             "The Golden Bell always uses the <b>newest</b> little rooftop. But where was it built?",
-            "If it was built <b>before</b> the visit started, it's an <b>Outside roof</b>. Grown-ups say <b>External</b>.",
+            "If it was built <b>before</b> the visit started, it's an <b>Outside roof</b>. Grown-ups say <b>External</b>. "
+            "(If a visit fails and the twins come back to the <b>same</b> spot, the first visit there still counts as the start.)",
             "If it was built <b>during</b> the visit, it's an <b>Inside roof</b>. Grown-ups say <b>Internal</b>.",
             "Each grown-up can choose which bells they want on their phone: outside, inside, or both.",
         ]),
@@ -378,7 +379,8 @@ def chapters():
         ("The Wobble", "#ff7a59", "wobble", [
             "Sometimes the Little Twins slip. A twin closes <b>below the newest little valley floor</b>.",
             "That's a <b>Wobble</b>. They're out of line, and every little hand-off step is forgotten. No bell rings for a wobble.",
-            "But if a later twin climbs back and closes <b>above the newest little rooftop</b>, ENCORE! The climb is back on.",
+            "To get back in line, the twins must first <b>visit a Giant safe spot</b> again (the trampoline, a stepping stone, or a Giant valley floor or hand-off step inside the house). "
+            "Then, when a Little Twin closes <b>above the newest little rooftop</b>, ENCORE! The climb is back on.",
             "Encore Bells keep ringing like this until the next Giant breakout.",
         ]),
         ("A Brand-New Game", RED_D, "gameover", [

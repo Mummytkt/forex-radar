@@ -49,6 +49,10 @@
 //             Inside-range reactions must come from a Daily V-shape (A-shape for
 //             sells) or Daily OC level inside the broken range: exact touch, hold;
 //             the reaction fails on a close through that level.
+//             H4 out of line → H4 only realigns after a FRESH daily reaction
+//             (same three zones), then an H4 break; the alert names that level.
+//             External/Internal is judged from the first reaction at the daily
+//             level that confirms (a failed reaction restarting there keeps it).
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -544,7 +548,12 @@ var float  pb_close1  = na
 var float  pb_oc_lvl  = na   // most recent post-breakout OC (for the label)
 var array<float> pb_ocs = array.new<float>()   // every completed post-breakout OC
 var float  retest_lvl = na   // level of the zone price is currently reacting from
-var int    retest_bar = na   // bar the current reaction started on (External vs Internal)
+var int    retest_bar = na   // bar the current reaction started on
+// External/Internal is judged from the FIRST reaction at the daily level that
+// confirms: a failed reaction that restarts at the same level keeps that start;
+// a reaction at a different daily level starts fresh from that level.
+var float  anchor_lvl = na
+var int    anchor_bar = na
 var bool   just_broke = false
 
 // ── H4 continuation state ─────────────────────────────────────────────────────
@@ -590,6 +599,8 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     retest_on := false
     retest_src:= na
     retest_kind := na
+    anchor_lvl := na
+    anchor_bar := na
     h4_a_lvl  := na
     h4_v_lvl  := na
     pb_consec := 0
@@ -773,12 +784,17 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                       alert.freq_once_per_bar)
 
     // ── RETEST detection ──────────────────────────────────────────────────
-    if not retest_on and not h4_bo_fired
+    // Before the Origin, and again whenever H4 is out of line: H4 only counts
+    // a break back in the daily direction after a fresh daily reaction.
+    if not retest_on and (not h4_bo_fired or not h4_aligned)
         if pb_oc_zone and was_est
             retest_on  := true
             retest_bar := bar_index
             retest_src := "post_breakout_oc"
             retest_lvl := pb_hit
+            if na(anchor_lvl) or math.abs(anchor_lvl - pb_hit) > pip * 0.1
+                anchor_lvl := pb_hit
+                anchor_bar := bar_index
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
@@ -790,6 +806,9 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "daily_breaker"
             retest_lvl := bo_level
+            if na(anchor_lvl) or math.abs(anchor_lvl - bo_level) > pip * 0.1
+                anchor_lvl := bo_level
+                anchor_bar := bar_index
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"daily_breaker"'
@@ -801,6 +820,9 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "inside_range"
             retest_lvl := ir_hit
+            if na(anchor_lvl) or math.abs(anchor_lvl - ir_hit) > pip * 0.1
+                anchor_lvl := ir_hit
+                anchor_bar := bar_index
             retest_kind := ir_kind
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
@@ -816,7 +838,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
 
         if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
-            string h4_cls = h4a_origin <= retest_bar ? "external" : "internal"
+            string h4_cls = h4a_origin <= anchor_bar ? "external" : "internal"
             if not h4_bo_fired
                 h4_bo_fired           := true
                 h4_aligned            := true
@@ -851,6 +873,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"breakout_cont"'
+                          + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
+                          + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
                           alert.freq_once_per_bar)
@@ -859,7 +883,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_lvl := na
 
         if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
-            string h4_cls = h4v_origin <= retest_bar ? "external" : "internal"
+            string h4_cls = h4v_origin <= anchor_bar ? "external" : "internal"
             if not h4_bo_fired
                 h4_bo_fired           := true
                 h4_aligned            := true
@@ -894,6 +918,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"breakout_cont"'
+                          + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
+                          + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
                           alert.freq_once_per_bar)
@@ -905,8 +931,9 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     if h4_bo_fired
         // Out of line: an H4 break AGAINST the daily bias — a close below the
         // latest H4 V-shape in a buy, above the latest H4 A-shape in a sell
-        // (same test as a confirmation, no tolerance). Every H4 OC is dropped;
-        // tracking restarts when H4 breaks back in the bias direction.
+        // (same test as a confirmation, no tolerance). Every H4 OC is dropped.
+        // H4 comes back in line only through a fresh daily reaction followed by
+        // an H4 break in the daily direction (H4 CONFIRMED block above).
         if h4_aligned
             bool against = (bo_dir == "bullish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl) or (bo_dir == "bearish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl)
             if against
@@ -916,42 +943,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4c_oc_lvl    := na
                 h4c_oc_ready  := false
 
-        bool cont_acted = false
-        if not h4_aligned and not retest_on
-            if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
-                h4_aligned            := true
-                h4_breaker_lvl        := h4_a_lvl
-                bk_origin             := bar_index
-                h4_invalid_lvl        := h4_v_lvl
-                h4c_consec            := 0
-                h4c_oc_close1         := na
-                h4c_oc_lvl            := na
-                h4c_oc_ready          := false
-                cont_acted            := true
-                if barstate.isrealtime
-                    alert(f_hdr("H4_CONTINUATION")
-                          + '","direction":"bullish","cont_type":"breakout_cont"'
-                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
-                          + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
-                          alert.freq_once_per_bar)
-            if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
-                h4_aligned            := true
-                h4_breaker_lvl        := h4_v_lvl
-                bk_origin             := bar_index
-                h4_invalid_lvl        := h4_a_lvl
-                h4c_consec            := 0
-                h4c_oc_close1         := na
-                h4c_oc_lvl            := na
-                h4c_oc_ready          := false
-                cont_acted            := true
-                if barstate.isrealtime
-                    alert(f_hdr("H4_CONTINUATION")
-                          + '","direction":"bearish","cont_type":"breakout_cont"'
-                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
-                          + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
-                          alert.freq_once_per_bar)
-
-        if h4_aligned and not cont_acted and not confirmed_this_bar
+        if h4_aligned and not confirmed_this_bar
             bool h4c_match = (bo_dir == "bullish") ? h4_bull0 : h4_bear0
             if h4c_match
                 h4c_consec := h4c_consec + 1
@@ -1117,6 +1109,9 @@ if barstate.islast
         f_draw_lvl(show_ext, s_clot, s_clo, f_dirw(s_cdir) + "External low" + (s_cdir == "bear" and not s_clof ? forming : ""), c_el, s_el, w_ext)
 
 // ── State label — shows script's current understanding at the latest bar ──────
+f_src_name(string src, string kind) =>
+    src == "daily_breaker" ? "Daily Breaker" : src == "post_breakout_oc" ? "post-breakout Daily OC" : kind == "oc" ? "Daily OC" : kind == "a_shape" ? "Daily A-shape" : "Daily V-shape"
+
 string _state_txt = "IDLE - no breakout detected"
 if not na(bo_dir) and not h4_bo_fired and retest_on
     _state_txt := (bo_dir == "bullish" ? "Bullish" : "Bearish") + " Retest | " + retest_src
@@ -1125,7 +1120,9 @@ else if not na(bo_dir) and not h4_bo_fired
 else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
 else if h4_bo_fired
-    _state_txt := "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · H4 alerts paused until H4 breaks " + bo_dir + " again"
+    _state_txt := retest_on
+         ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + str.tostring(retest_lvl, "#.#####") + " · waiting for H4 to break " + bo_dir
+         : "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · waiting for a daily reaction, then an H4 " + bo_dir + " break"
 // Off the 4H chart, show only what the DAILY candles decided (direction and the
 // broken level) — the H4 steps would run on the wrong candles there.
 bool _is_4h = timeframe.period == "240"

@@ -556,11 +556,25 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     now = datetime.utcnow()
     h4_level = payload.h4_level or (payload.breakout_level or breakout.broken_level)
 
+    # A realignment (H4 back in line after an H4 break against the daily bias)
+    # names the daily level price reacted from; shown in the alert only.
+    shown_source = None
+    if payload.source and payload.source_level is not None:
+        shown_source = ReactionSource(
+            instrument=instrument,
+            source_type=_source_type_from_str(payload.source, payload.source_kind),
+            direction=direction,
+            level=payload.source_level,
+            level_band_low=payload.source_level,
+            level_band_high=payload.source_level,
+            daily_breakout_ts=breakout.breakout_ts,
+        )
+
     alert_record = AlertRecord(
         instrument=instrument,
         direction=direction,
         daily_breakout=breakout,
-        reaction_source=None,
+        reaction_source=shown_source,
         h4_event=None,
         fired_at=now,
         classification=classification,
