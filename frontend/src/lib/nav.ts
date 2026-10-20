@@ -1,5 +1,5 @@
 import {
-  Compass, BookOpen, BookMarked, FlaskConical, BarChart2, ScrollText, Crosshair,
+  Compass, BookOpen, BookMarked, FlaskConical, ScrollText, Crosshair,
   SlidersHorizontal, Gift, Briefcase, UserCircle2, Settings, type LucideIcon,
 } from 'lucide-react'
 
@@ -29,12 +29,6 @@ export const NAV: NavGroup[] = [
       { href: '/strategy', color: '#a855f7', icon: BookOpen, label: 'Playbook', ownerLabel: 'Strategy', desc: 'How the Bias Pointer reads the market, plus updates' },
       { href: '/journal', color: '#f59e0b', icon: BookMarked, label: 'Journal', desc: 'Log and review your own trades' },
       { href: '/backtest', color: '#14b8a6', icon: FlaskConical, label: 'Backtest', desc: 'Record and test setups on past charts' },
-    ],
-  },
-  {
-    label: 'Markets',
-    items: [
-      { href: '/instruments', color: '#38bdf8', icon: BarChart2, label: 'Markets', desc: 'Every pair the Bias Pointer watches' },
     ],
   },
   {

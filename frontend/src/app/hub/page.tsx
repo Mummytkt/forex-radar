@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth'
 import { timeAgo } from '@/lib/utils'
 import { visibleNav, type NavItem } from '@/lib/nav'
 import { UNREAD_KEY } from '@/components/UpdatesSection'
-import type { Stats, AlertsPage, PriceAlertsList } from '@/lib/types'
+import type { AlertsPage, PriceAlertsList } from '@/lib/types'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -56,18 +56,21 @@ function Card({ item, group, detail, badge, featured }: { item: NavItem; group: 
 export default function HubPage() {
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
-  const { data: stats } = useSWR<Stats>('/api/stats', fetcher, { refreshInterval: 60000 })
   const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=1', fetcher, { refreshInterval: 60000 })
   const { data: levels } = useSWR<PriceAlertsList>('/api/price-alerts?tab=active', fetcher, { refreshInterval: 60000 })
   const { data: unreadData } = useSWR<{ unread: number }>(user && !isOwner ? UNREAD_KEY : null, fetcher, { refreshInterval: 60000 })
   const unread = unreadData?.unread ?? 0
 
+  const { data: board } = useSWR<{ pairs: { snapshot: { stage: string } | null }[] }>('/api/chart-board', fetcher, { refreshInterval: 60000 })
+  const stages = (board?.pairs ?? []).map(p => p.snapshot?.stage)
+  const activeN = stages.filter(s => s && s !== 'idle').length
+  const reactingN = stages.filter(s => s === 'retest').length
+
   const lastAlert = alerts?.items?.[0]
   const details: Record<string, string | null> = {
-    '/dashboard': stats ? `${stats.active_breakouts} active setup${stats.active_breakouts === 1 ? '' : 's'} · ${stats.retests_in_progress} reacting now` : null,
+    '/dashboard': board ? `${activeN} active setup${activeN === 1 ? '' : 's'} · ${reactingN} reacting now` : null,
     '/alerts': lastAlert ? `Last signal ${timeAgo(lastAlert.fired_at)} · ${lastAlert.instrument}` : alerts ? 'No signals yet' : null,
     '/price-alerts': levels ? `${levels.items.length} level${levels.items.length === 1 ? '' : 's'} watched` : null,
-    '/instruments': stats ? `${stats.total_instruments} pairs` : null,
     '/strategy': unread > 0 ? `${unread} new update${unread === 1 ? '' : 's'}` : null,
   }
 

@@ -63,6 +63,18 @@ import json as _json
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# TradingView sends the chart's own ticker, which differs between brokers.
+SYMBOL_ALIASES = {
+    "JP225": "JPN225", "JP225USD": "JPN225", "JPN225USD": "JPN225", "NI225": "JPN225", "NIKKEI225": "JPN225", "J225": "JPN225",
+    "USOIL": "WTIUSD", "WTI": "WTIUSD", "USOUSD": "WTIUSD", "XTIUSD": "WTIUSD", "WTICOUSD": "WTIUSD", "CL1!": "WTIUSD", "USCRUDE": "WTIUSD",
+    "US30USD": "US30", "DJI": "US30", "DJ30": "US30", "WS30": "US30",
+    "NAS100USD": "NAS100", "US100": "NAS100", "USTEC": "NAS100", "NDX": "NAS100",
+    "SPX500USD": "SPX500", "US500": "SPX500", "SPX": "SPX500",
+    "UK100GBP": "UK100", "FTSE100": "UK100",
+    "DE40": "GER40", "DE30EUR": "GER40", "DE40EUR": "GER40", "GER30": "GER40", "DAX": "GER40",
+    "GOLD": "XAUUSD", "SILVER": "XAGUSD",
+}
+
 
 def _subscription_active(role, plan, plan_expires_at) -> bool:
     """Owners and lifetime accounts never expire; everyone else only until plan_expires_at."""
@@ -247,8 +259,10 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
         # never stop silently, but log loudly until TV_WEBHOOK_SECRET is set.
         logger.warning("TV webhook accepted WITHOUT secret check — TV_WEBHOOK_SECRET is empty (received %s)", fp)
 
-    # Normalise instrument name: "USD/CHF" → "USDCHF"
+    # Normalise instrument name: "USD/CHF" → "USDCHF", and broker spellings
+    # (JP225, USOIL, ...) to the platform's names so the board and alerts match.
     instrument = payload.instrument.replace("/", "").upper()
+    instrument = SYMBOL_ALIASES.get(instrument, instrument)
     event_type = payload.type.upper()
 
     # Heartbeat for the feed health monitor — any authenticated webhook counts.

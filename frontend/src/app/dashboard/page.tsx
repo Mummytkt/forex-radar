@@ -6,12 +6,11 @@ import Link from 'next/link'
 import TopBar from '@/components/TopBar'
 import StatCard from '@/components/StatCard'
 import { fetcher } from '@/lib/api'
-import { timeAgo } from '@/lib/utils'
 import { useTimezone } from '@/lib/timezone'
 import { useAuth } from '@/lib/auth'
 import { useAccent } from '@/lib/useAccent'
 import { PALETTE } from '@/lib/accent'
-import type { InstrumentOverview, Stats, AlertsPage } from '@/lib/types'
+import type { Stats, AlertsPage } from '@/lib/types'
 import OnboardingChecklist, { type Onboarding } from '@/components/OnboardingChecklist'
 import LiveChartBoard from '@/components/LiveChartBoard'
 
@@ -41,7 +40,6 @@ export default function OverviewPage() {
   const [today, setToday] = useState('')
   const { fmtDate } = useTimezone()
   const { user } = useAuth()
-  const { data: instruments } = useSWR<InstrumentOverview[]>('/api/overview', fetcher, { refreshInterval: 30000 })
   const { data: stats } = useSWR<Stats>('/api/stats', fetcher, { refreshInterval: 30000 })
   const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=5', fetcher, { refreshInterval: 30000 })
   const { data: profile } = useSWR<Profile>('/api/profile', fetcher, { refreshInterval: 60000 })
@@ -56,14 +54,12 @@ export default function OverviewPage() {
   const firstName = user?.name?.split(' ')[0] || user?.name || ''
   const { accent, setAccent } = useAccent()
 
-  const activeSetups = (instruments ?? []).filter(i => i.state !== 'IDLE')
-    .sort((a, b) => {
-      const o = { RETEST_IN_PROGRESS: 0, BREAKOUT_ACTIVE: 1, IDLE: 2 }
-      return o[a.state] - o[b.state]
-    })
-  // The chart's own view (sent at every H4 close) says when H4 is out of line
+  // Counts come from the charts' own view, sent by the Bias Pointer at every H4 close
   const { data: board } = useSWR<{ pairs: { instrument: string; snapshot: { stage: string } | null }[] }>('/api/chart-board', fetcher, { refreshInterval: 60000 })
-  const outOfLine = new Set((board?.pairs ?? []).filter(p => p.snapshot?.stage === 'confirmed_realigning').map(p => p.instrument))
+  const stages = (board?.pairs ?? []).map(p => p.snapshot?.stage)
+  const pairCount = board ? board.pairs.length : null
+  const activeCount = board ? stages.filter(s => s && s !== 'idle').length : null
+  const retestCount = board ? stages.filter(s => s === 'retest').length : null
 
   const isOwner = user?.role === 'OWNER'
   // This user's own Telegram link (not the platform's), so a subscriber who hasn't
@@ -71,7 +67,7 @@ export default function OverviewPage() {
   const tgLinked = onboarding?.telegram_linked ?? false
   const steps = [
     { label: 'Engine running', done: true },
-    { label: 'Instruments loaded', done: (stats?.total_instruments ?? 0) > 0 },
+    { label: 'Instruments loaded', done: (pairCount ?? stats?.total_instruments ?? 0) > 0 },
     { label: 'Telegram linked', done: tgLinked },
     { label: 'First alert fired', done: (profile?.first_alert_at ?? null) !== null },
   ]
@@ -99,8 +95,8 @@ export default function OverviewPage() {
                 {greeting}{firstName ? `, ${firstName}` : ''}.
               </h2>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-                {stats
-                  ? `${stats.active_breakouts} active setup${stats.active_breakouts !== 1 ? 's' : ''} across ${stats.total_instruments} instruments.`
+                {activeCount !== null
+                  ? `${activeCount} active setup${activeCount !== 1 ? 's' : ''} across ${pairCount} instruments.`
                   : 'Loading engine state…'}
               </p>
             </div>
@@ -171,79 +167,13 @@ export default function OverviewPage() {
 
         {/* Stats */}
         <div className="grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-          <StatCard label="Instruments" value={stats?.total_instruments ?? '—'} icon={BarChart2} iconColor="var(--info)" sub="Under surveillance" />
-          <StatCard label="Active Breakouts" value={stats?.active_breakouts ?? '—'} icon={Activity} iconColor="var(--accent)" sub="Live bias setups" />
-          <StatCard label="Retests In Progress" value={stats?.retests_in_progress ?? '—'} icon={Zap} iconColor="var(--warning)" sub="Awaiting H4 confirm" />
+          <StatCard label="Instruments" value={pairCount ?? '—'} icon={BarChart2} iconColor="var(--info)" sub="Under surveillance" />
+          <StatCard label="Active Breakouts" value={activeCount ?? '—'} icon={Activity} iconColor="var(--accent)" sub="Live bias setups" />
+          <StatCard label="Retests In Progress" value={retestCount ?? '—'} icon={Zap} iconColor="var(--warning)" sub="Awaiting H4 confirm" />
           <StatCard label="Alerts Fired" value={stats?.total_alerts ?? '—'} icon={Bell} iconColor="var(--bullish)" sub={stats ? `${stats.alerts_today} today` : undefined} />
         </div>
 
         <LiveChartBoard />
-
-        <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-          {/* Active setups */}
-          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Active Setups</h3>
-              <Link href="/instruments" style={{ fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-                View all <ArrowRight size={12} />
-              </Link>
-            </div>
-            {activeSetups.length === 0 ? (
-              <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-                No active setups currently.<br />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Next H4 check fires at the top of each 4h candle.</span>
-              </div>
-            ) : (
-              <div>
-                {activeSetups.slice(0, 8).map((inst) => {
-                  const setupDir = inst.direction === 'BULLISH' ? '↑' : inst.direction === 'BEARISH' ? '↓' : ''
-                  const confirmed = inst.last_alert_direction
-                  return (
-                    <div key={inst.instrument} style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '11px 20px', borderBottom: '1px solid var(--border)',
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{inst.instrument}</span>
-                          {confirmed ? (
-                            <span style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
-                              color: confirmed === 'BULLISH' ? 'var(--bullish)' : 'var(--bearish)',
-                            }}>
-                              {confirmed === 'BULLISH' ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                              {confirmed === 'BULLISH' ? 'Buy confirmed' : 'Sell confirmed'}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {setupDir} Setup forming
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {outOfLine.has(inst.instrument.replace('/', '').toUpperCase()) && (
-                            <span style={{ color: 'var(--warning)', fontWeight: 600 }}>H4 out of line · alerts paused · </span>
-                          )}
-                          {inst.active_sources_count > 0 ? `${inst.active_sources_count} sources` : 'No sources'} · {timeAgo(inst.last_updated)}
-                        </div>
-                      </div>
-                      <span className="badge" style={{
-                        background: inst.state === 'RETEST_IN_PROGRESS' ? 'var(--warning-bg)' : 'var(--accent-bg)',
-                        color: inst.state === 'RETEST_IN_PROGRESS' ? 'var(--warning)' : 'var(--accent-hover)',
-                        fontSize: 10,
-                      }}>
-                        {inst.state === 'RETEST_IN_PROGRESS' && (
-                          <span className="pulse" style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }} />
-                        )}
-                        {inst.state === 'RETEST_IN_PROGRESS' ? `${setupDir} Retesting` : `${setupDir} Setup`}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
 
           {/* Latest alerts */}
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
@@ -294,7 +224,6 @@ export default function OverviewPage() {
               </div>
             )}
           </div>
-        </div>
 
         {/* Personalise */}
         <div style={{
