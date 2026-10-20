@@ -144,16 +144,16 @@ def make_images():
         notes=[(0, 22.5, "wick through, body closes below\n→ NOT broken", RED), (2, 24.4, "body closes above\n→ BROKEN", GREEN)],
         ylim=(15.5, 25.6))
     im["ashape"] = chart("ashape", [(10, 17, 9, 16), (16, 16.8, 11, 12)],
-        levels=[(17, "Daily level: highest wick of the pair", ACCENT), (16, "H4 level: body high of C1", MUTED)],
+        levels=[(17, "Daily level with the Wick setting: highest wick", MUTED), (16, "H4 and Daily (Body, default): body high", ACCENT)],
         labels=["C1 up", "C2 down"], ylim=(8.4, 18.2))
     im["vshape"] = chart("vshape", [(16, 17, 9, 10), (10, 15, 9.2, 14)],
-        levels=[(9, "Daily level: lowest wick of the pair", ACCENT), (10, "H4 level: body low of C1", MUTED)],
+        levels=[(9, "Daily level with the Wick setting: lowest wick", MUTED), (10, "H4 and Daily (Body, default): body low", ACCENT)],
         labels=["C1 down", "C2 up"], ylim=(7.8, 17.6))
     im["oc"] = chart("oc", [(10, 13, 9.5, 12.5), (12.5, 15.5, 12, 15), (15, 18, 14.5, 17.5)],
         levels=[(12.5, "OC 1 = C1 close / C2 open", ACCENT, 0, 1), (15, "OC 2 = C2 close / C3 open", ACCENT, 1, 2)],
         labels=["C1", "C2", "C3"], ylim=(9, 18.6))
     im["breakout"] = chart("breakout", [(10, 14, 9, 13.5), (13.5, 13.8, 10.5, 11), (11, 14.6, 10.2, 13.2), (12.6, 15.2, 12.2, 14.7)],
-        levels=[(14, "a structure high (wick)", ACCENT)],
+        levels=[(14, "a structure high", ACCENT)],
         notes=[(2, 14.95, "wick only →\nno breakout", RED), (3, 15.55, "body closes above\n→ BREAKOUT", GREEN)],
         labels=["", "", "", "breakout"], ylim=(8.6, 16.6))
     im["external"] = chart("external", [(14, 15, 13.5, 14.8), (14.8, 15.6, 13.8, 14.0), (14.0, 14.2, 12.0, 12.4), (12.4, 13.4, 11.6, 13.2),
@@ -241,19 +241,20 @@ def make_rules(im):
          "A candle is <b>bullish</b> (up) when it closes at or above its open, and <b>bearish</b> (down) when it closes below its open. "
          "The <b>body</b> runs between open and close; the <b>wicks</b> are the high and low beyond the body.",
          "Close ≥ open", "Close &lt; open",
-         "H4 levels and the entry patterns use candle <b>bodies</b>. Daily structure levels (the External high and low, D.A and D.V) use <b>wicks</b>.", im["anatomy"]),
+         "H4 levels and Daily levels (the External high and low, D.A, D.V and inside-range V/A-shapes) use candle <b>bodies</b>. "
+         "The indicator setting <b>Daily levels from: Wick</b> switches the Daily levels back to wicks. Entry patterns are described in section H.", im["anatomy"]),
         ("A. Candle basics", "Closes, not wicks",
          "A level is only broken when a candle <b>body closes</b> beyond it. A wick that pokes through and closes back never counts as a break.",
          "Broken when a candle closes above the level", "Broken when a candle closes below the level",
          "Confirmations are judged on <b>closed</b> candles only. A candle still forming can react, but it can't confirm.", im["closes"]),
         ("B. Formations (Daily and H4)", "A-shape — resistance",
          "An up candle followed immediately by a down candle. On <b>H4</b> the level is the <b>body high of the up candle</b>. "
-         "On the <b>Daily</b> it is the <b>highest wick</b> of the two candles.",
+         "On the <b>Daily</b> it is the <b>highest body top</b> of the two candles (the highest wick with the Wick setting).",
          "Broken upward when a candle closes above it", "In a sell bias the latest Daily one is shown as D.A",
          "The level exists once the down candle has closed. The most recent A-shape is the one that counts.", im["ashape"]),
         ("B. Formations (Daily and H4)", "V-shape — support",
          "A down candle followed immediately by an up candle. On <b>H4</b> the level is the <b>body low of the down candle</b>. "
-         "On the <b>Daily</b> it is the <b>lowest wick</b> of the two candles.",
+         "On the <b>Daily</b> it is the <b>lowest body bottom</b> of the two candles (the lowest wick with the Wick setting).",
          "In a buy bias the latest Daily one is shown as D.V", "Broken downward when a candle closes below it",
          "The level exists once the up candle has closed. The most recent V-shape is the one that counts.", im["vshape"]),
         ("B. Formations (Daily and H4)", "OC — Open/Close level",
@@ -261,7 +262,7 @@ def make_rules(im):
          "Two up candles in a row", "Two down candles in a row",
          "A run of three same-direction candles makes two OC levels (C1/C2 and C2/C3).", im["oc"]),
         ("C. Daily bias", "External high and low",
-         "The <b>external low</b> is the lowest point between a Daily A-shape and the Daily candle that <b>closes above that A-shape's wick</b> "
+         "The <b>external low</b> is the lowest body bottom between a Daily A-shape and the Daily candle that <b>closes above that A-shape's level</b> "
          "(the external high is the mirror). The side in the direction of the move <b>keeps following price</b> (“still forming”) until price pulls back "
          "by closing beyond the last A/V-shape it came from; then it is fixed.",
          "Bullish: the external low is fixed; the external high follows new highs until a Daily close below the last V-shape",

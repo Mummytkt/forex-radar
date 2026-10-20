@@ -758,14 +758,14 @@ def remove_video(request: Request, url: str = Query(...)):
 
 STRATEGY_CONTENT = {
     "chain": [
-        {"n": 1, "title": "Daily Breakout", "body": "The Daily chart is read as market structure. A structure's high and low are wick levels built by fixed rules, and a new structure can form inside the current range at any depth. Only the most recent one counts, shown as the External high and low. A breakout is a Daily candle BODY closing beyond it — no tolerance — and the level it broke becomes the Daily Breaker."},
+        {"n": 1, "title": "Daily Breakout", "body": "The Daily chart is read as market structure. A structure's high and low are candle-body levels (like H4; a setting can switch them to wicks) built by fixed rules, and a new structure can form inside the current range at any depth. Only the most recent one counts, shown as the External high and low. A breakout is a Daily candle BODY closing beyond it — no tolerance — and the level it broke becomes the Daily Breaker."},
         {"n": 2, "title": "Reaction Source Identification", "body": "After a breakout, price is watched at three kinds of reaction source: a retest of the Daily Breaker, a Daily V-shape (A-shape for sells) or Daily OC level inside the range that was just broken, and post-breakout Daily OC levels. Only reactions in the breakout direction count."},
         {"n": 3, "title": "Retest Detection", "body": "Price must first move away (an H4 close more than 5 pips beyond the Daily Breaker). Then an H4 wick has to touch a reaction level exactly and hold. A close through the level (beyond a 5-pip allowance) means the reaction failed, and the engine waits for the next one."},
         {"n": 4, "title": "H4 Confirmation", "body": "While a reaction holds, the first H4 candle that closes beyond the latest H4 A-shape (buys) or V-shape (sells) body level confirms Daily + H4 alignment. This is the Origin alert, one per Daily breakout."},
     ],
     "formations": [
-        {"term": "A-Shape (Bearish resistance)", "body": "A bullish candle followed by a bearish candle. On the Daily the level is the highest wick of the two (shown as D.A in a bearish bias). On the H4 it is the body high of the bullish candle."},
-        {"term": "V-Shape (Bullish support)", "body": "A bearish candle followed by a bullish candle. On the Daily the level is the lowest wick of the two (shown as D.V in a bullish bias). On the H4 it is the body low of the bearish candle."},
+        {"term": "A-Shape (Bearish resistance)", "body": "A bullish candle followed by a bearish candle. On the Daily the level is the highest body top of the two (shown as D.A in a bearish bias). On the H4 it is the body high of the bullish candle."},
+        {"term": "V-Shape (Bullish support)", "body": "A bearish candle followed by a bullish candle. On the Daily the level is the lowest body bottom of the two (shown as D.V in a bullish bias). On the H4 it is the body low of the bearish candle."},
         {"term": "OC (Open-Close level)", "body": "Formed when 2+ consecutive same-direction candles run. The OC level is the close of the first candle in each consecutive pair (the junction price — not the midpoint). A run of 3 candles produces exactly 2 independent OC levels."},
     ],
     "h4_classification": [
@@ -775,7 +775,7 @@ STRATEGY_CONTENT = {
     "daily_context": {
         "intro": "The Daily breakout always comes from the most recent External high or low.",
         "items": [
-            {"label": "External high / low", "variant": "bullish", "desc": "The most recent structure. Its low is the lowest point before price closed above an A shape (mirror for the high). The side in the move's direction keeps following price (still forming) until price pulls back by closing beyond the last A/V it came from, then it is fixed."},
+            {"label": "External high / low", "variant": "bullish", "desc": "The most recent structure. Its low is the lowest body bottom before price closed above an A shape (mirror for the high). The side in the move's direction keeps following price (still forming) until price pulls back by closing beyond the last A/V it came from, then it is fixed."},
             {"label": "Structures inside", "variant": "warning", "desc": "While price stays inside the range, a smaller structure can form inside it by the same rules; it then becomes the most recent External high and low. When a structure breaks, every structure inside it is dropped and the one around it counts again."},
         ],
     },

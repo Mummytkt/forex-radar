@@ -188,14 +188,14 @@ def make_images():
     im["giants"] = scene("giants", [(1, 9, 0.5, 8, 1.4), None] + little, sx=1.05,
         bubbles=[(0, 8.8, "I'm ONE whole day!", (0.4, 1.0)), (5, 5.25, "We're the six Little Twins\nof that same day.", (-0.6, 3.6))],
         ylim=(0, 10.6), xpad=(1.3, 1.6))
-    im["breakout"] = scene("breakout", [(1, 5.6, 0.6, 5, G), (5, 5.3, 2.6, 3, G), (3, 6.3, 2.8, 5.2, G), (5.0, 7.9, 4.7, 7.4, G)], sx=1.8,
-        levels=[(5.6, "a Giant roof (fingertip)", SKY, 0)],
+    im["breakout"] = scene("breakout", [(1, 5.6, 0.6, 5, G), (5, 5.3, 2.6, 3, G), (3, 6.3, 2.8, 4.9, G), (4.9, 7.9, 4.7, 7.4, G)], sx=1.8,
+        levels=[(5.0, "a Giant roof (top of the shirt)", SKY, 0)],
         bubbles=[(2, 6.25, "My arm went past,\nbut my shirt didn't.\nNot yet!", (-1.6, 2.4)), (3, 7.85, "My SHIRT closed above.\nBREAKOUT!", (-0.4, 1.4))],
         ylim=(0.2, 10.2), xpad=(1.4, 3.8), speed=[1])
     im["house"] = scene("house", [(2.0, 5.0, 1.2, 4.6, G), (4.6, 9.0, 4.4, 8.6, G), (8.6, 8.8, 3.2, 3.6, G), (3.6, 7.4, 3.4, 7.0, G),
                                   (7.0, 7.1, 4.4, 4.8, G), (4.8, 6.2, 4.6, 5.9, G)], sx=1.5,
-        levels=[(9.0, "Big House roof", "#b4a6dc", 1), (7.4, "smaller house roof", "#b4a6dc", 3), (6.2, "NEWEST house roof", SKY, 5),
-                (4.4, "NEWEST house floor", SKY, 4), (3.2, "smaller house floor", "#b4a6dc", 2), (1.2, "Big House floor", "#b4a6dc", 0)],
+        levels=[(8.6, "Big House roof", "#b4a6dc", 1), (7.0, "smaller house roof", "#b4a6dc", 3), (5.9, "NEWEST house roof", SKY, 5),
+                (4.8, "NEWEST house floor", SKY, 4), (3.6, "smaller house floor", "#b4a6dc", 2), (2.0, "Big House floor", "#b4a6dc", 0)],
         ylim=(0.4, 10.2), xpad=(1.4, 4.6), speed=[2, 4])
     im["trampoline"] = scene("trampoline", [(5.1, 5.6, 4.9, 5.3, L), (5.3, 6.8, 5.2, 6.6, L), (6.6, 6.8, 5.8, 6.0, L), (6.0, 6.1, 4.8, 5.6, L)], sx=1.6,
         levels=[(5, "Trampoline", SKY)], mats=[(4.6, 5.4, "wiggle mat")],
@@ -245,7 +245,7 @@ def make_images():
                  (4, 2.35, "My shirt closed below the floor:\nNEW GAME, going DOWN!", (2.2, -0.9))],
         ylim=(0.6, 9.6), xpad=(1.4, 4.2), speed=[1, 3, 4])
     im["mirror"] = scene("mirror", [(8, 8.3, 3.6, 4, G), (4, 6.3, 3.8, 6, G), (6, 6.1, 2.4, 2.8, G)], sx=1.9,
-        levels=[(4, "a Giant floor (toe)", RED_D, 0)],
+        levels=[(4, "a Giant floor (bottom of the shirt)", RED_D, 0)],
         bubbles=[(2, 2.45, "My turn! Everything flips.\nBREAKOUT DOWN!", (2.3, 0.0))],
         ylim=(1.2, 9.0), xpad=(1.4, 4.4), speed=[0, 2])
     im["peek"] = scene("peek", [(6, 6.4, 2.6, 3, 1.0), (3, 7.2, 2.8, 5.6, 1.0)], sx=2.0,
@@ -300,7 +300,8 @@ def chapters():
             "When Bella slides and Ben climbs <b>right after her</b>, they make a <b>valley</b>, like the letter V.",
             "The valley floor sits at the <b>bottom of Bella's shirt</b>, where she closed. That's a <b>V-shape</b>, and it acts like a floor.",
             "Little Twins always use the <b>newest</b> rooftop and the <b>newest</b> valley.",
-            "Giant Twins (you'll meet them soon) measure their rooftop from the <b>highest fingertip</b> of the pair, and their valley from the <b>lowest toe</b>.",
+            "Giant Twins (you'll meet them soon) measure their rooftops and valleys from their <b>shirts</b> too, just like the Little Twins. "
+            "(Grown-ups can switch the Giants to fingertips and toes with the <b>Daily levels from: Wick</b> setting.)",
         ]),
         ("The Hand-off Step", GREEN_D, "handoff", [
             "Sometimes two Bens climb <b>one after the other</b>, like a relay race.",
@@ -316,7 +317,7 @@ def chapters():
             "<b>Giants decide the direction. Little Twins find the moment.</b>",
         ]),
         ("Houses Inside Houses", "#8a5cf6", "house", [
-            "The Giant Twins live in a <b>Big House</b>. Its floor is the lowest spot a Giant's toe reached before Ben broke out through a rooftop. Grown-ups call it the <b>external low</b>.",
+            "The Giant Twins live in a <b>Big House</b>. Its floor is the lowest spot a Giant's <b>shirt</b> reached before Ben broke out through a rooftop. Grown-ups call it the <b>external low</b>.",
             "While the Giants keep climbing, the roof keeps rising with them. It's <b>still being built</b>. When a Giant slides back down past the last valley, the roof is finished. That's the <b>external high</b>.",
             "Inside the Big House, a <b>smaller house</b> can be built in exactly the same way. And inside that one, an even smaller one, as small as you like!",
             "Candle Town only paints the <b>newest</b> house on the wall. Its roof and floor are called the <b>External high and low</b>.",
@@ -499,7 +500,7 @@ def build():
              ("Shirt", "candle body (open to close)"),
              ("Stretchy arms and legs", "upper and lower wicks (to the high and low)"),
              ("Closing Bell", "candle close; nothing is judged before it"),
-             ("Rooftop / Valley floor", "A-shape / V-shape level (Giants: wicks; Little twins: bodies)"),
+             ("Rooftop / Valley floor", "A-shape / V-shape level (bodies; Giants can use wicks via a setting)"),
              ("Newest house (roof / floor)", "the most recent External high / low (Daily)"),
              ("Hand-off Step", "OC level (close of candle 1 = open of candle 2)"),
              ("Giant / Little / Tiny Twins", "Daily / H4 / H1 and H2 candles"),
