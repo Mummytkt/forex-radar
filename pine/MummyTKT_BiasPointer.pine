@@ -57,6 +57,9 @@
 //             watched; each alerts once on a rejection then is removed; checked
 //             before a new candle can form the next OC; all dropped when H4
 //             breaks the other way or on a new daily breakout.
+//             Daily reaction levels (V/A-shapes, Daily OCs, post-breakout OCs)
+//             die once a Daily candle closes through them; dead levels never
+//             count as a reaction again.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -634,6 +637,24 @@ f_keep(array<float> a, float v) =>
     array.push(a, v)
     if array.size(a) > 120
         array.shift(a)
+
+// A Daily level is dead once a Daily candle closes through it: buy levels (V,
+// bullish OC) on a close below, sell levels (A, bearish OC) on a close above.
+f_kill(array<float> a, float c, bool buy_lvl) =>
+    int k = array.size(a) - 1
+    while k >= 0
+        float L = array.get(a, k)
+        if buy_lvl ? c < L : c > L
+            array.remove(a, k)
+        k -= 1
+
+if new_daily and not na(d_close)
+    f_kill(d_vs,  d_close, true)
+    f_kill(d_boc, d_close, true)
+    f_kill(d_as,  d_close, false)
+    f_kill(d_soc, d_close, false)
+    if not na(bo_dir)
+        f_kill(pb_ocs, d_close, bo_dir == "bullish")
 
 if new_daily and not na(d_close2)
     bool y_bull = d_close  > d_open

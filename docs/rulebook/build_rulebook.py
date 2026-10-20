@@ -295,7 +295,8 @@ def make_rules(im):
          f"An H4 candle reacts from a zone when its <b>wick reaches the level exactly</b> (a near miss doesn't count) and its close doesn't go through it. Zones are checked in this order:",
          "1) the deepest post-breakout OC touched · 2) the Daily Breaker · 3) a Daily V-shape or Daily bullish OC level inside the range that was just broken",
          "1) the highest post-breakout OC touched · 2) the Daily Breaker · 3) a Daily A-shape or Daily bearish OC level inside the range that was just broken",
-         "The reaction is reported with its source and level: Post-Breakout OC, Daily Breaker, or the Daily V/A-shape or OC inside the range. Simply being back inside the range is not a reaction. It doesn't matter which zone price reaches first.",
+         "The reaction is reported with its source and level: Post-Breakout OC, Daily Breaker, or the Daily V/A-shape or OC inside the range. Simply being back inside the range is not a reaction. It doesn't matter which zone price reaches first. "
+         "A Daily level is dead once a Daily candle closes through it (below a buy level, above a sell level) and never counts again.",
          im["zones3"]),
         ("D. Reaction zones (until the Origin)", "A reaction stays alive until it fails",
          "Once price has reacted, the reaction stays valid on <b>later candles</b>. It only <b>fails</b> when an H4 candle closes back through the zone "

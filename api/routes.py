@@ -787,8 +787,8 @@ STRATEGY_CONTENT = {
     ],
     "reaction_sources": [
         {"term": "Daily Breaker", "body": "The External high or low the Daily close broke. Price often returns to test it from the other side (role reversal)."},
-        {"term": "Inside Range", "body": "A Daily V-shape (A-shape for sells) or Daily OC level that sits inside the range that was just broken — between the Daily Breaker and the other side of that range. The H4 wick must reach that exact level and hold. Simply being back inside the range does not count. It fails if a candle closes through that level."},
-        {"term": "Post-Breakout OC", "body": "Two consecutive Daily candles in the breakout direction after the breakout. The level is where the first one closed. The H4 wick must reach that exact level and hold."},
+        {"term": "Inside Range", "body": "A Daily V-shape (A-shape for sells) or Daily OC level that sits inside the range that was just broken — between the Daily Breaker and the other side of that range. The H4 wick must reach that exact level and hold. Simply being back inside the range does not count. It fails if a candle closes through that level. A Daily level is dead once a Daily candle has closed through it and never counts again."},
+        {"term": "Post-Breakout OC", "body": "Two consecutive Daily candles in the breakout direction after the breakout. The level is where the first one closed. The H4 wick must reach that exact level and hold. It is dead once a Daily candle closes through it."},
     ],
     "disclaimer": "Alerts confirm Daily + H4 alignment. Entry timing, risk management, and position sizing remain your responsibility.",
 }

@@ -340,7 +340,8 @@ def chapters():
             "After the breakout day, more Giant Bens may keep climbing. Each pair that climbs one after the other makes a <b>Stepping Stone</b>. That's a Giant hand-off step.",
             "Both Giants in the pair must close <b>above the breakout line</b>. The stone must also sit <b>clear of the Trampoline's mat</b>.",
             "The breakout day itself doesn't get to start a stone.",
-            "Candle Town keeps <b>every</b> stepping stone it finds, and watches them all, until the next Giant breakout.",
+            "Candle Town keeps <b>every</b> stepping stone it finds, and watches them all, until the next Giant breakout. "
+            "But if a Giant twin ever <b>closes below</b> a stone, that stone is cracked and can never be a safe spot again.",
         ]),
         ("The Safe Spots", SKY, "spots", [
             "Now the Little Twins go looking for a safe place to land. Bella slides down... and stretches her leg to touch a Wiggle Mat.",
@@ -348,6 +349,7 @@ def chapters():
             "There are three kinds of safe spots. Candle Town checks them in this order:",
             "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> The <b>Trampoline</b>. <b>3.</b> A <b>valley floor or hand-off step inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
             "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
+            "<b>Cracked spots don't count.</b> A Giant valley floor or hand-off step that a Giant twin has already <b>closed below</b> is cracked (closed above, when the twins are sliding down). Cracked spots are never safe again.",
         ]),
         ("Hold On Tight!", "#ff7a59", "hold", [
             "Once a twin has made a visit, the visit <b>stays alive</b>. Later twins don't have to touch the spot again.",
