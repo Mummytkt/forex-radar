@@ -16,7 +16,8 @@ function authHeaders(): HeadersInit {
 
 function formatPrice(instrument: string, price: number): string {
   if (instrument.endsWith('JPY')) return price.toFixed(3)
-  if (['XAUUSD', 'USOIL', 'WTIUSD', 'XAGUSD'].includes(instrument)) return price.toFixed(2)
+  if (instrument === 'XAGUSD') return price.toFixed(3)
+  if (['XAUUSD', 'USOIL', 'WTIUSD'].includes(instrument)) return price.toFixed(2)
   if (['US30', 'NAS100', 'SPX500', 'UK100', 'GER40', 'JPN225'].includes(instrument)) return price.toFixed(0)
   return price.toFixed(5)
 }

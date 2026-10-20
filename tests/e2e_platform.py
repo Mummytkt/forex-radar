@@ -528,6 +528,9 @@ tv(type="CONFIRMED", instrument="CHFJPY", direction="bullish", source="daily_bre
    breakout_level=180.0, source_level=180.0, h4_level=181.0, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='CHFJPY' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("Origin describes the close above the External high", "A Daily candle closed above the most recent External high @ 180.000" in t)
+tv(type="PRICE_UPDATE", instrument="XAGUSD", price=48.235, timeframe="240", snapshot=dict(snap, stage="breakout"))
+b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
+check("XAGUSD is a platform instrument and lands on the board", (b.get("XAGUSD") or {}).get("stage") == "breakout")
 check("JP225 webhooks count as JPN225 in the feed monitor",
       conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JPN225'").fetchone()[0] == 1
       and conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JP225'").fetchone()[0] == 0)

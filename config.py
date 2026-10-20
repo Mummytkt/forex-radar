@@ -141,7 +141,7 @@ DEFAULT_INSTRUMENTS: list[str] = [
     # CAD / CHF crosses
     "CAD/JPY", "CAD/CHF", "CHF/JPY",
     # Metals
-    "XAU/USD",
+    "XAU/USD", "XAG/USD",
     # Energy
     "WTI/USD",
     # Indices

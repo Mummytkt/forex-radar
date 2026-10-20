@@ -93,7 +93,7 @@ const INSTRUMENTS = [
   'EUR/JPY','EUR/GBP','EUR/AUD','EUR/CAD','EUR/NZD','EUR/CHF',
   'GBP/JPY','GBP/AUD','GBP/CAD','GBP/NZD','GBP/CHF',
   'AUD/JPY','AUD/CAD','AUD/NZD','AUD/CHF','NZD/JPY','NZD/CAD','NZD/CHF',
-  'CAD/JPY','CAD/CHF','CHF/JPY','XAU/USD',
+  'CAD/JPY','CAD/CHF','CHF/JPY','XAU/USD','XAG/USD',
   'WTI/USD','US30','NAS100','SPX500','UK100','GER40','JPN225',
   'BTC/USD','ETH/USD',
 ]
@@ -644,7 +644,7 @@ function TradeModal({
     const exit = parseFloat(f.exit_price)
     if (isNaN(entry) || isNaN(exit)) return f
     const instr = f.instrument.toUpperCase().replace('/', '')
-    const pipSize = instr.endsWith('JPY') ? 0.01 : instr === 'XAUUSD' ? 0.1 : 0.0001
+    const pipSize = instr.endsWith('JPY') ? 0.01 : instr === 'XAUUSD' ? 0.1 : instr === 'XAGUSD' ? 0.01 : 0.0001
     const raw = f.direction === 'buy' ? (exit - entry) / pipSize : (entry - exit) / pipSize
     return { ...f, pips: raw.toFixed(1) }
   }

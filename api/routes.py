@@ -81,7 +81,7 @@ CATEGORIES: dict[str, str] = {
     "AUD/JPY": "Commodity Cross", "AUD/CAD": "Commodity Cross", "AUD/NZD": "Commodity Cross",
     "AUD/CHF": "Commodity Cross", "NZD/JPY": "Commodity Cross", "NZD/CAD": "Commodity Cross",
     "NZD/CHF": "Commodity Cross", "CAD/JPY": "Commodity Cross", "CAD/CHF": "Commodity Cross",
-    "CHF/JPY": "Commodity Cross", "XAU/USD": "Metal",
+    "CHF/JPY": "Commodity Cross", "XAU/USD": "Metal", "XAG/USD": "Metal",
     "BTC/USD": "Crypto", "ETH/USD": "Crypto", "SOL/USD": "Crypto",
     "BNB/USD": "Crypto", "XRP/USD": "Crypto", "ADA/USD": "Crypto",
     "DOGE/USD": "Crypto", "LTC/USD": "Crypto",

@@ -708,7 +708,7 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
         conn.commit()
 
         # Determine decimal precision for display
-        if instrument.endswith("JPY"):
+        if instrument.endswith("JPY") or instrument == "XAGUSD":
             fmt = "{:.3f}"
         elif instrument in ("XAUUSD", "USOIL", "WTIUSD"):
             fmt = "{:.2f}"
