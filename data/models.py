@@ -92,7 +92,7 @@ class Formation:
     # V-shape → BULLISH (support that bears must break downward)
     # OC      → matches the run direction
     direction: Direction
-    level: float               # body_high (A) / body_low (V) / midpoint (OC)
+    level: float               # H4: body high (A) / body low (V); Daily: wick; OC: first candle's close
     established_at: datetime   # timestamp of the completing candle
     candle_1_ts: datetime
     candle_2_ts: datetime

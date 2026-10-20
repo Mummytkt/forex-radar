@@ -122,9 +122,8 @@ class TestFormatAlert:
             source_type=ReactionSourceType.POST_BREAKOUT_DAILY_OC,
         )
         text = format_alert(alert)
-        assert "Post-breakout" in text
-        # direction label should appear in source name
-        assert "Bearish" in text or "bearish" in text
+        assert "Daily reaction source: Post-Breakout OC @ 1.09750" in text
+        assert "two consecutive bearish Daily candles" in text
 
     def test_daily_breaker_source_description(self):
         alert = _make_alert(source_type=ReactionSourceType.DAILY_BREAKER)
@@ -134,12 +133,20 @@ class TestFormatAlert:
     def test_oc_inside_range_description(self):
         alert = _make_alert(source_type=ReactionSourceType.OC_INSIDE_RANGE)
         text = format_alert(alert)
-        assert "OC inside Daily range" in text
+        assert "Daily reaction source: Daily OC inside the range @ 1.09750" in text
 
     def test_av_inside_range_description(self):
-        alert = _make_alert(source_type=ReactionSourceType.AV_INSIDE_RANGE)
-        text = format_alert(alert)
-        assert "A/V" in text
+        # Sells react from a Daily A-shape inside the range, buys from a V-shape
+        text = format_alert(_make_alert(source_type=ReactionSourceType.AV_INSIDE_RANGE))
+        assert "Daily reaction source: Daily A-shape inside the range @ 1.09750" in text
+        text = format_alert(_make_alert(Direction.BULLISH, source_type=ReactionSourceType.AV_INSIDE_RANGE))
+        assert "Daily reaction source: Daily V-shape inside the range @ 1.09750" in text
+
+    def test_breakout_names_the_external_level(self):
+        text = format_alert(_make_alert(Direction.BEARISH))
+        assert "A Daily candle closed below the most recent External low @ 1.10000" in text
+        text = format_alert(_make_alert(Direction.BULLISH, source_type=ReactionSourceType.DAILY_BREAKER))
+        assert "A Daily candle closed above the most recent External high @ 1.10000" in text
 
     def test_reason_line_present(self):
         text = format_alert(_make_alert())

@@ -4,9 +4,10 @@ Alert message formatter.
 Builds the exact human-readable bias-confirmation alert from an AlertRecord.
 Handles four alert classifications:
   ORIGIN                  — first H4 confirmation from a Daily reaction source
-  CONTINUATION_ASHAPE     — subsequent H4 A/V formation break in the daily direction
-  CONTINUATION_H4_OC      — H4 OC reaction (close beyond OC midpoint)
-  CONTINUATION_H4_BREAKER — H4 Breaker or A/V inside range retested with wick+close
+  CONTINUATION_ASHAPE     — H4 back in line with the Daily after a Daily reaction
+                            (older scripts: any later H4 A/V break)
+  CONTINUATION_H4_OC      — H4 OC rejection (exact touch, close beyond the OC level)
+  CONTINUATION_H4_BREAKER — H4 Breaker retested: opens on the bias side, exact touch, closes beyond
 """
 
 from __future__ import annotations

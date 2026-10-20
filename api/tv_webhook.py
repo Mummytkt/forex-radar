@@ -6,12 +6,16 @@ breakouts, retests, and H4 confirmations are detected. This replaces the
 Twelve Data polling scheduler with TradingView's own chart data.
 
 Event types received from Pine:
-  BREAKOUT        — Daily candle closed beyond an external / internal / inner internal
-                    high or low (level_type); a break the other way replaces it
-  RETEST          — H4 wick touched the Daily Breaker band
-  RETEST_CANCELLED — H4 moved away from the band without H4 confirmation
-  CONFIRMED       — H4 closed beyond an H4 A/V level → fires Telegram alert
-  INVALIDATED     — Daily close returned through broken level → reset to IDLE
+  BREAKOUT        — Daily candle closed beyond the most recent External high or
+                    low; a break the other way replaces it (no Telegram)
+  RETEST          — H4 wick touched a Daily reaction level exactly (Breaker,
+                    inside-range V/A or OC, post-breakout OC)
+  RETEST_CANCELLED — the reaction failed (H4 closed through the level)
+  CONFIRMED       — Origin: H4 closed beyond the latest H4 A/V → Telegram alert
+  H4_CONTINUATION — H4 Breaker retest, H4 OC rejection or H4 back in line
+                    after a Daily reaction → Telegram alert to everyone
+  PRICE_UPDATE    — price + chart snapshot for the Live Chart Board
+  INVALIDATED     — older scripts only; current scripts never send it
 """
 
 from __future__ import annotations
@@ -180,7 +184,7 @@ class TVWebhookPayload(BaseModel):
     source: Optional[str] = None        # "daily_breaker" | "inside_range" | "post_breakout_oc"
     h4_class: Optional[str] = None      # "external" | "internal" (CONFIRMED)
     breakout_level: Optional[float] = None   # daily broken level
-    source_level: Optional[float] = None     # reaction source level (OC midpoint, or bo_level for others)
+    source_level: Optional[float] = None     # the Daily level that reacted (Breaker, inside-range V/A or OC, post-breakout OC)
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
     cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | breaker_origin | breaker_cont | oc_cont
     price: Optional[float] = None      # current close price (PRICE_UPDATE / ENTRY_CONFIRMATION)
