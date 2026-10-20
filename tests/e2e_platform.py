@@ -489,7 +489,12 @@ check("realignment from an inside-range A-shape is named", "Daily A-shape inside
 tv(type="H4_CONTINUATION", instrument="EURNZD", direction="bearish", cont_type="breakout_cont", level_type="external",
    breakout_level=1.85, h4_level=1.843, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='EURNZD' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("older scripts' continuation text unchanged", "H4 Breakout Continuation" in t)
+check("older scripts' in-line break reads as in line with the Daily", "H4 breakout in line with the Daily" in t)
+tv(type="H4_CONTINUATION", instrument="EURNZD", direction="bearish", cont_type="inline_break", level_type="external",
+   breakout_level=1.85, h4_level=1.8412, timeframe="240")
+t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='EURNZD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("in-line H4 breakout alert names the new H4 Breaker",
+      "H4 breakout in line with the Daily" in t and "H4 breakout @ 1.84120" in t and "This level is now the H4 Breaker." in t)
 
 snap = {"stage": "confirmed_aligned", "bias": "bearish", "retest_source": None, "breakout_level": 0.69842,
         "d_a": 0.69842, "d_v": None, "d_oc": 0.69632, "d_oc_count": 2, "h4_a": 0.69537, "h4_v": None, "h4_bk": 0.69591, "h4_oc": 0.69293}

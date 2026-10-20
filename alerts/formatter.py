@@ -432,17 +432,19 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
             "",
         ]
     else:
+        # A new H4 breakout while H4 is already in line with the Daily
         lines = [
             f"{bias_label} — {instrument}",
-            "H4 Breakout Continuation",
+            "H4 breakout in line with the Daily",
             "",
             f"Daily breakout: {direction_label} (active)",
             "",
             f"H4 breakout @ {level_str}",
             desc,
+            "This level is now the H4 Breaker.",
             "",
-            f"Reason: A new H4 breakout in the {direction_lower} direction has extended the active Daily "
-            f"{direction_lower} bias. The overall direction remains intact.",
+            f"Reason: A new H4 breakout in the {direction_lower} direction, while H4 is in line with the Daily, "
+            f"has extended the active Daily {direction_lower} bias.",
             "",
         ]
     lines += [

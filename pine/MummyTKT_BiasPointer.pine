@@ -60,6 +60,9 @@
 //             Daily reaction levels (V/A-shapes, Daily OCs, post-breakout OCs)
 //             die once a Daily candle closes through them; dead levels never
 //             count as a reaction again.
+//             While H4 is in line, every new H4 close beyond the latest H4 A
+//             (buy) / V (sell) alerts ("H4 breakout in line with the Daily"); its
+//             level becomes the H4 Breaker and its leg's OCs are kept.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -975,6 +978,29 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 array.clear(h4_ocs)
                 array.clear(h4_ocb)
 
+        // A new H4 breakout in the daily direction while in line (a close beyond
+        // the latest H4 A for buys / V for sells, not the level already broken):
+        // it alerts, its level becomes the H4 Breaker (replacing the older one)
+        // and only the OCs of its leg (from its swing low/high) and after it count.
+        if h4_aligned and not confirmed_this_bar
+            bool  ilb     = bo_dir == "bullish"
+            float brk_lvl = ilb ? h4_a_lvl : h4_v_lvl
+            bool  brk     = not na(brk_lvl) and (ilb ? (not new_a and close > brk_lvl) : (not new_v and close < brk_lvl)) and (na(h4_brk_lvl) or brk_lvl != h4_brk_lvl)
+            if brk
+                h4_brk_lvl            := brk_lvl
+                h4_breaker_lvl        := brk_lvl
+                bk_origin             := bar_index
+                h4_invalid_lvl        := ilb ? h4_v_lvl : h4_a_lvl
+                h4_breaker_orig_fired := false
+                f_h4_leg_prune(h4_ocs, h4_ocb, ilb ? h4a_origin : h4v_origin, ilb)
+                confirmed_this_bar    := true
+                if barstate.isrealtime
+                    alert(f_hdr("H4_CONTINUATION")
+                          + '","direction":"' + bo_dir + '","cont_type":"inline_break"'
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(brk_lvl) + '}',
+                          alert.freq_once_per_bar)
+
         if h4_aligned and not confirmed_this_bar
             if not na(h4_breaker_lvl)
                 // Re-arm when a NEW breaker level is established
@@ -1003,14 +1029,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
 
     // ── H4 OCs (trend continuation) ───────────────────────────────────────
     bool ocb = bo_dir == "bullish"
-    // a) A new H4 breakout in the daily direction while in line: only the OCs of
-    //    that breakout's leg (from its swing low/high) and after it count.
-    if h4_bo_fired and h4_aligned and not confirmed_this_bar
-        float brk_lvl = ocb ? h4_a_lvl : h4_v_lvl
-        bool  brk = not na(brk_lvl) and (ocb ? (not new_a and close > brk_lvl) : (not new_v and close < brk_lvl)) and (na(h4_brk_lvl) or brk_lvl != h4_brk_lvl)
-        if brk
-            h4_brk_lvl := brk_lvl
-            f_h4_leg_prune(h4_ocs, h4_ocb, ocb ? h4a_origin : h4v_origin, ocb)
+    // a) New in-line H4 breakouts prune the list in the continuation block above.
     // b) Rejections, checked against the OCs that existed BEFORE this candle:
     //    opens on the bias side, wick touches the exact level, closes beyond it.
     //    One alert naming the furthest OC reached; every OC it rejected is used

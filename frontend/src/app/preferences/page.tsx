@@ -128,7 +128,7 @@ export default function PreferencesPage() {
               )}
 
               <div style={{ padding: '12px 20px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Continuation alerts (H4 Breaker retest, H4 OC reaction, H4 back in line) always reach you. They follow an Origin you already received.
+                Continuation alerts (H4 breakout in line, H4 Breaker retest, H4 OC reaction, H4 back in line) always reach you. They follow an Origin you already received.
               </div>
             </div>
           )}

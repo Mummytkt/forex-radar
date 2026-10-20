@@ -176,7 +176,7 @@ class TVWebhookPayload(BaseModel):
     breakout_level: Optional[float] = None   # daily broken level
     source_level: Optional[float] = None     # the Daily level that reacted (Breaker, inside-range V/A or OC, post-breakout OC)
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
-    cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | breaker_origin | breaker_cont | oc_cont
+    cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | inline_break | breaker_origin | breaker_cont | oc_cont
     price: Optional[float] = None      # current close price (PRICE_UPDATE / ENTRY_CONFIRMATION)
     pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "engulfing_sweep"
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
@@ -547,6 +547,7 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
 
 _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
     "breakout_cont":  AlertClassification.H4_BREAKOUT_CONT,
+    "inline_break":   AlertClassification.H4_BREAKOUT_CONT,   # new H4 breakout while in line
     "breaker_origin": AlertClassification.H4_BREAKER_ORIGIN,
     "breaker_cont":   AlertClassification.H4_BREAKER_CONT,
     "oc_cont":        AlertClassification.H4_OC_CONT,

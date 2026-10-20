@@ -317,14 +317,15 @@ def make_rules(im):
          "Each subscriber chooses in Preferences whether External and/or Internal Origins reach their Telegram.", im["extint"]),
         ("F. Continuations (after the Origin)", "One Origin per Daily breakout",
          "After the Origin fires, later reactions from Daily zones do <b>not</b> create new Origins. Further H4 breaks in the same direction are "
-         "<b>continuation</b> alerts, until the next Daily breakout.",
+         "<b>continuation</b> alerts, until the next Daily breakout. While H4 is in line, every new H4 close beyond the <b>latest</b> H4 A-shape (buy) "
+         "or V-shape (sell) sends an <b>“H4 breakout in line with the Daily”</b> alert; no Daily reaction is needed for it.",
          "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
          "Continuation alerts always reach subscribers, whatever their External/Internal preference.", im["noneworigin"]),
         ("F. Continuations (after the Origin)", "H4 Breaker retest",
-         f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. When a later H4 candle <b>wicks exactly onto it and closes beyond it</b> "
-         "in the bias direction, a continuation fires.",
+         f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. Each newer in-line H4 breakout (and a return in line) replaces it with "
+         "the level it broke. When a later H4 candle <b>wicks exactly onto it and closes beyond it</b> in the bias direction, a continuation fires.",
          "Candle opens at/above the H4 breaker, wicks into it, closes above it", "Candle opens at/below the H4 breaker, wicks into it, closes below it",
-         "The first one is labelled “Breaker origin”, later ones “Breaker continuation”. Each visit alerts once; price must leave the zone before the next.",
+         "The first one at each H4 Breaker is labelled “Breaker origin”, later ones “Breaker continuation”. Each visit alerts once; price must leave the zone before the next.",
          im["breaker"]),
         ("F. Continuations (after the Origin)", "H4 OC continuation",
          f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. After each H4 breakout in the bias direction, <b>every OC of that breakout's leg</b> "
