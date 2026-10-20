@@ -326,11 +326,13 @@ def make_rules(im):
          "The first one is labelled “Breaker origin”, later ones “Breaker continuation”. Each visit alerts once; price must leave the zone before the next.",
          im["breaker"]),
         ("F. Continuations (after the Origin)", "H4 OC continuation",
-         f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. When a <b>later</b> H4 candle wicks exactly onto it and closes beyond it, "
-         "a continuation fires.",
+         f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. After each H4 breakout in the bias direction, <b>every OC of that breakout's leg</b> "
+         "(from its swing low, or swing high for sells) and every OC formed after it is watched. When a <b>later</b> H4 candle wicks exactly onto one and closes "
+         "beyond it, a continuation fires and that OC is used up.",
          "Candle opens at/above the H4 OC, wicks into it, closes above it", "Candle opens at/below the H4 OC, wicks into it, closes below it",
          "The candle that completes the OC can't trigger it, and a candle climbing up through it from below (falling through it from above, for sells) "
-         "is not a rejection. An H4 OC that a candle closes through against the bias is dropped. Each visit alerts once.", im["h4oc"]),
+         "is not a rejection. If one candle rejects several OCs, one alert names the furthest and all of them are used up. An OC closed through against the "
+         "bias is dropped. A newer H4 breakout keeps only its own leg's OCs; an H4 break the other way or a new Daily breakout drops them all.", im["h4oc"]),
         ("F. Continuations (after the Origin)", "Breakout continuation after a pullback",
          "If an H4 candle closes against the bias beyond the <b>latest</b> H4 V-shape (buy) or A-shape (sell), H4 is <b>out of line</b> (the chart label says OUT OF LINE) "
          "and every H4 OC is dropped. To come back in line, price must first <b>react at a Daily level again</b> (the Daily Breaker, a Daily V/A-shape "

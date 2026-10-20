@@ -53,6 +53,10 @@
 //             (same three zones), then an H4 break; the alert names that level.
 //             External/Internal is judged from the first reaction at the daily
 //             level that confirms (a failed reaction restarting there keeps it).
+//             H4 OCs: every OC of the latest H4 breakout leg (and after it) is
+//             watched; each alerts once on a rejection then is removed; checked
+//             before a new candle can form the next OC; all dropped when H4
+//             breaks the other way or on a new daily breakout.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -562,10 +566,13 @@ var bool   h4_breaker_orig_fired = false
 var float  h4_breaker_lvl        = na
 var float  h4_invalid_lvl        = na
 var bool   h4_aligned            = false
-var int    h4c_consec            = 0
-var float  h4c_oc_close1         = na
-var float  h4c_oc_lvl            = na
-var bool   h4c_oc_ready          = false
+// H4 OCs for trend continuation: every OC in the daily direction, each with the
+// bar it formed on (its second candle). At each H4 breakout in the daily
+// direction only that breakout's leg (from its swing low/high) is kept; each OC
+// alerts once then is removed; all go when H4 breaks the other way.
+var array<float> h4_ocs = array.new<float>()
+var array<int>   h4_ocb = array.new<int>()
+var float  h4_brk_lvl = na   // H4 A (buy) / V (sell) level last broken in the daily direction
 
 // Continuation dedup: each level fires at most once per "visit". It re-arms
 // when a new level is set (level-change) OR when price leaves the zone, so a
@@ -573,8 +580,6 @@ var bool   h4c_oc_ready          = false
 // sits at the level.
 var bool   bk_armed              = true
 var float  bk_armed_lvl          = na
-var bool   oc_armed              = true
-var float  oc_armed_lvl          = na
 
 // ── Level origin bar tracking (for extend-right lines) ───────────────────────
 var int    poc_origin = na
@@ -614,10 +619,9 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     h4_breaker_lvl        := na
     h4_invalid_lvl        := na
     h4_aligned            := false
-    h4c_consec            := 0
-    h4c_oc_close1         := na
-    h4c_oc_lvl            := na
-    h4c_oc_ready          := false
+    array.clear(h4_ocs)
+    array.clear(h4_ocb)
+    h4_brk_lvl            := na
     if barstate.isrealtime
         alert(f_hdr("BREAKOUT")
               + '","direction":"' + bo_dir + '","level_type":"' + bo_layer
@@ -681,6 +685,23 @@ if new_daily and not na(bo_dir) and not just_broke
             pb_close1  := d_close
     else
         pb_consec := 0
+
+// Keep only the H4 OCs formed from the breakout leg's swing low (buy) / high
+// (sell) onward: the extreme between the broken A/V's formation and now.
+f_h4_leg_prune(array<float> lv, array<int> lb, int from_bar, bool bull) =>
+    int   ext_bar = bar_index
+    float ext     = bull ? low : high
+    int   n       = math.min(bar_index - nz(from_bar, bar_index), 400)
+    for i = 0 to n
+        if bull ? low[i] < ext : high[i] > ext
+            ext     := bull ? low[i] : high[i]
+            ext_bar := bar_index - i
+    int k = array.size(lb) - 1
+    while k >= 0
+        if array.get(lb, k) < ext_bar
+            array.remove(lv, k)
+            array.remove(lb, k)
+        k -= 1
 
 // D.A / D.V (wick levels): only the one in line with the last breakout is
 // monitored — D.V in a bullish bias, D.A in a bearish bias.
@@ -845,10 +866,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_breaker_lvl        := h4_a_lvl
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_v_lvl
-                h4c_consec            := 0
-                h4c_oc_close1         := na
-                h4c_oc_lvl            := na
-                h4c_oc_ready          := false
+                h4_brk_lvl            := h4_a_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
                 if barstate.isrealtime
@@ -865,10 +884,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_breaker_lvl        := h4_a_lvl
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_v_lvl
-                h4c_consec            := 0
-                h4c_oc_close1         := na
-                h4c_oc_lvl            := na
-                h4c_oc_ready          := false
+                h4_brk_lvl            := h4_a_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 confirmed_this_bar    := true
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
@@ -890,10 +907,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_breaker_lvl        := h4_v_lvl
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_a_lvl
-                h4c_consec            := 0
-                h4c_oc_close1         := na
-                h4c_oc_lvl            := na
-                h4c_oc_ready          := false
+                h4_brk_lvl            := h4_v_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
                 if barstate.isrealtime
@@ -910,10 +925,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_breaker_lvl        := h4_v_lvl
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_a_lvl
-                h4c_consec            := 0
-                h4c_oc_close1         := na
-                h4c_oc_lvl            := na
-                h4c_oc_ready          := false
+                h4_brk_lvl            := h4_v_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 confirmed_this_bar    := true
                 if barstate.isrealtime
                     alert(f_hdr("H4_CONTINUATION")
@@ -938,25 +951,10 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             bool against = (bo_dir == "bullish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl) or (bo_dir == "bearish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl)
             if against
                 h4_aligned    := false
-                h4c_consec    := 0
-                h4c_oc_close1 := na
-                h4c_oc_lvl    := na
-                h4c_oc_ready  := false
+                array.clear(h4_ocs)
+                array.clear(h4_ocb)
 
         if h4_aligned and not confirmed_this_bar
-            bool h4c_match = (bo_dir == "bullish") ? h4_bull0 : h4_bear0
-            if h4c_match
-                h4c_consec := h4c_consec + 1
-                if h4c_consec == 1
-                    h4c_oc_close1 := close
-                else if h4c_consec >= 2
-                    h4c_oc_lvl    := h4c_oc_close1
-                    h4c_origin    := bar_index
-                    h4c_oc_close1 := close
-                    h4c_oc_ready  := true
-            else
-                h4c_consec := 0
-
             if not na(h4_breaker_lvl)
                 // Re-arm when a NEW breaker level is established
                 if na(bk_armed_lvl) or bk_armed_lvl != h4_breaker_lvl
@@ -982,36 +980,53 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                               + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
                               alert.freq_once_per_bar)
 
-            // OC continuation: only fires on H4 bars AFTER the OC was established
-            // (bar_index > h4c_origin). The formation bar itself always "closes
-            // beyond" the OC level by construction — that's not a reaction,
-            // it's just the second candle of the OC itself. We need price to
-            // leave and return, then close beyond on a later H4 candle.
-            if h4c_oc_ready and not na(h4c_oc_lvl) and bar_index > h4c_origin
-                // Re-arm when a NEW OC level is established
-                if na(oc_armed_lvl) or oc_armed_lvl != h4c_oc_lvl
-                    oc_armed     := true
-                    oc_armed_lvl := h4c_oc_lvl
-                // Reaction must reach the level exactly (no tolerance band)
-                bool oc_touched = low <= h4c_oc_lvl and high >= h4c_oc_lvl
-                // Re-arm when price is clear of the zone (so each fresh visit fires once)
-                if not oc_touched
-                    oc_armed := true
-                // Same rule as the breaker: open on the bias side, dip in, close beyond.
-                bool oc_react = oc_armed and oc_touched and ((bo_dir == "bullish" and open >= h4c_oc_lvl and close > h4c_oc_lvl) or (bo_dir == "bearish" and open <= h4c_oc_lvl and close < h4c_oc_lvl))
-                // An OC closed through against the bias is dead: stop watching it
-                bool oc_dead = (bo_dir == "bullish" and close < h4c_oc_lvl) or (bo_dir == "bearish" and close > h4c_oc_lvl)
-                if oc_dead
-                    h4c_oc_lvl   := na
-                    h4c_oc_ready := false
-                if oc_react
-                    oc_armed := false
-                    if barstate.isrealtime
-                        alert(f_hdr("H4_CONTINUATION")
-                              + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
-                              + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
-                              + ',"h4_level":' + str.tostring(h4c_oc_lvl) + '}',
-                              alert.freq_once_per_bar)
+    // ── H4 OCs (trend continuation) ───────────────────────────────────────
+    bool ocb = bo_dir == "bullish"
+    // a) A new H4 breakout in the daily direction while in line: only the OCs of
+    //    that breakout's leg (from its swing low/high) and after it count.
+    if h4_bo_fired and h4_aligned and not confirmed_this_bar
+        float brk_lvl = ocb ? h4_a_lvl : h4_v_lvl
+        bool  brk = not na(brk_lvl) and (ocb ? (not new_a and close > brk_lvl) : (not new_v and close < brk_lvl)) and (na(h4_brk_lvl) or brk_lvl != h4_brk_lvl)
+        if brk
+            h4_brk_lvl := brk_lvl
+            f_h4_leg_prune(h4_ocs, h4_ocb, ocb ? h4a_origin : h4v_origin, ocb)
+    // b) Rejections, checked against the OCs that existed BEFORE this candle:
+    //    opens on the bias side, wick touches the exact level, closes beyond it.
+    //    One alert naming the furthest OC reached; every OC it rejected is used
+    //    and removed. An OC closed through the wrong way is removed too.
+    float oc_hit = na
+    int   k = array.size(h4_ocs) - 1
+    while k >= 0
+        float L = array.get(h4_ocs, k)
+        if array.get(h4_ocb, k) < bar_index
+            bool react = low <= L and high >= L and (ocb ? (open >= L and close > L) : (open <= L and close < L))
+            bool dead  = ocb ? close < L : close > L
+            if react and h4_bo_fired and h4_aligned and not confirmed_this_bar
+                oc_hit := na(oc_hit) ? L : ocb ? math.min(oc_hit, L) : math.max(oc_hit, L)
+                array.remove(h4_ocs, k)
+                array.remove(h4_ocb, k)
+            else if dead
+                array.remove(h4_ocs, k)
+                array.remove(h4_ocb, k)
+        k -= 1
+    if not na(oc_hit) and barstate.isrealtime
+        alert(f_hdr("H4_CONTINUATION")
+              + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
+              + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+              + ',"h4_level":' + str.tostring(oc_hit) + '}',
+              alert.freq_once_per_bar)
+    // c) Record a new OC: two H4 candles in a row in the daily direction; the
+    //    level is where the first one closed.
+    if ocb ? (h4_bull1 and h4_bull0) : (h4_bear1 and h4_bear0)
+        array.push(h4_ocs, close[1])
+        array.push(h4_ocb, bar_index)
+        if array.size(h4_ocs) > 40
+            array.shift(h4_ocs)
+            array.shift(h4_ocb)
+
+// Newest watched H4 OC, for the label, line and dashboard snapshot
+float h4c_oc_lvl = array.size(h4_ocs) > 0 ? array.get(h4_ocs, array.size(h4_ocs) - 1) : na
+h4c_origin := array.size(h4_ocb) > 0 ? array.get(h4_ocb, array.size(h4_ocb) - 1) : na
 
 // ── Visual overlays ───────────────────────────────────────────────────────────
 
@@ -1065,7 +1080,7 @@ if barstate.islast
         if not na(h4_breaker_lvl)
             _bk_lbl  := label.new(lbl_x, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=h4bk_lbl_col, textcolor=color.white, size=size.small)
         if not na(h4c_oc_lvl)
-            _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####"), style=label.style_label_left, color=h4oc_lbl_col, textcolor=color.white, size=size.small)
+            _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####") + (array.size(h4_ocs) > 1 ? "  (" + str.tostring(array.size(h4_ocs)) + " watched)" : ""), style=label.style_label_left, color=h4oc_lbl_col, textcolor=color.white, size=size.small)
     if show_lvl_lines
         if show_daily_on_tf and not na(a_lvl)          and not na(s_da_t)
             _a_line   := line.new(s_da_t,     a_lvl,          time,      a_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
