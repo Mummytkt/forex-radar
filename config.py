@@ -111,6 +111,19 @@ def pip_size_for(instrument: str) -> float:
     return 0.0001
 
 
+# TradingView sends the chart's own ticker, which differs between brokers.
+SYMBOL_ALIASES = {
+    "JP225": "JPN225", "JP225USD": "JPN225", "JPN225USD": "JPN225", "NI225": "JPN225", "NIKKEI225": "JPN225", "J225": "JPN225",
+    "USOIL": "WTIUSD", "WTI": "WTIUSD", "USOUSD": "WTIUSD", "XTIUSD": "WTIUSD", "WTICOUSD": "WTIUSD", "CL1!": "WTIUSD", "USCRUDE": "WTIUSD",
+    "US30USD": "US30", "DJI": "US30", "DJ30": "US30", "WS30": "US30",
+    "NAS100USD": "NAS100", "US100": "NAS100", "USTEC": "NAS100", "NDX": "NAS100",
+    "SPX500USD": "SPX500", "US500": "SPX500", "SPX": "SPX500",
+    "UK100GBP": "UK100", "FTSE100": "UK100",
+    "DE40": "GER40", "DE30EUR": "GER40", "DE40EUR": "GER40", "GER30": "GER40", "DAX": "GER40",
+    "GOLD": "XAUUSD", "SILVER": "XAGUSD",
+}
+
+
 # ── Default instrument list ───────────────────────────────────────────────────
 # Twelve Data expects slash format for forex: EUR/USD
 # The normalizer stores internally without slash: EURUSD

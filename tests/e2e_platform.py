@@ -523,6 +523,18 @@ tv(type="CONFIRMED", instrument="CHFJPY", direction="bullish", source="daily_bre
    breakout_level=180.0, source_level=180.0, h4_level=181.0, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='CHFJPY' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("Origin describes the close above the External high", "A Daily candle closed above the most recent External high @ 180.000" in t)
+check("JP225 webhooks count as JPN225 in the feed monitor",
+      conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JPN225'").fetchone()[0] == 1
+      and conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JP225'").fetchone()[0] == 0)
+# An old broker-ticker heartbeat (from before the mapping) must not raise a "no data" warning
+conn.execute("INSERT OR REPLACE INTO webhook_heartbeats (instrument, last_seen_at, last_type) VALUES ('JP225', '2026-01-01T00:00:00+00:00', 'PRICE_UPDATE')")
+conn.commit()
+from alerts.feed_monitor import feed_health, run_feed_check
+check("old broker-ticker row hidden from feed health", all(f["instrument"] != "JP225" for f in feed_health(conn)))
+import asyncio as _aio
+_aio.run(run_feed_check(DB, config))
+check("feed check clears the old broker-ticker row",
+      conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JP225'").fetchone()[0] == 0)
 
 passed = sum(ok for _, ok in results)
 for name, ok in results:
