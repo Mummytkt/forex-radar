@@ -1102,21 +1102,23 @@ if barstate.islast
             _bk_lbl  := label.new(lbl_x, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=h4bk_lbl_col, textcolor=color.white, size=size.small)
         if not na(h4c_oc_lvl)
             _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####") + (array.size(h4_ocs) > 1 ? "  (" + str.tostring(array.size(h4_ocs)) + " watched)" : ""), style=label.style_label_left, color=h4oc_lbl_col, textcolor=color.white, size=size.small)
+    // Second point one step right of the first: a line whose level formed on the
+    // current candle would otherwise have no direction and extend straight down.
     if show_lvl_lines
         if show_daily_on_tf and not na(a_lvl)          and not na(s_da_t)
-            _a_line   := line.new(s_da_t,     a_lvl,          time,      a_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
+            _a_line   := line.new(s_da_t,     a_lvl,          s_da_t + timeframe.in_seconds() * 1000, a_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
         if show_daily_on_tf and not na(v_lvl)          and not na(s_dv_t)
-            _v_line   := line.new(s_dv_t,     v_lvl,          time,      v_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
+            _v_line   := line.new(s_dv_t,     v_lvl,          s_dv_t + timeframe.in_seconds() * 1000, v_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
         if show_daily_on_tf and not na(pb_oc_lvl)      and not na(poc_origin)
-            _poc_line := line.new(poc_origin, pb_oc_lvl,      bar_index, pb_oc_lvl,      extend=extend.right, color=daily_line_col, width=1)
+            _poc_line := line.new(poc_origin, pb_oc_lvl,      poc_origin + 1, pb_oc_lvl,      extend=extend.right, color=daily_line_col, width=1)
         if show_h4_on_tf and not na(h4_a_lvl)       and not na(h4a_origin)
-            _h4a_line := line.new(h4a_origin, h4_a_lvl,       bar_index, h4_a_lvl,       extend=extend.right, color=h4_line_col,    width=1)
+            _h4a_line := line.new(h4a_origin, h4_a_lvl,       h4a_origin + 1, h4_a_lvl,       extend=extend.right, color=h4_line_col,    width=1)
         if show_h4_on_tf and not na(h4_v_lvl)       and not na(h4v_origin)
-            _h4v_line := line.new(h4v_origin, h4_v_lvl,       bar_index, h4_v_lvl,       extend=extend.right, color=h4_line_col,    width=1)
+            _h4v_line := line.new(h4v_origin, h4_v_lvl,       h4v_origin + 1, h4_v_lvl,       extend=extend.right, color=h4_line_col,    width=1)
         if show_h4_on_tf and not na(h4_breaker_lvl) and not na(bk_origin)
-            _bk_line  := line.new(bk_origin,  h4_breaker_lvl, bar_index, h4_breaker_lvl, extend=extend.right, color=h4_line_col,    width=1)
+            _bk_line  := line.new(bk_origin,  h4_breaker_lvl, bk_origin + 1, h4_breaker_lvl, extend=extend.right, color=h4_line_col,    width=1)
         if show_h4_on_tf and not na(h4c_oc_lvl)     and not na(h4c_origin)
-            _h4c_line := line.new(h4c_origin, h4c_oc_lvl,     bar_index, h4c_oc_lvl,     extend=extend.right, color=h4_line_col,    width=1)
+            _h4c_line := line.new(h4c_origin, h4c_oc_lvl,     h4c_origin + 1, h4c_oc_lvl,     extend=extend.right, color=h4_line_col,    width=1)
 
 // ── Daily structure levels on the chart ──────────────────────────────────────
 var array<line>  _st_lines  = array.new<line>()
