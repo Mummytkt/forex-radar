@@ -68,6 +68,9 @@
 //             level becomes the H4 Breaker and its leg's OCs are kept.
 //             Webhooks carry the exchange (syminfo.prefix); on Deriv synthetic
 //             indices one pip is 0.002% of price (5-pip allowance = 0.01%).
+//             PRICE_UPDATE carries the closed H4 candle and the last Daily candle;
+//             each new alert first sends 40 Daily then 40 H4 candles (HISTORY)
+//             for the server's chart pictures.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -545,6 +548,30 @@ f_structure() =>
 // ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
 // lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
 // next day, on history and live (non-repainting).
+// Last completed Daily candle as drawn (wicks), for the server's chart pictures
+[dr_t, dr_o, dr_h, dr_l, dr_c] = request.security(syminfo.tickerid, "D",
+     [time[1], open[1], high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
+const int HIST_N = 40
+var array<int>   dh_t = array.new<int>()
+var array<float> dh_o = array.new<float>()
+var array<float> dh_h = array.new<float>()
+var array<float> dh_l = array.new<float>()
+var array<float> dh_c = array.new<float>()
+if timeframe.change("D") and not na(dr_t)
+    array.push(dh_t, dr_t)
+    array.push(dh_o, dr_o)
+    array.push(dh_h, dr_h)
+    array.push(dh_l, dr_l)
+    array.push(dh_c, dr_c)
+    if array.size(dh_t) > HIST_N
+        array.shift(dh_t)
+        array.shift(dh_o)
+        array.shift(dh_h)
+        array.shift(dh_l)
+        array.shift(dh_c)
+f_bar(int t, float o, float h, float l, float c) =>
+    na(t) or na(c) ? "null" : '[' + str.tostring(t) + ',' + str.tostring(o, format.mintick) + ',' + str.tostring(h, format.mintick) + ',' + str.tostring(l, format.mintick) + ',' + str.tostring(c, format.mintick) + ']'
+
 float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_on)
 float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
 [d_high, d_low, d_open2, d_close2, d_high2, d_low2] = request.security(syminfo.tickerid, "D",
@@ -1222,8 +1249,30 @@ if barstate.isconfirmed and barstate.isrealtime
           + ',"d_a":' + f_num(a_lvl) + ',"d_v":' + f_num(v_lvl)
           + ',"d_oc":' + f_num(pb_oc_lvl) + ',"d_oc_count":' + str.tostring(array.size(pb_ocs))
           + ',"h4_a":' + f_num(h4_a_lvl) + ',"h4_v":' + f_num(h4_v_lvl)
-          + ',"h4_bk":' + f_num(h4_breaker_lvl) + ',"h4_oc":' + f_num(h4c_oc_lvl) + '}}',
+          + ',"h4_bk":' + f_num(h4_breaker_lvl) + ',"h4_oc":' + f_num(h4c_oc_lvl) + '}'
+          + ',"bar":' + f_bar(time, open, high, low, close)
+          + ',"dbar":' + f_bar(dr_t, dr_o, dr_h, dr_l, dr_c) + '}',
           alert.freq_once_per_bar)
+
+// ── Candle history for the server's chart pictures ───────────────────────────
+// Once per alert: the first realtime H4 close sends the last Daily candles, the
+// second the last H4 candles. From then on every PRICE_UPDATE carries the
+// candle that just closed and the last completed Daily candle.
+var int hist_step = 0
+if barstate.isconfirmed and barstate.isrealtime and hist_step < 2
+    string js = ""
+    if hist_step == 0
+        int nd = array.size(dh_t)
+        if nd > 0
+            for i = 0 to nd - 1
+                js := js + (i > 0 ? "," : "") + f_bar(array.get(dh_t, i), array.get(dh_o, i), array.get(dh_h, i), array.get(dh_l, i), array.get(dh_c, i))
+            alert(f_hdr("HISTORY") + '","tf":"D","bars":[' + js + ']}', alert.freq_once_per_bar)
+    else
+        int nh = math.min(HIST_N, bar_index)
+        for i = nh - 1 to 0
+            js := js + (i < nh - 1 ? "," : "") + f_bar(time[i], open[i], high[i], low[i], close[i])
+        alert(f_hdr("HISTORY") + '","tf":"' + timeframe.period + '","bars":[' + js + ']}', alert.freq_once_per_bar)
+    hist_step += 1
 
 
 color _lbl_col = idle_lbl_col

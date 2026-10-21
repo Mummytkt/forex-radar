@@ -34,6 +34,7 @@ from pydantic import BaseModel
 from alerts.formatter import format_alert, format_entry_alert
 from config import SYMBOL_ALIASES, is_synthetic, fmt_price
 from state.instruments import register_synthetic
+from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
 from api.alert_prefs import confirmation_kind, get_alert_prefs
 from alerts.telegram import send_alert
 from config import pip_size_for
@@ -190,12 +191,16 @@ class TVWebhookPayload(BaseModel):
     level_type: Optional[str] = None   # which daily level broke: external | internal | inner_internal | sub_internal
     range_level: Optional[float] = None  # BREAKOUT: the other side of the range that was broken
     exchange: Optional[str] = None     # TradingView syminfo.prefix, e.g. "DERIV" for synthetic indices
+    bar: Optional[list] = None         # PRICE_UPDATE: the H4 candle that just closed [t_ms, o, h, l, c]
+    dbar: Optional[list] = None        # PRICE_UPDATE: the last completed Daily candle
+    tf: Optional[str] = None           # HISTORY: "D" or "240"
+    bars: Optional[list] = None        # HISTORY: candles, oldest first
 
 
 # Bias Pointer events are only meaningful from the 4H chart. Alerts created on any
 # other timeframe run the H4 logic on the wrong candles, so they are ignored.
 BIAS_EVENTS = {"BREAKOUT", "RETEST", "RETEST_CANCELLED", "CONFIRMED", "INVALIDATED",
-               "H4_CONTINUATION", "PRICE_UPDATE"}
+               "H4_CONTINUATION", "PRICE_UPDATE", "HISTORY"}
 BIAS_TIMEFRAME = "240"
 
 
@@ -306,7 +311,13 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     elif event_type == "ENTRY_CONFIRMATION":
         await _handle_entry_confirmation(conn, config, instrument, payload)
     elif event_type == "PRICE_UPDATE":
+        _store_candles(conn, instrument, payload)
         await _handle_price_update(conn, config, instrument, payload)
+    elif event_type == "HISTORY":
+        tf = candles_tf_name(payload.tf)
+        if tf:
+            n = upsert_candles(conn, instrument, tf, payload.bars)
+            logger.info("%s candle history stored: %d %s candles", instrument, n, tf)
     else:
         logger.warning("Unknown TV webhook type: %s", event_type)
 
@@ -314,6 +325,17 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 
 
 # ── Event handlers ────────────────────────────────────────────────────────────
+
+def _store_candles(conn, instrument: str, payload: "TVWebhookPayload") -> None:
+    """Keep the candles the chart just closed, for chart pictures. Never blocks alerts."""
+    try:
+        if payload.bar:
+            upsert_candles(conn, instrument, "H4", [payload.bar])
+        if payload.dbar:
+            upsert_candles(conn, instrument, "D", [payload.dbar])
+    except Exception as exc:
+        logger.warning("Candle store failed for %s: %s", instrument, exc)
+
 
 def _ensure_breakout(conn, config, instrument: str, direction: Direction,
                      level: Optional[float], event: str) -> DailyBreakout:

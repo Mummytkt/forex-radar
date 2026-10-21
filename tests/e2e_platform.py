@@ -577,6 +577,24 @@ from datetime import datetime as _dt, timezone as _tz
 _sat = _dt(2026, 10, 24, 12, tzinfo=_tz.utc)
 check("synthetics count as open on a Saturday; forex doesn't", _imo(SYN, _sat) and not _imo("EURUSD", _sat))
 
+# ── Candles for chart pictures (2026-10-21) ───────────────────────────────
+from state.candles import recent as _recent
+_t0 = 1792800000000   # ms
+r_h = tv(type="HISTORY", instrument="GBPJPY", tf="D", timeframe="240",
+         bars=[[_t0 + i * 86400000, 200 + i, 201 + i, 199 + i, 200.5 + i] for i in range(40)])
+check("Daily candle history is stored", r_h.status_code == 200 and len(_recent(conn, "GBPJPY", "D", 100)) == 40)
+tv(type="HISTORY", instrument="GBPJPY", tf="240", timeframe="240",
+   bars=[[_t0 + i * 14400000, 210, 211, 209, 210.5] for i in range(40)] + [["bad"], None])
+check("H4 candle history is stored; bad rows skipped", len(_recent(conn, "GBPJPY", "H4", 100)) == 40)
+tv(type="HISTORY", instrument="GBPJPY", tf="D", timeframe="60", bars=[[_t0, 1, 2, 0, 1]])
+check("history from a non-4H chart is ignored", _recent(conn, "GBPJPY", "D", 1)[0][1] != 1)
+tv(type="PRICE_UPDATE", instrument="GBPJPY", price=211.1, timeframe="240", snapshot=dict(snap),
+   bar=[_t0 + 40 * 14400000, 210.5, 211.4, 210.2, 211.1], dbar=[_t0 + 40 * 86400000, 240, 241, 239, 240.7])
+h4_last = _recent(conn, "GBPJPY", "H4", 1)[0]; d_last = _recent(conn, "GBPJPY", "D", 1)[0]
+check("each price update adds the closed H4 and Daily candle", h4_last[4] == 211.1 and d_last[4] == 240.7)
+r_bad = tv(type="PRICE_UPDATE", instrument="GBPJPY", price=211.2, timeframe="240", bar=["x"], dbar=None)
+check("a malformed candle never blocks the price update", r_bad.status_code == 200)
+
 # ── High-impact news (2026-10-21) ─────────────────────────────────────────
 import alerts.news as news
 import alerts.telegram as _tgm
