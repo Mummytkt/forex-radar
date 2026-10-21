@@ -136,7 +136,14 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
     for l in sorted(shown, key=lambda l: -l["y"]):
         col = COLORS.get(l.get("kind", ""), INK)
         y = py(l["y"])
-        for xs in range(int(x0), int(x1), 12):
+        # Start at the candle that formed the level (if known), not across the chart
+        xstart = x0
+        if l.get("t0"):
+            i0 = max((i for i, cd in enumerate(candles) if cd[0] <= l["t0"]), default=None)
+            if i0 is not None:
+                xstart = x0 + step * (i0 + 0.5) - bw / 2
+                d.ellipse([xstart - 3, y - 3, xstart + 3, y + 3], fill=col)
+        for xs in range(int(xstart), int(x1), 12):
             d.line([(xs, y), (min(xs + 7, x1), y)], fill=col, width=2)
         ty = y - 8
         while any(abs(ty - u) < 17 for u in used):
@@ -167,6 +174,48 @@ def _png(img) -> bytes:
     return buf.getvalue()
 
 
+def _form(l: dict, side: str) -> tuple[str, str]:
+    """(timeframe, shape) a level was formed on, from its kind and label."""
+    lab, kind = l.get("label", ""), l.get("kind", "")
+    if kind == "breaker" or kind in ("ext", "daily"):
+        return "D", "ext"
+    if kind == "source":
+        return ("D", "OC") if "OC" in lab else ("D", "ext")
+    if "OC" in lab:
+        return "H4", "OC"
+    if "A broken" in lab or lab == "H4.A":
+        return "H4", "A"
+    if "V broken" in lab or lab == "H4.V":
+        return "H4", "V"
+    return "H4", ("A" if side == "BUY" else "V")   # H4 Breaker / H4 breakout
+
+
+def level_origin(level: float, shape: str, candles: list[tuple]) -> Optional[str]:
+    """Open time of the most recent candle that formed this level with this
+    shape (A: up candle then down, body high; V: down then up, body low; OC:
+    first of two same-direction candles, its close; ext: a wick or body edge).
+    None when nothing matches."""
+    tol = max(abs(level) * 1e-7, 1e-9)
+    eq = lambda v: abs(v - level) <= tol
+    for i in range(len(candles) - 1, -1, -1):
+        ts, o, h, lo, c = candles[i]
+        bull = c >= o
+        nx = candles[i + 1] if i + 1 < len(candles) else None
+        nbull = nx is not None and nx[4] >= nx[1]
+        if shape == "ext":
+            if eq(h) or eq(lo) or eq(max(o, c)) or eq(min(o, c)):
+                return ts
+        elif nx is None:
+            continue
+        elif shape == "A" and bull and not nbull and eq(max(o, c)):
+            return ts
+        elif shape == "V" and not bull and nbull and eq(min(o, c)):
+            return ts
+        elif shape == "OC" and bull == nbull and eq(c):
+            return ts
+    return None
+
+
 def candles_until(conn, instrument: str, tf: str, until_iso: str) -> list[tuple]:
     """The last N candles that opened at or before the alert time."""
     from state.candles import ensure_table
@@ -192,11 +241,18 @@ def picture_for_alert(conn, alert_id: int, tf: str, full: bool = False) -> Optio
     # candles are stored with +00:00; alerts.fired_at may be naive UTC
     until = fired_iso if "+" in fired_iso else fired_iso + "+00:00"
     candles = candles_until(conn, instrument, tf, until)
+    other = candles_until(conn, instrument, "H4" if tf == "D" else "D", until)
+    h4set, dset = (other, candles) if tf == "D" else (candles, other)
+    side = info["meta"].get("side", "")
+    levels = []
+    for l in info["levels"]:
+        ftf, shape = _form(l, side)
+        levels.append(dict(l, t0=level_origin(l["y"], shape, h4set[:-1] if ftf == "H4" else dset)))
     meta = dict(info["meta"])
     try:
         meta["fired_at"] = datetime.fromisoformat(until).astimezone(WAT).strftime("%d %b %H:%M") + " WAT"
     except Exception:
         meta["fired_at"] = str(fired)[:16].replace("T", " ") + " UTC"
-    png = render(instrument, tf, candles, info["levels"], meta, fmt=lambda v: fmt_price(instrument, v), full=full)
+    png = render(instrument, tf, candles, levels, meta, fmt=lambda v: fmt_price(instrument, v), full=full)
     caption = f"{instrument} · {'Daily' if tf == 'D' else '4H'} · {meta.get('side', '')} · {meta.get('subtitle', '')}"
     return png, caption[:1000], len(candles)

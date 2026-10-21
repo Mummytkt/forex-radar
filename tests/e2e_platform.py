@@ -639,6 +639,13 @@ _lv = [{"y": 205.5, "label": "Daily Breaker", "kind": "breaker", "tf": "both"},
 _cd = _recent(conn, "GBPJPY", "D", 45)
 check("subscriber pictures leave out the chart's other levels",
       _render("GBPJPY", "D", _cd, _lv, {}, full=False) != _render("GBPJPY", "D", _cd, _lv, {}, full=True))
+from alerts.chart_image import level_origin as _lo
+_cs = [("t1", 1.10, 1.12, 1.09, 1.11), ("t2", 1.11, 1.115, 1.10, 1.105),   # A: up then down, body high 1.11
+       ("t3", 1.105, 1.12, 1.10, 1.115), ("t4", 1.115, 1.13, 1.11, 1.125),  # OC: two up candles, close 1.115
+       ("t5", 1.125, 1.126, 1.11, 1.11), ("t6", 1.11, 1.13, 1.105, 1.12)]   # V: down then up, body low 1.11
+check("level lines start at the candle that formed them (A / OC / V)",
+      _lo(1.11, "A", _cs) == "t1" and _lo(1.115, "OC", _cs) == "t3" and _lo(1.11, "V", _cs) == "t5")
+check("an unmatched level falls back to a full-width line", _lo(1.2345, "A", _cs) is None)
 _calls.clear(); tap("chx", photo=True, mid=9)
 check("Close deletes the chart message", ("delete", "777", 9) in _calls)
 _calls.clear(); tap("ch:999999:D")
