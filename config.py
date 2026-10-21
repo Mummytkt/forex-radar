@@ -111,6 +111,27 @@ def pip_size_for(instrument: str) -> float:
     return 0.0001
 
 
+# Deriv synthetic indices seen from TradingView (exchange DERIV), filled at
+# startup from the DB and as new ones report (state/instruments.py). They trade
+# 24/7 and subscribers get them only if they opt in.
+SYNTHETICS: set[str] = set()
+
+
+def is_synthetic(instrument: str) -> bool:
+    return instrument.replace("/", "").upper() in SYNTHETICS
+
+
+def fmt_price(instrument: str, price: float) -> str:
+    """Price text with sensible decimals: JPY / metals 3, synthetics by size, else 5."""
+    s = instrument.replace("/", "").upper()
+    if is_synthetic(s):
+        a = abs(price)
+        return f"{price:.2f}" if a >= 1000 else f"{price:.3f}" if a >= 10 else f"{price:.5f}"
+    if s.endswith("JPY") or s in {"XAUUSD", "XAGUSD"}:
+        return f"{price:.3f}"
+    return f"{price:.5f}"
+
+
 # TradingView sends the chart's own ticker, which differs between brokers.
 SYMBOL_ALIASES = {
     "JP225": "JPN225", "JP225USD": "JPN225", "JPN225USD": "JPN225", "NI225": "JPN225", "NIKKEI225": "JPN225", "J225": "JPN225",

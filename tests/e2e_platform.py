@@ -544,6 +544,51 @@ _aio.run(run_feed_check(DB, config))
 check("feed check clears the old broker-ticker row",
       conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JP225'").fetchone()[0] == 0)
 
+# ── Deriv synthetic indices (2026-10-21) ──────────────────────────────────
+import config as _cfgmod
+SYN = "JUMP_25_INDEX"
+S_ = make_sub("synth@x.com"); ts_, sid = S_["token"], S_["user"]["id"]
+dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET telegram_chat_id = 'chatS' WHERE id = ?", (sid,)); dbw.commit(); dbw.close()
+tv(type="PRICE_UPDATE", instrument=SYN, exchange="DERIV", price=132918.4, timeframe="240", snapshot=dict(snap, stage="breakout"))
+check("a Deriv chart registers itself as a synthetic", _cfgmod.is_synthetic(SYN) and SYN in config.instruments)
+check("the synthetic is saved for the next restart",
+      SYN in _j.loads(conn.execute("SELECT value FROM user_config WHERE key='synthetic_instruments'").fetchone()[0]))
+tv(type="PRICE_UPDATE", instrument="EURCHF", exchange="FOREXCOM", price=0.93, timeframe="240")
+check("a non-Deriv chart is never registered as synthetic", not _cfgmod.is_synthetic("EURCHF"))
+check("config endpoint lists synthetics", SYN in c.get("/api/config/instruments", headers=H(owner)).json()["synthetics"])
+check("owner board shows the synthetic", any(p["instrument"] == SYN for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]))
+check("subscriber without a pair list doesn't see synthetics on the board",
+      not any(p["instrument"] == SYN for p in c.get("/api/chart-board", headers=H(ts_)).json()["pairs"]))
+sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, SYN, "x"))
+check(f"synthetic alerts reach the owner but not subscribers who didn't opt in {sorted(sent)}",
+      conn.execute("SELECT telegram_chat_id FROM users WHERE role='OWNER'").fetchone()[0] in sent and "chatS" not in sent)
+dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET watched_instruments = ? WHERE id = ?", (_j.dumps(["EUR/USD", SYN]), sid)); dbw.commit(); dbw.close()
+sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, SYN, "x"))
+check(f"a subscriber who ticked the synthetic gets it {sorted(sent)}", "chatS" in sent)
+check("…and sees it on their board", any(p["instrument"] == SYN for p in c.get("/api/chart-board", headers=H(ts_)).json()["pairs"]))
+dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET watched_instruments = NULL WHERE id = ?", (sid,)); dbw.commit(); dbw.close()
+tv(type="BREAKOUT", instrument=SYN, exchange="DERIV", direction="bullish", level=131500.25, level_type="external", range_level=127000.0, timeframe="240")
+tv(type="CONFIRMED", instrument=SYN, exchange="DERIV", direction="bullish", source="daily_breaker", h4_class="external", level_type="external",
+   breakout_level=131500.25, source_level=131500.25, h4_level=132100.5, timeframe="240")
+t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument=? ORDER BY id DESC LIMIT 1", (SYN,)).fetchone()[0]
+check("synthetic levels print with 2 decimals", "@ 131500.25" in t and "@ 132100.50" in t)
+from alerts.feed_monitor import is_market_open as _imo
+from datetime import datetime as _dt, timezone as _tz
+_sat = _dt(2026, 10, 24, 12, tzinfo=_tz.utc)
+check("synthetics count as open on a Saturday; forex doesn't", _imo(SYN, _sat) and not _imo("EURUSD", _sat))
+
+# Instruments added after the list was saved reach an existing DB once
+from state.instruments import load_instruments
+_c2 = sqlite3.connect(os.path.join(tmpdir, "inst.db")); _c2.execute("CREATE TABLE user_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
+_c2.execute("INSERT INTO user_config (key, value) VALUES ('instruments', ?)", (_j.dumps(["EUR/USD", "XAU/USD"]),)); _c2.commit()
+_ns = NS(instruments=[])
+load_instruments(_c2, _ns)
+check("XAG/USD is added to an older saved list", _ns.instruments == ["EUR/USD", "XAU/USD", "XAG/USD"])
+_c2.execute("UPDATE user_config SET value = ? WHERE key = 'instruments'", (_j.dumps(["EUR/USD"]),)); _c2.commit()
+load_instruments(_c2, _ns)
+check("an owner's later removal sticks (added only once)", _ns.instruments == ["EUR/USD"])
+_cfgmod.SYNTHETICS.add(SYN)   # load_instruments on the other DB reset the set
+
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

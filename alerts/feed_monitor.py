@@ -36,7 +36,8 @@ def is_crypto(instrument: str) -> bool:
 def is_market_open(instrument: str, at: datetime) -> bool:
     """Crypto never closes. Everything else follows the FX week: closed from
     Friday 17:00 to Sunday 17:00 New York time (DST-aware)."""
-    if is_crypto(instrument):
+    from config import is_synthetic
+    if is_crypto(instrument) or is_synthetic(instrument):   # 24/7 markets
         return True
     local = at.astimezone(_NY) if _NY else at - timedelta(hours=4)
     wd, hour = local.weekday(), local.hour  # Mon=0 … Sun=6

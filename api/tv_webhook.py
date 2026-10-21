@@ -32,7 +32,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from alerts.formatter import format_alert, format_entry_alert
-from config import SYMBOL_ALIASES
+from config import SYMBOL_ALIASES, is_synthetic, fmt_price
+from state.instruments import register_synthetic
 from api.alert_prefs import confirmation_kind, get_alert_prefs
 from alerts.telegram import send_alert
 from config import pip_size_for
@@ -107,6 +108,7 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
     if they allow that type (external/internal). Continuations pass None and
     always go out."""
     instr_norm = instrument.replace("/", "").upper()
+    synthetic = is_synthetic(instr_norm)
     kind = confirmation_kind(h4_class) if h4_class is not None else None
     recipients = conn.execute(
         "SELECT id, telegram_chat_id, watched_instruments, role, plan, plan_expires_at FROM users "
@@ -122,6 +124,8 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
             watched = [w.replace("/", "").upper() for w in _json.loads(raw)]
             if instr_norm not in watched:
                 continue
+        elif synthetic and rec["role"] != "OWNER":
+            continue  # synthetics are opt-in: only subscribers who ticked them get them
         if kind and not get_alert_prefs(conn, rec["id"], rec["role"])[kind]:
             continue  # user switched this confirmation type off
         chats.append(rec["telegram_chat_id"])
@@ -185,6 +189,7 @@ class TVWebhookPayload(BaseModel):
     source_kind: Optional[str] = None  # inside_range reactions: "v_shape" | "a_shape" | "oc"
     level_type: Optional[str] = None   # which daily level broke: external | internal | inner_internal | sub_internal
     range_level: Optional[float] = None  # BREAKOUT: the other side of the range that was broken
+    exchange: Optional[str] = None     # TradingView syminfo.prefix, e.g. "DERIV" for synthetic indices
 
 
 # Bias Pointer events are only meaningful from the 4H chart. Alerts created on any
@@ -258,6 +263,14 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     instrument = payload.instrument.replace("/", "").upper()
     instrument = SYMBOL_ALIASES.get(instrument, instrument)
     event_type = payload.type.upper()
+
+    # A Deriv synthetic index joins the platform the first time its chart reports.
+    if (payload.exchange or "").upper() == "DERIV":
+        try:
+            if register_synthetic(conn, config, instrument):
+                logger.info("New Deriv synthetic registered: %s", instrument)
+        except Exception as exc:
+            logger.warning("Synthetic registration failed for %s: %s", instrument, exc)
 
     # Heartbeat for the feed health monitor — any authenticated webhook counts.
     try:
@@ -708,7 +721,10 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
         conn.commit()
 
         # Determine decimal precision for display
-        if instrument.endswith("JPY") or instrument == "XAGUSD":
+        if is_synthetic(instrument):
+            a_ = abs(price)
+            fmt = "{:.2f}" if a_ >= 1000 else "{:.3f}" if a_ >= 10 else "{:.5f}"
+        elif instrument.endswith("JPY") or instrument == "XAGUSD":
             fmt = "{:.3f}"
         elif instrument in ("XAUUSD", "USOIL", "WTIUSD"):
             fmt = "{:.2f}"

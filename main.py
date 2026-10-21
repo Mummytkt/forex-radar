@@ -54,18 +54,11 @@ async def main(dry_run: bool = False) -> None:
     conn = get_connection(config.db_path)
     bootstrap_schema(conn)
 
-    # Load instrument list from DB override (allows UI edits without restart)
-    row = conn.execute("SELECT value FROM user_config WHERE key = 'instruments'").fetchone()
-    if row:
-        config.instruments = json.loads(row[0])
-        logger.info("Loaded %d instruments from DB config.", len(config.instruments))
-    else:
-        conn.execute(
-            "INSERT INTO user_config (key, value) VALUES ('instruments', ?)",
-            (json.dumps(config.instruments),),
-        )
-        conn.commit()
-        logger.info("Wrote default instrument list (%d) to DB config.", len(config.instruments))
+    # Instrument list from the DB (owner-editable), plus instruments added since
+    # it was saved and the Deriv synthetics that have reported.
+    from state.instruments import load_instruments
+    load_instruments(conn, config)
+    logger.info("Loaded %d instruments from DB config.", len(config.instruments))
 
     # Load JWT secret — create a random one if missing, so tokens are never
     # signed with a guessable fallback.

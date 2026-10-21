@@ -53,10 +53,8 @@ def _context_line(alert: AlertRecord) -> str:
 # ── Price / timestamp helpers ─────────────────────────────────────────────────
 
 def _fmt_level(instrument: str, level: float) -> str:
-    instr = instrument.upper().replace("/", "")
-    if instr.endswith("JPY") or instr in {"XAUUSD", "XAGUSD"}:
-        return f"{level:.3f}"
-    return f"{level:.5f}"
+    from config import fmt_price
+    return fmt_price(instrument, level)
 
 
 def _fmt_ts(dt: datetime | None) -> str:

@@ -255,6 +255,9 @@ def chart_board(request: Request):
             if row and row[0]:
                 mine = {w.replace("/", "").upper() for w in json.loads(row[0])}
                 pairs = [p for p in pairs if p in mine]
+            else:
+                from config import is_synthetic
+                pairs = [p for p in pairs if not is_synthetic(p)]   # synthetics are opt-in
         rows = {r["instrument"]: r for r in conn.execute(
             "SELECT instrument, snapshot, price, updated_at FROM chart_snapshots").fetchall()}
     board = []
@@ -579,8 +582,9 @@ def onboarding_status(request: Request):
 
 @router.get("/config/instruments")
 def get_config_instruments(request: Request):
-    """Return the current monitored instrument list."""
-    return {"instruments": request.app.state.config.instruments}
+    """Return the current monitored instrument list and which are Deriv synthetics."""
+    from config import SYNTHETICS
+    return {"instruments": request.app.state.config.instruments, "synthetics": sorted(SYNTHETICS)}
 
 
 @router.put("/config/instruments")

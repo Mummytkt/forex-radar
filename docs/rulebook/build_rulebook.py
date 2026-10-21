@@ -388,7 +388,7 @@ GLOSSARY = [
     ("Origin", "The first H4 confirmation of a Daily breakout. One per breakout."),
     ("Continuation", "Every later H4 confirmation in the same direction, until the next Daily breakout."),
     ("H4 External / Internal", "Whether the H4 A/V-shape that broke formed before or after the reaction began."),
-    ("Tolerance", "The ± band (default 5 pips) used for moving away from the breaker and for a reaction failing; touches must be exact. Entry alerts use 20 pips."),
+    ("Tolerance", "The ± band (default 5 pips) used for moving away from the breaker and for a reaction failing; touches must be exact. Entry alerts use 20 pips. On Deriv synthetic indices one pip is 0.002% of price, so the 5-pip band is 0.01% of price."),
     ("Next breakout", "Any later Daily break replaces the setup; a break the other way flips the bias."),
 ]
 

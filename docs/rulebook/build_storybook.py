@@ -332,7 +332,7 @@ def chapters():
         ]),
         ("The Old Ceiling Becomes a Trampoline", "#ff7a59", "trampoline", [
             "Here's some magic. The roof that got broken flips into a <b>Trampoline</b>! The old ceiling is now a floor to bounce on. Grown-ups call it the <b>Daily Breaker</b>.",
-            "The trampoline has a cushion around it called the <b>Wiggle Mat</b>. It's 5 <b>pips</b> thick on each side. (Pips are the tiniest steps a price can take.)",
+            "The trampoline has a cushion around it called the <b>Wiggle Mat</b>. It's 5 <b>pips</b> thick on each side. (Pips are the tiniest steps a price can take. Deriv's make-believe markets have no pips, so there the mat is a tiny slice of the price: 0.01%.)",
             "But first, the Little Twins must <b>go out to play</b>. A Little Twin has to close <b>above the Trampoline's Wiggle Mat</b>.",
             "A twin still sitting on the trampoline hasn't left, so it doesn't count.",
             "Only after they've gone out to play can a twin come back for a <b>bounce</b>. That's when it's a real <b>visit</b>.",

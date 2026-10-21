@@ -66,6 +66,8 @@
 //             While H4 is in line, every new H4 close beyond the latest H4 A
 //             (buy) / V (sell) alerts ("H4 breakout in line with the Daily"); its
 //             level becomes the H4 Breaker and its leg's OCs are kept.
+//             Webhooks carry the exchange (syminfo.prefix); on Deriv synthetic
+//             indices one pip is 0.002% of price (5-pip allowance = 0.01%).
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=100)
@@ -172,13 +174,16 @@ f_pip(string t) =>
         "JPN225"  => 10.0
         => str.endswith(t, "JPY") ? 0.01 : 0.0001
 
-float pip = f_pip(syminfo.ticker)
+// Deriv synthetic indices have no pips: one "pip" is 0.002% of price, so the
+// default 5-pip allowance is 0.01% of price.
+bool  is_deriv = syminfo.prefix == "DERIV"
+float pip = is_deriv ? close * 0.00002 : f_pip(syminfo.ticker)
 float tol = float(tol_pips) * pip
 
 // Every webhook carries the chart timeframe so the server can ignore alerts that
 // were accidentally created on a non-4H chart.
 f_hdr(string t) =>
-    '{"secret":"' + wh_secret + '","type":"' + t + '","timeframe":"' + timeframe.period + '","instrument":"' + syminfo.ticker
+    '{"secret":"' + wh_secret + '","type":"' + t + '","timeframe":"' + timeframe.period + '","exchange":"' + syminfo.prefix + '","instrument":"' + syminfo.ticker
 f_num(float x) =>
     na(x) ? "null" : str.tostring(x)
 

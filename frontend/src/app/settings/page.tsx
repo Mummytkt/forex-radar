@@ -26,6 +26,8 @@ const ALL_INSTRUMENTS: Record<string, string[]> = {
   'Crypto': ['BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','LTC/USD'],
 }
 
+const SYNTH_CAT = 'Deriv synthetics'
+
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
@@ -56,13 +58,20 @@ function InstrumentManager() {
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<'ok' | 'fail' | null>(null)
   const [search, setSearch] = useState('')
+  // Deriv synthetic indices on the platform (they register when their chart first reports)
+  const [synth, setSynth] = useState<string[]>([])
+  const cats: Record<string, string[]> = synth.length ? { ...ALL_INSTRUMENTS, [SYNTH_CAT]: synth } : ALL_INSTRUMENTS
 
   const load = async () => {
     setLoading(true)
     try {
+      const rc = await apiFetch('/api/config/instruments')
+      if (rc.ok) setSynth(((await rc.json()).synthetics ?? []) as string[])
+    } catch { /* ignore */ }
+    try {
       const r = await apiFetch('/api/user/instruments')
       const data = await r.json()
-      // null = no personal list saved yet → default all pairs to selected
+      // null = no personal list saved yet → every standard pair selected (synthetics are opt-in)
       if (data.instruments === null || data.instruments === undefined) {
         setEnabled(Object.values(ALL_INSTRUMENTS).flat())
       } else {
@@ -80,7 +89,7 @@ function InstrumentManager() {
     setEnabled(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
 
   const toggleCat = (cat: string) => {
-    const pairs = ALL_INSTRUMENTS[cat]
+    const pairs = cats[cat]
     const allOn = pairs.every(p => isOn(p))
     if (allOn) setEnabled(prev => prev.filter(p => !pairs.includes(p)))
     else setEnabled(prev => [...new Set([...prev, ...pairs])])
@@ -102,8 +111,8 @@ function InstrumentManager() {
     setTimeout(() => setSaveResult(null), 4000)
   }
 
-  const totalAvailable = Object.values(ALL_INSTRUMENTS).flat().length
-  const filtered = Object.entries(ALL_INSTRUMENTS)
+  const totalAvailable = Object.values(cats).flat().length
+  const filtered = Object.entries(cats)
     .map(([cat, pairs]) => ({ cat, pairs: search ? pairs.filter(p => p.replace('/', '').toLowerCase().includes(search.toLowerCase())) : pairs }))
     .filter(({ pairs }) => pairs.length > 0)
 
@@ -135,6 +144,11 @@ function InstrumentManager() {
                 {pairs.every(p => isOn(p)) ? 'Deselect all' : 'Select all'}
               </button>
             </div>
+            {cat === SYNTH_CAT && (
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '-2px 0 8px' }}>
+                Off unless you turn them on. They trade all week, weekends included.
+              </p>
+            )}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {pairs.map(pair => {
                 const on = isOn(pair)
