@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 1080, 600
-PAD_L, PAD_R, PAD_T, PAD_B = 18, 350, 78, 40
+W, H = 1100, 620
+PAD_L, PAD_R, PAD_T, PAD_B = 18, 370, 78, 52
 BG, GRID, INK, MUTED = (15, 17, 23), (34, 38, 50), (232, 234, 242), (123, 130, 150)
 UP, DOWN = (34, 197, 94), (239, 68, 68)
 COLORS = {
@@ -25,6 +25,10 @@ COLORS = {
     "ext": (167, 139, 250), "daily": (96, 165, 250), "h4lvl": (251, 146, 60),
 }
 N_CANDLES = {"D": 45, "H4": 60}
+# The alert's own levels: all a subscriber sees. The owner also sees the chart's
+# External high/low, D.A/D.V and H4.A/H4.V.
+ALERT_KINDS = {"breaker", "source", "h4"}
+WAT = timezone(timedelta(hours=1))
 
 
 def _font(size: int):
@@ -62,7 +66,7 @@ def remember_file_id(conn, alert_id: int, tf: str, file_id: str) -> None:
 
 
 def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], meta: dict,
-           fmt=lambda v: f"{v:.5f}") -> bytes:
+           fmt=lambda v: f"{v:.5f}", full: bool = False) -> bytes:
     """candles: (ts, o, h, l, c) oldest first. Returns PNG bytes."""
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
@@ -73,7 +77,7 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
     d.text((PAD_L, 14), f"{instrument} · {tf_name} · {side}", font=f_title, fill=INK)
     d.text((PAD_L, 44), meta.get("subtitle", ""), font=f_sub, fill=MUTED)
 
-    lv = [l for l in levels if l.get("tf", "both") in ("both", tf)]
+    lv = [l for l in levels if l.get("tf", "both") in ("both", tf) and (full or l.get("kind") in ALERT_KINDS)]
     if not candles:
         d.text((PAD_L, H // 2), "No candles yet — they arrive with the next 4H close.", font=f_sub, fill=MUTED)
         return _png(img)
@@ -113,7 +117,19 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
     # alert marker on the last candle
     lx = x0 + step * (n - 0.5)
     d.line([(lx, y0), (lx, y1)], fill=(80, 86, 104), width=1)
-    d.text((lx - 40 if lx > x0 + 60 else lx + 4, y1 + 8), "alert", font=f_ax, fill=MUTED)
+    d.text((lx - 36 if lx > x0 + 60 else lx + 4, y0 - 18), "alert", font=f_ax, fill=MUTED)
+
+    # time axis: candle open times in WAT
+    ticks = sorted({round(k * (n - 1) / 5) for k in range(6)}) if n > 1 else [0]
+    for i in ticks:
+        try:
+            t = datetime.fromisoformat(candles[i][0]).astimezone(WAT)
+        except Exception:
+            continue
+        txt = t.strftime("%d %b") if tf == "D" else t.strftime("%d %b %H:%M")
+        cx = x0 + step * (i + 0.5)
+        tw = f_ax.getlength(txt)
+        d.text((min(max(cx - tw / 2, x0), x1 - tw), y1 + 6), txt, font=f_ax, fill=MUTED)
 
     # levels: dashed line + label in the right margin, labels kept apart
     used: list[float] = []
@@ -126,12 +142,19 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
         while any(abs(ty - u) < 17 for u in used):
             ty += 17
         used.append(ty)
-        d.text((x1 + 66, ty), f"{l['label']}  {fmt(l['y'])}", font=f_lbl, fill=col)
+        own = l.get("kind") in ALERT_KINDS
+        if own:   # price tag on the axis; the name sits beside it
+            txt = fmt(l["y"])
+            tw = f_ax.getlength(txt)
+            d.rectangle([x1 + 2, y - 10, x1 + tw + 12, y + 10], fill=col)
+            d.text((x1 + 7, y - 8), txt, font=f_ax, fill=BG)
+        d.text((x1 + 86, ty), l["label"] if own else f"{l['label']}  {fmt(l['y'])}", font=f_lbl, fill=col)
 
     off = [l for l in lv if l not in shown]
+    foot = "Candle open times in WAT"
     if off:
-        d.text((PAD_L, H - 22), "Off chart: " + " · ".join(f"{l['label']} {fmt(l['y'])}" for l in off),
-               font=f_ax, fill=MUTED)
+        foot += "   ·   Off chart: " + " · ".join(f"{l['label']} {fmt(l['y'])}" for l in off)
+    d.text((PAD_L, H - 20), foot, font=f_ax, fill=MUTED)
     when = meta.get("fired_at")
     if when:
         d.text((W - PAD_R + 6, 50), f"Alert {when}", font=f_ax, fill=MUTED)
@@ -154,7 +177,7 @@ def candles_until(conn, instrument: str, tf: str, until_iso: str) -> list[tuple]
     return [tuple(r) for r in reversed(rows)]
 
 
-def picture_for_alert(conn, alert_id: int, tf: str) -> Optional[tuple[bytes, str, int]]:
+def picture_for_alert(conn, alert_id: int, tf: str, full: bool = False) -> Optional[tuple[bytes, str, int]]:
     """(png, caption, number of candles drawn) for an alert, or None if unknown."""
     from config import fmt_price
     info = load_alert_levels(conn, alert_id)
@@ -170,7 +193,10 @@ def picture_for_alert(conn, alert_id: int, tf: str) -> Optional[tuple[bytes, str
     until = fired_iso if "+" in fired_iso else fired_iso + "+00:00"
     candles = candles_until(conn, instrument, tf, until)
     meta = dict(info["meta"])
-    meta["fired_at"] = str(fired)[:16].replace("T", " ") + " UTC"
-    png = render(instrument, tf, candles, info["levels"], meta, fmt=lambda v: fmt_price(instrument, v))
+    try:
+        meta["fired_at"] = datetime.fromisoformat(until).astimezone(WAT).strftime("%d %b %H:%M") + " WAT"
+    except Exception:
+        meta["fired_at"] = str(fired)[:16].replace("T", " ") + " UTC"
+    png = render(instrument, tf, candles, info["levels"], meta, fmt=lambda v: fmt_price(instrument, v), full=full)
     caption = f"{instrument} · {'Daily' if tf == 'D' else '4H'} · {meta.get('side', '')} · {meta.get('subtitle', '')}"
     return png, caption[:1000], len(candles)

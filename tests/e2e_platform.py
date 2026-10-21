@@ -618,8 +618,8 @@ async def _dm(token, chat, mid): _calls.append(("delete", chat, mid)); return Tr
 _saved = (_tgb.send_photo, _tgb.edit_photo, _tgb.answer_button, _tgb.delete_message)
 _tgb.send_photo, _tgb.edit_photo, _tgb.answer_button, _tgb.delete_message = _sp, _ep, _ab, _dm
 TG = {"X-Telegram-Bot-Api-Secret-Token": "tgsecret"}
-def tap(data, photo=False, mid=5):
-    m = {"message_id": mid, "chat": {"id": 777}}
+def tap(data, photo=False, mid=5, chat=777):
+    m = {"message_id": mid, "chat": {"id": chat}}
     if photo: m["photo"] = [{"file_id": "x"}]
     return c.post("/api/telegram/update", headers=TG, json={"update_id": 1, "callback_query": {"id": "q1", "data": data, "message": m}})
 _calls.clear(); tap(f"ch:{_aid}:D")
@@ -629,6 +629,16 @@ _calls.clear(); tap(f"ch:{_aid}:D")
 check("a second tap reuses the stored picture (no redraw upload)", _calls and _calls[0] == ("send", 777, "str", 5))
 _calls.clear(); tap(f"ch:{_aid}:H4", photo=True, mid=9)
 check("4H swaps the picture in place", _calls and _calls[0] == ("edit", 777, "bytes", 9) and load_alert_levels(conn, _aid)["file_h4"] == "FILE_H4")
+_ow = conn.execute("SELECT telegram_chat_id FROM users WHERE role='OWNER'").fetchone()[0]
+_calls.clear(); tap(f"ch:{_aid}:D", chat=int(_ow))
+check("the owner always gets a freshly drawn full picture (not the subscribers' cached one)",
+      _calls and _calls[0][0] == "send" and _calls[0][2] == "bytes")
+from alerts.chart_image import render as _render
+_lv = [{"y": 205.5, "label": "Daily Breaker", "kind": "breaker", "tf": "both"},
+       {"y": 199.0, "label": "External low", "kind": "ext", "tf": "D"}]
+_cd = _recent(conn, "GBPJPY", "D", 45)
+check("subscriber pictures leave out the chart's other levels",
+      _render("GBPJPY", "D", _cd, _lv, {}, full=False) != _render("GBPJPY", "D", _cd, _lv, {}, full=True))
 _calls.clear(); tap("chx", photo=True, mid=9)
 check("Close deletes the chart message", ("delete", "777", 9) in _calls)
 _calls.clear(); tap("ch:999999:D")

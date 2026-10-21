@@ -521,18 +521,21 @@ async def _handle_chart_button(request: Request, config, cq: dict) -> None:
         info = load_alert_levels(conn, aid)
         if not info:
             return await answer_button(token, cq.get("id", ""), "No chart is available for this alert.")
-        pic = picture_for_alert(conn, aid, tf)
+        # The owner sees every level; subscribers only the alert's own levels
+        owner = str(chat_id) == str(config.telegram_chat_id) or conn.execute(
+            "SELECT 1 FROM users WHERE role = 'OWNER' AND telegram_chat_id = ?", (str(chat_id),)).fetchone() is not None
+        pic = picture_for_alert(conn, aid, tf, full=owner)
         if not pic:
             return await answer_button(token, cq.get("id", ""), "No chart is available for this alert.")
         png, caption, n = pic
-        cached = info["file_d"] if tf == "D" else info["file_h4"]
+        cached = None if owner else (info["file_d"] if tf == "D" else info["file_h4"])
         photo = cached or png
         markup = chart_controls(aid, tf)
         if msg.get("photo"):
             fid = await edit_photo(token, chat_id, mid, photo, caption, markup)
         else:
             fid = await send_photo(token, chat_id, photo, caption, markup, reply_to=mid)
-        if fid and not cached and n > 0:
+        if fid and not cached and not owner and n > 0:
             remember_file_id(conn, aid, tf, fid)
     await answer_button(token, cq.get("id", ""))
 
