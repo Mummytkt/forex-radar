@@ -502,7 +502,7 @@ async def _handle_chart_button(request: Request, config, cq: dict) -> None:
     sends the picture as a reply; the timeframe buttons swap it in place. Each
     picture is drawn once and then reused by its Telegram file id."""
     from alerts.telegram import answer_button, chart_controls, delete_message, edit_photo, send_photo
-    from alerts.chart_image import load_alert_levels, picture_for_alert, remember_file_id
+    from alerts.chart_image import MIN_FULL, load_alert_levels, picture_for_alert, remember_file_id
     token = config.telegram_bot_token
     data = cq.get("data") or ""
     msg = cq.get("message") or {}
@@ -535,7 +535,7 @@ async def _handle_chart_button(request: Request, config, cq: dict) -> None:
             fid = await edit_photo(token, chat_id, mid, photo, caption, markup)
         else:
             fid = await send_photo(token, chat_id, photo, caption, markup, reply_to=mid)
-        if fid and not cached and not owner and n > 0:
+        if fid and not cached and not owner and n >= MIN_FULL:   # never keep a half-empty chart
             remember_file_id(conn, aid, tf, fid)
     await answer_button(token, cq.get("id", ""))
 

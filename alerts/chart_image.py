@@ -25,6 +25,7 @@ COLORS = {
     "ext": (167, 139, 250), "daily": (96, 165, 250), "h4lvl": (251, 146, 60),
 }
 N_CANDLES = {"D": 45, "H4": 60}
+MIN_FULL = 25   # fewer candles than this: say history is still arriving, and don't cache the picture
 # The alert's own levels: all a subscriber sees. The owner also sees the chart's
 # External high/low, D.A/D.V and H4.A/H4.V.
 ALERT_KINDS = {"breaker", "source", "h4"}
@@ -84,10 +85,12 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
 
     lo = min(c[3] for c in candles)
     hi = max(c[2] for c in candles)
-    span = hi - lo or abs(hi) * 0.001 or 1.0
+    # A floor of 0.5% of price, so a handful of candles doesn't push the alert's
+    # own levels off the chart
+    span = max(hi - lo, abs(hi) * 0.005) or 1.0
     # Levels far outside the candles would squash the chart: keep those within
     # two candle ranges, list the rest as off-chart.
-    shown = [l for l in lv if lo - 2 * span <= l["y"] <= hi + 2 * span]
+    shown = [l for l in lv if lo - 2 * span <= l["y"] <= hi + 2 * span or l.get("kind") in ALERT_KINDS]
     for l in shown:
         lo, hi = min(lo, l["y"]), max(hi, l["y"])
     pad = (hi - lo) * 0.06 or span * 0.06
@@ -97,7 +100,7 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
     py = lambda v: y1 - (v - lo) / (hi - lo) * (y1 - y0)
     n = len(candles)
     step = (x1 - x0) / max(n, 1)
-    bw = max(2, int(step * 0.62))
+    bw = min(max(2, int(step * 0.62)), 16)
 
     # grid + price axis
     for k in range(6):
@@ -162,6 +165,9 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
     if off:
         foot += "   ·   Off chart: " + " · ".join(f"{l['label']} {fmt(l['y'])}" for l in off)
     d.text((PAD_L, H - 20), foot, font=f_ax, fill=MUTED)
+    if n < MIN_FULL:
+        note = f"Only {n} candle{'s' if n != 1 else ''} so far · the full history arrives with the next 4H close"
+        d.text((x0 + 8, y0 + 6), note, font=f_sub, fill=(251, 191, 36))
     when = meta.get("fired_at")
     if when:
         d.text((W - PAD_R + 6, 50), f"Alert {when}", font=f_ax, fill=MUTED)
