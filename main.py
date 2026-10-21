@@ -60,6 +60,16 @@ async def main(dry_run: bool = False) -> None:
     # it was saved and the Deriv synthetics that have reported.
     from state.instruments import load_instruments
     load_instruments(conn, config)
+
+    # One-time: forget chart pictures saved before half-empty charts stopped being
+    # cached (2026-10-21), so they are redrawn from the full candle history.
+    if not conn.execute("SELECT 1 FROM user_config WHERE key = 'chart_cache_reset_1'").fetchone():
+        try:
+            conn.execute("UPDATE alert_levels SET file_d = NULL, file_h4 = NULL")
+        except Exception:
+            pass   # table not created yet: nothing cached
+        conn.execute("INSERT OR REPLACE INTO user_config (key, value) VALUES ('chart_cache_reset_1', '1')")
+        conn.commit()
     logger.info("Loaded %d instruments from DB config.", len(config.instruments))
 
     # Load JWT secret — create a random one if missing, so tokens are never
