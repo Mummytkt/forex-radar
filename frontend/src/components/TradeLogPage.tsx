@@ -95,8 +95,25 @@ const INSTRUMENTS = [
   'AUD/JPY','AUD/CAD','AUD/NZD','AUD/CHF','NZD/JPY','NZD/CAD','NZD/CHF',
   'CAD/JPY','CAD/CHF','CHF/JPY','XAU/USD','XAG/USD',
   'WTI/USD','US30','NAS100','SPX500','UK100','GER40','JPN225',
-  'BTC/USD','ETH/USD',
+  'BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','LTC/USD',
 ]
+const INDICES = ['US30', 'NAS100', 'SPX500', 'UK100', 'GER40', 'JPN225']
+const SYNTH_RE = /^(VOLATILITY|JUMP|BOOM|CRASH|STEP|RANGE|DEX)/
+
+// One "pip" per market, as traders count it: forex 0.0001 (JPY 0.01), gold 0.1,
+// silver and oil 0.01, indices and the larger coins 1 point, small coins 0.0001.
+// Deriv synthetics have no pips, so a point is scaled to the price.
+function pipSizeFor(instrument: string, price: number): number {
+  const s = instrument.toUpperCase().replace('/', '').replace(/\s+/g, '_')
+  if (s.endsWith('JPY')) return 0.01
+  if (s === 'XAUUSD') return 0.1
+  if (s === 'XAGUSD' || s === 'WTIUSD' || s === 'USOIL') return 0.01
+  if (INDICES.includes(s)) return 1
+  if (/^(BTC|ETH|SOL|BNB|LTC)/.test(s)) return 1
+  if (/^(XRP|ADA|DOGE)/.test(s)) return 0.0001
+  if (SYNTH_RE.test(s)) return price >= 1000 ? 1 : price >= 10 ? 0.01 : 0.0001
+  return 0.0001
+}
 const PERIODS: { key: Period; label: string }[] = [
   { key: 'today', label: 'Today' },
   { key: 'week', label: 'This Week' },
@@ -604,7 +621,7 @@ function TradeDetailModal({ entry, onClose, onEdit }: { entry: Entry; onClose: (
 type FormState = ReturnType<typeof blank>
 
 function TradeModal({
-  form, setForm, editing, saving, editEntryId, logButtonLabel, onSave, onClose,
+  form, setForm, editing, saving, editEntryId, logButtonLabel, onSave, onClose, synthetics = [],
 }: {
   form: FormState
   setForm: (f: FormState) => void
@@ -614,6 +631,7 @@ function TradeModal({
   logButtonLabel: string
   onSave: (beforeFiles: File[], afterFiles: File[]) => void
   onClose: () => void
+  synthetics?: string[]
 }) {
   const set = (k: keyof FormState, v: string) => setForm({ ...form, [k]: v })
 
@@ -643,8 +661,7 @@ function TradeModal({
     const entry = parseFloat(f.entry_price)
     const exit = parseFloat(f.exit_price)
     if (isNaN(entry) || isNaN(exit)) return f
-    const instr = f.instrument.toUpperCase().replace('/', '')
-    const pipSize = instr.endsWith('JPY') ? 0.01 : instr === 'XAUUSD' ? 0.1 : instr === 'XAGUSD' ? 0.01 : 0.0001
+    const pipSize = pipSizeFor(f.instrument, entry)
     const raw = f.direction === 'buy' ? (exit - entry) / pipSize : (entry - exit) / pipSize
     return { ...f, pips: raw.toFixed(1) }
   }
@@ -723,7 +740,7 @@ function TradeModal({
             <div>
               <label style={labelStyle}>Instrument</label>
               <input list="instruments-list" value={form.instrument} onChange={e => handleChange('instrument', e.target.value)} placeholder="EUR/USD" style={inputStyle} />
-              <datalist id="instruments-list">{INSTRUMENTS.map(i => <option key={i} value={i} />)}</datalist>
+              <datalist id="instruments-list">{[...INSTRUMENTS, ...synthetics].map(i => <option key={i} value={i} />)}</datalist>
             </div>
           </div>
 
@@ -917,6 +934,15 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
   }, [period, config.tradeType])
 
   useEffect(() => { load() }, [load])
+
+  // Deriv synthetics on the platform, for the pair list
+  const [synthetics, setSynthetics] = useState<string[]>([])
+  useEffect(() => {
+    fetch(`${API_BASE}/api/config/instruments`, { headers: hdrs() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && Array.isArray(d.synthetics)) setSynthetics(d.synthetics) })
+      .catch(() => {})
+  }, [])
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -1276,6 +1302,7 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
           editing={!!editEntry} saving={saving}
           editEntryId={editEntry?.id}
           logButtonLabel={config.logButtonLabel}
+          synthetics={synthetics}
           onSave={save}
           onClose={() => setModalOpen(false)}
         />
