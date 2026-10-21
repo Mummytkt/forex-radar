@@ -35,6 +35,9 @@ from alerts.formatter import format_alert, format_entry_alert
 from config import SYMBOL_ALIASES, is_synthetic, fmt_price
 from state.instruments import register_synthetic
 from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
+from alerts.chart_image import save_alert_levels
+from alerts.telegram import chart_button
+from alerts.formatter import _SOURCE_NAMES
 from api.alert_prefs import confirmation_kind, get_alert_prefs
 from alerts.telegram import send_alert
 from config import pip_size_for
@@ -102,7 +105,7 @@ def _resolve_chat(config, user_id, chat_id, role, plan, plan_expires_at):
 
 
 async def _deliver_alert(conn, config, instrument: str, alert_text: str,
-                         h4_class: Optional[str] = None) -> None:
+                         h4_class: Optional[str] = None, alert_id: Optional[int] = None) -> None:
     """Send alert_text to every active user whose watched_instruments includes instrument.
 
     h4_class is set only for Origin confirmations: each user then receives it only
@@ -131,11 +134,16 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
             continue  # user switched this confirmation type off
         chats.append(rec["telegram_chat_id"])
 
+    # "📊 View chart" under the alert: tapping it sends the chart picture
+    markup = chart_button(alert_id) if alert_id else None
+
     # Many chats at once, paced under Telegram's limit (see alerts/telegram.py)
     sem = asyncio.Semaphore(20)
 
     async def _one(chat_id: str) -> bool:
         async with sem:
+            if markup is not None:
+                return await send_alert(config.telegram_bot_token, chat_id, alert_text, reply_markup=markup)
             return await send_alert(config.telegram_bot_token, chat_id, alert_text)
 
     if chats:
@@ -325,6 +333,37 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 
 
 # ── Event handlers ────────────────────────────────────────────────────────────
+
+_CONT_LEVEL_NAMES = {"inline_break": "H4 breakout (new H4 Breaker)", "breakout_cont": "H4 breakout",
+                     "breaker_origin": "H4 Breaker", "breaker_cont": "H4 Breaker", "oc_cont": "H4 OC"}
+_CONT_TITLES = {"inline_break": "H4 breakout in line with the Daily", "breakout_cont": "H4 back in line with the Daily",
+                "breaker_origin": "H4 Breaker Origin", "breaker_cont": "H4 Breaker Continuation",
+                "oc_cont": "H4 OC Continuation"}
+
+
+def _save_chart_levels(conn, instrument: str, alert_id: int, direction: Direction, breaker: Optional[float],
+                       source: Optional[tuple] = None, h4: Optional[tuple] = None, subtitle: str = "") -> None:
+    """Levels for this alert's chart picture: the alert's own levels plus the
+    chart's External high/low, D.A/D.V and H4 A/V at that moment. Never blocks."""
+    try:
+        import json as _js
+        levels = [{"y": breaker, "label": "Daily Breaker", "kind": "breaker", "tf": "both"}]
+        if source and source[0] is not None and (breaker is None or abs(source[0] - breaker) > 1e-12):
+            levels.append({"y": source[0], "label": source[1].replace(" inside the range", " (in range)") + " · reaction", "kind": "source", "tf": "both"})
+        if h4 and h4[0] is not None:
+            levels.append({"y": h4[0], "label": h4[1], "kind": "h4", "tf": "both"})
+        row = conn.execute("SELECT snapshot FROM chart_snapshots WHERE instrument = ?", (instrument,)).fetchone()
+        snap = _js.loads(row[0]) if row and row[0] else {}
+        for key, label, kind, tf in (("ext_hi", "External high", "ext", "D"), ("ext_lo", "External low", "ext", "D"),
+                                     ("d_a", "D.A", "daily", "D"), ("d_v", "D.V", "daily", "D"),
+                                     ("h4_a", "H4.A", "h4lvl", "H4"), ("h4_v", "H4.V", "h4lvl", "H4")):
+            if snap.get(key) is not None:
+                levels.append({"y": float(snap[key]), "label": label, "kind": kind, "tf": tf})
+        save_alert_levels(conn, alert_id, levels,
+                          {"side": "BUY" if direction == Direction.BULLISH else "SELL", "subtitle": subtitle})
+    except Exception as exc:
+        logger.warning("Chart levels not saved for alert %s: %s", alert_id, exc)
+
 
 def _store_candles(conn, instrument: str, payload: "TVWebhookPayload") -> None:
     """Keep the candles the chart just closed, for chart pictures. Never blocks alerts."""
@@ -555,7 +594,11 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
     )
 
     alert_text = format_alert(alert_record)
-    insert_alert(conn, alert_record, breakout.db_id, source.db_id, h4_formation_id, alert_text)
+    alert_id = insert_alert(conn, alert_record, breakout.db_id, source.db_id, h4_formation_id, alert_text)
+    _save_chart_levels(conn, instrument, alert_id, direction, breakout.broken_level,
+                       source=(source.level, _SOURCE_NAMES.get(source.source_type, "Daily level")),
+                       h4=(h4_level, "H4 A broken" if direction == Direction.BULLISH else "H4 V broken"),
+                       subtitle=f"Origin · {(payload.h4_class or 'internal').capitalize()} H4 breakout")
 
     # Update state: clear retest, keep breakout active, enter continuation mode
     state = get_instrument_state(conn, instrument)
@@ -577,7 +620,7 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
 
     if config.telegram_enabled:
         _in_background(_deliver_alert(conn, config, instrument, alert_text,
-                             h4_class=confirmation_kind(payload.h4_class)))
+                             h4_class=confirmation_kind(payload.h4_class), alert_id=alert_id))
 
 
 _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
@@ -628,7 +671,11 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     )
 
     alert_text = format_alert(alert_record)
-    insert_alert(conn, alert_record, breakout.db_id, None, None, alert_text)
+    alert_id = insert_alert(conn, alert_record, breakout.db_id, None, None, alert_text)
+    _save_chart_levels(conn, instrument, alert_id, direction, breakout.broken_level,
+                       source=(shown_source.level, _SOURCE_NAMES.get(shown_source.source_type, "Daily level")) if shown_source else None,
+                       h4=(h4_level, _CONT_LEVEL_NAMES.get(cont_type, "H4 level")),
+                       subtitle=_CONT_TITLES.get(cont_type, "H4 continuation"))
 
     state = get_instrument_state(conn, instrument)
     upsert_instrument_state(conn, InstrumentStateRow(
@@ -648,7 +695,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     logger.info("%s H4_CONTINUATION %s (cont_type=%s) — alert stored", instrument, direction.value, cont_type)
 
     if config.telegram_enabled:
-        _in_background(_deliver_alert(conn, config, instrument, alert_text))
+        _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

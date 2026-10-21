@@ -173,6 +173,10 @@ async def main(dry_run: bool = False) -> None:
         misfire_grace_time=240,
     )
     scheduler.start()
+    # Button taps ("📊 View chart") reach /api/telegram/update only if the webhook allows them
+    if config.telegram_enabled and config.telegram_bot_token:
+        from alerts.telegram import ensure_button_updates
+        asyncio.create_task(ensure_button_updates(config.telegram_bot_token, config.telegram_webhook_secret))
     logger.info("Price monitor + billing cycle + daily backup + feed monitor + reminders + news started")
 
     server = uvicorn.Server(

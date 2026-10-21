@@ -579,7 +579,8 @@ check("synthetics count as open on a Saturday; forex doesn't", _imo(SYN, _sat) a
 
 # ── Candles for chart pictures (2026-10-21) ───────────────────────────────
 from state.candles import recent as _recent
-_t0 = 1792800000000   # ms
+import time as _time
+_t0 = (int(_time.time()) - 45 * 86400) // 86400 * 86400 * 1000   # ms, 45 days ago
 r_h = tv(type="HISTORY", instrument="GBPJPY", tf="D", timeframe="240",
          bars=[[_t0 + i * 86400000, 200 + i, 201 + i, 199 + i, 200.5 + i] for i in range(40)])
 check("Daily candle history is stored", r_h.status_code == 200 and len(_recent(conn, "GBPJPY", "D", 100)) == 40)
@@ -594,6 +595,48 @@ h4_last = _recent(conn, "GBPJPY", "H4", 1)[0]; d_last = _recent(conn, "GBPJPY", 
 check("each price update adds the closed H4 and Daily candle", h4_last[4] == 211.1 and d_last[4] == 240.7)
 r_bad = tv(type="PRICE_UPDATE", instrument="GBPJPY", price=211.2, timeframe="240", bar=["x"], dbar=None)
 check("a malformed candle never blocks the price update", r_bad.status_code == 200)
+
+# ── Chart pictures ("📊 View chart") ──────────────────────────────────────
+tv(type="BREAKOUT", instrument="GBPJPY", direction="bullish", level=205.5, level_type="external", range_level=198.0, timeframe="240")
+tv(type="CONFIRMED", instrument="GBPJPY", direction="bullish", source="daily_breaker", h4_class="external", level_type="external",
+   breakout_level=205.5, source_level=205.5, h4_level=210.8, timeframe="240")
+_aid = conn.execute("SELECT MAX(id) FROM alerts WHERE instrument='GBPJPY'").fetchone()[0]
+from alerts.chart_image import load_alert_levels, picture_for_alert
+_info = load_alert_levels(conn, _aid)
+check("an alert saves its chart levels (Breaker, H4 level, chart levels)",
+      _info is not None and {"Daily Breaker", "H4 A broken"} <= {l["label"] for l in _info["levels"]} and _info["meta"]["side"] == "BUY")
+_pic = picture_for_alert(conn, _aid, "D")
+check("the Daily picture renders with candles", _pic is not None and _pic[0][1:4] == b"PNG" and _pic[2] > 30)
+_pic4 = picture_for_alert(conn, _aid, "H4")
+check("the 4H picture renders with candles", _pic4 is not None and _pic4[2] > 30)
+import alerts.telegram as _tgb
+_calls = []
+async def _sp(token, chat, photo, caption, reply_markup=None, reply_to=None): _calls.append(("send", chat, type(photo).__name__, reply_to)); return "FILE_D"
+async def _ep(token, chat, mid, photo, caption, reply_markup=None): _calls.append(("edit", chat, type(photo).__name__, mid)); return "FILE_H4"
+async def _ab(token, cid, text=""): _calls.append(("answer", text))
+async def _dm(token, chat, mid): _calls.append(("delete", chat, mid)); return True, ""
+_saved = (_tgb.send_photo, _tgb.edit_photo, _tgb.answer_button, _tgb.delete_message)
+_tgb.send_photo, _tgb.edit_photo, _tgb.answer_button, _tgb.delete_message = _sp, _ep, _ab, _dm
+TG = {"X-Telegram-Bot-Api-Secret-Token": "tgsecret"}
+def tap(data, photo=False, mid=5):
+    m = {"message_id": mid, "chat": {"id": 777}}
+    if photo: m["photo"] = [{"file_id": "x"}]
+    return c.post("/api/telegram/update", headers=TG, json={"update_id": 1, "callback_query": {"id": "q1", "data": data, "message": m}})
+_calls.clear(); tap(f"ch:{_aid}:D")
+check(f"View chart sends the Daily picture as a reply {_calls[:1]}", _calls and _calls[0] == ("send", 777, "bytes", 5))
+check("the picture is remembered for reuse", load_alert_levels(conn, _aid)["file_d"] == "FILE_D")
+_calls.clear(); tap(f"ch:{_aid}:D")
+check("a second tap reuses the stored picture (no redraw upload)", _calls and _calls[0] == ("send", 777, "str", 5))
+_calls.clear(); tap(f"ch:{_aid}:H4", photo=True, mid=9)
+check("4H swaps the picture in place", _calls and _calls[0] == ("edit", 777, "bytes", 9) and load_alert_levels(conn, _aid)["file_h4"] == "FILE_H4")
+_calls.clear(); tap("chx", photo=True, mid=9)
+check("Close deletes the chart message", ("delete", "777", 9) in _calls)
+_calls.clear(); tap("ch:999999:D")
+check("an unknown alert just answers politely", _calls == [("answer", "No chart is available for this alert.")])
+_calls.clear(); tap("rm -rf:1:D")
+check("junk button data is ignored", [k for k in _calls if k[0] != "answer"] == [])
+check("button taps need Telegram's secret", c.post("/api/telegram/update", json={"callback_query": {"id": "q", "data": f"ch:{_aid}:D"}}).status_code == 401)
+_tgb.send_photo, _tgb.edit_photo, _tgb.answer_button, _tgb.delete_message = _saved
 
 # ── High-impact news (2026-10-21) ─────────────────────────────────────────
 import alerts.news as news

@@ -17,7 +17,7 @@ import asyncio
 import logging
 import time
 
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.error import BadRequest, Forbidden, RetryAfter, TelegramError
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def _retry_after_seconds(e: RetryAfter) -> float:
 _RETRY_DELAY_S = 5.0
 
 
-async def send_alert(bot_token: str, chat_id: str, text: str) -> bool:
+async def send_alert(bot_token: str, chat_id: str, text: str, reply_markup=None) -> bool:
     """
     Send a plain-text message to one Telegram chat, paced with every other send.
     Returns True on success, False if it could not be delivered.
@@ -66,7 +66,7 @@ async def send_alert(bot_token: str, chat_id: str, text: str) -> bool:
         if delay > 0:
             await asyncio.sleep(delay)
         try:
-            await bot.send_message(chat_id=chat_id, text=text)
+            await bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
             logger.info("Alert sent to chat %s", chat_id)
             return True
         except RetryAfter as e:
@@ -103,6 +103,72 @@ async def send_many(bot_token: str, chat_ids: list[str], text: str, concurrency:
 
     results = await asyncio.gather(*(one(c) for c in chat_ids))
     return sum(1 for r in results if r)
+
+
+# ── Chart pictures ("📊 View chart") ──────────────────────────────────────────
+
+def chart_button(alert_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("📊 View chart", callback_data=f"ch:{alert_id}:D")]])
+
+
+def chart_controls(alert_id: int, tf: str) -> InlineKeyboardMarkup:
+    mark = lambda t, name: ("✓ " if t == tf else "") + name
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(mark("D", "Daily"), callback_data=f"ch:{alert_id}:D"),
+         InlineKeyboardButton(mark("H4", "4H"), callback_data=f"ch:{alert_id}:H4")],
+        [InlineKeyboardButton("Close", callback_data="chx")],
+    ])
+
+
+async def send_photo(bot_token: str, chat_id, photo, caption: str, reply_markup=None, reply_to: int | None = None) -> str | None:
+    """photo: PNG bytes or a Telegram file_id. Returns the photo's file_id (for reuse)."""
+    bot = Bot(token=bot_token)
+    delay = _reserve_slot()
+    if delay > 0:
+        await asyncio.sleep(delay)
+    try:
+        msg = await bot.send_photo(chat_id=chat_id, photo=photo, caption=caption[:1024], reply_markup=reply_markup,
+                                   reply_to_message_id=reply_to, read_timeout=60, write_timeout=60)
+        return msg.photo[-1].file_id if msg.photo else None
+    except TelegramError as e:
+        logger.warning("Telegram photo to %s failed: %s", chat_id, e)
+        return None
+
+
+async def edit_photo(bot_token: str, chat_id, message_id: int, photo, caption: str, reply_markup=None) -> str | None:
+    """Swap the picture in one of the bot's photo messages (Daily ↔ 4H)."""
+    bot = Bot(token=bot_token)
+    try:
+        msg = await bot.edit_message_media(chat_id=chat_id, message_id=message_id,
+                                           media=InputMediaPhoto(media=photo, caption=caption[:1024]),
+                                           reply_markup=reply_markup, read_timeout=60, write_timeout=60)
+        return msg.photo[-1].file_id if getattr(msg, "photo", None) else None
+    except TelegramError as e:
+        if "not modified" in str(e).lower():
+            return None
+        logger.warning("Telegram photo edit in %s failed: %s", chat_id, e)
+        return None
+
+
+async def answer_button(bot_token: str, callback_id: str, text: str = "") -> None:
+    try:
+        await Bot(token=bot_token).answer_callback_query(callback_query_id=callback_id, text=text[:200] or None)
+    except TelegramError:
+        pass
+
+
+async def ensure_button_updates(bot_token: str, secret: str) -> None:
+    """Make sure the bot's webhook also delivers button taps (callback_query)."""
+    bot = Bot(token=bot_token)
+    try:
+        info = await bot.get_webhook_info()
+        allowed = list(info.allowed_updates or [])
+        if info.url and allowed and "callback_query" not in allowed:
+            await bot.set_webhook(url=info.url, secret_token=secret or None,
+                                  allowed_updates=allowed + ["callback_query"])
+            logger.info("Telegram webhook now also delivers button taps")
+    except TelegramError as e:
+        logger.warning("Could not check the Telegram webhook's update types: %s", e)
 
 
 async def send_document(bot_token: str, chat_id: str, path: str, filename: str, caption: str = "") -> int | None:

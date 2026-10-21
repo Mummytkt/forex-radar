@@ -497,6 +497,46 @@ async def _handle_bot_membership(request: Request, config, mcm: dict) -> None:
             await send_alert(config.telegram_bot_token, chat_id, note_channel)
 
 
+async def _handle_chart_button(request: Request, config, cq: dict) -> None:
+    """'📊 View chart' / 'Daily' / '4H' / 'Close' under an alert. The first tap
+    sends the picture as a reply; the timeframe buttons swap it in place. Each
+    picture is drawn once and then reused by its Telegram file id."""
+    from alerts.telegram import answer_button, chart_controls, delete_message, edit_photo, send_photo
+    from alerts.chart_image import load_alert_levels, picture_for_alert, remember_file_id
+    token = config.telegram_bot_token
+    data = cq.get("data") or ""
+    msg = cq.get("message") or {}
+    chat_id = (msg.get("chat") or {}).get("id")
+    mid = msg.get("message_id")
+    if chat_id is None:
+        return await answer_button(token, cq.get("id", ""))
+    if data == "chx":
+        await delete_message(token, str(chat_id), mid)
+        return await answer_button(token, cq.get("id", ""))
+    parts = data.split(":")
+    if len(parts) != 3 or parts[0] != "ch" or not parts[1].isdigit() or parts[2] not in ("D", "H4"):
+        return await answer_button(token, cq.get("id", ""))
+    aid, tf = int(parts[1]), parts[2]
+    with _db_write(request) as conn:
+        info = load_alert_levels(conn, aid)
+        if not info:
+            return await answer_button(token, cq.get("id", ""), "No chart is available for this alert.")
+        pic = picture_for_alert(conn, aid, tf)
+        if not pic:
+            return await answer_button(token, cq.get("id", ""), "No chart is available for this alert.")
+        png, caption, n = pic
+        cached = info["file_d"] if tf == "D" else info["file_h4"]
+        photo = cached or png
+        markup = chart_controls(aid, tf)
+        if msg.get("photo"):
+            fid = await edit_photo(token, chat_id, mid, photo, caption, markup)
+        else:
+            fid = await send_photo(token, chat_id, photo, caption, markup, reply_to=mid)
+        if fid and not cached and n > 0:
+            remember_file_id(conn, aid, tf, fid)
+    await answer_button(token, cq.get("id", ""))
+
+
 @router.post("/telegram/update")
 async def telegram_update(request: Request):
     """
@@ -520,6 +560,10 @@ async def telegram_update(request: Request):
 
     if update.get("my_chat_member"):
         await _handle_bot_membership(request, config, update["my_chat_member"])
+        return {"ok": True}
+
+    if update.get("callback_query"):
+        await _handle_chart_button(request, config, update["callback_query"])
         return {"ok": True}
 
     message = update.get("message") or update.get("edited_message") or {}
