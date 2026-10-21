@@ -647,7 +647,7 @@ def get_preferences(request: Request):
     user = getattr(request.state, "user", None)
     with _db(request) as conn:
         prefs = get_alert_prefs(conn, user["id"] if user else None, user["role"] if user else None)
-    return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"])
+    return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"], newsAlerts=prefs["news"])
 
 
 @router.patch("/preferences")
@@ -660,6 +660,8 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
             set_alert_pref(conn, uid, "external", body.alertExternal)
         if body.alertInternal is not None:
             set_alert_pref(conn, uid, "internal", body.alertInternal)
+        if body.newsAlerts is not None:
+            set_alert_pref(conn, uid, "news", body.newsAlerts)
     return {"ok": True}
 
 

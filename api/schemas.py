@@ -43,11 +43,13 @@ class AlertsPage(BaseModel):
 class AlertPreferences(BaseModel):
     alertExternal: bool
     alertInternal: bool
+    newsAlerts: bool = True
 
 
 class AlertPreferencesUpdate(BaseModel):
     alertExternal: bool | None = None
     alertInternal: bool | None = None
+    newsAlerts: bool | None = None
 
 
 class VideoEntry(BaseModel):

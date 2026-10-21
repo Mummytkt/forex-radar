@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import sys
+from datetime import datetime, timezone
 
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -28,6 +29,7 @@ from alerts.billing_cycle import run_billing_cycle
 from alerts.backup import run_backup
 from alerts.feed_monitor import run_feed_check
 from alerts.reminders import run_reminders
+from alerts.news import refresh_calendar, run_news_summary, run_news_reminders
 
 
 def setup_logging(level: str) -> None:
@@ -142,8 +144,36 @@ async def main(dry_run: bool = False) -> None:
         name="Renewal / trial-ending / access-ended reminders to subscribers' Telegram",
         misfire_grace_time=1800,
     )
+    scheduler.add_job(
+        refresh_calendar,
+        "interval",
+        hours=3,
+        next_run_time=datetime.now(timezone.utc),   # also once at startup
+        kwargs={"db_path": config.db_path, "config": config},
+        id="news_calendar",
+        name="High-impact news calendar refresh",
+        misfire_grace_time=1800,
+    )
+    scheduler.add_job(
+        run_news_summary,
+        "cron",
+        hour=6, minute=2,   # 07:02 WAT, after the 06:00 refresh window, away from H4 closes
+        kwargs={"db_path": config.db_path, "config": config},
+        id="news_summary",
+        name="Morning high-impact news summary to subscribers",
+        misfire_grace_time=3 * 3600,
+    )
+    scheduler.add_job(
+        run_news_reminders,
+        "interval",
+        minutes=5,
+        kwargs={"db_path": config.db_path, "config": config},
+        id="news_reminders",
+        name="30-minutes-before high-impact news reminders",
+        misfire_grace_time=240,
+    )
     scheduler.start()
-    logger.info("Price monitor + billing cycle + daily backup + feed monitor + reminders started")
+    logger.info("Price monitor + billing cycle + daily backup + feed monitor + reminders + news started")
 
     server = uvicorn.Server(
         uvicorn.Config(

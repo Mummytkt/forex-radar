@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-_KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal"}
+_KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal",
+         "news": "pref_alert_news"}   # high-impact news summary + 30-minute reminders
 
 
 def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, bool]:

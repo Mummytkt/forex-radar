@@ -577,6 +577,59 @@ from datetime import datetime as _dt, timezone as _tz
 _sat = _dt(2026, 10, 24, 12, tzinfo=_tz.utc)
 check("synthetics count as open on a Saturday; forex doesn't", _imo(SYN, _sat) and not _imo("EURUSD", _sat))
 
+# ── High-impact news (2026-10-21) ─────────────────────────────────────────
+import alerts.news as news
+import alerts.telegram as _tgm
+_now = _dt(2026, 10, 21, 6, 2, tzinfo=_tz.utc)
+feed = [
+    {"title": "CPI q/q", "country": "NZD", "date": "2026-10-21T17:45:00-04:00", "impact": "High", "forecast": "0.8%", "previous": "1.5%"},
+    {"title": "Unemployment Claims", "country": "USD", "date": "2026-10-21T20:30:00-04:00", "impact": "High", "forecast": "", "previous": "230K"},
+    {"title": "Retail Sales m/m", "country": "CHF", "date": "2026-10-21T03:30:00-04:00", "impact": "Medium", "forecast": "", "previous": ""},
+    {"title": "Bank Holiday", "country": "JPY", "date": "2026-10-21T00:00:00-04:00", "impact": "Holiday", "forecast": "", "previous": ""},
+    {"title": "Next week", "country": "USD", "date": "2026-10-28T08:30:00-04:00", "impact": "High", "forecast": "", "previous": ""},
+]
+ev = news.parse_feed(feed)
+check("news feed keeps high impact only, times in UTC",
+      len(ev) == 3 and ev[0]["ts"] == "2026-10-21T21:45:00+00:00" and ev[0]["currency"] == "NZD")
+news.store_events(conn, ev)
+check("currencies come from pairs (indices, metals, crypto map to their currency; synthetics none)",
+      news.currencies_for(["NZD/USD", "GER40", "XAUUSD", "BTCUSD", SYN]) == {"NZD", "USD", "EUR"})
+_out = []
+async def _capn(token, chat, text): _out.append((chat, text)); return True
+_old_send = _tgm.send_alert; _tgm.send_alert = _capn
+config.telegram_enabled = True
+dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET watched_instruments = ? WHERE id = ?", (_j.dumps(["EUR/USD"]), sid)); dbw.commit(); dbw.close()
+n1 = asyncio.run(news.run_news_summary(DB, config, now=_now))
+_owner_chat = conn.execute("SELECT telegram_chat_id FROM users WHERE role='OWNER'").fetchone()[0]
+_by = dict(_out)
+check(f"morning summary goes out ({n1} people)", n1 >= 1 and _owner_chat in _by)
+check("owner's summary lists NZD CPI with WAT time and figures",
+      "NZD: CPI q/q" in _by.get(_owner_chat, "") and "Wed 21 Oct, 21:45 UTC (22:45 WAT)" in _by.get(_owner_chat, "")
+      and "Forecast 0.8% · Previous 1.5%" in _by.get(_owner_chat, ""))
+check("a EUR/USD-only subscriber gets USD news but not NZD",
+      "chatS" in _by and "USD: Unemployment Claims" in _by["chatS"] and "NZD" not in _by["chatS"])
+check("events beyond 24 hours are left out", "Next week" not in _by.get(_owner_chat, ""))
+_out.clear()
+check("the summary is never sent twice the same day", asyncio.run(news.run_news_summary(DB, config, now=_now)) == 0 and not _out)
+_out.clear()
+asyncio.run(news.run_news_reminders(DB, config, now=_dt(2026, 10, 21, 21, 17, tzinfo=_tz.utc)))
+_by = dict(_out)
+check("30-minute reminder for NZD CPI reaches the owner, not the EUR/USD-only subscriber",
+      "In 30 minutes" in _by.get(_owner_chat, "").replace("news in 30 minutes", "In 30 minutes") and "chatS" not in _by)
+_out.clear()
+asyncio.run(news.run_news_reminders(DB, config, now=_dt(2026, 10, 21, 21, 22, tzinfo=_tz.utc)))
+check("the reminder is sent once", not _out)
+asyncio.run(news.run_news_reminders(DB, config, now=_dt(2026, 10, 21, 20, 0, tzinfo=_tz.utc)))
+check("no reminder earlier than 30 minutes before", not _out)
+c.patch("/api/preferences", headers=H(ts_), json={"newsAlerts": False})
+check("news switch saves", c.get("/api/preferences", headers=H(ts_)).json()["newsAlerts"] is False)
+_out.clear()
+asyncio.run(news.run_news_summary(DB, config, now=_now + timedelta(days=1)))
+check("someone who switched news off gets none", "chatS" not in dict(_out))
+_tgm.send_alert = _old_send
+config.telegram_enabled = False
+dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET watched_instruments = NULL WHERE id = ?", (sid,)); dbw.commit(); dbw.close()
+
 # Instruments added after the list was saved reach an existing DB once
 from state.instruments import load_instruments
 _c2 = sqlite3.connect(os.path.join(tmpdir, "inst.db")); _c2.execute("CREATE TABLE user_config (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")

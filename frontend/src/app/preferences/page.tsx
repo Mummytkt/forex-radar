@@ -24,18 +24,19 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled?: 
   )
 }
 
-type Key = 'alertExternal' | 'alertInternal'
+type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
 const TYPES: { key: Key; label: string; desc: string }[] = [
   { key: 'alertExternal', label: 'External breakouts', desc: 'Bias confirmed by an H4 close beyond the last structure formed before price reached the daily level. The standard alert.' },
   { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level.' },
+  { key: 'newsAlerts', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
 ]
 
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
-  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle' })
+  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle' })
 
   const { user } = useAuth()
   useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
@@ -43,7 +44,7 @@ export default function PreferencesPage() {
   useEffect(() => {
     fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })
       .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setPrefs({ alertExternal: !!d.alertExternal, alertInternal: !!d.alertInternal }))
+      .then(d => setPrefs({ alertExternal: !!d.alertExternal, alertInternal: !!d.alertInternal, newsAlerts: d.newsAlerts !== false }))
       .catch(() => setLoadError(true))
   }, [])
 
@@ -80,7 +81,7 @@ export default function PreferencesPage() {
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Telegram delivery</h2>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.6 }}>
-              Choose which Origin confirmations are sent to your Telegram. Changes save to your account straight away and only affect you.
+              Choose which Origin confirmations and news reach your Telegram. Changes save to your account straight away and only affect you.
             </p>
           </div>
 
