@@ -477,6 +477,19 @@ def register(body: RegisterBody, request: Request):
             "UPDATE users SET name = ?, password_hash = ?, invite_used = 1, invite_token = NULL WHERE id = ?",
             (body.name.strip(), hash_pw(body.password), row["id"]),
         )
+        # The plan's days count from sign-up, not from when the invite was made
+        u = conn.execute("SELECT plan_expires_at, created_at FROM users WHERE id = ?", (row["id"],)).fetchone()
+        try:
+            if u and u["plan_expires_at"] and u["created_at"]:
+                exp = datetime.fromisoformat(str(u["plan_expires_at"]).replace("Z", "+00:00"))
+                made = datetime.fromisoformat(str(u["created_at"]).replace("Z", "+00:00"))
+                exp = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
+                made = made if made.tzinfo else made.replace(tzinfo=timezone.utc)
+                new_exp = datetime.now(timezone.utc) + (exp - made)
+                if new_exp > exp:
+                    conn.execute("UPDATE users SET plan_expires_at = ? WHERE id = ?", (new_exp.isoformat(), row["id"]))
+        except Exception:
+            pass   # keep the original expiry rather than fail sign-up
     with _db(request) as conn:
         row2 = conn.execute(
             "SELECT id, email, name, role, plan FROM users WHERE id = ?", (row["id"],)

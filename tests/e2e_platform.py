@@ -379,7 +379,7 @@ t2 = c.post("/api/announcements", headers=H(owner), json={"title": "Both", "body
 check("multi-plan update reaches both plans (in app and Telegram)",
       t2["telegram_targets"] == 3 and t2["audience"] == "TRIAL,30DAY"
       and any(i["id"] == t2["id"] for i in c.get("/api/announcements", headers=H(tb)).json()["items"]))
-t3 = c.post("/api/announcements", headers=H(owner), json={"title": "Every plan", "body": "x", "plans": ["TRIAL", "30DAY", "6MONTH", "9MONTH", "12MONTH", "LIFETIME"]}).json()
+t3 = c.post("/api/announcements", headers=H(owner), json={"title": "Every plan", "body": "x", "plans": ["TESTER", "TRIAL", "30DAY", "6MONTH", "9MONTH", "12MONTH", "LIFETIME"]}).json()
 check("selecting every plan is stored as 'everyone'", t3["audience"] is None)
 check("unknown plan refused", c.post("/api/announcements", headers=H(owner), json={"title": "t", "body": "b", "plans": ["GOLD"]}).status_code == 400)
 own = c.get("/api/announcements", headers=H(owner)).json()
@@ -707,6 +707,34 @@ check("someone who switched news off gets none", "chatS" not in dict(_out))
 _tgm.send_alert = _old_send
 config.telegram_enabled = False
 dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET watched_instruments = NULL WHERE id = ?", (sid,)); dbw.commit(); dbw.close()
+
+# ── Testers (2026-10-21) ───────────────────────────────────────────────────
+_tok = c.post("/api/auth/invite", headers=H(owner), json={"email": "tester@x.com", "plan": "TESTER", "plan_days": 21}).json()["token"]
+dbw = sqlite3.connect(DB)
+dbw.execute("UPDATE users SET created_at = datetime('now', '-5 days'), plan_expires_at = ? WHERE email = 'tester@x.com'", ((datetime.now(timezone.utc) + timedelta(days=16)).isoformat(),))   # invited 5 days ago
+dbw.commit(); dbw.close()
+_reg = c.post("/api/auth/register", json={"token": _tok, "name": "Tess Ter", "password": "testerpass1"})
+_exp = conn.execute("SELECT plan_expires_at FROM users WHERE email = 'tester@x.com'").fetchone()[0]
+_days_left = (datetime.fromisoformat(_exp) - datetime.now(timezone.utc)).total_seconds() / 86400
+check(f"a tester gets the full 21 days from sign-up, not from the invite ({_days_left:.2f})", _reg.status_code == 200 and 20.9 < _days_left <= 21.01)
+from alerts.reminders import run_reminders
+_tid = conn.execute("SELECT id FROM users WHERE email = 'tester@x.com'").fetchone()[0]
+dbw = sqlite3.connect(DB)
+dbw.execute("UPDATE users SET telegram_chat_id = 'chatT', plan_expires_at = ? WHERE id = ?",
+            ((datetime.now(timezone.utc) + timedelta(days=2)).isoformat(), _tid)); dbw.commit(); dbw.close()
+_rem = []
+async def _capr(token, chat, text, reply_markup=None): _rem.append((chat, text)); return True
+_old_r = _tgm.send_alert; _tgm.send_alert = _capr; config.telegram_enabled = True
+asyncio.run(run_reminders(DB, config))
+_tt = [t for ch, t in _rem if ch == "chatT"]
+check("a tester's 'ends soon' message thanks them and has no payment link",
+      len(_tt) == 1 and "Thank you for testing" in _tt[0] and "checkout" not in _tt[0])
+dbw = sqlite3.connect(DB)
+dbw.execute("UPDATE users SET plan_expires_at = ? WHERE id = ?", ((datetime.now(timezone.utc) - timedelta(hours=3)).isoformat(), _tid)); dbw.commit(); dbw.close()
+_rem.clear(); asyncio.run(run_reminders(DB, config))
+_tt = [t for ch, t in _rem if ch == "chatT"]
+check("a tester's 'ended' message has no payment link", len(_tt) == 1 and "checkout" not in _tt[0] and "Thank you" in _tt[0])
+_tgm.send_alert = _old_r; config.telegram_enabled = False
 
 # Instruments added after the list was saved reach an existing DB once
 from state.instruments import load_instruments

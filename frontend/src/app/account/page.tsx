@@ -108,6 +108,7 @@ function InputField({ label, value, onChange, placeholder, type = 'text' }: {
 }
 
 const PLAN_META: Record<string, { label: string; color: string }> = {
+  TESTER:  { label: 'Tester',        color: '#14b8a6' },
   TRIAL:   { label: 'Free Trial',    color: 'var(--text-muted)' },
   '30DAY': { label: '30 Days',       color: 'var(--accent-hover)' },
   '6MONTH':{ label: '6 Months',      color: '#10b981' },
@@ -244,8 +245,9 @@ function SubscribersSection() {
           <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Access plan</label>
-              <select value={invitePlan} onChange={e => setInvitePlan(e.target.value)}
+              <select value={invitePlan} onChange={e => { setInvitePlan(e.target.value); if (e.target.value === 'TESTER') setInviteDays('21') }}
                 style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}>
+                <option value="TESTER">Tester (free, 21 days)</option>
                 <option value="30DAY">30-day access</option>
                 <option value="TRIAL">Trial (7 days)</option>
                 <option value="LIFETIME">Lifetime access</option>
@@ -438,6 +440,19 @@ function BillingSection() {
 
   if (!info || info.plan === 'LIFETIME') return null
   const ends = info.plan_expires_at ? fmtDate(info.plan_expires_at) : '—'
+
+  // Testers have free access for a set period: no billing, no renewal
+  if (info.plan === 'TESTER') return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <h2 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Tester access</h2>
+      </div>
+      <div style={{ padding: 20, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+        Your free test access runs until <strong style={{ color: 'var(--text-primary)' }}>{ends}</strong>. Thank you for testing,
+        and for your weekly review.
+      </div>
+    </div>
+  )
 
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>

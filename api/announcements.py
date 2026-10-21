@@ -23,7 +23,7 @@ from api.auth import require_owner, require_user
 router = APIRouter()
 
 MAX_TITLE, MAX_BODY = 120, 3500
-PLANS = ("TRIAL", "30DAY", "6MONTH", "9MONTH", "12MONTH", "LIFETIME")
+PLANS = ("TESTER", "TRIAL", "30DAY", "6MONTH", "9MONTH", "12MONTH", "LIFETIME")
 
 
 @contextmanager

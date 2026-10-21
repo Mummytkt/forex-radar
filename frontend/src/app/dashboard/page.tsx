@@ -32,6 +32,7 @@ function planLabel(plan?: string) {
   if (plan === 'LIFETIME') return 'Lifetime Access'
   if (plan === '30DAY') return '30-day Access'
   if (plan === 'TRIAL') return 'Trial Access'
+  if (plan === 'TESTER') return 'Tester Access'
   return plan ?? '—'
 }
 

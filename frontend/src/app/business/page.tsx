@@ -16,7 +16,7 @@ function api(path: string, opts: RequestInit = {}) {
 }
 
 const PLAN_LABEL: Record<string, string> = {
-  TRIAL: 'Free trial', '30DAY': '30 days', '6MONTH': '6 months', '9MONTH': '9 months', '12MONTH': '12 months', LIFETIME: 'Lifetime',
+  TESTER: 'Tester', TRIAL: 'Free trial', '30DAY': '30 days', '6MONTH': '6 months', '9MONTH': '9 months', '12MONTH': '12 months', LIFETIME: 'Lifetime',
 }
 const usd = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`
 

@@ -103,6 +103,21 @@ async def run_reminders(db_path: str, config) -> None:
                     sent += 1
                 continue
 
+            # Testers: free access for a set period; thank them, never ask for payment
+            if u["plan"] == "TESTER":
+                if expires and now < expires <= now + LEAD:
+                    text = (f"{hi}your test access to MummyTKT's Bias Pointer ends on {fmt_day(expires)}.\n\n"
+                            "Thank you for testing. Your final review would mean a lot: what helped, "
+                            "what confused you, and what you'd change.")
+                    if await notify_once(conn, config, f"expiry3:{u['id']}:{u['plan_expires_at']}", chat, text):
+                        sent += 1
+                elif expires and expires <= now and now - expires <= EXPIRED_GRACE:
+                    text = (f"{hi}your test access to MummyTKT's Bias Pointer has ended, so the alerts have stopped.\n\n"
+                            "Thank you for being one of the first to try it.")
+                    if await notify_once(conn, config, f"expired:{u['id']}:{u['plan_expires_at']}", chat, text):
+                        sent += 1
+                continue
+
             # Access ending soon with no auto-renew
             if expires and not auto and now < expires <= now + LEAD:
                 plan = u["plan"] if u["plan"] in PLANS and u["plan"] != "TRIAL" else "30DAY"
