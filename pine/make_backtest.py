@@ -50,8 +50,10 @@ var int bt_t0 = time
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing")''')
 
 # Label function: after f_wk(), so it can read the Weekly relation
-rep('''f_wk() =>
-''', '''f_bt(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
+rep('''// Weekly context sent with every bias alert (empty when there is no Weekly setup)
+f_wk() =>
+''', '''// Backtest: label where an alert is sent (returns true if labelled)
+f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool on = kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
     bool cls_ok = kind > 1 or (cls == "external" ? bt_ext : bt_int)
     if on and cls_ok
@@ -68,6 +70,7 @@ rep('''f_wk() =>
         array.set(bt_cnt, bull ? 7 : 8, array.get(bt_cnt, bull ? 7 : 8) + 1)
     on and cls_ok
 
+// Weekly context sent with every bias alert (empty when there is no Weekly setup)
 f_wk() =>
 ''')
 
@@ -76,38 +79,38 @@ for d, lvl in (("bullish", "h4_a_lvl"), ("bearish", "h4_v_lvl")):
     bull = "true" if d == "bullish" else "false"
     rep(f'''{ALERT}"CONFIRMED")
                           + '","direction":"{d}","source":"' + retest_src''',
-        f'''                f_bt({bull}, 0, h4_cls, {lvl}, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+        f'''                f_btlbl({bull}, 0, h4_cls, {lvl}, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
 {ALERT}"CONFIRMED")
                           + '","direction":"{d}","source":"' + retest_src''')
     rep(f'''{ALERT}"H4_CONTINUATION")
                           + '","direction":"{d}","cont_type":"breakout_cont"''',
-        f'''                f_bt({bull}, 1, h4_cls, {lvl}, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+        f'''                f_btlbl({bull}, 1, h4_cls, {lvl}, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
 {ALERT}"H4_CONTINUATION")
                           + '","direction":"{d}","cont_type":"breakout_cont"''')
 
 rep(f'''{ALERT}"H4_CONTINUATION")
                           + '","direction":"' + bo_dir + '","cont_type":"inline_break"\'''',
-    f'''                f_bt(ilb, 2, "", brk_lvl, bo_level, "")
+    f'''                f_btlbl(ilb, 2, "", brk_lvl, bo_level, "")
 {ALERT}"H4_CONTINUATION")
                           + '","direction":"' + bo_dir + '","cont_type":"inline_break"\'''')
 
 rep('''                    if barstate.isrealtime
                         alert(f_hdrw("H4_CONTINUATION")
                               + '","direction":"' + bo_dir + '","cont_type":"' + bk_type + '"\'''',
-    '''                    f_bt(bo_dir == "bullish", bk_type == "breaker_origin" ? 3 : 4, "", h4_breaker_lvl, bo_level, "")
+    '''                    f_btlbl(bo_dir == "bullish", bk_type == "breaker_origin" ? 3 : 4, "", h4_breaker_lvl, bo_level, "")
                     if barstate.isrealtime
                         alert(f_hdrw("H4_CONTINUATION")
                               + '","direction":"' + bo_dir + '","cont_type":"' + bk_type + '"\'''')
 
 rep('''    if not na(oc_hit) and barstate.isrealtime
 ''', '''    if not na(oc_hit)
-        f_bt(ocb, 5, "", oc_hit, bo_level, "")
+        f_btlbl(ocb, 5, "", oc_hit, bo_level, "")
     if not na(oc_hit) and barstate.isrealtime
 ''')
 
 rep('''        if eng and barstate.isrealtime
 ''', '''        if eng and (bt_eng_mode == "Both" or (bt_eng_mode == "Wick") == eng_wick)
-            f_bt(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
+            f_btlbl(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
         if eng and barstate.isrealtime
 ''')
 
