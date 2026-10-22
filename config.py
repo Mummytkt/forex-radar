@@ -140,6 +140,35 @@ def is_crypto(instrument: str) -> bool:
     return s.endswith("USD") and s[:-3] in CRYPTO_BASES
 
 
+_FIAT = {"USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"}
+_INDICES = {"US30", "NAS100", "SPX500", "UK100", "GER40", "JPN225"}
+
+
+def market_label(instrument: str) -> str:
+    """What kind of market this is, for alert titles: Forex, Metal, Energy,
+    Index, Crypto or Synthetic ("" if unknown)."""
+    s = instrument.replace("/", "").upper()
+    if is_synthetic(s):
+        return "Synthetic"
+    if is_crypto(s):
+        return "Crypto"
+    if s in ("XAUUSD", "XAGUSD"):
+        return "Metal"
+    if s in ("WTIUSD", "USOIL"):
+        return "Energy"
+    if s in _INDICES:
+        return "Index"
+    if len(s) == 6 and s[:3] in _FIAT and s[3:] in _FIAT:
+        return "Forex"
+    return ""
+
+
+def tagged(instrument: str) -> str:
+    """'BTCUSD (Crypto)': the instrument with its market type, for alert titles."""
+    lab = market_label(instrument)
+    return f"{instrument} ({lab})" if lab else instrument
+
+
 def is_synthetic(instrument: str) -> bool:
     return instrument.replace("/", "").upper() in SYNTHETICS
 

@@ -32,7 +32,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from alerts.formatter import format_alert, format_entry_alert
-from config import SYMBOL_ALIASES, is_synthetic, fmt_price, normalize_symbol
+from config import SYMBOL_ALIASES, is_synthetic, fmt_price, normalize_symbol, tagged
 from state.instruments import register_synthetic
 from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
 from alerts.chart_image import save_alert_levels
@@ -799,7 +799,7 @@ async def _handle_price_update(conn, config, instrument: str, payload: TVWebhook
         else:
             fmt = "{:.5f}"
 
-        text = f"⚡ Price Alert: {instrument}\n\n"
+        text = f"⚡ Price Alert: {tagged(instrument)}\n\n"
         text += f"Price crossed {direction_str} {fmt.format(alert_price)}\n"
         text += f"Current: {fmt.format(price)}"
         if message:

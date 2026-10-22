@@ -13,6 +13,8 @@ this job is the primary feed for intrabar / multi-timeframe monitoring.
 from __future__ import annotations
 
 import logging
+
+from config import tagged
 import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
@@ -271,13 +273,13 @@ async def run_price_check(db_path: str, config) -> None:
 
                 if condition == "rejects":
                     text = (
-                        f"⚡ Price Alert: {instrument}\n\n"
+                        f"⚡ Price Alert: {tagged(instrument)}\n\n"
                         f"Price rejected at {fmt.format(alert_price)} ({direction_str})\n"
                         f"Close: {fmt.format(price)}"
                     )
                 else:
                     text = (
-                        f"⚡ Price Alert: {instrument}\n\n"
+                        f"⚡ Price Alert: {tagged(instrument)}\n\n"
                         f"Price crossed {direction_str} {fmt.format(alert_price)}\n"
                         f"Current: {fmt.format(price)}"
                     )

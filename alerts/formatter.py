@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from config import tagged
+
 from data.models import (
     AlertClassification,
     AlertRecord,
@@ -142,7 +144,7 @@ def _format_origin(alert: AlertRecord) -> str:
     reason = _reason_origin(source.source_type, direction_label, classification_label, direction_lower)
 
     lines = [
-        f"{bias_label} — {instrument}",
+        f"{bias_label} — {tagged(instrument)}",
         "Daily → H4 aligned",
         "",
         f"Daily breakout: {direction_label} — broken level @ {breakout_level_str}",
@@ -198,7 +200,7 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {instrument}",
+        f"{bias_label} — {tagged(instrument)}",
         f"Daily → H4 continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -261,7 +263,7 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {instrument}",
+        f"{bias_label} — {tagged(instrument)}",
         f"Daily → H4 Breaker continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -307,7 +309,7 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {instrument}",
+        f"{bias_label} — {tagged(instrument)}",
         f"Daily → H4 OC continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -362,7 +364,7 @@ def _format_h4_breaker_origin(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {instrument}",
+        f"{bias_label} — {tagged(instrument)}",
         "H4 Breaker Origin",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -414,7 +416,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
             src_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape inside the range"
         src_str = _fmt_level(instrument, src.level)
         lines = [
-            f"{bias_label} — {instrument}",
+            f"{bias_label} — {tagged(instrument)}",
             "H4 back in line with the Daily",
             "",
             f"Daily breakout: {direction_label} (active)",
@@ -432,7 +434,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
     else:
         # A new H4 breakout while H4 is already in line with the Daily
         lines = [
-            f"{bias_label} — {instrument}",
+            f"{bias_label} — {tagged(instrument)}",
             "H4 breakout in line with the Daily",
             "",
             f"Daily breakout: {direction_label} (active)",
@@ -490,7 +492,7 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {instrument}",
+        f"{bias_label} — {tagged(instrument)}",
         "H4 Breaker Continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -536,7 +538,7 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {instrument}",
+        f"{bias_label} — {tagged(instrument)}",
         "H4 OC Continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -688,7 +690,7 @@ def format_entry_alert(
             )
 
     lines = [
-        f"ENTRY CONFIRMATION — {instrument}",
+        f"ENTRY CONFIRMATION — {tagged(instrument)}",
         f"{pattern_name} · {tf_label} · {direction_label}",
         "",
         f"Pattern: {pattern_name} ({direction_lower})",

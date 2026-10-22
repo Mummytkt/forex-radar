@@ -528,6 +528,7 @@ tv(type="CONFIRMED", instrument="CHFJPY", direction="bullish", source="daily_bre
    breakout_level=180.0, source_level=180.0, h4_level=181.0, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='CHFJPY' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("Origin describes the close above the External high", "A Daily candle closed above the most recent External high @ 180.000" in t)
+check("alert titles name the market type (Forex)", "BUY BIAS CONFIRMED — CHFJPY (Forex)" in t)
 tv(type="PRICE_UPDATE", instrument="XAGUSD", price=48.235, timeframe="240", snapshot=dict(snap, stage="breakout"))
 b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
 check("XAGUSD is a platform instrument and lands on the board", (b.get("XAGUSD") or {}).get("stage") == "breakout")
@@ -584,6 +585,7 @@ tv(type="CONFIRMED", instrument=SYN, exchange="DERIV", direction="bullish", sour
    breakout_level=131500.25, source_level=131500.25, h4_level=132100.5, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument=? ORDER BY id DESC LIMIT 1", (SYN,)).fetchone()[0]
 check("synthetic levels print with 2 decimals", "@ 131500.25" in t and "@ 132100.50" in t)
+check("synthetic alert titles say (Synthetic)", f"— {SYN} (Synthetic)" in t)
 from alerts.feed_monitor import is_market_open as _imo
 from datetime import datetime as _dt, timezone as _tz
 _sat = _dt(2026, 10, 24, 12, tzinfo=_tz.utc)
