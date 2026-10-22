@@ -54,8 +54,8 @@ const STAGE: Record<Snapshot['stage'], string> = {
   idle: 'No breakout',
   breakout: 'Breakout · awaiting retest',
   retest: 'Retest in progress',
-  confirmed_aligned: 'Confirmed · H4 aligned',
-  confirmed_realigning: 'OUT OF LINE · H4 alerts paused',
+  confirmed_aligned: 'Confirmed · Aligned',
+  confirmed_realigning: 'NOT ALIGNED · H4 paused',
 }
 const SOURCE: Record<string, string> = {
   post_breakout_oc: 'Post-breakout OC', daily_breaker: 'Daily Breaker', inside_range: 'Inside Range',
@@ -68,7 +68,7 @@ const FILTERS = [
   { key: 'retest', label: 'Retest' },
   { key: 'breakout', label: 'Awaiting retest' },
   { key: 'confirmed', label: 'Confirmed' },
-  { key: 'out', label: 'Out of line' },
+  { key: 'out', label: 'Not aligned' },
   { key: 'wkconf', label: 'Weekly-confirmed' },
   { key: 'bullish', label: 'Buys' },
   { key: 'bearish', label: 'Sells' },
@@ -90,7 +90,7 @@ function weeklyLine(w: WeeklySnap, inst: string): string | null {
   if (!w.wk_dir) return null
   const dir = w.wk_dir === 'bullish' ? 'Weekly Buy' : 'Weekly Sell'
   if (w.wk_rel === 'confirmed') return `${dir} · Daily ${w.wk_cls === 'internal' ? 'Internal' : 'External'} break Weekly-confirmed`
-  if (w.wk_rel === 'against') return `${dir} · Daily is AGAINST the Weekly`
+  if (w.wk_rel === 'against') return `${dir} · Daily NOT aligned`
   if (w.wk_react) return `${dir} · reacting at ${w.wk_src ?? 'a Weekly level'}${w.wk_src_lvl != null ? ' @ ' + fmt(inst, w.wk_src_lvl) : ''}`
   return `${dir} · waiting for a Weekly reaction`
 }
@@ -100,9 +100,9 @@ function weeklyLine(w: WeeklySnap, inst: string): string | null {
 function simpleWeeklyLine(w: WeeklySnap): string | null {
   if (!w.wk_dir) return null
   const dir = w.wk_dir === 'bullish' ? 'Weekly Buy' : 'Weekly Sell'
-  if (w.wk_rel === 'confirmed' || w.wk_rel === 'inline') return `${dir} · Daily is in line with the Weekly`
-  if (w.wk_rel === 'against') return `${dir} · Daily is AGAINST the Weekly`
-  return `${dir} · waiting for a Weekly reaction`
+  if (w.wk_rel === 'confirmed' || w.wk_rel === 'inline') return `${dir} · Daily aligned`
+  if (w.wk_rel === 'against') return `${dir} · Daily NOT aligned`
+  return `${dir} · awaiting reaction`
 }
 
 // Subscriber row: three even columns (pair + Daily status, Weekly, price)
