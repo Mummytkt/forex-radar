@@ -1525,7 +1525,17 @@ if barstate.isconfirmed and barstate.isrealtime
           + ',"d_a":' + f_num(a_lvl) + ',"d_v":' + f_num(v_lvl)
           + ',"d_oc":' + f_num(pb_oc_lvl) + ',"d_oc_count":' + str.tostring(array.size(pb_ocs))
           + ',"h4_a":' + f_num(h4_a_lvl) + ',"h4_v":' + f_num(h4_v_lvl)
-          + ',"h4_bk":' + f_num(h4_breaker_lvl) + ',"h4_oc":' + f_num(h4c_oc_lvl) + '}'
+          + ',"h4_bk":' + f_num(h4_breaker_lvl) + ',"h4_oc":' + f_num(h4c_oc_lvl)
+          + ',"wk_dir":' + (na(wk_dir) ? "null" : '"' + wk_dir + '"')
+          + ',"wk_react":' + (wk_react ? "true" : "false")
+          + ',"wk_src":' + (wk_react ? '"' + f_wsrc_name(wk_src, wk_kind) + '"' : "null")
+          + ',"wk_src_lvl":' + f_num(wk_react ? wk_src_lvl : na)
+          + ',"wk_rel":"' + bo_wk_rel + '"'
+          + ',"wk_cls":' + (bo_wk_rel == "confirmed" ? '"' + bo_wk_cls + '"' : "null")
+          + ',"w_hi":' + f_num(w_chi) + ',"w_lo":' + f_num(w_clo)
+          + ',"w_bk":' + f_num(wk_level)
+          + ',"w_av":' + f_num(na(wk_dir) ? na : wk_dir == "bullish" ? w_dv : w_da)
+          + ',"w_oc":' + f_num(wpb_oc_lvl) + '}'
           + ',"bar":' + f_bar(time, open, high, low, close)
           + ',"dbar":' + f_bar(dr_t, dr_o, dr_h, dr_l, dr_c) + '}',
           alert.freq_once_per_bar)

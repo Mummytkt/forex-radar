@@ -31,6 +31,22 @@ interface Snapshot {
   sub_hi?: number | null
   sub_lo?: number | null
 }
+// Weekly fields (Bias Pointer 2026-10-22+); absent on older alerts
+interface WeeklySnap {
+  wk_dir?: 'bullish' | 'bearish' | null
+  wk_react?: boolean
+  wk_src?: string | null
+  wk_src_lvl?: number | null
+  wk_rel?: '' | 'confirmed' | 'inline' | 'against'
+  wk_cls?: 'external' | 'internal' | null
+  w_hi?: number | null
+  w_lo?: number | null
+  w_bk?: number | null
+  w_av?: number | null
+  w_oc?: number | null
+}
+const WK = '#FFB74D'
+
 interface BoardRow { instrument: string; snapshot: Snapshot | null; price: number | null; updated_at: string | null }
 
 const STAGE: Record<Snapshot['stage'], string> = {
@@ -52,6 +68,7 @@ const FILTERS = [
   { key: 'breakout', label: 'Awaiting retest' },
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'out', label: 'Out of line' },
+  { key: 'wkconf', label: 'Weekly-confirmed' },
   { key: 'bullish', label: 'Buys' },
   { key: 'bearish', label: 'Sells' },
 ]
@@ -62,9 +79,19 @@ function fmt(inst: string, n: number | null): string | null {
   return n.toFixed(d)
 }
 
-function Level({ name, v }: { name: string; v: string | null }) {
+function Level({ name, v, color }: { name: string; v: string | null; color?: string }) {
   if (!v) return null
-  return <span style={{ whiteSpace: 'nowrap' }}><span style={{ color: 'var(--text-muted)' }}>{name}</span> {v}</span>
+  return <span style={{ whiteSpace: 'nowrap' }}><span style={{ color: color ?? 'var(--text-muted)' }}>{name}</span> {v}</span>
+}
+
+// One line on the Weekly: direction, what it is doing, and how the Daily relates
+function weeklyLine(w: WeeklySnap, inst: string): string | null {
+  if (!w.wk_dir) return null
+  const dir = w.wk_dir === 'bullish' ? 'Weekly Buy' : 'Weekly Sell'
+  if (w.wk_rel === 'confirmed') return `${dir} · Daily ${w.wk_cls === 'internal' ? 'Internal' : 'External'} break Weekly-confirmed`
+  if (w.wk_rel === 'against') return `${dir} · Daily is AGAINST the Weekly`
+  if (w.wk_react) return `${dir} · reacting at ${w.wk_src ?? 'a Weekly level'}${w.wk_src_lvl != null ? ' @ ' + fmt(inst, w.wk_src_lvl) : ''}`
+  return `${dir} · waiting for a Weekly reaction`
 }
 
 export default function LiveChartBoard() {
@@ -80,6 +107,7 @@ export default function LiveChartBoard() {
       if (!s) return false
       if (filter === 'confirmed') return s.stage === 'confirmed_aligned'
       if (filter === 'out') return s.stage === 'confirmed_realigning'
+      if (filter === 'wkconf') return (s as Snapshot & WeeklySnap).wk_rel === 'confirmed'
       if (filter === 'bullish' || filter === 'bearish') return s.bias === filter
       return s.stage === filter
     })
@@ -144,8 +172,30 @@ export default function LiveChartBoard() {
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Waiting for the next H4 close</div>
                   )}
                 </div>
+                {s && (() => {
+                  const w = s as Snapshot & WeeklySnap
+                  const line = weeklyLine(w, i)
+                  if (!line) return null
+                  const against = w.wk_rel === 'against'
+                  return (
+                    <div style={{ minWidth: 170, flex: '0 1 230px', fontSize: 11, fontWeight: 600, lineHeight: 1.45,
+                      color: against ? 'var(--warning)' : WK, borderLeft: `2px solid ${against ? 'var(--warning)' : WK}`, paddingLeft: 8 }}>
+                      {line}
+                    </div>
+                  )
+                })()}
                 {s && (
                   <div style={{ flex: '1 1 260px', display: 'flex', flexWrap: 'wrap', gap: '3px 12px', fontSize: 11.5, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                    {(() => {
+                      const w = s as Snapshot & WeeklySnap
+                      return <>
+                        <Level name="W.H" color={WK} v={fmt(i, w.w_hi ?? null)} />
+                        <Level name="W.L" color={WK} v={fmt(i, w.w_lo ?? null)} />
+                        <Level name="W.BK" color={WK} v={fmt(i, w.w_bk ?? null)} />
+                        <Level name={w.wk_dir === 'bearish' ? 'W.A' : 'W.V'} color={WK} v={fmt(i, w.w_av ?? null)} />
+                        <Level name="W.OC" color={WK} v={fmt(i, w.w_oc ?? null)} />
+                      </>
+                    })()}
                     <Level name="Ext.H" v={fmt(i, s.ext_hi ?? null)} />
                     <Level name="Ext.L" v={fmt(i, s.ext_lo ?? null)} />
                     <Level name="Int.H" v={fmt(i, s.int_hi ?? null)} />
