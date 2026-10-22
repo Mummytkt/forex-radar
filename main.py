@@ -61,6 +61,22 @@ async def main(dry_run: bool = False) -> None:
     from state.instruments import load_instruments
     load_instruments(conn, config)
 
+    # One-time: Deriv synthetic journal trades are counted in plain points (the price
+    # move); earlier entries were counted in 0.0001 steps (2026-10-22).
+    if not conn.execute("SELECT 1 FROM user_config WHERE key = 'journal_synth_points_1'").fetchone():
+        import re as _re
+        try:
+            for jid, inst, d, en, ex in conn.execute(
+                    "SELECT id, instrument, direction, entry_price, exit_price FROM journal_entries "
+                    "WHERE entry_price IS NOT NULL AND exit_price IS NOT NULL").fetchall():
+                if _re.match(r"^(VOLATILITY|JUMP|BOOM|CRASH|STEP|RANGE|DEX)", _re.sub(r"\s+", "_", (inst or "").upper())):
+                    pts = (ex - en) if (d or "").lower() == "buy" else (en - ex)
+                    conn.execute("UPDATE journal_entries SET pips = ? WHERE id = ?", (round(pts, 2), jid))
+        except Exception:
+            pass   # no journal yet
+        conn.execute("INSERT OR REPLACE INTO user_config (key, value) VALUES ('journal_synth_points_1', '1')")
+        conn.commit()
+
     # One-time: forget chart pictures saved before half-empty charts stopped being
     # cached (2026-10-21), so they are redrawn from the full candle history.
     if not conn.execute("SELECT 1 FROM user_config WHERE key = 'chart_cache_reset_1'").fetchone():
