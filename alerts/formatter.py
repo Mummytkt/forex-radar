@@ -71,6 +71,30 @@ def format_alert(alert: AlertRecord) -> str:
     return _with_weekly(alert, _format_body(alert))
 
 
+# Lines kept in the Short message style: the headline of each part, no explanations
+_SHORT_KEEP = ("Daily breakout:", "Weekly", "Daily reaction source:", "H4 confirmation:", "Reason:",
+               "Daily breakout level:", "⚠️")
+
+
+def short_text(full: str) -> str:
+    """The Short style: title, alert type, then only the headline lines, so the
+    message goes straight to the point. Weekly lines stay with 'Daily breakout'."""
+    lines = full.split("\n")
+    if len(lines) < 3:
+        return full
+    out = lines[:2]
+    for ln in lines[2:]:
+        if ln.startswith(_SHORT_KEEP):
+            if ln.startswith("Weekly") and out and (out[-1].startswith("Daily breakout:") or out[-1].startswith("Weekly")):
+                out.append(ln)
+            else:
+                out += ["", ln]
+    tail = [ln for ln in lines if ln.startswith("— ")]
+    if tail:
+        out += ["", tail[-1]]
+    return "\n".join(out)
+
+
 def _weekly_lines(alert: AlertRecord) -> list[str]:
     """The Weekly storyline above this Daily setup, if there is one."""
     w = alert.weekly or {}

@@ -31,14 +31,14 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from alerts.formatter import format_alert, format_entry_alert
+from alerts.formatter import format_alert, format_entry_alert, short_text
 from config import SYMBOL_ALIASES, is_synthetic, fmt_price, normalize_symbol, tagged
 from state.instruments import register_synthetic
 from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
 from alerts.chart_image import save_alert_levels
 from alerts.telegram import chart_button
 from alerts.formatter import _SOURCE_NAMES
-from api.alert_prefs import confirmation_kind, get_alert_prefs
+from api.alert_prefs import confirmation_kind, get_alert_prefs, get_alert_style
 from alerts.telegram import send_alert
 from config import pip_size_for
 from data.models import (
@@ -120,6 +120,7 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
         "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
     ).fetchall()
     chats: list[str] = []
+    short_chats: set[str] = set()   # people who chose the Short message style
     for rec in recipients:
         if not _subscription_active(rec["role"], rec["plan"], rec["plan_expires_at"]):
             continue  # expired subscriber — no more signals
@@ -137,18 +138,22 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
         if pref and not prefs.get(pref, True):
             continue  # user switched this alert type off (Origin / a continuation type / engulfing)
         chats.append(rec["telegram_chat_id"])
+        if get_alert_style(conn, rec["id"]) == "short":
+            short_chats.add(rec["telegram_chat_id"])
 
     # "📊 View chart" under the alert: tapping it sends the chart picture
     markup = chart_button(alert_id) if alert_id else None
+    short = short_text(alert_text)
 
     # Many chats at once, paced under Telegram's limit (see alerts/telegram.py)
     sem = asyncio.Semaphore(20)
 
     async def _one(chat_id: str) -> bool:
         async with sem:
+            text = short if chat_id in short_chats else alert_text
             if markup is not None:
-                return await send_alert(config.telegram_bot_token, chat_id, alert_text, reply_markup=markup)
-            return await send_alert(config.telegram_bot_token, chat_id, alert_text)
+                return await send_alert(config.telegram_bot_token, chat_id, text, reply_markup=markup)
+            return await send_alert(config.telegram_bot_token, chat_id, text)
 
     if chats:
         results = await asyncio.gather(*(_one(c) for c in chats))

@@ -16,7 +16,7 @@ import io
 
 from fastapi.responses import FileResponse, StreamingResponse
 
-from api.alert_prefs import get_alert_prefs, set_alert_pref
+from api.alert_prefs import get_alert_prefs, set_alert_pref, get_alert_style, set_alert_style
 
 from api.schemas import (
     InstrumentOverview, Stats, AlertItem, AlertsPage,
@@ -694,9 +694,11 @@ def get_preferences(request: Request):
     user = getattr(request.state, "user", None)
     with _db(request) as conn:
         prefs = get_alert_prefs(conn, user["id"] if user else None, user["role"] if user else None)
+        style = get_alert_style(conn, user["id"] if user else None)
     return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"], newsAlerts=prefs["news"],
                             alertOrigin=prefs["origin"], contInline=prefs["cont_inline"], contBreaker=prefs["cont_breaker"],
-                            contOc=prefs["cont_oc"], contRealign=prefs["cont_realign"], contEngulfing=prefs["engulfing"])
+                            contOc=prefs["cont_oc"], contRealign=prefs["cont_realign"], contEngulfing=prefs["engulfing"],
+                            alertStyle=style)
 
 
 @router.patch("/preferences")
@@ -716,6 +718,8 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
             value = getattr(body, field)
             if value is not None:
                 set_alert_pref(conn, uid, kind, value)
+        if body.alertStyle is not None:
+            set_alert_style(conn, uid, body.alertStyle)
     return {"ok": True}
 
 

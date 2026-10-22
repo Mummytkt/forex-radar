@@ -50,6 +50,7 @@ class AlertPreferences(BaseModel):
     contOc: bool = True
     contRealign: bool = True
     contEngulfing: bool = True
+    alertStyle: str = "full"            # "full" | "short"
 
 
 class AlertPreferencesUpdate(BaseModel):
@@ -62,6 +63,7 @@ class AlertPreferencesUpdate(BaseModel):
     contOc: bool | None = None
     contRealign: bool | None = None
     contEngulfing: bool | None = None
+    alertStyle: str | None = None
 
 
 class VideoEntry(BaseModel):

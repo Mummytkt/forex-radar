@@ -79,10 +79,64 @@ export default function PreferencesPage() {
 
   const bothOff = prefs && prefs.alertOrigin && !prefs.alertExternal && !prefs.alertInternal
 
+  // Message style: the full explanation, or Short (headlines only)
+  const [style, setStyle] = useState<'full' | 'short'>('full')
+  const [styleStatus, setStyleStatus] = useState<Status>('idle')
+  useEffect(() => {
+    fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && (d.alertStyle === 'short' || d.alertStyle === 'full')) setStyle(d.alertStyle) })
+      .catch(() => {})
+  }, [])
+  const chooseStyle = async (v: 'full' | 'short') => {
+    const previous = style
+    setStyle(v)
+    setStyleStatus('saving')
+    try {
+      const r = await fetch(`${API_BASE}/api/preferences`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ alertStyle: v }) })
+      if (!r.ok) throw new Error()
+      setStyleStatus('saved')
+      setTimeout(() => setStyleStatus(s => (s === 'saved' ? 'idle' : s)), 2000)
+    } catch {
+      setStyle(previous)
+      setStyleStatus('error')
+    }
+  }
+
   return (
     <>
       <TopBar title="Alert Filters" subtitle="Choose which bias confirmations reach your Telegram" />
       <main className="page-padded" style={{ flex: 1, width: '100%', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* Message style */}
+        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+            <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Message style</h2>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.6 }}>
+              How your bias alerts read on Telegram. Short keeps the headline of each part and drops the explanations.
+            </p>
+          </div>
+          <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            {([
+              ['full', 'Full', 'Every part explained: the Daily breakout, the reaction, the H4 confirmation and why.'],
+              ['short', 'Short', 'Straight to the point: alert type, Daily breakout, reaction, H4 confirmation and reason.'],
+            ] as const).map(([v, name, desc]) => (
+              <button key={v} onClick={() => chooseStyle(v)} disabled={styleStatus === 'saving'}
+                style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                  border: `1px solid ${style === v ? 'var(--accent)' : 'var(--border)'}`,
+                  background: style === v ? 'var(--accent-bg)' : 'transparent', color: 'var(--text-primary)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>
+                  {style === v && <Check size={13} color="var(--accent)" />}{name}
+                </span>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{desc}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ padding: '0 20px 12px', minHeight: 18, fontSize: 11, fontWeight: 600 }}>
+            {styleStatus === 'saved' && <span style={{ color: 'var(--bullish)' }}>Saved</span>}
+            {styleStatus === 'error' && <span style={{ color: 'var(--bearish)' }}>Couldn&apos;t save. Check your connection and try again.</span>}
+          </div>
+        </div>
 
         {/* Telegram delivery */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>

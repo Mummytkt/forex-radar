@@ -34,6 +34,23 @@ def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, 
     return prefs
 
 
+def get_alert_style(conn, uid: Optional[int]) -> str:
+    """'full' (default) or 'short': how bias alerts are written to this person."""
+    if uid is None:
+        return "full"
+    row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"pref_alert_style:{uid}",)).fetchone()
+    return "short" if row and row[0] == "short" else "full"
+
+
+def set_alert_style(conn, uid: Optional[int], style: str) -> None:
+    if uid is None or style not in ("full", "short"):
+        return
+    conn.execute(
+        "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+        (f"pref_alert_style:{uid}", style),
+    )
+
+
 def set_alert_pref(conn, uid: Optional[int], kind: str, on: bool) -> None:
     base = _KEYS[kind]
     key = f"{base}:{uid}" if uid is not None else base

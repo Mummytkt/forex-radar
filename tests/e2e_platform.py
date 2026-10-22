@@ -752,6 +752,20 @@ c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": False})
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="external", pref="origin"))
 check("switching Origin off stops Origins", "chatS" not in sent)
 c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": True, "contOc": True, "contEngulfing": True})
+c.patch("/api/preferences", headers=H(ts_), json={"alertStyle": "short"})
+check("message style saves", c.get("/api/preferences", headers=H(ts_)).json()["alertStyle"] == "short")
+_full_txt = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' AND alert_text LIKE '%Weekly-confirmed%' LIMIT 1").fetchone()[0]
+_got = {}
+async def _capt(token, chat, text, reply_markup=None): _got[chat] = text; return True
+_old_t = tvw.send_alert; tvw.send_alert = _capt
+asyncio.run(tvw._deliver_alert(conn, cfg, "AUDCAD", _full_txt, pref="origin"))
+tvw.send_alert = _old_t
+_sh = _got.get("chatS", "")
+check("Short-style subscribers get the short message; others the full one",
+      _sh and len(_sh) < len(_full_txt) and "Weekly-confirmed" in _sh and "Reason:" in _sh
+      and "aligns with the most recent Daily breakout" not in _sh
+      and any(v == _full_txt for k, v in _got.items() if k != "chatS"))
+c.patch("/api/preferences", headers=H(ts_), json={"alertStyle": "full"})
 
 # ── Testers (2026-10-21) ───────────────────────────────────────────────────
 _tok = c.post("/api/auth/invite", headers=H(owner), json={"email": "tester@x.com", "plan": "TESTER", "plan_days": 21}).json()["token"]
