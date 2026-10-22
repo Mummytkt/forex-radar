@@ -95,6 +95,16 @@ function weeklyLine(w: WeeklySnap, inst: string): string | null {
   return `${dir} · waiting for a Weekly reaction`
 }
 
+// Subscribers get the plain version: is the Daily with the Weekly or against it
+// (the alert itself carries the Internal / External and Weekly-confirmed detail)
+function simpleWeeklyLine(w: WeeklySnap): string | null {
+  if (!w.wk_dir) return null
+  const dir = w.wk_dir === 'bullish' ? 'Weekly Buy' : 'Weekly Sell'
+  if (w.wk_rel === 'confirmed' || w.wk_rel === 'inline') return `${dir} · Daily is in line with the Weekly`
+  if (w.wk_rel === 'against') return `${dir} · Daily is AGAINST the Weekly`
+  return `${dir} · waiting for a Weekly reaction`
+}
+
 // Subscriber row: three even columns (pair + Daily status, Weekly, price)
 function Badge({ text, color }: { text: string; color: string }) {
   return (
@@ -110,7 +120,7 @@ function SubscriberRow({ r }: { r: BoardRow }) {
   const i = r.instrument
   const dirCol = s?.bias === 'bullish' ? 'var(--bullish)' : s?.bias === 'bearish' ? 'var(--bearish)' : 'var(--text-muted)'
   const w = (s ?? {}) as Snapshot & WeeklySnap
-  const line = s ? weeklyLine(w, i) : null
+  const line = s ? simpleWeeklyLine(w) : null
   const against = w.wk_rel === 'against'
   const wkCol = against ? '#F87171' : WK
   const [wkBadge, ...wkRest] = (line ?? '').split(' · ')
