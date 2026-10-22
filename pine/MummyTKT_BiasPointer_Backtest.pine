@@ -925,6 +925,7 @@ f_bt_src(string s) =>
 // Backtest: label where an alert is sent (returns true if labelled)
 f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool conf = kind <= 1 or kind == 7   // an H4 confirmation after a Daily reaction
+    bool tf_ok = timeframe.period == "240"   // the H4 steps only mean something on 4H candles
     bool on = kind == 7 ? bt_react : kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
     if conf
         array.set(bt_scls, 0, cls)
@@ -932,14 +933,14 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     bool cls_ok = c == "" or (c == "external" ? bt_ext : bt_int)
     string head = kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
     string tag  = c == "" ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
-    if bt_grey and not (on and cls_ok and time >= bt_from)
+    if tf_ok and bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         if bt_latest
             label.delete(array.get(bt_last, 0))
         array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "Not counted: " + why + "\n" + head + tag,
              style=bull ? label.style_label_up : label.style_label_down, color=color.new(color.gray, 35),
              textcolor=color.white, size=size.small))
-    if on and cls_ok and time >= bt_from
+    if tf_ok and on and cls_ok and time >= bt_from
         if bt_latest
             label.delete(array.get(bt_last, 0))
         array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
@@ -951,7 +952,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
              + "\nEntry = next candle's open"))
         array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
         array.set(bt_cnt, bull ? 8 : 9, array.get(bt_cnt, bull ? 8 : 9) + 1)
-    on and cls_ok and time >= bt_from
+    tf_ok and on and cls_ok and time >= bt_from
 
 // Weekly context sent with every bias alert (empty when there is no Weekly setup)
 f_wk() =>
@@ -1717,7 +1718,9 @@ _state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style
 
 // ── Backtest count ────────────────────────────────────────────────────────────
 var table bt_tbl = table.new(position.top_right, 2, 12, bgcolor=color.new(#0F1120, 10), border_width=1, border_color=color.new(color.gray, 70))
-if bt_table and barstate.islast
+if bt_table and barstate.islast and timeframe.period != "240"
+    table.cell(bt_tbl, 0, 0, "Backtest labels show on the 4H chart only", text_color=color.white, text_size=size.small)
+if bt_table and barstate.islast and timeframe.period == "240"
     int bt_total = array.get(bt_cnt, 8) + array.get(bt_cnt, 9)
     table.cell(bt_tbl, 0, 0, "H4 aligned alerts", text_color=color.white, text_size=size.small)
     table.cell(bt_tbl, 1, 0, str.tostring(bt_total), text_color=color.white, text_size=size.small)
