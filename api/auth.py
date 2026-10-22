@@ -274,6 +274,68 @@ def login(body: LoginBody, request: Request):
     }
 
 
+class TelegramLoginBody(BaseModel):
+    init_data: str
+
+
+def verify_telegram_init_data(init_data: str, bot_token: str, max_age_s: int = 86400) -> Optional[dict]:
+    """Check the Mini App's initData really came from Telegram for this bot
+    (HMAC with the bot token, per Telegram's Web App docs) and is recent.
+    Returns the Telegram user dict, or None."""
+    import hmac
+    import json
+    from urllib.parse import parse_qsl
+    if not init_data or not bot_token:
+        return None
+    fields = dict(parse_qsl(init_data, keep_blank_values=True))
+    sent = fields.pop("hash", "")
+    check = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
+    key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    if not sent or not hmac.compare_digest(hmac.new(key, check.encode(), hashlib.sha256).hexdigest(), sent):
+        return None
+    try:
+        if time.time() - int(fields.get("auth_date", "0")) > max_age_s:
+            return None
+        user = json.loads(fields.get("user", ""))
+    except (ValueError, TypeError):
+        return None
+    return user if isinstance(user, dict) and user.get("id") else None
+
+
+@auth_router.post("/telegram")
+def telegram_login(body: TelegramLoginBody, request: Request):
+    """Sign in from inside Telegram (the bot's Mini App buttons). The Telegram
+    account must already be linked to a platform account via Connect Telegram."""
+    ip_key = "tg-ip:" + client_ip(request)
+    if rate_limited(ip_key, 30, _LOGIN_WINDOW):
+        raise HTTPException(429, "Too many sign-in attempts. Please wait 15 minutes and try again.")
+    tg = verify_telegram_init_data(body.init_data, request.app.state.config.telegram_bot_token)
+    if not tg:
+        record_hit(ip_key)
+        raise HTTPException(401, "Couldn't verify Telegram. Close and reopen the page from the bot.")
+    with _db(request) as conn:
+        row = conn.execute(
+            "SELECT id, email, name, role, plan, plan_expires_at FROM users WHERE telegram_chat_id = ?",
+            (str(tg["id"]),),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "This Telegram isn't linked to an account yet. Log in, then use Connect Telegram in Settings.")
+    if row["role"] != "OWNER" and row["plan"] != "LIFETIME" and row["plan_expires_at"]:
+        exp = datetime.fromisoformat(row["plan_expires_at"].replace("Z", "+00:00"))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < datetime.now(timezone.utc):
+            raise HTTPException(403, "Your access has expired")
+    token = create_token({"sub": str(row["id"]), "role": row["role"]}, request.app)
+    with _db_write(request) as conn:
+        conn.execute("UPDATE users SET last_login_at = datetime('now') WHERE id = ?", (row["id"],))
+    return {
+        "token": token,
+        "user": {"id": row["id"], "email": row["email"], "name": row["name"] or "",
+                 "role": row["role"], "plan": row["plan"]},
+    }
+
+
 @auth_router.get("/me")
 def me(request: Request):
     auth = request.headers.get("Authorization", "")

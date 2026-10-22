@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { API_BASE } from './api'
+import { startTelegramApp, telegramInitData } from './telegram'
 
 export interface User {
   id: number
@@ -67,6 +68,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const status = await sr.json()
         setAuthEnabled(status.enabled)
         if (status.enabled) {
+          // Inside Telegram: sign in as the linked account, no password needed
+          const tg = telegramInitData()
+          if (tg) {
+            startTelegramApp()
+            try {
+              const r = await fetch(`${API_BASE}/api/auth/telegram`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ init_data: tg }),
+              })
+              if (r.ok) {
+                const { token: t, user: u } = await r.json()
+                localStorage.setItem(TOKEN_KEY, t)
+                setToken(t)
+                setUser(u)
+                return
+              }
+            } catch {}
+          }
           const t = localStorage.getItem(TOKEN_KEY)
           if (t) await verifyToken(t)
         }

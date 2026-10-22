@@ -211,6 +211,9 @@ async def main(dry_run: bool = False) -> None:
     if config.telegram_enabled and config.telegram_bot_token:
         from alerts.telegram import ensure_button_updates
         asyncio.create_task(ensure_button_updates(config.telegram_bot_token, config.telegram_webhook_secret))
+        # The bot's Menu button: /board, /pricealerts, /confirmations, /news, /help …
+        from alerts.bot_menu import setup_bot_menu
+        asyncio.create_task(setup_bot_menu(config.telegram_bot_token))
     logger.info("Price monitor + billing cycle + daily backup + feed monitor + reminders + news started")
 
     server = uvicorn.Server(

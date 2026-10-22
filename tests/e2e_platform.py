@@ -846,6 +846,57 @@ load_instruments(_c2, _ns)
 check("an owner's later removal sticks (added only once)", _ns.instruments == ["EUR/USD"])
 _cfgmod.SYNTHETICS.add(SYN)   # load_instruments on the other DB reset the set
 
+# ── Bot command menu + Mini App sign-in (2026-10-22) ──────────────────────
+import hashlib as _hl, hmac as _hm, time as _time
+from urllib.parse import urlencode as _ue
+import alerts.bot_menu as _bm
+from api.alert_prefs import get_alert_prefs
+config.telegram_bot_token = "123:TEST"
+def _init(uid, token="123:TEST", age=0):
+    f = {"auth_date": str(int(_time.time()) - age), "query_id": "q", "user": _j.dumps({"id": uid, "first_name": "T"})}
+    dcs = "\n".join(f"{k}={v}" for k, v in sorted(f.items()))
+    key = _hm.new(b"WebAppData", token.encode(), _hl.sha256).digest()
+    f["hash"] = _hm.new(key, dcs.encode(), _hl.sha256).hexdigest()
+    return _ue(f)
+_T = make_sub("tg@x.com"); _tgid = _T["user"]["id"]
+dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET telegram_chat_id = '5550001' WHERE id = ?", (_tgid,)); dbw.commit(); dbw.close()
+_r = c.post("/api/auth/telegram", json={"init_data": _init(5550001)})
+check("a linked Telegram signs in from the Mini App as its own account",
+      _r.status_code == 200 and _r.json()["user"]["id"] == _tgid and c.get("/api/auth/me", headers=H(_r.json()["token"])).json()["id"] == _tgid)
+check("forged Mini App data is refused", c.post("/api/auth/telegram", json={"init_data": _init(5550001, token="999:OTHER")}).status_code == 401)
+check("old Mini App data is refused", c.post("/api/auth/telegram", json={"init_data": _init(5550001, age=200000)}).status_code == 401)
+check("an unlinked Telegram gets 'not linked'", c.post("/api/auth/telegram", json={"init_data": _init(5550999)}).status_code == 404)
+_said = []
+async def _sa(token, chat, text, reply_markup=None): _said.append((chat, text, reply_markup)); return True
+async def _ab2(token, cid, text=""): _said.append(("answer", text, None))
+_old_bm = (_bm.send_alert, _bm.answer_button); _bm.send_alert, _bm.answer_button = _sa, _ab2
+def cmd(text, chat=5550001, ctype="private"):
+    _said.clear()
+    c.post("/api/telegram/update", headers=TG, json={"update_id": 2, "message": {"text": text, "chat": {"id": chat, "type": ctype}}})
+    return _said
+_m = cmd("/pricealerts")
+check("/pricealerts answers with a button opening Level Watch inside Telegram",
+      len(_m) == 1 and _m[0][2].inline_keyboard[0][0].web_app.url.endswith("/price-alerts"))
+_m = cmd("/confirmations@MummyBot")
+check("/confirmations opens Alert Filters", _m and _m[0][2].inline_keyboard[0][0].web_app.url.endswith("/preferences"))
+_m = cmd("/start")
+check("plain /start greets a linked person with Open Bias Pointer", _m and _m[0][2].inline_keyboard[0][0].web_app.url.endswith("/hub"))
+_m = cmd("/board", chat=5550999)
+check("an unlinked chat is told how to link", _m and "isn't linked" in _m[0][1])
+check("/help explains the alert words", "CONTINUATION CONFIRMED" in cmd("/help")[0][1])
+check("menu commands are ignored in groups", cmd("/board", ctype="group") == [])
+_m = cmd("/news")
+check("/news shows the current setting with a switch", _m and "ON" in _m[0][1] and _m[0][2].inline_keyboard[0][0].callback_data == "nw:0")
+_said.clear()
+c.post("/api/telegram/update", headers=TG, json={"update_id": 3, "callback_query": {"id": "q", "data": "nw:0", "message": {"message_id": 1, "chat": {"id": 5550001}}}})
+check("the news switch turns news off for that person only",
+      get_alert_prefs(conn, _tgid, "SUBSCRIBER")["news"] is False and get_alert_prefs(conn, bid, "SUBSCRIBER")["news"] is True)
+_said.clear()
+c.post("/api/telegram/update", headers=TG, json={"update_id": 4, "message": {"text": "/start nosuchtoken", "chat": {"id": 5550001, "type": "private"}}})
+check("/start <link> still goes to account linking", _said == [])
+_bm.send_alert, _bm.answer_button = _old_bm
+config.telegram_bot_token = ""
+
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

@@ -566,15 +566,29 @@ async def telegram_update(request: Request):
         return {"ok": True}
 
     if update.get("callback_query"):
-        await _handle_chart_button(request, config, update["callback_query"])
+        cq = update["callback_query"]
+        if (cq.get("data") or "").startswith("nw:"):
+            from alerts.bot_menu import handle_news_button
+            with _db_write(request) as conn:
+                await handle_news_button(conn, config, cq)
+        else:
+            await _handle_chart_button(request, config, cq)
         return {"ok": True}
 
-    message = update.get("message") or update.get("edited_message") or {}
+    message = update.get("message") or {}
     text = (message.get("text") or "").strip()
     chat = message.get("chat") or {}
     chat_id = chat.get("id")
 
-    if not text.startswith("/start") or chat_id is None:
+    if not text.startswith("/") or chat_id is None:
+        return {"ok": True}
+
+    # Menu commands (/board, /pricealerts, /news, /help, plain /start …)
+    from alerts.bot_menu import handle_command
+    with _db_write(request) as conn:
+        if await handle_command(conn, config, chat, text):
+            return {"ok": True}
+    if not text.startswith("/start"):
         return {"ok": True}
 
     parts = text.split(maxsplit=1)

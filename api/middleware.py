@@ -13,6 +13,7 @@ _ALWAYS_PUBLIC = {
     "/api/auth/status",
     "/api/auth/setup",
     "/api/auth/login",
+    "/api/auth/telegram",    # sign in from the bot's Mini App (verified by Telegram's HMAC)
     "/api/auth/register",
     "/api/auth/forgot",      # request a reset link (sent to the account's Telegram)
     "/api/auth/reset",       # complete a reset with the one-time token
