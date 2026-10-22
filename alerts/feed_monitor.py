@@ -62,12 +62,12 @@ def _parse(s: str) -> datetime:
 
 def feed_health(conn) -> list[dict]:
     """Status per instrument for the owner's Business page."""
-    from config import SYMBOL_ALIASES
+    from config import normalize_symbol
     now = datetime.now(timezone.utc)
     out = []
     for r in conn.execute(
             "SELECT instrument, last_seen_at, last_type, stale_since FROM webhook_heartbeats ORDER BY instrument"):
-        if r[0] in SYMBOL_ALIASES:   # old broker-ticker row; reports under the platform name now
+        if normalize_symbol(r[0]) != r[0]:   # old broker-ticker row; reports under the platform name now
             continue
         last = _parse(r[1])
         if not is_market_open(r[0], now):
@@ -94,8 +94,10 @@ async def run_feed_check(db_path: str, config) -> None:
     try:
         # Broker tickers (JP225, USOIL, ...) now report under the platform name,
         # so their old heartbeat rows would look silent forever.
-        from config import SYMBOL_ALIASES
-        conn.executemany("DELETE FROM webhook_heartbeats WHERE instrument = ?", [(k,) for k in SYMBOL_ALIASES])
+        from config import normalize_symbol
+        old = [(r[0],) for r in conn.execute("SELECT instrument FROM webhook_heartbeats").fetchall()
+               if normalize_symbol(r[0]) != r[0]]
+        conn.executemany("DELETE FROM webhook_heartbeats WHERE instrument = ?", old)
         rows = conn.execute(
             "SELECT instrument, last_seen_at, stale_since FROM webhook_heartbeats").fetchall()
         for inst, last_seen, stale_since in rows:

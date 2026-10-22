@@ -117,6 +117,21 @@ def pip_size_for(instrument: str) -> float:
 SYNTHETICS: set[str] = set()
 
 
+def normalize_symbol(raw: str) -> str:
+    """The platform's name for a TradingView ticker: "USD/CHF" -> "USDCHF", broker
+    spellings via SYMBOL_ALIASES (JP225 -> JPN225), and crypto quoted in stablecoins
+    or perpetuals (BNBUSDT, BTCUSDT.P, ETHUSDC) -> the USD pair (BNBUSD)."""
+    s = raw.replace("/", "").upper()
+    s = SYMBOL_ALIASES.get(s, s)
+    if s.endswith(".P"):
+        s = s[:-2]
+    for q in ("USDT", "USDC"):
+        if s.endswith(q) and len(s) > len(q):
+            s = s[:-len(q)] + "USD"
+            break
+    return SYMBOL_ALIASES.get(s, s)
+
+
 def is_synthetic(instrument: str) -> bool:
     return instrument.replace("/", "").upper() in SYNTHETICS
 

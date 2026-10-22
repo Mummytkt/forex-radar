@@ -32,7 +32,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from alerts.formatter import format_alert, format_entry_alert
-from config import SYMBOL_ALIASES, is_synthetic, fmt_price
+from config import SYMBOL_ALIASES, is_synthetic, fmt_price, normalize_symbol
 from state.instruments import register_synthetic
 from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
 from alerts.chart_image import save_alert_levels
@@ -273,8 +273,7 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 
     # Normalise instrument name: "USD/CHF" → "USDCHF", and broker spellings
     # (JP225, USOIL, ...) to the platform's names so the board and alerts match.
-    instrument = payload.instrument.replace("/", "").upper()
-    instrument = SYMBOL_ALIASES.get(instrument, instrument)
+    instrument = normalize_symbol(payload.instrument)
     event_type = payload.type.upper()
 
     # A Deriv synthetic index joins the platform the first time its chart reports.

@@ -531,6 +531,13 @@ check("Origin describes the close above the External high", "A Daily candle clos
 tv(type="PRICE_UPDATE", instrument="XAGUSD", price=48.235, timeframe="240", snapshot=dict(snap, stage="breakout"))
 b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
 check("XAGUSD is a platform instrument and lands on the board", (b.get("XAGUSD") or {}).get("stage") == "breakout")
+from config import normalize_symbol as _ns_
+check("crypto stablecoin/perp tickers map to the USD pair; forex untouched",
+      _ns_("BNBUSDT") == "BNBUSD" and _ns_("BTCUSDT.P") == "BTCUSD" and _ns_("ETHUSDC") == "ETHUSD"
+      and _ns_("USDCHF") == "USDCHF" and _ns_("USDCAD") == "USDCAD" and _ns_("EUR/USD") == "EURUSD")
+tv(type="PRICE_UPDATE", instrument="BNBUSDT", exchange="BINANCE", price=744.17, timeframe="240", snapshot=dict(snap, stage="retest"))
+b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
+check("a Binance BNBUSDT chart lands on the board as BNBUSD", (b.get("BNBUSD") or {}).get("stage") == "retest")
 check("JP225 webhooks count as JPN225 in the feed monitor",
       conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JPN225'").fetchone()[0] == 1
       and conn.execute("SELECT COUNT(*) FROM webhook_heartbeats WHERE instrument='JP225'").fetchone()[0] == 0)
