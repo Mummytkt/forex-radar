@@ -2,13 +2,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MummyTKT's Bias Pointer v6 — BACKTEST EDITION (on-chart labels)
 //
-// Same logic as the live alert script, line for line. Instead of relying on the
-// Telegram alert, it puts an "H4 aligned - Alert" label on the H4 candle where
-// you would have received an EXTERNAL H4 confirmation:
-//   • Origin  — first External H4 breakout after a Daily reaction (CONFIRMED)
-//   • Back in line — External H4 breakout bringing H4 back in line after a
-//     fresh Daily reaction (H4_CONTINUATION breakout_cont)
-// Internal confirmations and the other continuation types are not labelled.
+// Same logic as the live alert script, line for line. Wherever the live script
+// sends a bias alert, this one puts an "H4 aligned - Alert" label on that H4
+// candle, filtered the way Alert Filters filter Telegram (defaults = defaults):
+//   Origin (BUY / SELL CONFIRMED)   External on, Internal off
+//   H4 back in line                 External on, Internal off
+//   H4 breakout in line, Breaker Origin / retest, OC reaction, Engulfing (wick)
+// A third line "Weekly AGAINST" marks alerts that went against the Weekly.
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
 // No alert needs to be created on this copy.
@@ -93,27 +93,24 @@
 
 indicator("MummyTKT Bias Pointer — Backtest", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=500)
 
-// ── Backtest labels ───────────────────────────────────────────────────────────
-bool  bt_origin  = input.bool(true, "Label External Origin (BUY / SELL CONFIRMED)", group="Backtest")
-bool  bt_realign = input.bool(true, "Label External H4 back in line", group="Backtest")
-bool  bt_table   = input.bool(true, "Show count table", group="Backtest")
-color bt_buy_col  = input.color(#00C853, "Buy label", group="Backtest", inline="btc")
-color bt_sell_col = input.color(#FF1744, "Sell label", group="Backtest", inline="btc")
-var int bt_buys  = 0
-var int bt_sells = 0
-var int bt_t0    = time
-
-f_bt_label(bool bull, bool origin, string cls, float h4lvl, float dlvl, string src) =>
-    bool show = cls == "external" and (origin ? bt_origin : bt_realign)
-    if show
-        label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + (bull ? "BUY" : "SELL") + (origin ? " · Origin" : " · Back in line"),
-             style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
-             textcolor=color.white, size=size.small,
-             tooltip="External H4 breakout @ " + str.tostring(h4lvl, format.mintick)
-             + "\nDaily reaction: " + (na(src) ? "-" : src) + " @ " + str.tostring(dlvl, format.mintick)
-             + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
-             + "\nEntry = next candle's open")
-    show
+// ── Backtest labels (same switches as Alert Filters) ──────────────────────────
+GBT = "Backtest labels"
+bool   bt_ext      = input.bool(true,  "External H4 breakouts (Origin / back in line)", group=GBT)
+bool   bt_int      = input.bool(false, "Internal H4 breakouts (Origin / back in line)", group=GBT)
+bool   bt_origin   = input.bool(true,  "Origin — BUY / SELL CONFIRMED", group=GBT)
+bool   bt_realign  = input.bool(true,  "H4 back in line", group=GBT)
+bool   bt_inline   = input.bool(true,  "H4 breakout in line", group=GBT)
+bool   bt_breaker  = input.bool(true,  "H4 Breaker (Origin + retests)", group=GBT)
+bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=GBT)
+bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=GBT)
+string bt_eng_mode = input.string("Wick", "Engulfing covers", options=["Wick", "Body only", "Both"], group=GBT)
+bool   bt_table    = input.bool(true,  "Show count table", group=GBT)
+color  bt_buy_col  = input.color(#00C853, "Buy label", group=GBT, inline="btc")
+color  bt_sell_col = input.color(#FF1744, "Sell label", group=GBT, inline="btc")
+// counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing, 7 Buys, 8 Sells
+var bt_cnt  = array.new_int(9, 0)
+var int bt_t0 = time
+var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing")
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
 string wh_secret       = input.string("", "Webhook Secret",
@@ -899,6 +896,23 @@ f_wsrc_name(string src, string kind) =>
     src == "breaker" ? "Weekly Breaker" : src == "post_breakout_oc" ? "post-breakout Weekly OC" : kind == "oc" ? "Weekly OC inside the range" : kind == "a_shape" ? "Weekly A-shape inside the range" : "Weekly V-shape inside the range"
 
 // Weekly context sent with every bias alert (empty when there is no Weekly setup)
+f_bt(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
+    bool on = kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
+    bool cls_ok = kind > 1 or (cls == "external" ? bt_ext : bt_int)
+    if on and cls_ok
+        string head = kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
+        string tag  = kind <= 1 ? (cls == "external" ? " (External)" : " (Internal)") : ""
+        label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
+             style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
+             textcolor=color.white, size=kind == 0 ? size.normal : size.small,
+             tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
+             + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
+             + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
+             + "\nEntry = next candle's open")
+        array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
+        array.set(bt_cnt, bull ? 7 : 8, array.get(bt_cnt, bull ? 7 : 8) + 1)
+    on and cls_ok
+
 f_wk() =>
     bo_wk_rel == "" ? "" : ',"wk_rel":"' + bo_wk_rel + '","wk_dir":"' + bo_wk_dir + '","wk_level":' + f_num(bo_wk_lvl)
          + (bo_wk_rel == "confirmed" ? ',"wk_src":"' + bo_wk_src + '","wk_src_level":' + f_num(bo_wk_src_lvl) + ',"wk_cls":"' + bo_wk_cls + '"' : "")
@@ -1217,8 +1231,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
-                if f_bt_label(true, true, h4_cls, h4_a_lvl, src_lvl, retest_src)
-                    bt_buys += 1
+                f_bt(true, 0, h4_cls, h4_a_lvl, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
                           + '","direction":"bullish","source":"' + retest_src
@@ -1236,8 +1249,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_brk_lvl            := h4_a_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 confirmed_this_bar    := true
-                if f_bt_label(true, false, h4_cls, h4_a_lvl, src_lvl, retest_src)
-                    bt_buys += 1
+                f_bt(true, 1, h4_cls, h4_a_lvl, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
@@ -1262,8 +1274,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
-                if f_bt_label(false, true, h4_cls, h4_v_lvl, src_lvl, retest_src)
-                    bt_sells += 1
+                f_bt(false, 0, h4_cls, h4_v_lvl, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
                           + '","direction":"bearish","source":"' + retest_src
@@ -1281,8 +1292,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_brk_lvl            := h4_v_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 confirmed_this_bar    := true
-                if f_bt_label(false, false, h4_cls, h4_v_lvl, src_lvl, retest_src)
-                    bt_sells += 1
+                f_bt(false, 1, h4_cls, h4_v_lvl, bo_level, "Daily reaction: " + (na(retest_src) ? "-" : retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
@@ -1325,6 +1335,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_breaker_orig_fired := false
                 f_h4_leg_prune(h4_ocs, h4_ocb, ilb ? h4a_origin : h4v_origin, ilb)
                 confirmed_this_bar    := true
+                f_bt(ilb, 2, "", brk_lvl, bo_level, "")
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
                           + '","direction":"' + bo_dir + '","cont_type":"inline_break"'
@@ -1352,6 +1363,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                         h4_breaker_orig_fired := true
                     bk_armed := false
                     bk_sent  := true
+                    f_bt(bo_dir == "bullish", bk_type == "breaker_origin" ? 3 : 4, "", h4_breaker_lvl, bo_level, "")
                     if barstate.isrealtime
                         alert(f_hdrw("H4_CONTINUATION")
                               + '","direction":"' + bo_dir + '","cont_type":"' + bk_type + '"'
@@ -1381,6 +1393,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 array.remove(h4_ocs, k)
                 array.remove(h4_ocb, k)
         k -= 1
+    if not na(oc_hit)
+        f_bt(ocb, 5, "", oc_hit, bo_level, "")
     if not na(oc_hit) and barstate.isrealtime
         alert(f_hdrw("H4_CONTINUATION")
               + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
@@ -1397,6 +1411,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         bool eng = ocb ? (close[1] < open[1] and close > open and open <= close[1] and close > open[1])
                        : (close[1] > open[1] and close < open and open >= close[1] and close < open[1])
         bool eng_wick = ocb ? close > high[1] : close < low[1]
+        if eng and (bt_eng_mode == "Both" or (bt_eng_mode == "Wick") == eng_wick)
+            f_bt(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
         if eng and barstate.isrealtime
             alert(f_hdrw("H4_CONTINUATION")
                   + '","direction":"' + bo_dir + '","cont_type":"engulfing","eng_wick":' + (eng_wick ? "true" : "false")
@@ -1627,13 +1643,17 @@ string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " (" + f_layer_name(bo
 _state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=color.white, size=size.small, tooltip=_tip)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
-var table bt_tbl = table.new(position.top_right, 2, 4, bgcolor=color.new(#0F1120, 10), border_width=1, border_color=color.new(color.gray, 70))
+var table bt_tbl = table.new(position.top_right, 2, 11, bgcolor=color.new(#0F1120, 10), border_width=1, border_color=color.new(color.gray, 70))
 if bt_table and barstate.islast
+    int bt_total = array.get(bt_cnt, 7) + array.get(bt_cnt, 8)
     table.cell(bt_tbl, 0, 0, "H4 aligned alerts", text_color=color.white, text_size=size.small)
-    table.cell(bt_tbl, 1, 0, str.tostring(bt_buys + bt_sells), text_color=color.white, text_size=size.small)
-    table.cell(bt_tbl, 0, 1, "Buys", text_color=bt_buy_col, text_size=size.small)
-    table.cell(bt_tbl, 1, 1, str.tostring(bt_buys), text_color=bt_buy_col, text_size=size.small)
-    table.cell(bt_tbl, 0, 2, "Sells", text_color=bt_sell_col, text_size=size.small)
-    table.cell(bt_tbl, 1, 2, str.tostring(bt_sells), text_color=bt_sell_col, text_size=size.small)
-    table.cell(bt_tbl, 0, 3, "Since", text_color=color.gray, text_size=size.tiny)
-    table.cell(bt_tbl, 1, 3, str.format_time(bt_t0, "dd MMM yyyy"), text_color=color.gray, text_size=size.tiny)
+    table.cell(bt_tbl, 1, 0, str.tostring(bt_total), text_color=color.white, text_size=size.small)
+    for i = 0 to 6
+        table.cell(bt_tbl, 0, i + 1, array.get(BT_NAMES, i), text_color=color.silver, text_size=size.tiny)
+        table.cell(bt_tbl, 1, i + 1, str.tostring(array.get(bt_cnt, i)), text_color=color.silver, text_size=size.tiny)
+    table.cell(bt_tbl, 0, 8, "Buys", text_color=bt_buy_col, text_size=size.small)
+    table.cell(bt_tbl, 1, 8, str.tostring(array.get(bt_cnt, 7)), text_color=bt_buy_col, text_size=size.small)
+    table.cell(bt_tbl, 0, 9, "Sells", text_color=bt_sell_col, text_size=size.small)
+    table.cell(bt_tbl, 1, 9, str.tostring(array.get(bt_cnt, 8)), text_color=bt_sell_col, text_size=size.small)
+    table.cell(bt_tbl, 0, 10, "Since", text_color=color.gray, text_size=size.tiny)
+    table.cell(bt_tbl, 1, 10, str.format_time(bt_t0, "dd MMM yyyy"), text_color=color.gray, text_size=size.tiny)
