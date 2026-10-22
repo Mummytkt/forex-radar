@@ -381,7 +381,7 @@ def chapters():
             "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. Each newer rooftop the twins break becomes the new little trampoline. If a later twin <b>starts above it</b>, comes down to touch its exact line and closes <b>above</b> it, ENCORE!",
             "<b>The little hand-off steps.</b> When two Little Bens climb one after the other, they make a little step. Every step on the newest climb is kept. If a <b>later</b> twin starts above one, touches it and closes above, ENCORE! That step is then used up. (A twin climbing up through it from below doesn't count.)",
             "Each visit to a spot rings <b>once</b>. The twins must leave and come back to ring it again.",
-            "<b>The big hug step.</b> When a Little Ben's shirt starts at or below a sliding Bella's shirt-end and finishes above where her shirt started, he has covered her shirt completely. ENCORE!",
+            "<b>The big hug step.</b> When a Little Ben's shirt starts at or below a sliding Bella's shirt-end and finishes above even her highest fingertip, he has covered all of her. ENCORE!",
         ]),
         (None, None, "encore2", []),
         ("The Wobble", "#ff7a59", "wobble", [

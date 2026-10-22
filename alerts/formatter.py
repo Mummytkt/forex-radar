@@ -76,6 +76,11 @@ _SHORT_KEEP = ("Daily breakout:", "Weekly", "Daily reaction source:", "H4 confir
                "Daily breakout level:", "⚠️")
 
 
+def _h4_break_line(alert: AlertRecord, level_str: str) -> str:
+    cls = (alert.h4_class or "").lower()
+    return f"H4 {'External' if cls == 'external' else 'Internal'} breakout @ {level_str}" if cls in ("external", "internal") else f"H4 breakout @ {level_str}"
+
+
 def _headline(direction: Direction, instrument: str, continuation: bool) -> str:
     """First line of a bias alert.
     Origin:        'BUY CONFIRMED — Look for entry and buy AUDCAD (Forex)'
@@ -502,7 +507,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
             f"Daily reaction source: {src_name} @ {src_str}",
             f"H4 had broken against the Daily {direction_lower} bias. Price then reacted at this Daily level.",
             "",
-            f"H4 breakout @ {level_str}",
+            _h4_break_line(alert, level_str),
             desc,
             "",
             f"Reason: The reaction from the {src_name} brought H4 back in line with the Daily "
@@ -517,7 +522,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
             "",
             f"Daily breakout: {direction_label} (active)",
             "",
-            f"H4 breakout @ {level_str}",
+            _h4_break_line(alert, level_str),
             desc,
             "This level is now the H4 Breaker.",
             "",
@@ -600,11 +605,11 @@ def _format_h4_engulfing(alert: AlertRecord) -> str:
     direction_lower = direction_label.lower()
     level_str = _fmt_level(instrument, level) if level is not None else "—"
     if direction == Direction.BULLISH:
-        desc = (f"A bullish H4 candle engulfed the previous bearish candle: it opened at or below that candle's "
-                f"close and closed above its open @ {level_str}.")
+        desc = (f"A bullish H4 candle engulfed the previous bearish candle, wick included: it opened at or below "
+                f"that candle's close and closed above its high @ {level_str}.")
     else:
-        desc = (f"A bearish H4 candle engulfed the previous bullish candle: it opened at or above that candle's "
-                f"close and closed below its open @ {level_str}.")
+        desc = (f"A bearish H4 candle engulfed the previous bullish candle, wick included: it opened at or above "
+                f"that candle's close and closed below its low @ {level_str}.")
     lines = [
         bias_label,
         f"H4 Engulfing in the Daily direction",

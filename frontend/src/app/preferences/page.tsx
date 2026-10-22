@@ -30,12 +30,12 @@ type Status = 'idle' | 'saving' | 'saved' | 'error'
 const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'alertOrigin', group: 'Origin', label: 'Origin alerts', desc: 'The first confirmation of a Daily setup: a Daily reaction followed by an H4 break. External / Internal below choose which kinds.' },
   { key: 'alertExternal', label: 'External breakouts', desc: 'Bias confirmed by an H4 close beyond the last structure formed before price reached the daily level. The standard alert.' },
-  { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level.' },
+  { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level. Off by default; External / Internal also apply to "H4 back in line" alerts.' },
   { key: 'contInline', group: 'Continuations', label: 'H4 breakout in line', desc: 'A new H4 breakout in the Daily direction while H4 is in line with the Daily.' },
   { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'Price comes back to the H4 Breaker, touches it exactly and closes beyond it.' },
   { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
   { key: 'contRealign', label: 'H4 back in line', desc: 'After H4 went against the Daily, a fresh Daily reaction and an H4 break bring it back in line.' },
-  { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle whose body covers the previous opposite candle\'s body, in the Daily direction.' },
+  { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, wick included, in the Daily direction.' },
   { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
 ]
 
@@ -196,7 +196,7 @@ export default function PreferencesPage() {
               )}
 
               <div style={{ padding: '12px 20px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Continuation alerts follow an Origin. External / Internal apply to Origins only.
+                Continuation alerts follow an Origin. External / Internal apply to Origins and to "H4 back in line" alerts.
               </div>
             </div>
           )}

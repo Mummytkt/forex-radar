@@ -61,6 +61,14 @@ async def main(dry_run: bool = False) -> None:
     from state.instruments import load_instruments
     load_instruments(conn, config)
 
+    # One-time (2026-10-22): Internal H4 breakouts are off by default; clear old
+    # Internal choices (the switches didn't visibly move before) so everyone
+    # starts on External only.
+    if not conn.execute("SELECT 1 FROM user_config WHERE key = 'internal_default_off_1'").fetchone():
+        conn.execute("DELETE FROM user_config WHERE key = 'pref_alert_internal' OR key LIKE 'pref_alert_internal:%'")
+        conn.execute("INSERT OR REPLACE INTO user_config (key, value) VALUES ('internal_default_off_1', '1')")
+        conn.commit()
+
     # One-time: Deriv synthetic journal trades are counted in plain points (the price
     # move); earlier entries were counted in 0.0001 steps (2026-10-22).
     if not conn.execute("SELECT 1 FROM user_config WHERE key = 'journal_synth_points_1'").fetchone():

@@ -205,9 +205,9 @@ def make_images():
         levels=[(17.8, "H4 OC (C1 close / C2 open)", ACCENT)], zones=[(17.3, 18.3, "", ZONE)],
         notes=[(1, 19.0, "completing candle\ncan't trigger it", MUTED), (2, 17.6, "later candle wicks in, closes above\n→ continuation", GREEN, (2.7, 16.3))],
         labels=["C1", "C2", "later"], ylim=(15.8, 19.6))
-    im["h4engulf"] = chart("h4engulf", [(17.6, 17.75, 16.9, 17.0), (16.95, 17.95, 16.85, 17.85)],
-        levels=[(17.6, "bearish candle's open (top of its body)", MUTED)],
-        notes=[(1, 17.95, "opens at/below its close, closes above its open\n→ engulfing continuation", GREEN, (0.7, 18.7))],
+    im["h4engulf"] = chart("h4engulf", [(17.6, 17.75, 16.9, 17.0), (16.95, 18.05, 16.85, 17.95)],
+        levels=[(17.75, "bearish candle's HIGH (top of its wick)", MUTED)],
+        notes=[(1, 18.05, "opens at/below its close, closes above its high\n→ engulfing continuation", GREEN, (0.7, 18.8))],
         labels=["bearish", "engulfing"], ylim=(16.4, 19.2))
     im["weekly"] = chart("weekly", [(15.0, 15.7, 14.9, 15.6), (15.6, 17.3, 15.5, 17.1), (17.1, 17.2, 16.0, 16.3), (16.3, 17.9, 16.1, 17.7)],
         levels=[(16.0, "Weekly Breaker (broken Weekly External high)", RED)],
@@ -365,9 +365,9 @@ def make_rules(im):
          "Out of line on a close above the latest H4 A-shape; back in after a Daily reaction plus a close below the latest H4 V-shape",
          "Going out of line sends no alert. While out of line no H4 OC or H4 Breaker alerts fire, and the dashboard shows the pair as OUT OF LINE.", im["realign"]),
         ("F. Continuations (after the Origin)", "H4 engulfing",
-         "After the Origin and while H4 is in line, an H4 candle whose <b>body covers the previous opposite candle's body</b>, in the Daily direction, "
+         "After the Origin and while H4 is in line, an H4 candle that <b>covers the previous opposite candle, wick included</b>, in the Daily direction, "
          "sends an engulfing continuation.",
-         "After a bearish candle: opens at/below its close and closes above its open", "After a bullish candle: opens at/above its close and closes below its open",
+         "After a bearish candle: opens at/below its close and closes above its HIGH", "After a bullish candle: opens at/above its close and closes below its LOW",
          "One alert per candle: if a Breaker, OC or in-line breakout alert fires on the same candle, the engulfing alert is not sent.", im["h4engulf"]),
         ("G. A new breakout", "When the setup changes",
          "Pulling back into the range is not a cancellation — that's where reactions happen. The setup only changes at the "
@@ -397,8 +397,8 @@ def make_rules(im):
          "When US clocks change in November, all these times move one hour later.", im["timing"]),
         ("I. Timing and delivery", "Who receives an alert",
          "An alert reaches a member only if their plan is active, their Telegram is linked, they follow that pair (Settings → My Instruments), "
-         "and they allow that alert type in Alert Filters (Origin, each continuation type, engulfing; for Origins also External / Internal).",
-         "Buy and Sell alerts follow the same rules", "Every type is on until the member switches it off",
+         "and they allow that alert type in Alert Filters (Origin, each continuation type, engulfing; External / Internal for Origins and back-in-line alerts).",
+         "Buy and Sell alerts follow the same rules", "Every type is on until switched off, except Internal H4 breakouts (off until switched on)",
          "Members without Telegram linked still see every alert on the dashboard and in History.", im["delivery"]),
     ]
 

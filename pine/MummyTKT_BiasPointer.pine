@@ -74,7 +74,7 @@
 //             Weekly storyline: Weekly External breakout → Weekly reaction (on
 //             Daily candles) → Daily breakout in the Weekly direction is
 //             Weekly-confirmed (Internal / External); bias alerts carry wk_* fields.
-//             H4 engulfing (body covers the previous opposite body) after the
+//             H4 engulfing (closes beyond the previous opposite candle's wick) after the
 //             Origin, in line, in the Daily direction: cont_type "engulfing".
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1201,7 +1201,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 confirmed_this_bar    := true
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
-                          + '","direction":"bullish","cont_type":"breakout_cont"'
+                          + '","direction":"bullish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
                           + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
@@ -1242,7 +1242,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 confirmed_this_bar    := true
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
-                          + '","direction":"bearish","cont_type":"breakout_cont"'
+                          + '","direction":"bearish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
                           + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
@@ -1345,17 +1345,18 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
               + ',"h4_level":' + str.tostring(oc_hit) + '}',
               alert.freq_once_per_bar)
     // d) Engulfing in the Daily direction (after the Origin, while in line): the
-    //    candle's BODY covers the previous opposite candle's body (buy: previous
-    //    bearish; this one opens at/below its close and closes above its open).
+    //    candle covers the previous opposite candle including its wick (buy:
+    //    previous bearish; this one opens at/below its close and closes above
+    //    its HIGH; sell: mirror, closes below its LOW).
     //    One alert per candle: not when another continuation fired on it.
     if h4_bo_fired and h4_aligned and not confirmed_this_bar and not bk_sent and na(oc_hit)
-        bool eng = ocb ? (close[1] < open[1] and close > open and open <= close[1] and close > open[1])
-                       : (close[1] > open[1] and close < open and open >= close[1] and close < open[1])
+        bool eng = ocb ? (close[1] < open[1] and close > open and open <= close[1] and close > high[1])
+                       : (close[1] > open[1] and close < open and open >= close[1] and close < low[1])
         if eng and barstate.isrealtime
             alert(f_hdrw("H4_CONTINUATION")
                   + '","direction":"' + bo_dir + '","cont_type":"engulfing"'
                   + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
-                  + ',"h4_level":' + str.tostring(open[1]) + '}',
+                  + ',"h4_level":' + str.tostring(ocb ? high[1] : low[1]) + '}',
                   alert.freq_once_per_bar)
     // c) Record a new OC: two H4 candles in a row in the daily direction; the
     //    level is where the first one closed.

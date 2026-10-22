@@ -132,12 +132,14 @@ me_b = c.get("/api/auth/me", headers=H(tb)).json()
 check("/me returns only your own account", me_b["id"] == bid and "password_hash" not in me_b)
 
 # ── Per-user Telegram delivery preferences ────────────────────────────────
+_pb = c.get("/api/preferences", headers=H(tb)).json()
+check("by default External is on and Internal is off", _pb["alertExternal"] is True and _pb["alertInternal"] is False)
 check("A can save own delivery prefs",
-      c.patch("/api/preferences", headers=H(ta), json={"alertInternal": False}).status_code == 200)
+      c.patch("/api/preferences", headers=H(ta), json={"alertInternal": True}).status_code == 200)
 pa_ = c.get("/api/preferences", headers=H(ta)).json()
-check("A's prefs read back (internal off, external on)", pa_["alertInternal"] is False and pa_["alertExternal"] is True)
-check("A's choice does not change B's", c.get("/api/preferences", headers=H(tb)).json()["alertInternal"] is True)
-check("A's choice does not change owner's", c.get("/api/preferences", headers=H(owner)).json()["alertInternal"] is True)
+check("A's prefs read back (internal on, external on)", pa_["alertInternal"] is True and pa_["alertExternal"] is True)
+check("A's choice does not change B's", c.get("/api/preferences", headers=H(tb)).json()["alertInternal"] is False)
+check("A's choice does not change owner's", c.get("/api/preferences", headers=H(owner)).json()["alertInternal"] is False)
 
 import asyncio
 import api.tv_webhook as tvw
@@ -156,9 +158,9 @@ conn.row_factory = sqlite3.Row
 cfg = NS(telegram_bot_token="t", telegram_chat_id="chatOwner")
 
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="internal"))
-check(f"internal Origin skips A (who switched it off) {sorted(sent)}", "chatA" not in sent and {"chatB", "chatOwner"} <= set(sent))
+check(f"internal Origin reaches only A (who switched Internal on) {sorted(sent)}", "chatA" in sent and "chatB" not in sent and "chatOwner" not in sent)
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="external"))
-check(f"external Origin reaches A {sorted(sent)}", "chatA" in sent)
+check(f"external Origin reaches everyone {sorted(sent)}", {"chatA", "chatB", "chatOwner"} <= set(sent))
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x"))
 check(f"continuations always reach A {sorted(sent)}", "chatA" in sent)
 # Everyone watches only GBPUSD -> an EURUSD alert must reach nobody (no owner fallback)
@@ -481,6 +483,10 @@ check("inside-range Origin names the Daily OC and its level", "Daily OC inside t
 tv(type="H4_CONTINUATION", instrument="EURNZD", direction="bearish", cont_type="breakout_cont", source="daily_breaker",
    source_level=1.85, level_type="external", breakout_level=1.85, h4_level=1.845, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='EURNZD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+tv(type="H4_CONTINUATION", instrument="EURNZD", direction="bearish", cont_type="breakout_cont", source="daily_breaker",
+   source_level=1.85, level_type="external", breakout_level=1.85, h4_level=1.8455, h4_class="external", timeframe="240")
+_tr = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='EURNZD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("a back-in-line alert names its H4 External breakout", "H4 External breakout @ 1.84550" in _tr)
 check("realignment alert names the daily reaction", "H4 back in line with the Daily" in t and "Daily reaction source: Daily Breaker @ 1.85000" in t)
 tv(type="H4_CONTINUATION", instrument="EURNZD", direction="bearish", cont_type="breakout_cont", source="inside_range", source_kind="a_shape",
    source_level=1.8644, level_type="external", breakout_level=1.85, h4_level=1.844, timeframe="240")
@@ -742,7 +748,7 @@ tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="
    breakout_level=0.9100, h4_level=0.9135, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("engulfing alert reads right and has no Weekly line without a Weekly setup",
-      "H4 Engulfing in the Daily direction" in t and "closed above its open @ 0.91350" in t and "Weekly:" not in t)
+      "H4 Engulfing in the Daily direction" in t and "closed above its high @ 0.91350" in t and "Weekly:" not in t)
 c.patch("/api/preferences", headers=H(ts_), json={"contOc": False, "contEngulfing": False})
 _pp = c.get("/api/preferences", headers=H(ts_)).json()
 check("alert-type switches save", _pp["contOc"] is False and _pp["contEngulfing"] is False and _pp["alertOrigin"] is True)
@@ -754,6 +760,17 @@ c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": False})
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="external", pref="origin"))
 check("switching Origin off stops Origins", "chatS" not in sent)
 c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": True, "contOc": True, "contEngulfing": True})
+_switches = [("alertOrigin", "origin", "external"), ("contInline", "cont_inline", None), ("contBreaker", "cont_breaker", None),
+             ("contOc", "cont_oc", None), ("contRealign", "cont_realign", "external"), ("contEngulfing", "engulfing", None)]
+for field, pref_key, cls in _switches:
+    c.patch("/api/preferences", headers=H(ts_), json={field: False})
+    sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class=cls, pref=pref_key))
+    off_ok = "chatS" not in sent
+    c.patch("/api/preferences", headers=H(ts_), json={field: True})
+    sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class=cls, pref=pref_key))
+    check(f"switching {field} off really stops it; on brings it back", off_ok and "chatS" in sent)
+sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="internal", pref="cont_realign"))
+check("an Internal 'back in line' alert skips people with Internal off", "chatS" not in sent)
 check("subscribers get the Short style by default; the owner Full",
       c.get("/api/preferences", headers=H(ts_)).json()["alertStyle"] == "short"
       and c.get("/api/preferences", headers=H(owner)).json()["alertStyle"] == "full")

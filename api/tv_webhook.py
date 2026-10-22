@@ -194,7 +194,7 @@ class TVWebhookPayload(BaseModel):
     direction: Optional[str] = None     # "bullish" | "bearish"
     level: Optional[float] = None       # daily broken level (BREAKOUT)
     source: Optional[str] = None        # "daily_breaker" | "inside_range" | "post_breakout_oc"
-    h4_class: Optional[str] = None      # "external" | "internal" (CONFIRMED)
+    h4_class: Optional[str] = None      # "external" | "internal" (CONFIRMED, and back-in-line continuations)
     breakout_level: Optional[float] = None   # daily broken level
     source_level: Optional[float] = None     # the Daily level that reacted (Breaker, inside-range V/A or OC, post-breakout OC)
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
@@ -695,6 +695,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         h4_breaker_level=h4_level if classification != AlertClassification.H4_OC_CONT else None,
         daily_level_context=payload.level_type or "external",
         weekly=_weekly_ctx(payload),
+        h4_class=payload.h4_class if cont_type == "breakout_cont" else None,
     )
 
     alert_text = format_alert(alert_record)
@@ -722,8 +723,11 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     logger.info("%s H4_CONTINUATION %s (cont_type=%s) — alert stored", instrument, direction.value, cont_type)
 
     if config.telegram_enabled:
+        # "Back in line" is an H4 breakout after a Daily reaction, like the Origin:
+        # it follows each person's External / Internal choice too.
+        realign_kind = confirmation_kind(payload.h4_class) if cont_type == "breakout_cont" and payload.h4_class else None
         _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id,
-                                      pref=_CONT_PREF.get(cont_type)))
+                                      h4_class=realign_kind, pref=_CONT_PREF.get(cont_type)))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

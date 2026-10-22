@@ -22,6 +22,11 @@ _KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal",
          "cont_realign": "pref_alert_cont_realign", "engulfing": "pref_alert_engulfing"}
 
 
+# Everything is on until switched off, except Internal H4 breakouts: External
+# only by default; each person can switch Internal on.
+_DEFAULTS = {"internal": False}
+
+
 def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, bool]:
     prefs: dict[str, bool] = {}
     for kind, base in _KEYS.items():
@@ -30,7 +35,7 @@ def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, 
             row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"{base}:{uid}",)).fetchone()
         if row is None and (uid is None or role == "OWNER"):
             row = conn.execute("SELECT value FROM user_config WHERE key = ?", (base,)).fetchone()
-        prefs[kind] = (row[0] == "1") if row else True
+        prefs[kind] = (row[0] == "1") if row else _DEFAULTS.get(kind, True)
     return prefs
 
 
