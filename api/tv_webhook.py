@@ -38,7 +38,7 @@ from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
 from alerts.chart_image import save_alert_levels
 from alerts.telegram import chart_button
 from alerts.formatter import _SOURCE_NAMES
-from api.alert_prefs import confirmation_kind, get_alert_prefs, get_alert_style
+from api.alert_prefs import confirmation_kind, get_alert_prefs, get_alert_style, get_engulf_mode, engulf_wanted
 from alerts.telegram import send_alert
 from config import pip_size_for
 from data.models import (
@@ -106,7 +106,7 @@ def _resolve_chat(config, user_id, chat_id, role, plan, plan_expires_at):
 
 async def _deliver_alert(conn, config, instrument: str, alert_text: str,
                          h4_class: Optional[str] = None, alert_id: Optional[int] = None,
-                         pref: Optional[str] = None) -> None:
+                         pref: Optional[str] = None, engulf_wick: Optional[bool] = None) -> None:
     """Send alert_text to every active user whose watched_instruments includes instrument.
 
     h4_class is set only for Origin confirmations: each user then receives it only
@@ -137,6 +137,8 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
             continue  # user switched this confirmation type off
         if pref and not prefs.get(pref, True):
             continue  # user switched this alert type off (Origin / a continuation type / engulfing)
+        if engulf_wick is not None and not engulf_wanted(get_engulf_mode(conn, rec["id"]), engulf_wick):
+            continue  # this kind of engulfing (wick / body only) isn't the one they chose
         chats.append(rec["telegram_chat_id"])
         if get_alert_style(conn, rec["id"]) == "short":
             short_chats.add(rec["telegram_chat_id"])
@@ -214,6 +216,7 @@ class TVWebhookPayload(BaseModel):
     wk_src: Optional[str] = None
     wk_src_level: Optional[float] = None
     wk_cls: Optional[str] = None       # external | internal (Weekly-confirmed Daily breakout)
+    eng_wick: Optional[bool] = None    # H4 engulfing that also closed beyond the previous candle's wick
     bar: Optional[list] = None         # PRICE_UPDATE: the H4 candle that just closed [t_ms, o, h, l, c]
     dbar: Optional[list] = None        # PRICE_UPDATE: the last completed Daily candle
     tf: Optional[str] = None           # HISTORY: "D" or "240"
@@ -696,6 +699,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         daily_level_context=payload.level_type or "external",
         weekly=_weekly_ctx(payload),
         h4_class=payload.h4_class if cont_type == "breakout_cont" else None,
+        eng_wick=(payload.eng_wick is not False) if cont_type == "engulfing" else None,
     )
 
     alert_text = format_alert(alert_record)
@@ -727,7 +731,8 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         # it follows each person's External / Internal choice too.
         realign_kind = confirmation_kind(payload.h4_class) if cont_type == "breakout_cont" and payload.h4_class else None
         _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id,
-                                      h4_class=realign_kind, pref=_CONT_PREF.get(cont_type)))
+                                      h4_class=realign_kind, pref=_CONT_PREF.get(cont_type),
+                                      engulf_wick=alert_record.eng_wick))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

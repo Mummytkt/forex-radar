@@ -365,9 +365,11 @@ def make_rules(im):
          "Out of line on a close above the latest H4 A-shape; back in after a Daily reaction plus a close below the latest H4 V-shape",
          "Going out of line sends no alert. While out of line no H4 OC or H4 Breaker alerts fire, and the dashboard shows the pair as OUT OF LINE.", im["realign"]),
         ("F. Continuations (after the Origin)", "H4 engulfing",
-         "After the Origin and while H4 is in line, an H4 candle that <b>covers the previous opposite candle, wick included</b>, in the Daily direction, "
-         "sends an engulfing continuation.",
-         "After a bearish candle: opens at/below its close and closes above its HIGH", "After a bullish candle: opens at/above its close and closes below its LOW",
+         "After the Origin and while H4 is in line, an H4 candle that <b>covers the previous opposite candle's body</b>, in the Daily direction, "
+         "sends an engulfing continuation, marked <b>covers the wick</b> when it also closes beyond that candle's high (low for sells). Each member "
+         "chooses which reach them: covers the wick (default), covers the body only, or both.",
+         "After a bearish candle: opens at/below its close, closes above its open (body) or above its HIGH (wick)",
+         "After a bullish candle: opens at/above its close, closes below its open (body) or below its LOW (wick)",
          "One alert per candle: if a Breaker, OC or in-line breakout alert fires on the same candle, the engulfing alert is not sent.", im["h4engulf"]),
         ("G. A new breakout", "When the setup changes",
          "Pulling back into the range is not a cancellation — that's where reactions happen. The setup only changes at the "

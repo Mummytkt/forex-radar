@@ -147,4 +147,5 @@ class AlertRecord:
     h4_breaker_level: Optional[float] = None    # set for CONTINUATION_H4_BREAKER
     daily_level_context: str = "internal"       # "external" or "internal" Daily level
     h4_class: Optional[str] = None              # external | internal, for back-in-line continuations
+    eng_wick: Optional[bool] = None             # H4 engulfing: also closed beyond the previous candle's wick
     weekly: Optional[dict] = None               # Weekly storyline (wk_rel, wk_dir, wk_level, wk_src, wk_src_level, wk_cls)

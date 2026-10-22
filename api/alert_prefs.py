@@ -39,6 +39,31 @@ def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, 
     return prefs
 
 
+ENGULF_MODES = ("wick", "body", "both")
+
+
+def get_engulf_mode(conn, uid: Optional[int]) -> str:
+    """Which H4 engulfings reach this person: 'wick' (closes beyond the previous
+    candle's wick; default), 'body' (covers the body but not the wick) or 'both'."""
+    if uid is None:
+        return "wick"
+    row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"pref_engulf_mode:{uid}",)).fetchone()
+    return row[0] if row and row[0] in ENGULF_MODES else "wick"
+
+
+def set_engulf_mode(conn, uid: Optional[int], mode: str) -> None:
+    if uid is None or mode not in ENGULF_MODES:
+        return
+    conn.execute(
+        "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+        (f"pref_engulf_mode:{uid}", mode),
+    )
+
+
+def engulf_wanted(mode: str, covers_wick: bool) -> bool:
+    return mode == "both" or (mode == "wick") == covers_wick
+
+
 def get_alert_style(conn, uid: Optional[int]) -> str:
     """'full' or 'short': how bias alerts are written to this person. Subscribers
     get Short unless they chose Full; the owner gets Full unless they chose Short."""

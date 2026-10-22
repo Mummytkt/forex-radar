@@ -604,19 +604,24 @@ def _format_h4_engulfing(alert: AlertRecord) -> str:
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
     level_str = _fmt_level(instrument, level) if level is not None else "—"
+    wick = alert.eng_wick is not False
     if direction == Direction.BULLISH:
         desc = (f"A bullish H4 candle engulfed the previous bearish candle, wick included: it opened at or below "
-                f"that candle's close and closed above its high @ {level_str}.")
+                f"that candle's close and closed above its high @ {level_str}." if wick else
+                f"A bullish H4 candle engulfed the previous bearish candle's body: it opened at or below that "
+                f"candle's close and closed above its open @ {level_str} (inside its wick).")
     else:
         desc = (f"A bearish H4 candle engulfed the previous bullish candle, wick included: it opened at or above "
-                f"that candle's close and closed below its low @ {level_str}.")
+                f"that candle's close and closed below its low @ {level_str}." if wick else
+                f"A bearish H4 candle engulfed the previous bullish candle's body: it opened at or above that "
+                f"candle's close and closed below its open @ {level_str} (inside its wick).")
     lines = [
         bias_label,
         f"H4 Engulfing in the Daily direction",
         "",
         f"Daily breakout: {direction_label} (active)",
         "",
-        f"H4 {direction_lower} engulfing @ {level_str}",
+        f"H4 {direction_lower} engulfing ({'covers the wick' if wick else 'covers the body'}) @ {level_str}",
         desc,
         "",
         f"Reason: A {direction_lower} H4 engulfing candle formed while H4 is in line with the active Daily "

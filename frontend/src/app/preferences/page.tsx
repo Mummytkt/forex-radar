@@ -35,7 +35,7 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'Price comes back to the H4 Breaker, touches it exactly and closes beyond it.' },
   { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
   { key: 'contRealign', label: 'H4 back in line', desc: 'After H4 went against the Daily, a fresh Daily reaction and an H4 break bring it back in line.' },
-  { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, wick included, in the Daily direction.' },
+  { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, in the Daily direction. Choose which kind below.' },
   { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
 ]
 
@@ -78,6 +78,23 @@ export default function PreferencesPage() {
   }
 
   const bothOff = prefs && prefs.alertOrigin && !prefs.alertExternal && !prefs.alertInternal
+
+  // Which H4 engulfings: covers the wick (default), covers the body only, or both
+  const [engulf, setEngulf] = useState<'wick' | 'body' | 'both'>('wick')
+  useEffect(() => {
+    fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && ['wick', 'body', 'both'].includes(d.engulfMode)) setEngulf(d.engulfMode) })
+      .catch(() => {})
+  }, [])
+  const chooseEngulf = async (v: 'wick' | 'body' | 'both') => {
+    const previous = engulf
+    setEngulf(v)
+    try {
+      const r = await fetch(`${API_BASE}/api/preferences`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ engulfMode: v }) })
+      if (!r.ok) throw new Error()
+    } catch { setEngulf(previous) }
+  }
 
   // Message style: the full explanation, or Short (headlines only)
   const [style, setStyle] = useState<'full' | 'short'>('short')
@@ -185,6 +202,19 @@ export default function PreferencesPage() {
                   </div>
                   <Toggle checked={prefs[key]} disabled={status[key] === 'saving'} onChange={v => change(key, v)} />
                 </div>
+                {key === 'contEngulfing' && prefs.contEngulfing && (
+                  <div style={{ padding: '0 20px 14px', display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
+                    {([['wick', 'Covers the wick'], ['body', 'Covers the body only'], ['both', 'Both']] as const).map(([v, name]) => (
+                      <button key={v} onClick={() => chooseEngulf(v)}
+                        style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          border: `1px solid ${engulf === v ? 'var(--accent)' : 'var(--border)'}`,
+                          background: engulf === v ? 'var(--accent-bg)' : 'transparent',
+                          color: engulf === v ? 'var(--accent-hover)' : 'var(--text-secondary)' }}>
+                        {engulf === v ? '✓ ' : ''}{name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 </div>
               ))}
 

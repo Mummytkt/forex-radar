@@ -769,6 +769,21 @@ for field, pref_key, cls in _switches:
     c.patch("/api/preferences", headers=H(ts_), json={field: True})
     sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class=cls, pref=pref_key))
     check(f"switching {field} off really stops it; on brings it back", off_ok and "chatS" in sent)
+check("engulfing choice defaults to 'covers the wick'", c.get("/api/preferences", headers=H(ts_)).json()["engulfMode"] == "wick")
+def _eng(wick):
+    sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", pref="engulfing", engulf_wick=wick)); return "chatS" in sent
+check("default: wick engulfings arrive, body-only ones don't", _eng(True) and not _eng(False))
+c.patch("/api/preferences", headers=H(ts_), json={"engulfMode": "body"})
+check("'covers the body only': body-only arrive, wick ones don't", _eng(False) and not _eng(True))
+c.patch("/api/preferences", headers=H(ts_), json={"engulfMode": "both"})
+check("'both': every engulfing arrives", _eng(False) and _eng(True))
+c.patch("/api/preferences", headers=H(ts_), json={"engulfMode": "nonsense"})
+check("an invalid engulfing choice is ignored", c.get("/api/preferences", headers=H(ts_)).json()["engulfMode"] == "both")
+c.patch("/api/preferences", headers=H(ts_), json={"engulfMode": "wick"})
+tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="engulfing", eng_wick=False, level_type="external",
+   breakout_level=0.9100, h4_level=0.9125, timeframe="240")
+_te = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("a body-only engulfing message says so", "engulfing (covers the body) @ 0.91250" in _te and "closed above its open @ 0.91250 (inside its wick)" in _te)
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="internal", pref="cont_realign"))
 check("an Internal 'back in line' alert skips people with Internal off", "chatS" not in sent)
 check("subscribers get the Short style by default; the owner Full",

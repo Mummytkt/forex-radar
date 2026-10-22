@@ -51,6 +51,7 @@ class AlertPreferences(BaseModel):
     contRealign: bool = True
     contEngulfing: bool = True
     alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
+    engulfMode: str = "wick"            # "wick" | "body" | "both"
 
 
 class AlertPreferencesUpdate(BaseModel):
@@ -64,6 +65,7 @@ class AlertPreferencesUpdate(BaseModel):
     contRealign: bool | None = None
     contEngulfing: bool | None = None
     alertStyle: str | None = None
+    engulfMode: str | None = None
 
 
 class VideoEntry(BaseModel):
