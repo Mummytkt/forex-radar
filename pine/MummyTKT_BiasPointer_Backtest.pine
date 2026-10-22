@@ -1,0 +1,1639 @@
+//@version=6
+// ─────────────────────────────────────────────────────────────────────────────
+// MummyTKT's Bias Pointer v6 — BACKTEST EDITION (on-chart labels)
+//
+// Same logic as the live alert script, line for line. Instead of relying on the
+// Telegram alert, it puts an "H4 aligned - Alert" label on the H4 candle where
+// you would have received an EXTERNAL H4 confirmation:
+//   • Origin  — first External H4 breakout after a Daily reaction (CONFIRMED)
+//   • Back in line — External H4 breakout bringing H4 back in line after a
+//     fresh Daily reaction (H4_CONTINUATION breakout_cont)
+// Internal confirmations and the other continuation types are not labelled.
+// The label sits on the candle that CLOSED to confirm: entry = next candle's open.
+// Daily data is read from completed candles only, so history doesn't repaint.
+// No alert needs to be created on this copy.
+//
+//
+// Apply to a 4H chart for each instrument.
+// Create ONE alert per instrument: condition = "Any alert() function call"
+//                                   webhook  = https://forex-radar.fly.dev/api/tv-webhook
+//
+// Event types:
+//   BREAKOUT         — Daily candle closed beyond the most recent external
+//                      high/low (level_type "external")
+//   RETEST           — H4 entered a reaction source zone
+//   RETEST_CANCELLED — H4 moved away from zone without H4 confirmation
+//   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
+//   INVALIDATED      — no longer sent: a break the other way is a new BREAKOUT
+//   H4_CONTINUATION  — H4 continuation event after Origin has fired
+//                      cont_type: breakout_cont | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing
+//   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
+//
+// v5 change: added PRICE_UPDATE event — fires at every realtime H4 close.
+// 2026-10-16: every completed post-breakout daily OC is watched (not just the
+//             latest) until an opposing breakout; a daily-zone reaction stays
+//             valid on later candles — any later H4 close beyond the H4 A/V
+//             confirms it — and only fails on an H4 close back through the zone.
+//            Backend uses it to check subscriber price-level alerts.
+// 2026-10-16 (b): daily candles read with lookahead_on (history no longer a day
+//             late after a paste); pip sizes match the server's table; every
+//             webhook carries "timeframe"; PRICE_UPDATE carries a chart snapshot
+//             (stage + all levels); "moved away first" can't be inherited from
+//             the previous breakout; External/Internal is judged against the
+//             CURRENT reaction's start (also after a failed reaction restarts).
+// 2026-10-18: daily bias comes from market structure — external, internal and
+//             inner internal highs/lows (wick levels, body-close breaks, no
+//             tolerance). The most recent break on any layer is the breakout;
+//             its level is the breaker and the rest of that range is the
+//             inside-range zone. D.A/D.V are wick levels and only the one in line
+//             with the bias is shown (D.V for buys, D.A for sells).
+// 2026-10-19: retest and H4-aligned chart markers removed. Layers replaced by
+//             ONE most-recent external high/low: structures form inside the
+//             current range at any depth (same rules) and only the newest pair
+//             is drawn; its latest break is the daily breakout.
+//             H4 Breaker / H4 OC continuations only count a candle that OPENS on
+//             the bias side of the level (a climb through it from below — or a
+//             drop through it from above for sells — is not a rejection).
+//             Reactions must touch the level exactly (no ±tolerance on the
+//             touch). H4 is out of line on a close beyond the LATEST H4 V (buy)
+//             / A (sell); that drops every H4 OC until H4 breaks back in line,
+//             and an H4 OC closed through against the bias is dropped.
+//             Inside-range reactions must come from a Daily V-shape (A-shape for
+//             sells) or Daily OC level inside the broken range: exact touch, hold;
+//             the reaction fails on a close through that level.
+//             H4 out of line → H4 only realigns after a FRESH daily reaction
+//             (same three zones), then an H4 break; the alert names that level.
+//             External/Internal is judged from the first reaction at the daily
+//             level that confirms (a failed reaction restarting there keeps it).
+//             H4 OCs: every OC of the latest H4 breakout leg (and after it) is
+//             watched; each alerts once on a rejection then is removed; checked
+//             before a new candle can form the next OC; all dropped when H4
+//             breaks the other way or on a new daily breakout.
+//             Daily levels (structure, D.A/D.V, inside-range V/A) come from
+//             candle BODIES by default; setting "Daily levels from" = Wick
+//             restores the wick levels.
+//             Daily reaction levels (V/A-shapes, Daily OCs, post-breakout OCs)
+//             die once a Daily candle closes through them; dead levels never
+//             count as a reaction again.
+//             While H4 is in line, every new H4 close beyond the latest H4 A
+//             (buy) / V (sell) alerts ("H4 breakout in line with the Daily"); its
+//             level becomes the H4 Breaker and its leg's OCs are kept.
+//             Webhooks carry the exchange (syminfo.prefix); on Deriv synthetic
+//             indices and crypto one pip is 0.002% of price (5-pip allowance = 0.01%).
+//             PRICE_UPDATE carries the closed H4 candle and the last Daily candle;
+//             each new alert first sends 40 Daily then 40 H4 candles (HISTORY)
+//             for the server's chart pictures.
+//             Weekly storyline: Weekly External breakout → Weekly reaction (on
+//             Daily candles) → Daily breakout in the Weekly direction is
+//             Weekly-confirmed (Internal / External); bias alerts carry wk_* fields.
+//             H4 engulfing (body covers the previous opposite body; eng_wick when it
+//             also closes beyond that candle's wick) after the
+//             Origin, in line, in the Daily direction: cont_type "engulfing".
+// ─────────────────────────────────────────────────────────────────────────────
+
+indicator("MummyTKT Bias Pointer — Backtest", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=500)
+
+// ── Backtest labels ───────────────────────────────────────────────────────────
+bool  bt_origin  = input.bool(true, "Label External Origin (BUY / SELL CONFIRMED)", group="Backtest")
+bool  bt_realign = input.bool(true, "Label External H4 back in line", group="Backtest")
+bool  bt_table   = input.bool(true, "Show count table", group="Backtest")
+color bt_buy_col  = input.color(#00C853, "Buy label", group="Backtest", inline="btc")
+color bt_sell_col = input.color(#FF1744, "Sell label", group="Backtest", inline="btc")
+var int bt_buys  = 0
+var int bt_sells = 0
+var int bt_t0    = time
+
+f_bt_label(bool bull, bool origin, string cls, float h4lvl, float dlvl, string src) =>
+    bool show = cls == "external" and (origin ? bt_origin : bt_realign)
+    if show
+        label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + (bull ? "BUY" : "SELL") + (origin ? " · Origin" : " · Back in line"),
+             style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
+             textcolor=color.white, size=size.small,
+             tooltip="External H4 breakout @ " + str.tostring(h4lvl, format.mintick)
+             + "\nDaily reaction: " + (na(src) ? "-" : src) + " @ " + str.tostring(dlvl, format.mintick)
+             + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
+             + "\nEntry = next candle's open")
+    show
+
+// ── Inputs ────────────────────────────────────────────────────────────────────
+string wh_secret       = input.string("", "Webhook Secret",
+     tooltip="Paste your TV_WEBHOOK_SECRET value here")
+int    tol_pips        = input.int(5, "Tolerance Pips", minval=1, maxval=20,
+     tooltip="Half-width of the reaction zone band in pips")
+bool   show_daily_lbls = input.bool(true,  "Show Daily labels (D.A / D.V / D.OC)",
+     tooltip="Toggle right-edge labels for Daily A-shape, V-shape and OC levels",
+     group="Labels")
+bool   show_h4_lbls    = input.bool(true,  "Show H4 labels (H4.A / H4.V / H4.OC / H4.BK)",
+     tooltip="Toggle right-edge labels for H4 formation and breaker levels",
+     group="Labels")
+bool   show_lvl_lines  = input.bool(false, "Show level lines (extend right)",
+     tooltip="Draw a horizontal line from each level's origin extending to the right",
+     group="Labels")
+color  daily_line_col  = input.color(color.new(color.gray, 20), "Daily line color",
+     tooltip="Color for D.A / D.V / D.OC lines",
+     group="Labels")
+color  h4_line_col     = input.color(color.new(color.gray, 40), "H4 line color",
+     tooltip="Color for H4.A / H4.V / H4.OC / H4.BK lines",
+     group="Labels")
+string daily_lbl_max_tf = input.string("Daily", "Daily labels & lines visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="Daily level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Weekly to also see them on the weekly chart.",
+     group="Labels")
+string h4_lbl_max_tf    = input.string("4H",    "H4 labels & lines visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="H4 level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Daily to also see them on the daily chart.",
+     group="Labels")
+bool   show_wk_lbls     = input.bool(true, "Show Weekly labels (W.BK / W.A / W.V / W.OC)",
+     tooltip="Right-edge labels for the Weekly Breaker, Weekly A/V-shape and post-breakout Weekly OC",
+     group="Labels")
+bool   show_wk_ext      = input.bool(true, "Show Weekly External high / low lines", group="Labels")
+color  wk_col           = input.color(#FFB74D, "Weekly lines & labels color", group="Labels")
+string wk_style         = input.string("Dashed", "Weekly External line style", options=["Solid", "Dashed", "Dotted"], group="Labels")
+int    wk_width         = input.int(2, "Weekly External line width", minval=1, maxval=4, group="Labels")
+string wk_lbl_max_tf    = input.string("Daily", "Weekly labels & lines visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="Weekly level labels and lines appear on this timeframe and all lower timeframes.",
+     group="Labels")
+color  bull_lbl_col     = input.color(color.new(color.green, 60), "Bullish state label color",
+     tooltip="Background color of the state label when direction is bullish (BREAKOUT / awaiting retest)",
+     group="Labels")
+color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state label color",
+     tooltip="Background color of the state label when direction is bearish (BREAKOUT / awaiting retest)",
+     group="Labels")
+// Label colours — each picker has an opacity slider
+const string GLC = "Label colors (use the opacity slider to fade them)"
+color  retest_lbl_col   = input.color(color.orange, "State label: Retest", group = GLC)
+color  conf_lbl_col     = input.color(color.teal,   "State label: Confirmed · H4 aligned", group = GLC)
+color  realign_lbl_col  = input.color(color.blue,   "State label: OUT OF LINE (H4 against daily)", group = GLC)
+color  idle_lbl_col     = input.color(color.new(color.gray, 20), "State label: no breakout", group = GLC)
+color  da_lbl_col       = input.color(color.new(color.red,    55), "D.A", group = GLC, inline = "dl")
+color  dv_lbl_col       = input.color(color.new(color.lime,   45), "D.V", group = GLC, inline = "dl")
+color  doc_lbl_col      = input.color(color.new(color.purple, 45), "D.OC", group = GLC, inline = "dl")
+color  h4a_lbl_col      = input.color(color.new(color.red,    72), "H4.A", group = GLC, inline = "hl")
+color  h4v_lbl_col      = input.color(color.new(color.lime,   65), "H4.V", group = GLC, inline = "hl")
+color  h4bk_lbl_col     = input.color(color.new(color.orange, 25), "H4.BK", group = GLC, inline = "hl")
+color  h4oc_lbl_col     = input.color(color.new(color.teal,   45), "H4.OC", group = GLC, inline = "hl")
+
+// ── Daily structure lines (most recent external high / low) ─────────────────
+const string GS1 = "External levels"
+bool   show_ext = input.bool(true, "Show external high / low", group = GS1)
+color  c_eh  = input.color(#E0E0E0, "External high", group = GS1, inline = "eh")
+string s_eh  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "eh")
+color  c_el  = input.color(#E0E0E0, "External low ", group = GS1, inline = "el")
+string s_el  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "el")
+int    w_ext = input.int(2, "Line width", minval = 1, maxval = 4, group = GS1)
+// Daily levels from candle BODIES (like H4) or WICKS. Applies to the External
+// high/low structure (so the Daily breakout), D.A / D.V and inside-range V/A.
+bool   w_body = input.string("Body", "Weekly levels from", options = ["Body", "Wick"], group = GS1,
+     tooltip = "Body: Weekly highs/lows, A-shapes and V-shapes use candle bodies. Wick: they use the wicks. Set separately from the Daily choice.") == "Body"
+bool   d_body = input.string("Body", "Daily levels from", options = ["Body", "Wick"], group = GS1,
+     tooltip = "Body: Daily highs/lows, A-shapes and V-shapes use candle bodies, like H4. Wick: they use the wicks. A breakout is always a Daily close beyond the level. Each alert keeps the setting it was created with.") == "Body"
+
+f_style(string st) =>
+    st == "Dashed" ? line.style_dashed : st == "Dotted" ? line.style_dotted : line.style_solid
+
+// ── Timeframe visibility helpers ──────────────────────────────────────────────
+f_tf_str(opt) =>
+    switch opt
+        "Monthly" => "M"
+        "Weekly"  => "W"
+        "Daily"   => "D"
+        "4H"      => "240"
+        "1H"      => "60"
+        "30m"     => "30"
+        "15m"     => "15"
+        =>           "5"
+
+bool show_daily_on_tf = timeframe.in_seconds() <= timeframe.in_seconds(f_tf_str(daily_lbl_max_tf))
+bool show_h4_on_tf    = timeframe.in_seconds() <= timeframe.in_seconds(f_tf_str(h4_lbl_max_tf))
+bool show_wk_on_tf    = timeframe.in_seconds() <= timeframe.in_seconds(f_tf_str(wk_lbl_max_tf))
+
+// Pip size per market — must match pip_size_for() in config.py on the server.
+// mintick × 10 is only right for forex; indices/crypto/oil use the server's table.
+f_pip(string t) =>
+    switch t
+        "XAUUSD"  => 0.10
+        "XAGUSD"  => 0.01
+        "BTCUSD"  => 10.0
+        "ETHUSD"  => 1.0
+        "SOLUSD"  => 0.05
+        "BNBUSD"  => 0.10
+        "XRPUSD"  => 0.0002
+        "ADAUSD"  => 0.00005
+        "DOGEUSD" => 0.00002
+        "LTCUSD"  => 0.02
+        "WTIUSD"  => 0.05
+        "US30"    => 10.0
+        "NAS100"  => 5.0
+        "SPX500"  => 2.0
+        "UK100"   => 3.0
+        "GER40"   => 5.0
+        "JPN225"  => 10.0
+        => str.endswith(t, "JPY") ? 0.01 : 0.0001
+
+// Deriv synthetic indices have no pips: one "pip" is 0.002% of price, so the
+// default 5-pip allowance is 0.01% of price.
+bool  is_deriv = syminfo.prefix == "DERIV"
+// Crypto too (any exchange: BTCUSDT on Binance never matched the table above)
+bool  rel_pip  = is_deriv or syminfo.type == "crypto"
+float pip = rel_pip ? close * 0.00002 : f_pip(syminfo.ticker)
+float tol = float(tol_pips) * pip
+
+// Every webhook carries the chart timeframe so the server can ignore alerts that
+// were accidentally created on a non-4H chart.
+f_hdr(string t) =>
+    '{"secret":"' + wh_secret + '","type":"' + t + '","timeframe":"' + timeframe.period + '","exchange":"' + syminfo.prefix + '","instrument":"' + syminfo.ticker
+f_num(float x) =>
+    na(x) ? "null" : str.tostring(x)
+
+// ── Daily market structure: the most recent external high / low ─────────────
+// Runs on DAILY candles through request.security, so it reads the same on the
+// 4H chart as on the Daily chart. Levels are body (default) or wick highs/lows
+// per the "Daily levels from" setting; a break is a daily
+// body CLOSE beyond a level (no tolerance). Every structure follows the same rules:
+//   • first level: close above an A shape (inside a range: only after a later
+//     candle traded below the A's bearish candle) → the lowest point since the A
+//     is the low; mirror for V
+//   • while a side is "still forming" it follows price; it is fixed once price
+//     closes beyond the A/V it pulled back from
+//   • close beyond the fixed high/low → new pair in that direction;
+//     close beyond the opposite level → direction flips
+//   • a new structure can form inside the current range at any depth; a break
+//     drops every structure inside the one that broke
+// Only the MOST RECENT structure is drawn (as the external high/low), and its
+// most recent break — on whichever structure — is the daily breakout.
+
+// High / low of the daily candle i bars back: body top / bottom, or wick.
+f_bh(int i, bool bd) =>
+    bd ? math.max(open[i], close[i]) : high[i]
+f_bl(int i, bool bd) =>
+    bd ? math.min(open[i], close[i]) : low[i]
+
+f_lowest(int from_bar, bool bd) =>
+    float m = f_bl(0, bd)
+    int mb = bar_index
+    int n = math.min(bar_index - from_bar, 1500)
+    for i = 0 to n
+        if f_bl(i, bd) < m
+            m := f_bl(i, bd)
+            mb := bar_index - i
+    [m, mb]
+
+f_highest(int from_bar, bool bd) =>
+    float m = f_bh(0, bd)
+    int mb = bar_index
+    int n = math.min(bar_index - from_bar, 1500)
+    for i = 0 to n
+        if f_bh(i, bd) > m
+            m := f_bh(i, bd)
+            mb := bar_index - i
+    [m, mb]
+
+f_bt(int b) =>
+    time[bar_index - b]
+
+type Layer
+    string dir = "none"
+    float  hi = na
+    int    hi_bar = na
+    int    hi_t = na
+    float  lo = na
+    int    lo_bar = na
+    int    lo_t = na
+    bool   hi_fixed = false
+    bool   lo_fixed = false
+    float  pb_hi = na
+    float  pb_lo = na
+
+method set_hi(Layer s, float v, int b) =>
+    s.hi := v
+    s.hi_bar := b
+    s.hi_t := f_bt(b)
+
+method set_lo(Layer s, float v, int b) =>
+    s.lo := v
+    s.lo_bar := b
+    s.lo_t := f_bt(b)
+
+method reset(Layer s) =>
+    s.dir := "none"
+    s.hi := na
+    s.lo := na
+    s.hi_fixed := false
+    s.lo_fixed := false
+    s.pb_hi := na
+    s.pb_lo := na
+
+// One daily candle of structure logic inside [blo, bhi].
+// Returns [changed, broken level, time that level formed]; changed = a break
+// redefined this layer.
+method step(Layer s, float blo, float bhi, float lA, int lAb, bool lAok, float lV, int lVb, bool lVok, bool bd) =>
+    bool  ev   = false
+    float blvl = na
+    int   bt   = na
+    if s.dir == "none"
+        if not na(lA) and lAok and close > lA
+            [m, mb] = f_lowest(lAb, bd)
+            if m > blo and m < bhi
+                s.dir := "bull"
+                s.set_lo(m, mb)
+                s.set_hi(f_bh(0, bd), bar_index)
+                s.hi_fixed := false
+                s.pb_lo := lV
+                ev := true
+                blvl := lA
+                bt := f_bt(lAb)
+        else if not na(lV) and lVok and close < lV
+            [m, mb] = f_highest(lVb, bd)
+            if m > blo and m < bhi
+                s.dir := "bear"
+                s.set_hi(m, mb)
+                s.set_lo(f_bl(0, bd), bar_index)
+                s.lo_fixed := false
+                s.pb_hi := lA
+                ev := true
+                blvl := lV
+                bt := f_bt(lVb)
+    else if s.dir == "bull"
+        if close < s.lo
+            blvl := s.lo
+            bt := s.lo_t
+            s.dir := "bear"
+            s.set_lo(f_bl(0, bd), bar_index)
+            s.lo_fixed := false
+            s.pb_hi := lA
+            ev := true
+        else if s.hi_fixed and close > s.hi
+            blvl := s.hi
+            bt := s.hi_t
+            [m, mb] = f_lowest(s.hi_bar, bd)
+            s.set_lo(m, mb)
+            s.set_hi(f_bh(0, bd), bar_index)
+            s.hi_fixed := false
+            s.pb_lo := lV
+            ev := true
+        else
+            if not s.hi_fixed and f_bh(0, bd) > s.hi
+                s.set_hi(f_bh(0, bd), bar_index)
+            if not s.hi_fixed and not na(s.pb_lo) and close < s.pb_lo
+                s.hi_fixed := true
+    else if s.dir == "bear"
+        if close > s.hi
+            blvl := s.hi
+            bt := s.hi_t
+            s.dir := "bull"
+            s.set_hi(f_bh(0, bd), bar_index)
+            s.hi_fixed := false
+            s.pb_lo := lV
+            ev := true
+        else if s.lo_fixed and close < s.lo
+            blvl := s.lo
+            bt := s.lo_t
+            [m, mb] = f_highest(s.lo_bar, bd)
+            s.set_hi(m, mb)
+            s.set_lo(f_bl(0, bd), bar_index)
+            s.lo_fixed := false
+            s.pb_hi := lA
+            ev := true
+        else
+            if not s.lo_fixed and f_bl(0, bd) < s.lo
+                s.set_lo(f_bl(0, bd), bar_index)
+            if not s.lo_fixed and not na(s.pb_hi) and close > s.pb_hi
+                s.lo_fixed := true
+    [ev, blvl, bt]
+
+method on_new_A(Layer s, float a) =>
+    if s.dir == "bear" and not s.lo_fixed and na(s.pb_hi)
+        s.pb_hi := a
+
+method on_new_V(Layer s, float v) =>
+    if s.dir == "bull" and not s.hi_fixed and na(s.pb_lo)
+        s.pb_lo := v
+
+f_structure(bool bd) =>
+    // Outer structure
+    var string e_dir = "none"
+    var float  e_hi = na
+    var int    e_hi_bar = na
+    var int    e_hi_t = na
+    var float  e_lo = na
+    var int    e_lo_bar = na
+    var int    e_lo_t = na
+    var bool   e_hif = false
+    var bool   e_lof = false
+    var float  e_pbh = na
+    var float  e_pbl = na
+    // Structures inside it, outermost first; the last one is the most recent
+    var array<Layer> stack = array.new<Layer>()
+    // Latest unbroken A / V shapes (body or wick levels)
+    var float  lastA = na
+    var int    lastA_bar = na
+    var float  lastA_bear_lo = na
+    var bool   lastA_ok = false
+    var float  lastV = na
+    var int    lastV_bar = na
+    var float  lastV_bull_hi = na
+    var bool   lastV_ok = false
+    // D.A / D.V shown on the chart (latest A / V shape)
+    var float  da = na
+    var int    da_t = na
+    var float  dv = na
+    var int    dv_t = na
+    // Most recent break on any structure
+    var int    b_cnt = 0
+    var string b_dir = "none"
+    var float  b_lvl = na
+    var float  b_opp = na
+    var int    b_t = na    // when the broken level formed
+
+    bool  ext_ev = false
+    float e_blvl = na
+    int   e_bt = na
+
+    // 1. Outer structure
+    if e_dir == "none"
+        if not na(lastA) and close > lastA
+            e_blvl := lastA
+            e_bt := f_bt(lastA_bar)
+            [m, mb] = f_lowest(lastA_bar, bd)
+            e_lo := m, e_lo_bar := mb, e_lo_t := f_bt(mb)
+            e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
+            e_dir := "bull", e_hif := false
+            ext_ev := true
+        else if not na(lastV) and close < lastV
+            e_blvl := lastV
+            e_bt := f_bt(lastV_bar)
+            [m, mb] = f_highest(lastV_bar, bd)
+            e_hi := m, e_hi_bar := mb, e_hi_t := f_bt(mb)
+            e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
+            e_dir := "bear", e_lof := false
+            ext_ev := true
+    else if e_dir == "bull"
+        if close < e_lo
+            e_blvl := e_lo
+            e_bt := e_lo_t
+            e_dir := "bear"
+            e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
+            e_lof := false
+            ext_ev := true
+        else if e_hif and close > e_hi
+            e_blvl := e_hi
+            e_bt := e_hi_t
+            [m, mb] = f_lowest(e_hi_bar, bd)
+            e_lo := m, e_lo_bar := mb, e_lo_t := f_bt(mb)
+            e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
+            e_hif := false
+            ext_ev := true
+        else
+            if not e_hif and f_bh(0, bd) > e_hi
+                e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
+            if not e_hif and not na(e_pbl) and close < e_pbl
+                e_hif := true
+    else if e_dir == "bear"
+        if close > e_hi
+            e_blvl := e_hi
+            e_bt := e_hi_t
+            e_dir := "bull"
+            e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
+            e_hif := false
+            ext_ev := true
+        else if e_lof and close < e_lo
+            e_blvl := e_lo
+            e_bt := e_lo_t
+            [m, mb] = f_highest(e_lo_bar, bd)
+            e_hi := m, e_hi_bar := mb, e_hi_t := f_bt(mb)
+            e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
+            e_lof := false
+            ext_ev := true
+        else
+            if not e_lof and f_bl(0, bd) < e_lo
+                e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
+            if not e_lof and not na(e_pbh) and close > e_pbh
+                e_lof := true
+
+    if ext_ev
+        e_pbh := na, e_pbl := na
+        array.clear(stack)
+        b_cnt += 1
+        b_dir := e_dir == "bull" ? "bullish" : "bearish"
+        b_lvl := e_blvl
+        b_t   := e_bt
+        b_opp := e_dir == "bull" ? e_lo : e_hi
+
+    // 2. Structures inside it, from the outside in. A break drops everything
+    //    inside the structure that broke; if nothing broke, look for a new
+    //    structure inside the most recent range.
+    if not na(lastA) and not lastA_ok and f_bl(0, bd) < lastA_bear_lo
+        lastA_ok := true
+    if not na(lastV) and not lastV_ok and f_bh(0, bd) > lastV_bull_hi
+        lastV_ok := true
+
+    if not ext_ev and e_dir != "none"
+        float blo = e_lo
+        float bhi = e_hi
+        bool broke = false
+        int n = array.size(stack)
+        if n > 0
+            for k = 0 to n - 1
+                Layer L = array.get(stack, k)
+                [ev, lvl, lt] = L.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok, bd)
+                if ev
+                    while array.size(stack) > k + 1
+                        array.pop(stack)
+                    broke := true
+                    b_cnt += 1
+                    b_dir := L.dir == "bull" ? "bullish" : "bearish"
+                    b_lvl := lvl
+                    b_t   := lt
+                    b_opp := L.dir == "bull" ? L.lo : L.hi
+                    break
+                blo := L.lo
+                bhi := L.hi
+        if not broke and array.size(stack) < 30
+            Layer nl = Layer.new()
+            [nev, nlvl, nlt] = nl.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok, bd)
+            if nev
+                array.push(stack, nl)
+                b_cnt += 1
+                b_dir := nl.dir == "bull" ? "bullish" : "bearish"
+                b_lvl := nlvl
+                b_t   := nlt
+                b_opp := nl.dir == "bull" ? nl.lo : nl.hi
+
+    // Clear broken shapes / outer pullback triggers
+    if not na(lastA) and close > lastA
+        lastA := na
+    if not na(lastV) and close < lastV
+        lastV := na
+    if not na(e_pbh) and close > e_pbh
+        e_pbh := na
+    if not na(e_pbl) and close < e_pbl
+        e_pbl := na
+
+    // 3. Register new A / V shapes
+    bool isA = close[1] > open[1] and close < open
+    bool isV = close[1] < open[1] and close > open
+    if isA
+        lastA := math.max(f_bh(0, bd), f_bh(1, bd))
+        lastA_bar := f_bh(0, bd) >= f_bh(1, bd) ? bar_index : bar_index - 1
+        lastA_bear_lo := f_bl(0, bd)
+        lastA_ok := false
+        da := lastA, da_t := f_bt(lastA_bar)
+        if e_dir != "none"
+            e_pbh := lastA
+        for L in stack
+            L.on_new_A(lastA)
+    if isV
+        lastV := math.min(f_bl(0, bd), f_bl(1, bd))
+        lastV_bar := f_bl(0, bd) <= f_bl(1, bd) ? bar_index : bar_index - 1
+        lastV_bull_hi := f_bh(0, bd)
+        lastV_ok := false
+        dv := lastV, dv_t := f_bt(lastV_bar)
+        if e_dir != "none"
+            e_pbl := lastV
+        for L in stack
+            L.on_new_V(lastV)
+
+    // 4. The most recent structure (what the chart shows as External high / low)
+    string c_dir = e_dir
+    float  c_hi  = e_hi
+    float  c_lo  = e_lo
+    bool   c_hif = e_hif
+    bool   c_lof = e_lof
+    int    c_hit = e_hi_t
+    int    c_lot = e_lo_t
+    if array.size(stack) > 0
+        Layer cur = array.last(stack)
+        c_dir := cur.dir
+        c_hi  := cur.hi
+        c_lo  := cur.lo
+        c_hif := cur.hi_fixed
+        c_lof := cur.lo_fixed
+        c_hit := cur.hi_t
+        c_lot := cur.lo_t
+    // [1] + lookahead_on = state after the last COMPLETED daily candle (no repaint)
+    [c_dir[1], c_hi[1], c_lo[1], c_hif[1], c_lof[1], c_hit[1], c_lot[1],
+     b_cnt[1], b_dir[1], b_lvl[1], b_opp[1],
+     da[1], da_t[1], dv[1], dv_t[1], b_t[1]]
+
+[s_cdir, s_chi, s_clo, s_chif, s_clof, s_chit, s_clot,
+ s_bcnt, s_bdir, s_blvl, s_bopp,
+ s_da, s_da_t, s_dv, s_dv_t, s_bt] = request.security(syminfo.tickerid, "D", f_structure(d_body), lookahead=barmerge.lookahead_on)
+
+// The same structure engine on WEEKLY candles (Weekly External high / low)
+[w_cdir, w_chi, w_clo, w_chif, w_clof, w_chit, w_clot,
+ w_bcnt, w_bdir, w_blvl, w_bopp,
+ w_da, w_da_t, w_dv, w_dv_t, w_bt] = request.security(syminfo.tickerid, "W", f_structure(w_body), lookahead=barmerge.lookahead_on)
+// Last two completed Weekly candles (levels per the Body/Wick setting)
+[wk_o1, wk_c1, wk_h1, wk_l1, wk_o2, wk_c2, wk_h2, wk_l2] = request.security(syminfo.tickerid, "W",
+     [open[1], close[1], f_bh(1, w_body), f_bl(1, w_body), open[2], close[2], f_bh(2, w_body), f_bl(2, w_body)], lookahead=barmerge.lookahead_on)
+
+// ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
+// lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
+// next day, on history and live (non-repainting).
+// Last completed Daily candle as drawn (wicks), for the server's chart pictures
+[dr_t, dr_o, dr_h, dr_l, dr_c] = request.security(syminfo.tickerid, "D",
+     [time[1], open[1], high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
+const int HIST_N = 40
+var array<int>   dh_t = array.new<int>()
+var array<float> dh_o = array.new<float>()
+var array<float> dh_h = array.new<float>()
+var array<float> dh_l = array.new<float>()
+var array<float> dh_c = array.new<float>()
+if timeframe.change("D") and not na(dr_t)
+    array.push(dh_t, dr_t)
+    array.push(dh_o, dr_o)
+    array.push(dh_h, dr_h)
+    array.push(dh_l, dr_l)
+    array.push(dh_c, dr_c)
+    if array.size(dh_t) > HIST_N
+        array.shift(dh_t)
+        array.shift(dh_o)
+        array.shift(dh_h)
+        array.shift(dh_l)
+        array.shift(dh_c)
+f_bar(int t, float o, float h, float l, float c) =>
+    na(t) or na(c) ? "null" : '[' + str.tostring(t) + ',' + str.tostring(o, format.mintick) + ',' + str.tostring(h, format.mintick) + ',' + str.tostring(l, format.mintick) + ',' + str.tostring(c, format.mintick) + ']'
+
+float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_on)
+float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
+[d_high, d_low, d_open2, d_close2, d_high2, d_low2] = request.security(syminfo.tickerid, "D",
+     [f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body)], lookahead=barmerge.lookahead_on)
+
+f_layer_name(string l) =>
+    l == "external" ? "External" : l == "internal" ? "Internal" : l == "inner_internal" ? "Inner internal" : l == "sub_internal" ? "Sub-internal" : ""
+
+// ── Persistent state ──────────────────────────────────────────────────────────
+var string bo_dir     = na
+// How this Daily setup relates to the Weekly: "confirmed" (the Daily broke in the
+// Weekly direction while a Weekly reaction held), "inline", "against" or "".
+var string bo_wk_rel     = ""
+var string bo_wk_dir     = na
+var float  bo_wk_lvl     = na
+var string bo_wk_src     = na
+var float  bo_wk_src_lvl = na
+var string bo_wk_cls     = na
+var float  bo_level   = na
+var string bo_layer   = na   // which level broke: external | internal | inner_internal | sub_internal
+var float  bo_opp     = na   // other side of the range that was just broken
+var int    last_bcnt  = 0
+var bool   est_above  = false
+var bool   est_below  = false
+var bool   retest_on  = false
+var string retest_src = na
+var string retest_kind = na   // inside-range reactions: "v_shape" | "a_shape" | "oc"
+// Every Daily V-/A-shape (wick level) and Daily OC. An inside-range reaction must
+// come from one of these whose level sits inside the range that was just broken.
+var array<float> d_vs   = array.new<float>()   // V-shapes  (buy reactions)
+var array<float> d_as   = array.new<float>()   // A-shapes  (sell reactions)
+var array<float> d_boc  = array.new<float>()   // bullish OCs (buy reactions)
+var array<float> d_soc  = array.new<float>()   // bearish OCs (sell reactions)
+var float  h4_a_lvl   = na
+var float  h4_v_lvl   = na
+var int    pb_consec  = 0
+var float  pb_close1  = na
+var float  pb_oc_lvl  = na   // most recent post-breakout OC (for the label)
+var array<float> pb_ocs = array.new<float>()   // every completed post-breakout OC
+var float  retest_lvl = na   // level of the zone price is currently reacting from
+var int    retest_bar = na   // bar the current reaction started on
+// External/Internal is judged from the FIRST reaction at the daily level that
+// confirms: a failed reaction that restarts at the same level keeps that start;
+// a reaction at a different daily level starts fresh from that level.
+var float  anchor_lvl = na
+var int    anchor_bar = na
+var bool   just_broke = false
+
+// ── H4 continuation state ─────────────────────────────────────────────────────
+var bool   h4_bo_fired           = false
+var bool   h4_breaker_orig_fired = false
+var float  h4_breaker_lvl        = na
+var float  h4_invalid_lvl        = na
+var bool   h4_aligned            = false
+// H4 OCs for trend continuation: every OC in the daily direction, each with the
+// bar it formed on (its second candle). At each H4 breakout in the daily
+// direction only that breakout's leg (from its swing low/high) is kept; each OC
+// alerts once then is removed; all go when H4 breaks the other way.
+var array<float> h4_ocs = array.new<float>()
+var array<int>   h4_ocb = array.new<int>()
+var float  h4_brk_lvl = na   // H4 A (buy) / V (sell) level last broken in the daily direction
+
+// Continuation dedup: each level fires at most once per "visit". It re-arms
+// when a new level is set (level-change) OR when price leaves the zone, so a
+// second identical alert cannot fire on the next H4 candle while price just
+// sits at the level.
+var bool   bk_armed              = true
+var float  bk_armed_lvl          = na
+
+// ── Level origin bar tracking (for extend-right lines) ───────────────────────
+var int    poc_origin = na
+var int    h4a_origin = na
+var int    h4v_origin = na
+var int    bk_origin  = na
+var int    h4c_origin = na
+
+// ── Daily breakout: the most recent break on any structure layer ─────────────
+bool new_daily = timeframe.change("D")
+if new_daily
+    just_broke := false
+
+// ── Weekly storyline: Weekly breakout → Weekly reaction → Daily breakout ─────
+// The same technique one level up. A Weekly close beyond the Weekly External
+// high/low is a Weekly breakout. Price must move away (a Daily close more than
+// the allowance beyond the Weekly Breaker), then react at a Weekly level, checked
+// on DAILY candles: an exact Daily wick touch that holds (no Daily close through
+// it beyond the allowance) at a post-breakout Weekly OC, the Weekly Breaker, or a
+// Weekly V-shape (A-shape for sells) / Weekly OC inside the broken Weekly range.
+// While it holds, a Daily breakout in the Weekly direction is Weekly-confirmed:
+// External if the Daily level it broke formed before the reaction started,
+// Internal if after. A Daily close through the reacting level ends it; a new
+// Weekly breakout starts again. Without a Weekly setup the Daily logic is as before.
+var string wk_dir      = na
+var float  wk_level    = na
+var float  wk_opp      = na
+var int    last_wcnt   = 0
+var bool   wk_est      = false
+var bool   wk_react    = false
+var string wk_src      = na
+var string wk_kind     = na
+var float  wk_src_lvl  = na
+var float  wk_anchor_lvl = na
+var int    wk_anchor_t = na
+var bool   wk_just_broke = false
+var array<float> w_vs   = array.new<float>()
+var array<float> w_as   = array.new<float>()
+var array<float> w_boc  = array.new<float>()
+var array<float> w_soc  = array.new<float>()
+var array<float> w_pbocs = array.new<float>()
+var int    wpb_consec  = 0
+var float  wpb_close1  = na
+var float  wpb_oc_lvl  = na
+
+bool new_week = timeframe.change("W")
+if new_week
+    wk_just_broke := false
+
+if not na(w_bcnt) and w_bcnt > 0 and w_bcnt != last_wcnt
+    last_wcnt   := w_bcnt
+    wk_dir      := w_bdir
+    wk_level    := w_blvl
+    wk_opp      := w_bopp
+    wk_est      := false
+    wk_react    := false
+    wk_src      := na
+    wk_kind     := na
+    wk_src_lvl  := na
+    wk_anchor_lvl := na
+    wk_anchor_t := na
+    wpb_consec  := 0
+    wpb_close1  := na
+    wpb_oc_lvl  := na
+    array.clear(w_pbocs)
+    wk_just_broke := true
+
+f_wkeep(array<float> a, float v) =>
+    array.push(a, v)
+    if array.size(a) > 120
+        array.shift(a)
+
+f_wkill(array<float> a, float c, bool buy_lvl) =>
+    int k = array.size(a) - 1
+    while k >= 0
+        float L = array.get(a, k)
+        if buy_lvl ? c < L : c > L
+            array.remove(a, k)
+        k -= 1
+
+// Weekly V/A-shapes and OCs (a Weekly close through one kills it), and the
+// post-breakout Weekly OCs
+if new_week and not na(wk_c1)
+    f_wkill(w_vs,  wk_c1, true)
+    f_wkill(w_boc, wk_c1, true)
+    f_wkill(w_as,  wk_c1, false)
+    f_wkill(w_soc, wk_c1, false)
+    if not na(wk_dir)
+        f_wkill(w_pbocs, wk_c1, wk_dir == "bullish")
+        wpb_oc_lvl := array.size(w_pbocs) > 0 ? array.last(w_pbocs) : na
+    if not na(wk_c2)
+        bool wy_bull = wk_c1 > wk_o1
+        bool wy_bear = wk_c1 < wk_o1
+        bool wp_bull = wk_c2 > wk_o2
+        bool wp_bear = wk_c2 < wk_o2
+        if wp_bear and wy_bull
+            f_wkeep(w_vs, math.min(wk_l2, wk_l1))
+        if wp_bull and wy_bear
+            f_wkeep(w_as, math.max(wk_h2, wk_h1))
+        if wp_bull and wy_bull
+            f_wkeep(w_boc, wk_c2)
+        if wp_bear and wy_bear
+            f_wkeep(w_soc, wk_c2)
+    if not na(wk_dir) and not wk_just_broke
+        bool wmatch = wk_dir == "bullish" ? (wk_c1 >= wk_o1 and wk_c1 > wk_level) : (wk_c1 < wk_o1 and wk_c1 < wk_level)
+        if wmatch
+            wpb_consec := wpb_consec + 1
+            if wpb_consec == 1
+                wpb_close1 := wk_c1
+            else
+                wpb_oc_lvl := wpb_close1
+                array.push(w_pbocs, wpb_close1)
+                if array.size(w_pbocs) > 30
+                    array.shift(w_pbocs)
+                wpb_close1 := wk_c1
+        else
+            wpb_consec := 0
+
+// Deepest level in lv that the Daily candle (lo_, hi_, cl_) touches exactly and holds
+f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float lo_, float hi_, float cl_) =>
+    float best = na
+    if array.size(lv) > 0
+        for i = 0 to array.size(lv) - 1
+            float L = array.get(lv, i)
+            bool inside = L > lo_lim and L < hi_lim
+            bool touched = lo_ <= L and hi_ >= L
+            bool held = bull ? cl_ >= L - t : cl_ <= L + t
+            if inside and touched and held and (na(best) or (bull ? L < best : L > best))
+                best := L
+    best
+
+// Weekly reaction, checked on each completed Daily candle
+if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not na(dr_h)
+    bool wb = wk_dir == "bullish"
+    bool w_was_est = wk_est
+    if wb ? d_close > wk_level + tol : d_close < wk_level - tol
+        wk_est := true
+    if wk_react
+        if wb ? d_close < wk_src_lvl - tol : d_close > wk_src_lvl + tol
+            wk_react   := false
+            wk_src     := na
+            wk_kind    := na
+            wk_src_lvl := na
+    if not wk_react and w_was_est
+        // post-breakout Weekly OCs (beyond the Breaker), then the Breaker, then inside the range
+        float pbw = f_wpick(w_pbocs, wb, wb ? wk_level + tol : -1e18, wb ? 1e18 : wk_level - tol, tol, dr_l, dr_h, d_close)
+        bool  bkw = dr_l <= wk_level and dr_h >= wk_level and (wb ? d_close >= wk_level - tol : d_close <= wk_level + tol)
+        float ir_lo = wb ? wk_opp : wk_level + tol
+        float ir_hi = wb ? wk_level - tol : wk_opp
+        float shw = na(wk_opp) ? na : f_wpick(wb ? w_vs : w_as, wb, ir_lo, ir_hi, tol, dr_l, dr_h, d_close)
+        float ocw = na(wk_opp) ? na : f_wpick(wb ? w_boc : w_soc, wb, ir_lo, ir_hi, tol, dr_l, dr_h, d_close)
+        float hit = na
+        string hsrc = na
+        string hkind = na
+        if not na(pbw)
+            hit := pbw, hsrc := "post_breakout_oc"
+        else if bkw
+            hit := wk_level, hsrc := "breaker"
+        else
+            if not na(shw)
+                hit := shw, hsrc := "inside_range", hkind := wb ? "v_shape" : "a_shape"
+            if not na(ocw) and (na(hit) or (wb ? ocw < hit : ocw > hit))
+                hit := ocw, hsrc := "inside_range", hkind := "oc"
+        if not na(hit)
+            wk_react   := true
+            wk_src     := hsrc
+            wk_kind    := hkind
+            wk_src_lvl := hit
+            if na(wk_anchor_lvl) or math.abs(wk_anchor_lvl - hit) > pip * 0.1
+                wk_anchor_lvl := hit
+                wk_anchor_t   := dr_t
+
+f_wsrc_name(string src, string kind) =>
+    src == "breaker" ? "Weekly Breaker" : src == "post_breakout_oc" ? "post-breakout Weekly OC" : kind == "oc" ? "Weekly OC inside the range" : kind == "a_shape" ? "Weekly A-shape inside the range" : "Weekly V-shape inside the range"
+
+// Weekly context sent with every bias alert (empty when there is no Weekly setup)
+f_wk() =>
+    bo_wk_rel == "" ? "" : ',"wk_rel":"' + bo_wk_rel + '","wk_dir":"' + bo_wk_dir + '","wk_level":' + f_num(bo_wk_lvl)
+         + (bo_wk_rel == "confirmed" ? ',"wk_src":"' + bo_wk_src + '","wk_src_level":' + f_num(bo_wk_src_lvl) + ',"wk_cls":"' + bo_wk_cls + '"' : "")
+f_hdrw(string t) =>
+    '{"secret":"' + wh_secret + '","type":"' + t + '","timeframe":"' + timeframe.period + '","exchange":"' + syminfo.prefix + '"' + f_wk() + ',"instrument":"' + syminfo.ticker
+
+
+if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
+    last_bcnt := s_bcnt
+    bo_dir    := s_bdir
+    bo_level  := s_blvl
+    bo_layer  := "external"
+    bo_opp    := s_bopp
+    est_above := false
+    est_below := false
+    retest_on := false
+    retest_src:= na
+    retest_kind := na
+    anchor_lvl := na
+    anchor_bar := na
+    h4_a_lvl  := na
+    h4_v_lvl  := na
+    pb_consec := 0
+    pb_close1 := na
+    pb_oc_lvl := na
+    array.clear(pb_ocs)
+    retest_lvl := na
+    just_broke:= true
+    h4_bo_fired           := false
+    h4_breaker_orig_fired := false
+    h4_breaker_lvl        := na
+    h4_invalid_lvl        := na
+    h4_aligned            := false
+    array.clear(h4_ocs)
+    array.clear(h4_ocb)
+    h4_brk_lvl            := na
+    bo_wk_rel := ""
+    if not na(wk_dir)
+        bo_wk_dir := wk_dir
+        bo_wk_lvl := wk_level
+        if s_bdir == wk_dir
+            if wk_react
+                bo_wk_rel     := "confirmed"
+                bo_wk_src     := f_wsrc_name(wk_src, wk_kind)
+                bo_wk_src_lvl := wk_src_lvl
+                bo_wk_cls     := (not na(s_bt) and not na(wk_anchor_t) and s_bt < wk_anchor_t) ? "external" : "internal"
+            else
+                bo_wk_rel := "inline"
+        else
+            bo_wk_rel := "against"
+    if barstate.isrealtime
+        alert(f_hdrw("BREAKOUT")
+              + '","direction":"' + bo_dir + '","level_type":"' + bo_layer
+              + '","level":' + str.tostring(bo_level)
+              + ',"range_level":' + f_num(bo_opp) + '}',
+              alert.freq_once_per_bar)
+
+// ── Daily V-/A-shapes and OCs (for inside-range reactions) ───────────────────
+f_keep(array<float> a, float v) =>
+    array.push(a, v)
+    if array.size(a) > 120
+        array.shift(a)
+
+// A Daily level is dead once a Daily candle closes through it: buy levels (V,
+// bullish OC) on a close below, sell levels (A, bearish OC) on a close above.
+f_kill(array<float> a, float c, bool buy_lvl) =>
+    int k = array.size(a) - 1
+    while k >= 0
+        float L = array.get(a, k)
+        if buy_lvl ? c < L : c > L
+            array.remove(a, k)
+        k -= 1
+
+if new_daily and not na(d_close)
+    f_kill(d_vs,  d_close, true)
+    f_kill(d_boc, d_close, true)
+    f_kill(d_as,  d_close, false)
+    f_kill(d_soc, d_close, false)
+    if not na(bo_dir)
+        f_kill(pb_ocs, d_close, bo_dir == "bullish")
+        pb_oc_lvl := array.size(pb_ocs) > 0 ? array.last(pb_ocs) : na   // the label shows the newest OC still alive
+
+if new_daily and not na(d_close2)
+    bool y_bull = d_close  > d_open
+    bool y_bear = d_close  < d_open
+    bool p_bull = d_close2 > d_open2
+    bool p_bear = d_close2 < d_open2
+    if p_bear and y_bull
+        f_keep(d_vs, math.min(d_low2, d_low))
+    if p_bull and y_bear
+        f_keep(d_as, math.max(d_high2, d_high))
+    if p_bull and y_bull
+        f_keep(d_boc, d_close2)
+    if p_bear and y_bear
+        f_keep(d_soc, d_close2)
+
+// Deepest Daily level in `lv` that sits inside the broken range and that this
+// H4 candle touches exactly and holds (buy: lowest; sell: highest).
+f_ir_pick(array<float> lv, bool bull, float opp, float b_lo, float b_hi, float t) =>
+    float best = na
+    if array.size(lv) > 0
+        for i = 0 to array.size(lv) - 1
+            float L = array.get(lv, i)
+            bool inside  = bull ? (L > opp and L < b_lo) : (L < opp and L > b_hi)
+            bool touched = low <= L and high >= L
+            bool held    = bull ? close >= L - t : close <= L + t
+            if inside and touched and held and (na(best) or (bull ? L < best : L > best))
+                best := L
+    best
+
+// ── Post-breakout OC tracking ─────────────────────────────────────────────────
+if new_daily and not na(bo_dir) and not just_broke
+    bool d_bull = d_close >= d_open
+    bool d_bear = d_close <  d_open
+    bool pb_match = false
+    if bo_dir == "bullish"
+        pb_match := d_bull and d_close > bo_level
+    else
+        pb_match := d_bear and d_close < bo_level
+    if pb_match
+        pb_consec := pb_consec + 1
+        if pb_consec == 1
+            pb_close1 := d_close
+        else if pb_consec >= 2
+            pb_oc_lvl  := pb_close1
+            array.push(pb_ocs, pb_close1)
+            if array.size(pb_ocs) > 30
+                array.shift(pb_ocs)
+            poc_origin := bar_index
+            pb_close1  := d_close
+    else
+        pb_consec := 0
+
+// Keep only the H4 OCs formed from the breakout leg's swing low (buy) / high
+// (sell) onward: the extreme between the broken A/V's formation and now.
+f_h4_leg_prune(array<float> lv, array<int> lb, int from_bar, bool bull) =>
+    int   ext_bar = bar_index
+    float ext     = bull ? low : high
+    int   n       = math.min(bar_index - nz(from_bar, bar_index), 400)
+    for i = 0 to n
+        if bull ? low[i] < ext : high[i] > ext
+            ext     := bull ? low[i] : high[i]
+            ext_bar := bar_index - i
+    int k = array.size(lb) - 1
+    while k >= 0
+        if array.get(lb, k) < ext_bar
+            array.remove(lv, k)
+            array.remove(lb, k)
+        k -= 1
+
+// D.A / D.V (wick levels): only the one in line with the last breakout is
+// monitored — D.V in a bullish bias, D.A in a bearish bias.
+float a_lvl = bo_dir == "bullish" ? na : s_da
+float v_lvl = bo_dir == "bearish" ? na : s_dv
+
+// ── H4 block ──────────────────────────────────────────────────────────────────
+if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
+    float band_hi = bo_level + tol
+    float band_lo = bo_level - tol
+    bool  bk_sent = false   // an H4 Breaker alert went out on this candle
+
+    // ── H4 formation detection ────────────────────────────────────────────
+    bool h4_bull1 = close[1] >= open[1]
+    bool h4_bear1 = close[1] <  open[1]
+    bool h4_bull0 = close    >= open
+    bool h4_bear0 = close    <  open
+
+    bool new_a = h4_bull1 and h4_bear0
+    if new_a
+        h4_a_lvl   := math.max(open[1], close[1])
+        h4a_origin := bar_index
+
+    bool new_v = h4_bear1 and h4_bull0
+    if new_v
+        h4_v_lvl   := math.min(open[1], close[1])
+        h4v_origin := bar_index
+
+    // ── Establishment tracking ────────────────────────────────────────────
+    // Read BEFORE this bar updates it: "an EARLIER H4 bar closed beyond the band".
+    // (est_above[1] leaked the previous breakout's flag onto the bar of a new
+    // same-direction breakout, letting it count as a retest without moving away.)
+    bool was_est = (bo_dir == "bullish") ? est_above : est_below
+    if bo_dir == "bullish" and close > band_hi
+        est_above := true
+    if bo_dir == "bearish" and close < band_lo
+        est_below := true
+
+    // ── Zone 1: Post-Breakout OCs ─────────────────────────────────────────
+    // Every completed post-breakout OC stays eligible until an opposing daily
+    // breakout. Use the deepest one this H4 bar reacts from (lowest for a buy,
+    // highest for a sell) whose close hasn't gone through it.
+    float pb_hit = na
+    if array.size(pb_ocs) > 0
+        for i = 0 to array.size(pb_ocs) - 1
+            float oc = array.get(pb_ocs, i)
+            bool beyond  = (bo_dir == "bullish" and oc > band_hi) or (bo_dir == "bearish" and oc < band_lo)
+            bool touched = low <= oc and high >= oc
+            bool held    = bo_dir == "bullish" ? close >= oc - tol : close <= oc + tol
+            if beyond and touched and held
+                if na(pb_hit) or (bo_dir == "bullish" ? oc < pb_hit : oc > pb_hit)
+                    pb_hit := oc
+    bool pb_oc_zone = not na(pb_hit)
+
+    // ── Zone 2: Daily Breaker ─────────────────────────────────────────────
+    bool db_zone = low <= bo_level and high >= bo_level and (bo_dir == "bullish" ? close >= band_lo : close <= band_hi)
+
+    // ── Zone 3: Inside Range ──────────────────────────────────────────────
+    // Inside the range that was just broken, only a reaction from a Daily
+    // V-shape (A-shape for sells) or Daily OC level counts: the H4 wick reaches
+    // the exact level and the close doesn't go through it. Deepest level wins.
+    float  ir_hit  = na
+    string ir_kind = na
+    if not na(bo_opp)
+        bool  bull = bo_dir == "bullish"
+        float shp  = na
+        float occ  = na
+        if bull
+            shp := f_ir_pick(d_vs,  true,  bo_opp, band_lo, band_hi, tol)
+            occ := f_ir_pick(d_boc, true,  bo_opp, band_lo, band_hi, tol)
+        else
+            shp := f_ir_pick(d_as,  false, bo_opp, band_lo, band_hi, tol)
+            occ := f_ir_pick(d_soc, false, bo_opp, band_lo, band_hi, tol)
+        if not na(shp)
+            ir_hit  := shp
+            ir_kind := bull ? "v_shape" : "a_shape"
+        if not na(occ) and (na(ir_hit) or (bull ? occ < ir_hit : occ > ir_hit))
+            ir_hit  := occ
+            ir_kind := "oc"
+    bool ir_zone = not na(ir_hit)
+
+    // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
+    // A reaction stays valid on later candles: any later H4 close beyond the
+    // H4 A/V level still confirms it. It fails only when an H4 candle closes
+    // back through the zone on the wrong side; then the next zone price
+    // reaches (checked just below, on this same bar) takes over.
+    if retest_on
+        bool failed = false
+        if retest_src == "post_breakout_oc"
+            failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
+        else if retest_src == "daily_breaker"
+            failed := bo_dir == "bullish" ? close < band_lo : close > band_hi
+        else if retest_src == "inside_range"
+            failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
+
+        if failed
+            retest_on  := false
+            retest_src := na
+            retest_lvl := na
+            if barstate.isrealtime
+                alert(f_hdr("RETEST_CANCELLED") + '"}',
+                      alert.freq_once_per_bar)
+
+    // ── RETEST detection ──────────────────────────────────────────────────
+    // Before the Origin, and again whenever H4 is out of line: H4 only counts
+    // a break back in the daily direction after a fresh daily reaction.
+    if not retest_on and (not h4_bo_fired or not h4_aligned)
+        if pb_oc_zone and was_est
+            retest_on  := true
+            retest_bar := bar_index
+            retest_src := "post_breakout_oc"
+            retest_lvl := pb_hit
+            if na(anchor_lvl) or math.abs(anchor_lvl - pb_hit) > pip * 0.1
+                anchor_lvl := pb_hit
+                anchor_bar := bar_index
+            if barstate.isrealtime
+                alert(f_hdr("RETEST")
+                      + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"source_level":' + str.tostring(pb_hit) + '}',
+                      alert.freq_once_per_bar)
+        else if db_zone and was_est
+            retest_on  := true
+            retest_bar := bar_index
+            retest_src := "daily_breaker"
+            retest_lvl := bo_level
+            if na(anchor_lvl) or math.abs(anchor_lvl - bo_level) > pip * 0.1
+                anchor_lvl := bo_level
+                anchor_bar := bar_index
+            if barstate.isrealtime
+                alert(f_hdr("RETEST")
+                      + '","direction":"' + bo_dir + '","source":"daily_breaker"'
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"source_level":' + str.tostring(bo_level) + '}',
+                      alert.freq_once_per_bar)
+        else if ir_zone and was_est
+            retest_on  := true
+            retest_bar := bar_index
+            retest_src := "inside_range"
+            retest_lvl := ir_hit
+            if na(anchor_lvl) or math.abs(anchor_lvl - ir_hit) > pip * 0.1
+                anchor_lvl := ir_hit
+                anchor_bar := bar_index
+            retest_kind := ir_kind
+            if barstate.isrealtime
+                alert(f_hdr("RETEST")
+                      + '","direction":"' + bo_dir + '","source":"inside_range","source_kind":"' + ir_kind + '"'
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"source_level":' + str.tostring(ir_hit) + '}',
+                      alert.freq_once_per_bar)
+
+    // ── H4 CONFIRMED ──────────────────────────────────────────────────────
+    bool confirmed_this_bar = false
+
+    if retest_on
+        float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
+
+        if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
+            string h4_cls = h4a_origin <= anchor_bar ? "external" : "internal"
+            if not h4_bo_fired
+                h4_bo_fired           := true
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_a_lvl
+                bk_origin             := bar_index
+                h4_invalid_lvl        := h4_v_lvl
+                h4_brk_lvl            := h4_a_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
+                h4_breaker_orig_fired := false
+                confirmed_this_bar    := true
+                if f_bt_label(true, true, h4_cls, h4_a_lvl, src_lvl, retest_src)
+                    bt_buys += 1
+                if barstate.isrealtime
+                    alert(f_hdrw("CONFIRMED")
+                          + '","direction":"bullish","source":"' + retest_src
+                          + '","h4_class":"' + h4_cls
+                          + '","breakout_level":' + str.tostring(bo_level)
+                          + ',"source_level":' + str.tostring(src_lvl)
+                          + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
+                          alert.freq_once_per_bar)
+            else
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_a_lvl
+                bk_origin             := bar_index
+                h4_invalid_lvl        := h4_v_lvl
+                h4_brk_lvl            := h4_a_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
+                confirmed_this_bar    := true
+                if f_bt_label(true, false, h4_cls, h4_a_lvl, src_lvl, retest_src)
+                    bt_buys += 1
+                if barstate.isrealtime
+                    alert(f_hdrw("H4_CONTINUATION")
+                          + '","direction":"bullish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
+                          + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
+                          + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
+                          alert.freq_once_per_bar)
+            retest_on  := false
+            retest_src := na
+            retest_lvl := na
+
+        if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
+            string h4_cls = h4v_origin <= anchor_bar ? "external" : "internal"
+            if not h4_bo_fired
+                h4_bo_fired           := true
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_v_lvl
+                bk_origin             := bar_index
+                h4_invalid_lvl        := h4_a_lvl
+                h4_brk_lvl            := h4_v_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
+                h4_breaker_orig_fired := false
+                confirmed_this_bar    := true
+                if f_bt_label(false, true, h4_cls, h4_v_lvl, src_lvl, retest_src)
+                    bt_sells += 1
+                if barstate.isrealtime
+                    alert(f_hdrw("CONFIRMED")
+                          + '","direction":"bearish","source":"' + retest_src
+                          + '","h4_class":"' + h4_cls
+                          + '","breakout_level":' + str.tostring(bo_level)
+                          + ',"source_level":' + str.tostring(src_lvl)
+                          + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
+                          alert.freq_once_per_bar)
+            else
+                h4_aligned            := true
+                h4_breaker_lvl        := h4_v_lvl
+                bk_origin             := bar_index
+                h4_invalid_lvl        := h4_a_lvl
+                h4_brk_lvl            := h4_v_lvl
+                f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
+                confirmed_this_bar    := true
+                if f_bt_label(false, false, h4_cls, h4_v_lvl, src_lvl, retest_src)
+                    bt_sells += 1
+                if barstate.isrealtime
+                    alert(f_hdrw("H4_CONTINUATION")
+                          + '","direction":"bearish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
+                          + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
+                          + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
+                          alert.freq_once_per_bar)
+            retest_on  := false
+            retest_src := na
+            retest_lvl := na
+
+    // ── H4 Continuation block ─────────────────────────────────────────────
+    if h4_bo_fired
+        // Out of line: an H4 break AGAINST the daily bias — a close below the
+        // latest H4 V-shape in a buy, above the latest H4 A-shape in a sell
+        // (same test as a confirmation, no tolerance). Every H4 OC is dropped.
+        // H4 comes back in line only through a fresh daily reaction followed by
+        // an H4 break in the daily direction (H4 CONFIRMED block above).
+        if h4_aligned
+            bool against = (bo_dir == "bullish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl) or (bo_dir == "bearish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl)
+            if against
+                h4_aligned    := false
+                array.clear(h4_ocs)
+                array.clear(h4_ocb)
+
+        // A new H4 breakout in the daily direction while in line (a close beyond
+        // the latest H4 A for buys / V for sells, not the level already broken):
+        // it alerts, its level becomes the H4 Breaker (replacing the older one)
+        // and only the OCs of its leg (from its swing low/high) and after it count.
+        if h4_aligned and not confirmed_this_bar
+            bool  ilb     = bo_dir == "bullish"
+            float brk_lvl = ilb ? h4_a_lvl : h4_v_lvl
+            bool  brk     = not na(brk_lvl) and (ilb ? (not new_a and close > brk_lvl) : (not new_v and close < brk_lvl)) and (na(h4_brk_lvl) or brk_lvl != h4_brk_lvl)
+            if brk
+                h4_brk_lvl            := brk_lvl
+                h4_breaker_lvl        := brk_lvl
+                bk_origin             := bar_index
+                h4_invalid_lvl        := ilb ? h4_v_lvl : h4_a_lvl
+                h4_breaker_orig_fired := false
+                f_h4_leg_prune(h4_ocs, h4_ocb, ilb ? h4a_origin : h4v_origin, ilb)
+                confirmed_this_bar    := true
+                if barstate.isrealtime
+                    alert(f_hdrw("H4_CONTINUATION")
+                          + '","direction":"' + bo_dir + '","cont_type":"inline_break"'
+                          + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                          + ',"h4_level":' + str.tostring(brk_lvl) + '}',
+                          alert.freq_once_per_bar)
+
+        if h4_aligned and not confirmed_this_bar
+            if not na(h4_breaker_lvl)
+                // Re-arm when a NEW breaker level is established
+                if na(bk_armed_lvl) or bk_armed_lvl != h4_breaker_lvl
+                    bk_armed     := true
+                    bk_armed_lvl := h4_breaker_lvl
+                bool bk_touched = low <= h4_breaker_lvl and high >= h4_breaker_lvl
+                // Re-arm when price is clear of the zone (so each fresh visit fires once)
+                if not bk_touched
+                    bk_armed := true
+                // A rejection comes INTO the level from the bias side: for a buy the
+                // candle opens at/above it, dips in and closes above (mirror for sells).
+                // A candle climbing up through it from below is not a rejection.
+                bool bk_react = bk_armed and bk_touched and ((bo_dir == "bullish" and open >= h4_breaker_lvl and close > h4_breaker_lvl) or (bo_dir == "bearish" and open <= h4_breaker_lvl and close < h4_breaker_lvl))
+                if bk_react
+                    string bk_type = h4_breaker_orig_fired ? "breaker_cont" : "breaker_origin"
+                    if not h4_breaker_orig_fired
+                        h4_breaker_orig_fired := true
+                    bk_armed := false
+                    bk_sent  := true
+                    if barstate.isrealtime
+                        alert(f_hdrw("H4_CONTINUATION")
+                              + '","direction":"' + bo_dir + '","cont_type":"' + bk_type + '"'
+                              + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                              + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
+                              alert.freq_once_per_bar)
+
+    // ── H4 OCs (trend continuation) ───────────────────────────────────────
+    bool ocb = bo_dir == "bullish"
+    // a) New in-line H4 breakouts prune the list in the continuation block above.
+    // b) Rejections, checked against the OCs that existed BEFORE this candle:
+    //    opens on the bias side, wick touches the exact level, closes beyond it.
+    //    One alert naming the furthest OC reached; every OC it rejected is used
+    //    and removed. An OC closed through the wrong way is removed too.
+    float oc_hit = na
+    int   k = array.size(h4_ocs) - 1
+    while k >= 0
+        float L = array.get(h4_ocs, k)
+        if array.get(h4_ocb, k) < bar_index
+            bool react = low <= L and high >= L and (ocb ? (open >= L and close > L) : (open <= L and close < L))
+            bool dead  = ocb ? close < L : close > L
+            if react and h4_bo_fired and h4_aligned and not confirmed_this_bar
+                oc_hit := na(oc_hit) ? L : ocb ? math.min(oc_hit, L) : math.max(oc_hit, L)
+                array.remove(h4_ocs, k)
+                array.remove(h4_ocb, k)
+            else if dead
+                array.remove(h4_ocs, k)
+                array.remove(h4_ocb, k)
+        k -= 1
+    if not na(oc_hit) and barstate.isrealtime
+        alert(f_hdrw("H4_CONTINUATION")
+              + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
+              + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+              + ',"h4_level":' + str.tostring(oc_hit) + '}',
+              alert.freq_once_per_bar)
+    // d) Engulfing in the Daily direction (after the Origin, while in line): the
+    //    candle covers the previous opposite candle's BODY (buy: previous
+    //    bearish; this one opens at/below its close and closes above its open).
+    //    eng_wick = it also closes beyond that candle's wick (buy: above its HIGH).
+    //    Each subscriber picks wick / body-only / both on the server.
+    //    One alert per candle: not when another continuation fired on it.
+    if h4_bo_fired and h4_aligned and not confirmed_this_bar and not bk_sent and na(oc_hit)
+        bool eng = ocb ? (close[1] < open[1] and close > open and open <= close[1] and close > open[1])
+                       : (close[1] > open[1] and close < open and open >= close[1] and close < open[1])
+        bool eng_wick = ocb ? close > high[1] : close < low[1]
+        if eng and barstate.isrealtime
+            alert(f_hdrw("H4_CONTINUATION")
+                  + '","direction":"' + bo_dir + '","cont_type":"engulfing","eng_wick":' + (eng_wick ? "true" : "false")
+                  + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                  + ',"h4_level":' + str.tostring(eng_wick ? (ocb ? high[1] : low[1]) : open[1]) + '}',
+                  alert.freq_once_per_bar)
+    // c) Record a new OC: two H4 candles in a row in the daily direction; the
+    //    level is where the first one closed.
+    if ocb ? (h4_bull1 and h4_bull0) : (h4_bear1 and h4_bear0)
+        array.push(h4_ocs, close[1])
+        array.push(h4_ocb, bar_index)
+        if array.size(h4_ocs) > 40
+            array.shift(h4_ocs)
+            array.shift(h4_ocb)
+
+// Newest watched H4 OC, for the label, line and dashboard snapshot
+float h4c_oc_lvl = array.size(h4_ocs) > 0 ? array.get(h4_ocs, array.size(h4_ocs) - 1) : na
+h4c_origin := array.size(h4_ocb) > 0 ? array.get(h4_ocb, array.size(h4_ocb) - 1) : na
+
+// ── Visual overlays ───────────────────────────────────────────────────────────
+
+// ── Right-edge level labels ────────────────────────────────────────────────────
+var label _a_lbl   = na
+var label _wbk_lbl = na
+var label _wav_lbl = na
+var label _woc_lbl = na
+var label _v_lbl   = na
+var label _h4a_lbl = na
+var label _h4v_lbl = na
+var label _poc_lbl = na
+var label _bk_lbl  = na
+var label _h4c_lbl = na
+
+var line _a_line   = na
+var line _v_line   = na
+var line _h4a_line = na
+var line _h4v_line = na
+var line _poc_line = na
+var line _bk_line  = na
+var line _h4c_line = na
+
+label.delete(_a_lbl)
+label.delete(_v_lbl)
+label.delete(_h4a_lbl)
+label.delete(_h4v_lbl)
+label.delete(_poc_lbl)
+label.delete(_bk_lbl)
+label.delete(_h4c_lbl)
+
+line.delete(_a_line)
+line.delete(_v_line)
+line.delete(_h4a_line)
+line.delete(_h4v_line)
+line.delete(_poc_line)
+line.delete(_bk_line)
+line.delete(_h4c_line)
+
+label.delete(_wbk_lbl)
+label.delete(_wav_lbl)
+label.delete(_woc_lbl)
+if barstate.islast
+    int lbl_x = bar_index + 20
+    if show_wk_lbls and show_wk_on_tf and not na(wk_dir)
+        color wtxt = color.new(color.black, 0)
+        _wbk_lbl := label.new(lbl_x + 14, wk_level, "W.BK  " + str.tostring(wk_level, "#.#####") + (wk_react ? "  (reacting)" : ""), style=label.style_label_left, color=color.new(wk_col, 30), textcolor=wtxt, size=size.small)
+        float wav = wk_dir == "bullish" ? w_dv : w_da
+        if not na(wav)
+            _wav_lbl := label.new(lbl_x + 14, wav, (wk_dir == "bullish" ? "W.V  " : "W.A  ") + str.tostring(wav, "#.#####"), style=label.style_label_left, color=color.new(wk_col, 50), textcolor=wtxt, size=size.small)
+        if not na(wpb_oc_lvl)
+            _woc_lbl := label.new(lbl_x + 14, wpb_oc_lvl, "W.OC  " + str.tostring(wpb_oc_lvl, "#.#####") + (array.size(w_pbocs) > 1 ? "  (" + str.tostring(array.size(w_pbocs)) + " watched)" : ""), style=label.style_label_left, color=color.new(wk_col, 50), textcolor=wtxt, size=size.small)
+    if show_daily_lbls and show_daily_on_tf
+        if not na(a_lvl)
+            _a_lbl   := label.new(lbl_x, a_lvl,     "D.A  " + str.tostring(a_lvl,     "#.#####"), style=label.style_label_left, color=da_lbl_col, textcolor=color.white, size=size.small)
+        if not na(v_lvl)
+            _v_lbl   := label.new(lbl_x, v_lvl,     "D.V  " + str.tostring(v_lvl,     "#.#####"), style=label.style_label_left, color=dv_lbl_col, textcolor=color.black, size=size.small)
+        if not na(pb_oc_lvl)
+            _poc_lbl := label.new(lbl_x, pb_oc_lvl, "D.OC " + str.tostring(pb_oc_lvl, "#.#####") + (array.size(pb_ocs) > 1 ? "  (" + str.tostring(array.size(pb_ocs)) + " watched)" : ""), style=label.style_label_left, color=doc_lbl_col, textcolor=color.white, size=size.small)
+    if show_h4_lbls and show_h4_on_tf
+        if not na(h4_a_lvl)
+            _h4a_lbl := label.new(lbl_x, h4_a_lvl,       "H4.A  " + str.tostring(h4_a_lvl,       "#.#####"), style=label.style_label_left, color=h4a_lbl_col, textcolor=color.white, size=size.small)
+        if not na(h4_v_lvl)
+            _h4v_lbl := label.new(lbl_x, h4_v_lvl,       "H4.V  " + str.tostring(h4_v_lvl,       "#.#####"), style=label.style_label_left, color=h4v_lbl_col, textcolor=color.black, size=size.small)
+        if not na(h4_breaker_lvl)
+            _bk_lbl  := label.new(lbl_x, h4_breaker_lvl, "H4.BK " + str.tostring(h4_breaker_lvl, "#.#####"), style=label.style_label_left, color=h4bk_lbl_col, textcolor=color.white, size=size.small)
+        if not na(h4c_oc_lvl)
+            _h4c_lbl := label.new(lbl_x, h4c_oc_lvl,     "H4.OC " + str.tostring(h4c_oc_lvl,     "#.#####") + (array.size(h4_ocs) > 1 ? "  (" + str.tostring(array.size(h4_ocs)) + " watched)" : ""), style=label.style_label_left, color=h4oc_lbl_col, textcolor=color.white, size=size.small)
+    // Second point one step right of the first: a line whose level formed on the
+    // current candle would otherwise have no direction and extend straight down.
+    if show_lvl_lines
+        if show_daily_on_tf and not na(a_lvl)          and not na(s_da_t)
+            _a_line   := line.new(s_da_t,     a_lvl,          s_da_t + timeframe.in_seconds() * 1000, a_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
+        if show_daily_on_tf and not na(v_lvl)          and not na(s_dv_t)
+            _v_line   := line.new(s_dv_t,     v_lvl,          s_dv_t + timeframe.in_seconds() * 1000, v_lvl,          xloc=xloc.bar_time, extend=extend.right, color=daily_line_col, width=1)
+        if show_daily_on_tf and not na(pb_oc_lvl)      and not na(poc_origin)
+            _poc_line := line.new(poc_origin, pb_oc_lvl,      poc_origin + 1, pb_oc_lvl,      extend=extend.right, color=daily_line_col, width=1)
+        if show_h4_on_tf and not na(h4_a_lvl)       and not na(h4a_origin)
+            _h4a_line := line.new(h4a_origin, h4_a_lvl,       h4a_origin + 1, h4_a_lvl,       extend=extend.right, color=h4_line_col,    width=1)
+        if show_h4_on_tf and not na(h4_v_lvl)       and not na(h4v_origin)
+            _h4v_line := line.new(h4v_origin, h4_v_lvl,       h4v_origin + 1, h4_v_lvl,       extend=extend.right, color=h4_line_col,    width=1)
+        if show_h4_on_tf and not na(h4_breaker_lvl) and not na(bk_origin)
+            _bk_line  := line.new(bk_origin,  h4_breaker_lvl, bk_origin + 1, h4_breaker_lvl, extend=extend.right, color=h4_line_col,    width=1)
+        if show_h4_on_tf and not na(h4c_oc_lvl)     and not na(h4c_origin)
+            _h4c_line := line.new(h4c_origin, h4c_oc_lvl,     h4c_origin + 1, h4c_oc_lvl,     extend=extend.right, color=h4_line_col,    width=1)
+
+// ── Daily structure levels on the chart ──────────────────────────────────────
+var array<line>  _st_lines  = array.new<line>()
+var array<label> _st_labels = array.new<label>()
+
+f_draw_lvl(bool show, int t1, float y, string txt, color c, string st, int w) =>
+    if show and not na(y) and not na(t1)
+        int t2 = time + 5 * timeframe.in_seconds() * 1000
+        array.push(_st_lines, line.new(t1, y, t2, y, xloc = xloc.bar_time, color = c, style = f_style(st), width = w))
+        array.push(_st_labels, label.new(bar_index + 6, y, txt + "  " + str.tostring(y, format.mintick),
+          style = label.style_label_left, color = color.new(color.black, 100), textcolor = c, size = size.small))
+
+f_dirw(string d) =>
+    d == "bull" ? "Bullish " : "Bearish "
+
+if barstate.islast
+    for ln in _st_lines
+        line.delete(ln)
+    for lb in _st_labels
+        label.delete(lb)
+    array.clear(_st_lines)
+    array.clear(_st_labels)
+    if show_daily_on_tf and not na(s_cdir) and s_cdir != "none"
+        string forming = " (still forming)"
+        f_draw_lvl(show_ext, s_chit, s_chi, f_dirw(s_cdir) + "External high" + (s_cdir == "bull" and not s_chif ? forming : ""), c_eh, s_eh, w_ext)
+        f_draw_lvl(show_ext, s_clot, s_clo, f_dirw(s_cdir) + "External low" + (s_cdir == "bear" and not s_clof ? forming : ""), c_el, s_el, w_ext)
+    if show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"
+        string wforming = " (still forming)"
+        f_draw_lvl(true, w_chit, w_chi, f_dirw(w_cdir) + "Weekly External high" + (w_cdir == "bull" and not w_chif ? wforming : ""), wk_col, wk_style, wk_width)
+        f_draw_lvl(true, w_clot, w_clo, f_dirw(w_cdir) + "Weekly External low" + (w_cdir == "bear" and not w_clof ? wforming : ""), wk_col, wk_style, wk_width)
+
+// ── State label — shows script's current understanding at the latest bar ──────
+f_src_name(string src, string kind) =>
+    src == "daily_breaker" ? "Daily Breaker" : src == "post_breakout_oc" ? "post-breakout Daily OC" : kind == "oc" ? "Daily OC" : kind == "a_shape" ? "Daily A-shape" : "Daily V-shape"
+
+string _state_txt = "IDLE - no breakout detected"
+if not na(bo_dir) and not h4_bo_fired and retest_on
+    _state_txt := (bo_dir == "bullish" ? "Bullish" : "Bearish") + " Retest | " + retest_src
+else if not na(bo_dir) and not h4_bo_fired
+    _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest"
+else if h4_bo_fired and h4_aligned
+    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
+else if h4_bo_fired
+    _state_txt := retest_on
+         ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + str.tostring(retest_lvl, "#.#####") + " · waiting for H4 to break " + bo_dir
+         : "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · waiting for a daily reaction, then an H4 " + bo_dir + " break"
+// Off the 4H chart, show only what the DAILY candles decided (direction and the
+// broken level) — the H4 steps would run on the wrong candles there.
+string _wk_txt = na(wk_dir) ? "" : "\nWEEKLY " + wk_dir + (wk_react ? " · reacting at " + f_wsrc_name(wk_src, wk_kind) + " @ " + str.tostring(wk_src_lvl, "#.#####") : "")
+     + (bo_wk_rel == "confirmed" ? " · Daily " + bo_wk_cls + " breakout Weekly-confirmed" : bo_wk_rel == "against" ? " · Daily is AGAINST the Weekly" : "")
+bool _is_4h = timeframe.period == "240"
+if not _is_4h
+    _state_txt := na(bo_dir) ? "DAILY | no breakout" : "DAILY | BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") @ " + str.tostring(bo_level, "#.#####") + " | check 4H"
+
+// ── Price feed + chart snapshot — fires at every realtime H4 close ───────────
+// Powers dashboard price-level alerts and the server's copy of this chart's
+// state and levels (so the dashboard matches the chart even for setups that
+// formed before the script was pasted).
+string _stage = na(bo_dir) ? "idle" : retest_on ? "retest" : not h4_bo_fired ? "breakout" : h4_aligned ? "confirmed_aligned" : "confirmed_realigning"
+if barstate.isconfirmed and barstate.isrealtime
+    alert(f_hdr("PRICE_UPDATE")
+          + '","price":' + str.tostring(close)
+          + ',"snapshot":{"stage":"' + _stage + '"'
+          + ',"bias":' + (na(bo_dir) ? "null" : '"' + bo_dir + '"')
+          + ',"retest_source":' + (na(retest_src) ? "null" : '"' + retest_src + '"')
+          + ',"breakout_level":' + f_num(bo_level)
+          + ',"level_type":' + (na(bo_layer) ? "null" : '"' + bo_layer + '"')
+          + ',"ext_hi":' + f_num(s_chi) + ',"ext_lo":' + f_num(s_clo)
+          + ',"d_a":' + f_num(a_lvl) + ',"d_v":' + f_num(v_lvl)
+          + ',"d_oc":' + f_num(pb_oc_lvl) + ',"d_oc_count":' + str.tostring(array.size(pb_ocs))
+          + ',"h4_a":' + f_num(h4_a_lvl) + ',"h4_v":' + f_num(h4_v_lvl)
+          + ',"h4_bk":' + f_num(h4_breaker_lvl) + ',"h4_oc":' + f_num(h4c_oc_lvl)
+          + ',"wk_dir":' + (na(wk_dir) ? "null" : '"' + wk_dir + '"')
+          + ',"wk_react":' + (wk_react ? "true" : "false")
+          + ',"wk_src":' + (wk_react ? '"' + f_wsrc_name(wk_src, wk_kind) + '"' : "null")
+          + ',"wk_src_lvl":' + f_num(wk_react ? wk_src_lvl : na)
+          + ',"wk_rel":"' + bo_wk_rel + '"'
+          + ',"wk_cls":' + (bo_wk_rel == "confirmed" ? '"' + bo_wk_cls + '"' : "null")
+          + ',"w_hi":' + f_num(w_chi) + ',"w_lo":' + f_num(w_clo)
+          + ',"w_bk":' + f_num(wk_level)
+          + ',"w_av":' + f_num(na(wk_dir) ? na : wk_dir == "bullish" ? w_dv : w_da)
+          + ',"w_oc":' + f_num(wpb_oc_lvl) + '}'
+          + ',"bar":' + f_bar(time, open, high, low, close)
+          + ',"dbar":' + f_bar(dr_t, dr_o, dr_h, dr_l, dr_c) + '}',
+          alert.freq_once_per_bar)
+
+// ── Candle history for the server's chart pictures ───────────────────────────
+// Once per alert: the first realtime H4 close sends the last Daily candles, the
+// second the last H4 candles. From then on every PRICE_UPDATE carries the
+// candle that just closed and the last completed Daily candle.
+var int hist_step = 0
+if barstate.isconfirmed and barstate.isrealtime and hist_step < 2
+    string js = ""
+    if hist_step == 0
+        int nd = array.size(dh_t)
+        if nd > 0
+            for i = 0 to nd - 1
+                js := js + (i > 0 ? "," : "") + f_bar(array.get(dh_t, i), array.get(dh_o, i), array.get(dh_h, i), array.get(dh_l, i), array.get(dh_c, i))
+            alert(f_hdr("HISTORY") + '","tf":"D","bars":[' + js + ']}', alert.freq_once_per_bar)
+    else
+        int nh = math.min(HIST_N, bar_index)
+        for i = nh - 1 to 0
+            js := js + (i < nh - 1 ? "," : "") + f_bar(time[i], open[i], high[i], low[i], close[i])
+        alert(f_hdr("HISTORY") + '","tf":"' + timeframe.period + '","bars":[' + js + ']}', alert.freq_once_per_bar)
+    hist_step += 1
+
+
+color _lbl_col = idle_lbl_col
+if retest_on
+    _lbl_col := retest_lbl_col
+else if h4_bo_fired and h4_aligned
+    _lbl_col := conf_lbl_col
+else if h4_bo_fired
+    _lbl_col := realign_lbl_col
+else if bo_dir == "bullish"
+    _lbl_col := bull_lbl_col
+else if bo_dir == "bearish"
+    _lbl_col := bear_lbl_col
+if not _is_4h
+    _lbl_col := na(bo_dir) ? idle_lbl_col : bo_dir == "bullish" ? bull_lbl_col : bear_lbl_col
+
+var label _state_lbl = na
+label.delete(_state_lbl)
+string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " (" + f_layer_name(bo_layer) + ") range=" + str.tostring(bo_opp, "#.#####") + " D.A=" + str.tostring(a_lvl, "#.#####") + " D.V=" + str.tostring(v_lvl, "#.#####") + " D.OC=" + str.tostring(pb_oc_lvl, "#.#####") + " H4.A=" + str.tostring(h4_a_lvl, "#.#####") + " H4.V=" + str.tostring(h4_v_lvl, "#.#####") + " H4.BK=" + str.tostring(h4_breaker_lvl, "#.#####") + " H4.OC=" + str.tostring(h4c_oc_lvl, "#.#####")
+_state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=color.white, size=size.small, tooltip=_tip)
+
+// ── Backtest count ────────────────────────────────────────────────────────────
+var table bt_tbl = table.new(position.top_right, 2, 4, bgcolor=color.new(#0F1120, 10), border_width=1, border_color=color.new(color.gray, 70))
+if bt_table and barstate.islast
+    table.cell(bt_tbl, 0, 0, "H4 aligned alerts", text_color=color.white, text_size=size.small)
+    table.cell(bt_tbl, 1, 0, str.tostring(bt_buys + bt_sells), text_color=color.white, text_size=size.small)
+    table.cell(bt_tbl, 0, 1, "Buys", text_color=bt_buy_col, text_size=size.small)
+    table.cell(bt_tbl, 1, 1, str.tostring(bt_buys), text_color=bt_buy_col, text_size=size.small)
+    table.cell(bt_tbl, 0, 2, "Sells", text_color=bt_sell_col, text_size=size.small)
+    table.cell(bt_tbl, 1, 2, str.tostring(bt_sells), text_color=bt_sell_col, text_size=size.small)
+    table.cell(bt_tbl, 0, 3, "Since", text_color=color.gray, text_size=size.tiny)
+    table.cell(bt_tbl, 1, 3, str.format_time(bt_t0, "dd MMM yyyy"), text_color=color.gray, text_size=size.tiny)
