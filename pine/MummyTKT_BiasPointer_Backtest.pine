@@ -95,6 +95,8 @@ indicator("MummyTKT Bias Pointer — Backtest", overlay=true, max_bars_back=2000
 
 // ── Backtest labels (same switches as Alert Filters) ──────────────────────────
 GBT = "Backtest labels"
+bool   bt_weekly   = input.bool(false, "Weekly (lines, labels, Weekly AGAINST marks)", group=GBT,
+     tooltip="Off: Daily + H4 only. The Weekly never changes which alerts fire; it only adds context.")
 bool   bt_ext      = input.bool(true,  "External H4 breakouts (Origin / back in line)", group=GBT)
 bool   bt_int      = input.bool(false, "Internal H4 breakouts (Origin / back in line)", group=GBT)
 bool   bt_origin   = input.bool(true,  "Origin — BUY / SELL CONFIRMED", group=GBT)
@@ -924,7 +926,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     if on and cls_ok and time >= bt_from
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
              style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
              textcolor=color.white, size=kind == 0 ? size.normal : size.small,
              tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
@@ -1499,7 +1501,7 @@ label.delete(_wav_lbl)
 label.delete(_woc_lbl)
 if barstate.islast
     int lbl_x = bar_index + 20
-    if show_wk_lbls and show_wk_on_tf and not na(wk_dir)
+    if bt_weekly and show_wk_lbls and show_wk_on_tf and not na(wk_dir)
         color wtxt = color.new(color.black, 0)
         _wbk_lbl := label.new(lbl_x + 14, wk_level, "W.BK  " + str.tostring(wk_level, "#.#####") + (wk_react ? "  (reacting)" : ""), style=label.style_label_left, color=color.new(wk_col, 30), textcolor=wtxt, size=size.small)
         float wav = wk_dir == "bullish" ? w_dv : w_da
@@ -1566,7 +1568,7 @@ if barstate.islast
         string forming = " (still forming)"
         f_draw_lvl(show_ext, s_chit, s_chi, f_dirw(s_cdir) + "External high" + (s_cdir == "bull" and not s_chif ? forming : ""), c_eh, s_eh, w_ext)
         f_draw_lvl(show_ext, s_clot, s_clo, f_dirw(s_cdir) + "External low" + (s_cdir == "bear" and not s_clof ? forming : ""), c_el, s_el, w_ext)
-    if show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"
+    if bt_weekly and show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"
         string wforming = " (still forming)"
         f_draw_lvl(true, w_chit, w_chi, f_dirw(w_cdir) + "Weekly External high" + (w_cdir == "bull" and not w_chif ? wforming : ""), wk_col, wk_style, wk_width)
         f_draw_lvl(true, w_clot, w_clo, f_dirw(w_cdir) + "Weekly External low" + (w_cdir == "bear" and not w_clof ? wforming : ""), wk_col, wk_style, wk_width)
@@ -1588,7 +1590,7 @@ else if h4_bo_fired
          : "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · waiting for a daily reaction, then an H4 " + bo_dir + " break"
 // Off the 4H chart, show only what the DAILY candles decided (direction and the
 // broken level) — the H4 steps would run on the wrong candles there.
-string _wk_txt = na(wk_dir) ? "" : "\nWEEKLY " + wk_dir + (wk_react ? " · reacting at " + f_wsrc_name(wk_src, wk_kind) + " @ " + str.tostring(wk_src_lvl, "#.#####") : "")
+string _wk_txt = not bt_weekly or na(wk_dir) ? "" : "\nWEEKLY " + wk_dir + (wk_react ? " · reacting at " + f_wsrc_name(wk_src, wk_kind) + " @ " + str.tostring(wk_src_lvl, "#.#####") : "")
      + (bo_wk_rel == "confirmed" ? " · Daily " + bo_wk_cls + " breakout Weekly-confirmed" : bo_wk_rel == "against" ? " · Daily is AGAINST the Weekly" : "")
 bool _is_4h = timeframe.period == "240"
 if not _is_4h

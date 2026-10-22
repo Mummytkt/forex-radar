@@ -32,6 +32,8 @@ rep('indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_li
 
 // ── Backtest labels (same switches as Alert Filters) ──────────────────────────
 GBT = "Backtest labels"
+bool   bt_weekly   = input.bool(false, "Weekly (lines, labels, Weekly AGAINST marks)", group=GBT,
+     tooltip="Off: Daily + H4 only. The Weekly never changes which alerts fire; it only adds context.")
 bool   bt_ext      = input.bool(true,  "External H4 breakouts (Origin / back in line)", group=GBT)
 bool   bt_int      = input.bool(false, "Internal H4 breakouts (Origin / back in line)", group=GBT)
 bool   bt_origin   = input.bool(true,  "Origin — BUY / SELL CONFIRMED", group=GBT)
@@ -87,7 +89,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     if on and cls_ok and time >= bt_from
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\\n" + head + tag + (bo_wk_rel == "against" ? "\\nWeekly AGAINST" : ""),
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\\n" + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\\nWeekly AGAINST" : ""),
              style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
              textcolor=color.white, size=kind == 0 ? size.normal : size.small,
              tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
@@ -141,6 +143,12 @@ rep('''        if eng and barstate.isrealtime
             f_btlbl(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
         if eng and barstate.isrealtime
 ''')
+
+# Weekly display follows the backtest's Weekly switch
+rep('    if show_wk_lbls and show_wk_on_tf and not na(wk_dir)', '    if bt_weekly and show_wk_lbls and show_wk_on_tf and not na(wk_dir)')
+rep('    if show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"',
+    '    if bt_weekly and show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"')
+rep('string _wk_txt = na(wk_dir) ? "" :', 'string _wk_txt = not bt_weekly or na(wk_dir) ? "" :')
 
 s = s.rstrip('\n') + '''
 
