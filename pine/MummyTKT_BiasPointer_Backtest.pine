@@ -106,6 +106,8 @@ bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=GBT)
 string bt_eng_mode = input.string("Wick", "Engulfing covers", options=["Wick", "Body only", "Both"], group=GBT)
 int    bt_from     = input.time(timestamp("2020-01-01T00:00:00"), "Backtest from", group=GBT,
      tooltip="Labels and counts start at this date. Earlier candles still build the levels.")
+bool   bt_latest   = input.bool(true,  "Keep only the latest alert label (clean chart)", group=GBT,
+     tooltip="Each new alert label deletes the previous one. The count table still counts every alert. Switch off to see the whole history.")
 bool   bt_grey     = input.bool(true,  "Show alerts that are not counted (grey, with the reason)", group=GBT,
      tooltip="Alerts before the start date, Internal ones while Internal is off, and types switched off above.")
 bool   bt_table    = input.bool(true,  "Show count table", group=GBT)
@@ -117,6 +119,7 @@ var int bt_t0 = time
 // External / Internal of the setup's latest H4 confirmation (Origin or back in line);
 // continuations follow it, like the server: Internal off = no continuations of Internal setups
 var bt_scls = array.from("")
+var bt_last = array.new<label>(1, na)   // the alert label currently on the chart
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing")
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
@@ -913,17 +916,21 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     string tag  = c == "" ? "" : kind <= 1 ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
     if bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
-        label.new(bar_index, bull ? low : high, "Not counted: " + why + "\n" + head + tag,
+        if bt_latest
+            label.delete(array.get(bt_last, 0))
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "Not counted: " + why + "\n" + head + tag,
              style=bull ? label.style_label_up : label.style_label_down, color=color.new(color.gray, 35),
-             textcolor=color.white, size=size.small)
+             textcolor=color.white, size=size.small))
     if on and cls_ok and time >= bt_from
-        label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
+        if bt_latest
+            label.delete(array.get(bt_last, 0))
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
              style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
              textcolor=color.white, size=kind == 0 ? size.normal : size.small,
              tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
              + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
              + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
-             + "\nEntry = next candle's open")
+             + "\nEntry = next candle's open"))
         array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
         array.set(bt_cnt, bull ? 7 : 8, array.get(bt_cnt, bull ? 7 : 8) + 1)
     on and cls_ok and time >= bt_from
