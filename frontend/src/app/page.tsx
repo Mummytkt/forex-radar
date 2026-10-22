@@ -221,7 +221,7 @@ export default function LandingPage() {
           <button onClick={toggle} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           </button>
-          <Link href="/login" style={{ padding: '8px 20px', borderRadius: 9, background: 'var(--accent)', color: 'white', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Sign In</Link>
+          <Link href="/login" style={{ padding: '8px 20px', borderRadius: 9, background: 'var(--accent)', color: 'white', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Log in</Link>
         </div>
       </nav>
 
@@ -248,7 +248,7 @@ export default function LandingPage() {
               Start trading with clarity <ArrowRight size={16} />
             </a>
             <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '14px 32px', borderRadius: 11, border: `1px solid ${P.signinBorder}`, background: P.signinBg, color: P.signinText, fontSize: 15, fontWeight: 600, textDecoration: 'none', backdropFilter: 'blur(4px)' }}>
-              Sign In
+              Log in
             </Link>
           </div>
           {/* scroll cue */}

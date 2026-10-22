@@ -87,16 +87,27 @@ function JoinForm() {
         <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
           Confirm password
         </label>
-        <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repeat password"
-          style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }}
-        />
+        <div style={{ position: 'relative' }}>
+          <input type={showPw ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repeat password"
+            style={{ width: '100%', padding: '10px 40px 10px 12px', borderRadius: 8, fontSize: 14, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }}
+          />
+          <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Hide passwords' : 'Show passwords'}
+            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}>
+            {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        </div>
       </div>
       {error && (
-        <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bearish-bg)', color: 'var(--bearish)', fontSize: 13 }}>{error}</div>
+        <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bearish-bg)', color: 'var(--bearish)', fontSize: 13 }}>
+          {error}
+          {/already been used|invalid or expired/i.test(error) && (
+            <> Already set up your account? <a href="/login" style={{ color: 'var(--accent)', fontWeight: 600 }}>Log in here</a>.</>
+          )}
+        </div>
       )}
       <button type="submit" disabled={submitting || !name || !password || !confirm}
         style={{ padding: '11px', borderRadius: 9, fontSize: 14, fontWeight: 700, background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', opacity: submitting || !name || !password || !confirm ? 0.6 : 1, boxShadow: '0 2px 10px rgba(99,102,241,0.35)', marginTop: 4, transition: 'opacity 0.1s' }}>
-        {submitting ? 'Creating account…' : 'Create account & sign in'}
+        {submitting ? 'Creating account…' : 'Create account & log in'}
       </button>
     </form>
   )
@@ -125,6 +136,9 @@ export default function JoinPage() {
             <JoinForm />
           </Suspense>
         </div>
+        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', marginTop: 16 }}>
+          Already have an account? <a href="/login" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>Log in</a>
+        </p>
       </div>
     </div>
   )

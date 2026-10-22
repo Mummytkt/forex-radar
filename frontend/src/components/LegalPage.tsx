@@ -28,7 +28,7 @@ export default function LegalPage({ title, intro, children }: {
             </span>
             <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{LEGAL.business}</span>
           </Link>
-          <Link href="/login" style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>Sign in</Link>
+          <Link href="/login" style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>Log in</Link>
         </div>
       </header>
 

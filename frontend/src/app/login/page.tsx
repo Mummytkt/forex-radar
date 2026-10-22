@@ -55,7 +55,7 @@ export default function LoginPage() {
             Bias Pointer
           </p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
-            Sign in to access your dashboard
+            Log in to your account
           </p>
         </div>
 
@@ -119,7 +119,7 @@ export default function LoginPage() {
                 transition: 'opacity 0.1s',
                 marginTop: 4,
               }}>
-              {submitting ? 'Signing in…' : 'Sign in'}
+              {submitting ? 'Logging in…' : 'Log in'}
             </button>
           </form>
         </div>
