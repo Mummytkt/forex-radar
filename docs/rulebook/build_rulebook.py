@@ -297,7 +297,7 @@ def make_rules(im):
          "An H4 close above the breaker zone, then a later dip back into it", "An H4 close below the breaker zone, then a later rise back into it",
          "This stops a breakout that is still sitting on its level from counting as a retest straight away.", im["zone"]),
         ("C. Daily bias", "The Weekly storyline above the Daily",
-         "The same technique one level up. The <b>Weekly External high/low</b> is built by the Daily rules on Weekly candles; a <b>Weekly close</b> "
+         "The same technique one level up. The <b>Weekly External high/low</b> is built by the Daily rules on Weekly candles (with its own <b>Weekly levels from: Body / Wick</b> setting); a <b>Weekly close</b> "
          "beyond it is a Weekly breakout. After price moves away, it must react at a <b>Weekly level</b> — the Weekly Breaker, a Weekly V/A-shape or OC "
          "inside the broken Weekly range, or a post-breakout Weekly OC — with an exact Daily wick touch that holds. While it holds, a <b>Daily breakout in "
          "the Weekly direction is Weekly-confirmed</b>: External if the Daily level it broke formed before the reaction started, Internal if after. "

@@ -147,6 +147,8 @@ string s_el  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"]
 int    w_ext = input.int(2, "Line width", minval = 1, maxval = 4, group = GS1)
 // Daily levels from candle BODIES (like H4) or WICKS. Applies to the External
 // high/low structure (so the Daily breakout), D.A / D.V and inside-range V/A.
+bool   w_body = input.string("Body", "Weekly levels from", options = ["Body", "Wick"], group = GS1,
+     tooltip = "Body: Weekly highs/lows, A-shapes and V-shapes use candle bodies. Wick: they use the wicks. Set separately from the Daily choice.") == "Body"
 bool   d_body = input.string("Body", "Daily levels from", options = ["Body", "Wick"], group = GS1,
      tooltip = "Body: Daily highs/lows, A-shapes and V-shapes use candle bodies, like H4. Wick: they use the wicks. A breakout is always a Daily close beyond the level. Each alert keeps the setting it was created with.") == "Body"
 
@@ -225,28 +227,28 @@ f_num(float x) =>
 // most recent break — on whichever structure — is the daily breakout.
 
 // High / low of the daily candle i bars back: body top / bottom, or wick.
-f_bh(int i) =>
-    d_body ? math.max(open[i], close[i]) : high[i]
-f_bl(int i) =>
-    d_body ? math.min(open[i], close[i]) : low[i]
+f_bh(int i, bool bd) =>
+    bd ? math.max(open[i], close[i]) : high[i]
+f_bl(int i, bool bd) =>
+    bd ? math.min(open[i], close[i]) : low[i]
 
-f_lowest(int from_bar) =>
-    float m = f_bl(0)
+f_lowest(int from_bar, bool bd) =>
+    float m = f_bl(0, bd)
     int mb = bar_index
     int n = math.min(bar_index - from_bar, 1500)
     for i = 0 to n
-        if f_bl(i) < m
-            m := f_bl(i)
+        if f_bl(i, bd) < m
+            m := f_bl(i, bd)
             mb := bar_index - i
     [m, mb]
 
-f_highest(int from_bar) =>
-    float m = f_bh(0)
+f_highest(int from_bar, bool bd) =>
+    float m = f_bh(0, bd)
     int mb = bar_index
     int n = math.min(bar_index - from_bar, 1500)
     for i = 0 to n
-        if f_bh(i) > m
-            m := f_bh(i)
+        if f_bh(i, bd) > m
+            m := f_bh(i, bd)
             mb := bar_index - i
     [m, mb]
 
@@ -288,28 +290,28 @@ method reset(Layer s) =>
 // One daily candle of structure logic inside [blo, bhi].
 // Returns [changed, broken level, time that level formed]; changed = a break
 // redefined this layer.
-method step(Layer s, float blo, float bhi, float lA, int lAb, bool lAok, float lV, int lVb, bool lVok) =>
+method step(Layer s, float blo, float bhi, float lA, int lAb, bool lAok, float lV, int lVb, bool lVok, bool bd) =>
     bool  ev   = false
     float blvl = na
     int   bt   = na
     if s.dir == "none"
         if not na(lA) and lAok and close > lA
-            [m, mb] = f_lowest(lAb)
+            [m, mb] = f_lowest(lAb, bd)
             if m > blo and m < bhi
                 s.dir := "bull"
                 s.set_lo(m, mb)
-                s.set_hi(f_bh(0), bar_index)
+                s.set_hi(f_bh(0, bd), bar_index)
                 s.hi_fixed := false
                 s.pb_lo := lV
                 ev := true
                 blvl := lA
                 bt := f_bt(lAb)
         else if not na(lV) and lVok and close < lV
-            [m, mb] = f_highest(lVb)
+            [m, mb] = f_highest(lVb, bd)
             if m > blo and m < bhi
                 s.dir := "bear"
                 s.set_hi(m, mb)
-                s.set_lo(f_bl(0), bar_index)
+                s.set_lo(f_bl(0, bd), bar_index)
                 s.lo_fixed := false
                 s.pb_hi := lA
                 ev := true
@@ -320,22 +322,22 @@ method step(Layer s, float blo, float bhi, float lA, int lAb, bool lAok, float l
             blvl := s.lo
             bt := s.lo_t
             s.dir := "bear"
-            s.set_lo(f_bl(0), bar_index)
+            s.set_lo(f_bl(0, bd), bar_index)
             s.lo_fixed := false
             s.pb_hi := lA
             ev := true
         else if s.hi_fixed and close > s.hi
             blvl := s.hi
             bt := s.hi_t
-            [m, mb] = f_lowest(s.hi_bar)
+            [m, mb] = f_lowest(s.hi_bar, bd)
             s.set_lo(m, mb)
-            s.set_hi(f_bh(0), bar_index)
+            s.set_hi(f_bh(0, bd), bar_index)
             s.hi_fixed := false
             s.pb_lo := lV
             ev := true
         else
-            if not s.hi_fixed and f_bh(0) > s.hi
-                s.set_hi(f_bh(0), bar_index)
+            if not s.hi_fixed and f_bh(0, bd) > s.hi
+                s.set_hi(f_bh(0, bd), bar_index)
             if not s.hi_fixed and not na(s.pb_lo) and close < s.pb_lo
                 s.hi_fixed := true
     else if s.dir == "bear"
@@ -343,22 +345,22 @@ method step(Layer s, float blo, float bhi, float lA, int lAb, bool lAok, float l
             blvl := s.hi
             bt := s.hi_t
             s.dir := "bull"
-            s.set_hi(f_bh(0), bar_index)
+            s.set_hi(f_bh(0, bd), bar_index)
             s.hi_fixed := false
             s.pb_lo := lV
             ev := true
         else if s.lo_fixed and close < s.lo
             blvl := s.lo
             bt := s.lo_t
-            [m, mb] = f_highest(s.lo_bar)
+            [m, mb] = f_highest(s.lo_bar, bd)
             s.set_hi(m, mb)
-            s.set_lo(f_bl(0), bar_index)
+            s.set_lo(f_bl(0, bd), bar_index)
             s.lo_fixed := false
             s.pb_hi := lA
             ev := true
         else
-            if not s.lo_fixed and f_bl(0) < s.lo
-                s.set_lo(f_bl(0), bar_index)
+            if not s.lo_fixed and f_bl(0, bd) < s.lo
+                s.set_lo(f_bl(0, bd), bar_index)
             if not s.lo_fixed and not na(s.pb_hi) and close > s.pb_hi
                 s.lo_fixed := true
     [ev, blvl, bt]
@@ -371,7 +373,7 @@ method on_new_V(Layer s, float v) =>
     if s.dir == "bull" and not s.hi_fixed and na(s.pb_lo)
         s.pb_lo := v
 
-f_structure() =>
+f_structure(bool bd) =>
     // Outer structure
     var string e_dir = "none"
     var float  e_hi = na
@@ -416,17 +418,17 @@ f_structure() =>
         if not na(lastA) and close > lastA
             e_blvl := lastA
             e_bt := f_bt(lastA_bar)
-            [m, mb] = f_lowest(lastA_bar)
+            [m, mb] = f_lowest(lastA_bar, bd)
             e_lo := m, e_lo_bar := mb, e_lo_t := f_bt(mb)
-            e_hi := f_bh(0), e_hi_bar := bar_index, e_hi_t := time
+            e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
             e_dir := "bull", e_hif := false
             ext_ev := true
         else if not na(lastV) and close < lastV
             e_blvl := lastV
             e_bt := f_bt(lastV_bar)
-            [m, mb] = f_highest(lastV_bar)
+            [m, mb] = f_highest(lastV_bar, bd)
             e_hi := m, e_hi_bar := mb, e_hi_t := f_bt(mb)
-            e_lo := f_bl(0), e_lo_bar := bar_index, e_lo_t := time
+            e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
             e_dir := "bear", e_lof := false
             ext_ev := true
     else if e_dir == "bull"
@@ -434,20 +436,20 @@ f_structure() =>
             e_blvl := e_lo
             e_bt := e_lo_t
             e_dir := "bear"
-            e_lo := f_bl(0), e_lo_bar := bar_index, e_lo_t := time
+            e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
             e_lof := false
             ext_ev := true
         else if e_hif and close > e_hi
             e_blvl := e_hi
             e_bt := e_hi_t
-            [m, mb] = f_lowest(e_hi_bar)
+            [m, mb] = f_lowest(e_hi_bar, bd)
             e_lo := m, e_lo_bar := mb, e_lo_t := f_bt(mb)
-            e_hi := f_bh(0), e_hi_bar := bar_index, e_hi_t := time
+            e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
             e_hif := false
             ext_ev := true
         else
-            if not e_hif and f_bh(0) > e_hi
-                e_hi := f_bh(0), e_hi_bar := bar_index, e_hi_t := time
+            if not e_hif and f_bh(0, bd) > e_hi
+                e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
             if not e_hif and not na(e_pbl) and close < e_pbl
                 e_hif := true
     else if e_dir == "bear"
@@ -455,20 +457,20 @@ f_structure() =>
             e_blvl := e_hi
             e_bt := e_hi_t
             e_dir := "bull"
-            e_hi := f_bh(0), e_hi_bar := bar_index, e_hi_t := time
+            e_hi := f_bh(0, bd), e_hi_bar := bar_index, e_hi_t := time
             e_hif := false
             ext_ev := true
         else if e_lof and close < e_lo
             e_blvl := e_lo
             e_bt := e_lo_t
-            [m, mb] = f_highest(e_lo_bar)
+            [m, mb] = f_highest(e_lo_bar, bd)
             e_hi := m, e_hi_bar := mb, e_hi_t := f_bt(mb)
-            e_lo := f_bl(0), e_lo_bar := bar_index, e_lo_t := time
+            e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
             e_lof := false
             ext_ev := true
         else
-            if not e_lof and f_bl(0) < e_lo
-                e_lo := f_bl(0), e_lo_bar := bar_index, e_lo_t := time
+            if not e_lof and f_bl(0, bd) < e_lo
+                e_lo := f_bl(0, bd), e_lo_bar := bar_index, e_lo_t := time
             if not e_lof and not na(e_pbh) and close > e_pbh
                 e_lof := true
 
@@ -484,9 +486,9 @@ f_structure() =>
     // 2. Structures inside it, from the outside in. A break drops everything
     //    inside the structure that broke; if nothing broke, look for a new
     //    structure inside the most recent range.
-    if not na(lastA) and not lastA_ok and f_bl(0) < lastA_bear_lo
+    if not na(lastA) and not lastA_ok and f_bl(0, bd) < lastA_bear_lo
         lastA_ok := true
-    if not na(lastV) and not lastV_ok and f_bh(0) > lastV_bull_hi
+    if not na(lastV) and not lastV_ok and f_bh(0, bd) > lastV_bull_hi
         lastV_ok := true
 
     if not ext_ev and e_dir != "none"
@@ -497,7 +499,7 @@ f_structure() =>
         if n > 0
             for k = 0 to n - 1
                 Layer L = array.get(stack, k)
-                [ev, lvl, lt] = L.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
+                [ev, lvl, lt] = L.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok, bd)
                 if ev
                     while array.size(stack) > k + 1
                         array.pop(stack)
@@ -512,7 +514,7 @@ f_structure() =>
                 bhi := L.hi
         if not broke and array.size(stack) < 30
             Layer nl = Layer.new()
-            [nev, nlvl, nlt] = nl.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok)
+            [nev, nlvl, nlt] = nl.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok, bd)
             if nev
                 array.push(stack, nl)
                 b_cnt += 1
@@ -535,9 +537,9 @@ f_structure() =>
     bool isA = close[1] > open[1] and close < open
     bool isV = close[1] < open[1] and close > open
     if isA
-        lastA := math.max(f_bh(0), f_bh(1))
-        lastA_bar := f_bh(0) >= f_bh(1) ? bar_index : bar_index - 1
-        lastA_bear_lo := f_bl(0)
+        lastA := math.max(f_bh(0, bd), f_bh(1, bd))
+        lastA_bar := f_bh(0, bd) >= f_bh(1, bd) ? bar_index : bar_index - 1
+        lastA_bear_lo := f_bl(0, bd)
         lastA_ok := false
         da := lastA, da_t := f_bt(lastA_bar)
         if e_dir != "none"
@@ -545,9 +547,9 @@ f_structure() =>
         for L in stack
             L.on_new_A(lastA)
     if isV
-        lastV := math.min(f_bl(0), f_bl(1))
-        lastV_bar := f_bl(0) <= f_bl(1) ? bar_index : bar_index - 1
-        lastV_bull_hi := f_bh(0)
+        lastV := math.min(f_bl(0, bd), f_bl(1, bd))
+        lastV_bar := f_bl(0, bd) <= f_bl(1, bd) ? bar_index : bar_index - 1
+        lastV_bull_hi := f_bh(0, bd)
         lastV_ok := false
         dv := lastV, dv_t := f_bt(lastV_bar)
         if e_dir != "none"
@@ -579,15 +581,15 @@ f_structure() =>
 
 [s_cdir, s_chi, s_clo, s_chif, s_clof, s_chit, s_clot,
  s_bcnt, s_bdir, s_blvl, s_bopp,
- s_da, s_da_t, s_dv, s_dv_t, s_bt] = request.security(syminfo.tickerid, "D", f_structure(), lookahead=barmerge.lookahead_on)
+ s_da, s_da_t, s_dv, s_dv_t, s_bt] = request.security(syminfo.tickerid, "D", f_structure(d_body), lookahead=barmerge.lookahead_on)
 
 // The same structure engine on WEEKLY candles (Weekly External high / low)
 [w_cdir, w_chi, w_clo, w_chif, w_clof, w_chit, w_clot,
  w_bcnt, w_bdir, w_blvl, w_bopp,
- w_da, w_da_t, w_dv, w_dv_t, w_bt] = request.security(syminfo.tickerid, "W", f_structure(), lookahead=barmerge.lookahead_on)
+ w_da, w_da_t, w_dv, w_dv_t, w_bt] = request.security(syminfo.tickerid, "W", f_structure(w_body), lookahead=barmerge.lookahead_on)
 // Last two completed Weekly candles (levels per the Body/Wick setting)
 [wk_o1, wk_c1, wk_h1, wk_l1, wk_o2, wk_c2, wk_h2, wk_l2] = request.security(syminfo.tickerid, "W",
-     [open[1], close[1], f_bh(1), f_bl(1), open[2], close[2], f_bh(2), f_bl(2)], lookahead=barmerge.lookahead_on)
+     [open[1], close[1], f_bh(1, w_body), f_bl(1, w_body), open[2], close[2], f_bh(2, w_body), f_bl(2, w_body)], lookahead=barmerge.lookahead_on)
 
 // ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
 // lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
@@ -619,7 +621,7 @@ f_bar(int t, float o, float h, float l, float c) =>
 float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_on)
 float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
 [d_high, d_low, d_open2, d_close2, d_high2, d_low2] = request.security(syminfo.tickerid, "D",
-     [f_bh(1), f_bl(1), open[2], close[2], f_bh(2), f_bl(2)], lookahead=barmerge.lookahead_on)
+     [f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body)], lookahead=barmerge.lookahead_on)
 
 f_layer_name(string l) =>
     l == "external" ? "External" : l == "internal" ? "Internal" : l == "inner_internal" ? "Inner internal" : l == "sub_internal" ? "Sub-internal" : ""
