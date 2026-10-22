@@ -30,7 +30,8 @@ except Exception:  # tz data missing — fall back to a fixed 21:00 UTC session
 
 
 def is_crypto(instrument: str) -> bool:
-    return instrument.replace("/", "").upper().startswith(_CRYPTO)
+    from config import is_crypto as _is_crypto
+    return _is_crypto(instrument)
 
 
 def is_market_open(instrument: str, at: datetime) -> bool:

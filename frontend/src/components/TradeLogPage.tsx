@@ -95,22 +95,22 @@ const INSTRUMENTS = [
   'AUD/JPY','AUD/CAD','AUD/NZD','AUD/CHF','NZD/JPY','NZD/CAD','NZD/CHF',
   'CAD/JPY','CAD/CHF','CHF/JPY','XAU/USD','XAG/USD',
   'WTI/USD','US30','NAS100','SPX500','UK100','GER40','JPN225',
-  'BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','LTC/USD',
+  'BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','LTC/USD','TRX/USD','SUI/USD','AVAX/USD','LINK/USD','ZEC/USD','NEAR/USD','HYPE/USD','BCH/USD','DOT/USD','UNI/USD','AAVE/USD','TAO/USD','INJ/USD','SEI/USD','ICP/USD','ATOM/USD','XLM/USD','ETC/USD','FIL/USD','ARB/USD','OP/USD','ASTER/USD',
 ]
 const INDICES = ['US30', 'NAS100', 'SPX500', 'UK100', 'GER40', 'JPN225']
 const SYNTH_RE = /^(VOLATILITY|JUMP|BOOM|CRASH|STEP|RANGE|DEX)/
+const CRYPTO_RE = /^(ASTER|DOGE|AVAX|LINK|NEAR|HYPE|AAVE|ATOM|BTC|ETH|SOL|BNB|XRP|ADA|LTC|TRX|SUI|ZEC|BCH|DOT|UNI|TAO|INJ|SEI|ICP|XLM|ETC|FIL|ARB|OP)USDT?$/
 
 // One "pip" per market, as traders count it: forex 0.0001 (JPY 0.01), gold 0.1,
-// silver and oil 0.01, indices and the larger coins 1 point, small coins 0.0001.
+// silver and oil 0.01, indices 1 point, crypto by price (1 / 0.01 / 0.0001).
 // Deriv synthetics have no pips: they're counted in plain points (the price move).
-function pipSizeFor(instrument: string): number {
+function pipSizeFor(instrument: string, price: number): number {
   const s = instrument.toUpperCase().replace('/', '').replace(/\s+/g, '_')
   if (s.endsWith('JPY')) return 0.01
   if (s === 'XAUUSD') return 0.1
   if (s === 'XAGUSD' || s === 'WTIUSD' || s === 'USOIL') return 0.01
   if (INDICES.includes(s)) return 1
-  if (/^(BTC|ETH|SOL|BNB|LTC)/.test(s)) return 1
-  if (/^(XRP|ADA|DOGE)/.test(s)) return 0.0001
+  if (CRYPTO_RE.test(s)) return price >= 100 ? 1 : price >= 1 ? 0.01 : 0.0001   // crypto: by price
   if (SYNTH_RE.test(s)) return 1
   return 0.0001
 }
@@ -661,7 +661,7 @@ function TradeModal({
     const entry = parseFloat(f.entry_price)
     const exit = parseFloat(f.exit_price)
     if (isNaN(entry) || isNaN(exit)) return f
-    const pipSize = pipSizeFor(f.instrument)
+    const pipSize = pipSizeFor(f.instrument, entry)
     const raw = f.direction === 'buy' ? (exit - entry) / pipSize : (entry - exit) / pipSize
     const synth = SYNTH_RE.test(f.instrument.toUpperCase().replace(/\s+/g, '_'))
     return { ...f, pips: raw.toFixed(synth ? 2 : 1) }

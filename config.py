@@ -132,6 +132,14 @@ def normalize_symbol(raw: str) -> str:
     return SYMBOL_ALIASES.get(s, s)
 
 
+CRYPTO_BASES = {"BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "LTC", "TRX", "SUI", "AVAX", "LINK", "ZEC", "NEAR", "HYPE", "BCH", "DOT", "UNI", "AAVE", "TAO", "INJ", "SEI", "ICP", "ATOM", "XLM", "ETC", "FIL", "ARB", "OP", "ASTER"}
+
+
+def is_crypto(instrument: str) -> bool:
+    s = instrument.replace("/", "").upper()
+    return s.endswith("USD") and s[:-3] in CRYPTO_BASES
+
+
 def is_synthetic(instrument: str) -> bool:
     return instrument.replace("/", "").upper() in SYNTHETICS
 
@@ -139,7 +147,7 @@ def is_synthetic(instrument: str) -> bool:
 def fmt_price(instrument: str, price: float) -> str:
     """Price text with sensible decimals: JPY / metals 3, synthetics by size, else 5."""
     s = instrument.replace("/", "").upper()
-    if is_synthetic(s):
+    if is_synthetic(s) or is_crypto(s):
         a = abs(price)
         return f"{price:.2f}" if a >= 1000 else f"{price:.3f}" if a >= 10 else f"{price:.5f}"
     if s.endswith("JPY") or s in {"XAUUSD", "XAGUSD"}:
@@ -184,4 +192,5 @@ DEFAULT_INSTRUMENTS: list[str] = [
     "US30", "NAS100", "SPX500", "UK100", "GER40", "JPN225",
     # Crypto (24/7)
     "BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD", "ADA/USD", "DOGE/USD", "LTC/USD",
+    "TRX/USD", "SUI/USD", "AVAX/USD", "LINK/USD", "ZEC/USD", "NEAR/USD", "HYPE/USD", "BCH/USD", "DOT/USD", "UNI/USD", "AAVE/USD", "TAO/USD", "INJ/USD", "SEI/USD", "ICP/USD", "ATOM/USD", "XLM/USD", "ETC/USD", "FIL/USD", "ARB/USD", "OP/USD", "ASTER/USD",
 ]

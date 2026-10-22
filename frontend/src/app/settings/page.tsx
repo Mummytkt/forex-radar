@@ -23,7 +23,7 @@ const ALL_INSTRUMENTS: Record<string, string[]> = {
   'Metals': ['XAU/USD', 'XAG/USD'],
   'Energy': ['WTI/USD'],
   'Indices': ['US30','NAS100','SPX500','UK100','GER40','JPN225'],
-  'Crypto': ['BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','LTC/USD'],
+  'Crypto': ['BTC/USD','ETH/USD','SOL/USD','BNB/USD','XRP/USD','ADA/USD','DOGE/USD','LTC/USD','TRX/USD','SUI/USD','AVAX/USD','LINK/USD','ZEC/USD','NEAR/USD','HYPE/USD','BCH/USD','DOT/USD','UNI/USD','AAVE/USD','TAO/USD','INJ/USD','SEI/USD','ICP/USD','ATOM/USD','XLM/USD','ETC/USD','FIL/USD','ARB/USD','OP/USD','ASTER/USD'],
 }
 
 const SYNTH_CAT = 'Deriv synthetics'

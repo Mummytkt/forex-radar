@@ -19,7 +19,9 @@ import json
 import config as _cfg
 
 # Instruments added to the platform after the list was first saved.
-PLATFORM_ADDITIONS: list[str] = ["XAG/USD"]
+PLATFORM_ADDITIONS: list[str] = ["XAG/USD",
+    # crypto added 2026-10-22
+    "TRX/USD", "SUI/USD", "AVAX/USD", "LINK/USD", "ZEC/USD", "NEAR/USD", "HYPE/USD", "BCH/USD", "DOT/USD", "UNI/USD", "AAVE/USD", "TAO/USD", "INJ/USD", "SEI/USD", "ICP/USD", "ATOM/USD", "XLM/USD", "ETC/USD", "FIL/USD", "ARB/USD", "OP/USD", "ASTER/USD"]
 
 
 def _get(conn, key: str):

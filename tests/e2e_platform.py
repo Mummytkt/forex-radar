@@ -531,6 +531,11 @@ check("Origin describes the close above the External high", "A Daily candle clos
 tv(type="PRICE_UPDATE", instrument="XAGUSD", price=48.235, timeframe="240", snapshot=dict(snap, stage="breakout"))
 b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
 check("XAGUSD is a platform instrument and lands on the board", (b.get("XAGUSD") or {}).get("stage") == "breakout")
+from config import is_crypto as _isc
+check("new crypto pairs count as crypto (24/7); forex doesn't", _isc("INJUSD") and _isc("OP/USD") and not _isc("USDCHF") and not _isc("EURUSD"))
+tv(type="PRICE_UPDATE", instrument="INJUSDT", exchange="BINANCE", price=21.5, timeframe="240", snapshot=dict(snap, stage="breakout"))
+b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
+check("an INJUSDT chart lands on the board as INJUSD", (b.get("INJUSD") or {}).get("stage") == "breakout")
 from config import normalize_symbol as _ns_
 check("crypto stablecoin/perp tickers map to the USD pair; forex untouched",
       _ns_("BNBUSDT") == "BNBUSD" and _ns_("BTCUSDT.P") == "BTCUSD" and _ns_("ETHUSDC") == "ETHUSD"
@@ -749,7 +754,8 @@ _c2 = sqlite3.connect(os.path.join(tmpdir, "inst.db")); _c2.execute("CREATE TABL
 _c2.execute("INSERT INTO user_config (key, value) VALUES ('instruments', ?)", (_j.dumps(["EUR/USD", "XAU/USD"]),)); _c2.commit()
 _ns = NS(instruments=[])
 load_instruments(_c2, _ns)
-check("XAG/USD is added to an older saved list", _ns.instruments == ["EUR/USD", "XAU/USD", "XAG/USD"])
+check("XAG/USD and the new crypto are added to an older saved list",
+      _ns.instruments[:3] == ["EUR/USD", "XAU/USD", "XAG/USD"] and "INJ/USD" in _ns.instruments and "ASTER/USD" in _ns.instruments)
 _c2.execute("UPDATE user_config SET value = ? WHERE key = 'instruments'", (_j.dumps(["EUR/USD"]),)); _c2.commit()
 load_instruments(_c2, _ns)
 check("an owner's later removal sticks (added only once)", _ns.instruments == ["EUR/USD"])
