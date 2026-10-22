@@ -846,6 +846,27 @@ load_instruments(_c2, _ns)
 check("an owner's later removal sticks (added only once)", _ns.instruments == ["EUR/USD"])
 _cfgmod.SYNTHETICS.add(SYN)   # load_instruments on the other DB reset the set
 
+# ── Continuations follow the setup's latest H4 confirmation (2026-10-22) ──
+_dl = []
+async def _rec_deliver(conn_, cfg_, instrument, text, **kw): _dl.append(kw.get("h4_class"))
+_old_dl, tvw._deliver_alert = tvw._deliver_alert, _rec_deliver
+config.telegram_enabled = True
+tv(type="BREAKOUT", instrument="CHFJPY", direction="bullish", level=180.0, level_type="external", range_level=175.0, timeframe="240")
+check("a new Daily breakout clears the setup's class", tvw._setup_class(conn, "CHFJPY") is None)
+_dl.clear(); tv(type="H4_CONTINUATION", instrument="CHFJPY", direction="bullish", cont_type="oc_cont", breakout_level=180.0, h4_level=181.0, timeframe="240")
+check("with no confirmation known, a continuation isn't filtered by External/Internal", _dl == [None])
+tv(type="CONFIRMED", instrument="CHFJPY", direction="bullish", source="daily_breaker", h4_class="internal",
+   breakout_level=180.0, source_level=180.0, h4_level=181.0, timeframe="240")
+_dl.clear(); tv(type="H4_CONTINUATION", instrument="CHFJPY", direction="bullish", cont_type="oc_cont", breakout_level=180.0, h4_level=181.5, timeframe="240")
+check("after an Internal Origin, continuations count as Internal (skip people with Internal off)", _dl == ["internal"])
+_dl.clear(); tv(type="H4_CONTINUATION", instrument="CHFJPY", direction="bullish", cont_type="breakout_cont", h4_class="external",
+               source="daily_breaker", source_level=180.0, breakout_level=180.0, h4_level=182.0, timeframe="240")
+_dl.clear(); tv(type="H4_CONTINUATION", instrument="CHFJPY", direction="bullish", cont_type="engulfing", eng_wick=True,
+               breakout_level=180.0, h4_level=182.5, timeframe="240")
+check("after an External 'back in line', continuations count as External again", _dl == ["external"])
+tvw._deliver_alert = _old_dl
+config.telegram_enabled = False
+
 # ── Bot command menu + Mini App sign-in (2026-10-22) ──────────────────────
 import hashlib as _hl, hmac as _hm, time as _time
 from urllib.parse import urlencode as _ue

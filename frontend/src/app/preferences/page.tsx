@@ -30,7 +30,7 @@ type Status = 'idle' | 'saving' | 'saved' | 'error'
 const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'alertOrigin', group: 'Origin', label: 'Origin alerts', desc: 'The first confirmation of a Daily setup: a Daily reaction followed by an H4 break. External / Internal below choose which kinds.' },
   { key: 'alertExternal', label: 'External breakouts', desc: 'Bias confirmed by an H4 close beyond the last structure formed before price reached the daily level. The standard alert.' },
-  { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level. Off by default; External / Internal also apply to "H4 back in line" alerts.' },
+  { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level. Off by default. While it is off you also get no continuations of an Internal setup.' },
   { key: 'contInline', group: 'Continuations', label: 'H4 breakout in line', desc: 'A new H4 breakout in the Daily direction while H4 is in line with the Daily.' },
   { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'Price comes back to the H4 Breaker, touches it exactly and closes beyond it.' },
   { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
@@ -226,7 +226,7 @@ export default function PreferencesPage() {
               )}
 
               <div style={{ padding: '12px 20px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Continuation alerts follow an Origin. External / Internal apply to Origins and to "H4 back in line" alerts.
+                Continuation alerts follow the setup's latest H4 confirmation (its Origin, or a later "H4 back in line"): you get them only if you received that confirmation's type, External or Internal.
               </div>
             </div>
           )}

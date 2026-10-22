@@ -851,7 +851,7 @@ STRATEGY_CONTENT = {
     ],
     "h4_classification": [
         {"label": "External", "variant": "accent", "desc": "The H4 A-shape (V-shape for sells) that was broken already existed before the reaction started at the Daily level. A failed reaction that restarts at the same level keeps that start; a reaction at a different Daily level starts fresh."},
-        {"label": "Internal", "variant": "warning", "desc": "The H4 A-shape (V-shape for sells) that was broken formed after the reaction started. Each subscriber chooses whether they receive External Origins, Internal Origins or both; continuations always come through."},
+        {"label": "Internal", "variant": "warning", "desc": "The H4 A-shape (V-shape for sells) that was broken formed after the reaction started. Each subscriber chooses whether they receive External setups, Internal setups or both (Internal is off by default); continuations follow the setup's latest H4 confirmation, so they only come to people who received that type."},
     ],
     "daily_context": {
         "intro": "The Daily breakout always comes from the most recent External high or low.",

@@ -51,17 +51,29 @@ color  bt_sell_col = input.color(#FF1744, "Sell label", group=GBT, inline="btc")
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing, 7 Buys, 8 Sells
 var bt_cnt  = array.new_int(9, 0)
 var int bt_t0 = time
+// External / Internal of the setup's latest H4 confirmation (Origin or back in line);
+// continuations follow it, like the server: Internal off = no continuations of Internal setups
+var bt_scls = array.from("")
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing")''')
 
 # Label function: after f_wk(), so it can read the Weekly relation
+rep('''    h4_brk_lvl            := na
+    bo_wk_rel := ""
+''', '''    h4_brk_lvl            := na
+    array.set(bt_scls, 0, "")
+    bo_wk_rel := ""
+''')
 rep('''// Weekly context sent with every bias alert (empty when there is no Weekly setup)
 f_wk() =>
 ''', '''// Backtest: label where an alert is sent (returns true if labelled)
 f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool on = kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
-    bool cls_ok = kind > 1 or (cls == "external" ? bt_ext : bt_int)
+    if kind <= 1
+        array.set(bt_scls, 0, cls)
+    string c = array.get(bt_scls, 0)
+    bool cls_ok = c == "" or (c == "external" ? bt_ext : bt_int)
     string head = kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
-    string tag  = kind <= 1 ? (cls == "external" ? " (External)" : " (Internal)") : ""
+    string tag  = c == "" ? "" : kind <= 1 ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
     if bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         label.new(bar_index, bull ? low : high, "Not counted: " + why + "\\n" + head + tag,

@@ -109,9 +109,9 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
                          pref: Optional[str] = None, engulf_wick: Optional[bool] = None) -> None:
     """Send alert_text to every active user whose watched_instruments includes instrument.
 
-    h4_class is set only for Origin confirmations: each user then receives it only
-    if they allow that type (external/internal). Continuations pass None and
-    always go out."""
+    h4_class: External / Internal of the H4 confirmation this alert belongs to
+    (the Origin itself, or the confirmation a continuation follows). Each user
+    receives it only if they allow that type. None = no such filter."""
     instr_norm = instrument.replace("/", "").upper()
     synthetic = is_synthetic(instr_norm)
     kind = confirmation_kind(h4_class) if h4_class is not None else None
@@ -424,9 +424,28 @@ def _ensure_breakout(conn, config, instrument: str, direction: Direction,
     return breakout
 
 
+# External / Internal of the setup's latest H4 confirmation (Origin or "back in
+# line"), per instrument. Continuations carry it, so someone who doesn't get
+# Internal confirmations doesn't get the continuations that follow one either.
+def _set_setup_class(conn, instrument: str, cls: Optional[str]) -> None:
+    key = f"setup_h4_class:{instrument}"
+    if cls:
+        conn.execute("INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                     (key, cls))
+    else:
+        conn.execute("DELETE FROM user_config WHERE key = ?", (key,))
+    conn.commit()
+
+
+def _setup_class(conn, instrument: str) -> Optional[str]:
+    row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"setup_h4_class:{instrument}",)).fetchone()
+    return row[0] if row else None
+
+
 async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
     direction = Direction(payload.direction)
     broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
+    _set_setup_class(conn, instrument, None)   # a new Daily setup starts without an H4 confirmation
 
     # Deactivate any prior breakout and its reaction sources
     old_state = get_instrument_state(conn, instrument)
@@ -635,6 +654,7 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
     ))
 
     logger.info("%s CONFIRMED %s (h4_class=%s) — alert stored", instrument, direction.value, payload.h4_class)
+    _set_setup_class(conn, instrument, confirmation_kind(payload.h4_class))
 
     if config.telegram_enabled:
         _in_background(_deliver_alert(conn, config, instrument, alert_text,
@@ -726,12 +746,19 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
 
     logger.info("%s H4_CONTINUATION %s (cont_type=%s) — alert stored", instrument, direction.value, cont_type)
 
+    # "Back in line" is an H4 breakout after a Daily reaction, like the Origin:
+    # it follows each person's External / Internal choice and becomes the
+    # setup's class. Every other continuation follows the setup's latest
+    # confirmation, so it only reaches people who received that confirmation.
+    if cont_type == "breakout_cont" and payload.h4_class:
+        setup_kind = confirmation_kind(payload.h4_class)
+        _set_setup_class(conn, instrument, setup_kind)
+    else:
+        setup_kind = _setup_class(conn, instrument)   # None (unknown) = no External/Internal filter
+
     if config.telegram_enabled:
-        # "Back in line" is an H4 breakout after a Daily reaction, like the Origin:
-        # it follows each person's External / Internal choice too.
-        realign_kind = confirmation_kind(payload.h4_class) if cont_type == "breakout_cont" and payload.h4_class else None
         _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id,
-                                      h4_class=realign_kind, pref=_CONT_PREF.get(cont_type),
+                                      h4_class=setup_kind, pref=_CONT_PREF.get(cont_type),
                                       engulf_wick=alert_record.eng_wick))
 
 

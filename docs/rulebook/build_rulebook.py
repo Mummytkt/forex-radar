@@ -31,7 +31,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
 HERE = Path(__file__).resolve().parent
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "19 October 2026 · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "22 October 2026 · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -399,7 +399,7 @@ def make_rules(im):
          "When US clocks change in November, all these times move one hour later.", im["timing"]),
         ("I. Timing and delivery", "Who receives an alert",
          "An alert reaches a member only if their plan is active, their Telegram is linked, they follow that pair (Settings → My Instruments), "
-         "and they allow that alert type in Alert Filters (Origin, each continuation type, engulfing; External / Internal for Origins and back-in-line alerts).",
+         "and they allow that alert type in Alert Filters (Origin, each continuation type, engulfing; External / Internal for Origins and back-in-line alerts). Continuations follow the setup's latest H4 confirmation: with Internal off, an Internal setup sends none.",
          "Buy and Sell alerts follow the same rules", "Every type is on until switched off, except Internal H4 breakouts (off until switched on)",
          "Members without Telegram linked still see every alert on the dashboard and in History.", im["delivery"]),
     ]
