@@ -4,6 +4,7 @@ import useSWR from 'swr'
 import { MonitorPlay, Search } from 'lucide-react'
 import { fetcher } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
+import { useAuth } from '@/lib/auth'
 
 // Live Chart Board: what each pair's 4H Bias Pointer chart shows, refreshed by the
 // script at every H4 close. Subscribers only receive the pairs they get alerts on.
@@ -97,6 +98,9 @@ function weeklyLine(w: WeeklySnap, inst: string): string | null {
 export default function LiveChartBoard() {
   const { data } = useSWR<{ pairs: BoardRow[] }>('/api/chart-board', fetcher, { refreshInterval: 60000 })
   const [filter, setFilter] = useState('all')
+  // Subscribers see the status and Weekly line only; the owner also sees every level
+  const { user } = useAuth()
+  const showLevels = user?.role === 'OWNER'
   const [q, setQ] = useState('')
 
   const rows = (data?.pairs ?? [])
@@ -184,7 +188,7 @@ export default function LiveChartBoard() {
                     </div>
                   )
                 })()}
-                {s && (
+                {s && showLevels && (
                   <div style={{ flex: '1 1 260px', display: 'flex', flexWrap: 'wrap', gap: '3px 12px', fontSize: 11.5, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
                     {(() => {
                       const w = s as Snapshot & WeeklySnap
