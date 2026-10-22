@@ -349,16 +349,6 @@ export default function SettingsPage() {
           <TelegramConnect />
         </Section>
 
-        <Section title="Engine Configuration" desc="Read-only. Set via .env file.">
-          <Row label="Tolerance band" value="5 pips" note="Reaction source tolerance for retest detection" />
-          <Row label="Daily lookback" value="200 candles" note="Historical candles fetched on startup" />
-          <Row label="H4 lookback" value="500 candles" note="Historical H4 candles fetched on startup" />
-          <div style={{ display: 'flex', gap: 8, padding: '12px 20px', fontSize: 12, color: 'var(--text-secondary)', alignItems: 'flex-start' }}>
-            <Info size={13} style={{ flexShrink: 0, marginTop: 1, color: 'var(--info)' }} />
-            <span>Tolerance and lookback values require a restart to change.</span>
-          </div>
-        </Section>
-
       </main>
     </>
   )

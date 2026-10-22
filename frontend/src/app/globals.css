@@ -113,7 +113,7 @@ body {
   transition: transform 0.2s;
   pointer-events: none; z-index: 1;
 }
-.toggle input:checked ~ .toggle-thumb { transform: translateX(17px); }
+.toggle input:checked + .toggle-track .toggle-thumb { transform: translateX(17px); }
 
 /* ─── STATUS BADGE ─── */
 .badge {

@@ -73,7 +73,7 @@ const RESULT_LABEL: Record<string, string> = {
 }
 const SETUP_LABELS: Record<string, string> = {
   origin: 'Origin',
-  continuation_ashape: 'Cont. A/V',
+  continuation_ashape: 'Cont. H4 break',
   continuation_h4oc: 'Cont. OC',
   continuation_h4breaker: 'Cont. Breaker',
   continuation_engulfing: 'Engulfing',
@@ -835,7 +835,7 @@ function TradeModal({
             <label style={labelStyle}>Setup type</label>
             <select value={form.setup_type} onChange={e => set('setup_type', e.target.value)} style={selectStyle}>
               <option value="origin">Origin</option>
-              <option value="continuation_ashape">Continuation — A/V</option>
+              <option value="continuation_ashape">Continuation — H4 breakout</option>
               <option value="continuation_h4oc">Continuation — OC</option>
               <option value="continuation_h4breaker">Continuation — Breaker</option>
               <option value="continuation_engulfing">Engulfing</option>

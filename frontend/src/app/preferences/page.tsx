@@ -143,7 +143,7 @@ export default function PreferencesPage() {
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <h2 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Telegram delivery</h2>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.6 }}>
-              Choose which Origin confirmations and news reach your Telegram. Changes save to your account straight away and only affect you.
+              Choose which alerts and news reach your Telegram. Changes save to your account straight away and only affect you.
             </p>
           </div>
 

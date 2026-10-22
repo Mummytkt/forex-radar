@@ -777,6 +777,7 @@ if new_week and not na(wk_c1)
     f_wkill(w_soc, wk_c1, false)
     if not na(wk_dir)
         f_wkill(w_pbocs, wk_c1, wk_dir == "bullish")
+        wpb_oc_lvl := array.size(w_pbocs) > 0 ? array.last(w_pbocs) : na
     if not na(wk_c2)
         bool wy_bull = wk_c1 > wk_o1
         bool wy_bear = wk_c1 < wk_o1
@@ -943,6 +944,7 @@ if new_daily and not na(d_close)
     f_kill(d_soc, d_close, false)
     if not na(bo_dir)
         f_kill(pb_ocs, d_close, bo_dir == "bullish")
+        pb_oc_lvl := array.size(pb_ocs) > 0 ? array.last(pb_ocs) : na   // the label shows the newest OC still alive
 
 if new_daily and not na(d_close2)
     bool y_bull = d_close  > d_open

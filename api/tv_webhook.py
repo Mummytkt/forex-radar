@@ -604,7 +604,7 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
         h4_event=h4_event,
         fired_at=now,
         classification=AlertClassification.ORIGIN,
-        daily_level_context=payload.level_type or "internal",
+        daily_level_context=payload.level_type or "external",
         weekly=_weekly_ctx(payload),
     )
 
@@ -693,7 +693,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         classification=classification,
         h4_oc_level=h4_level if classification == AlertClassification.H4_OC_CONT else None,
         h4_breaker_level=h4_level if classification != AlertClassification.H4_OC_CONT else None,
-        daily_level_context=payload.level_type or "internal",
+        daily_level_context=payload.level_type or "external",
         weekly=_weekly_ctx(payload),
     )
 
