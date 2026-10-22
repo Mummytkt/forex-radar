@@ -166,7 +166,7 @@ function HeroScene() {
 
       <div className="lp-float" style={{ position: 'absolute', zIndex: 2, top: 26, right: -6, maxWidth: 230, background: 'rgba(16,18,30,0.92)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 16px 40px -12px rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#4ade80' }}>
-          <CheckCircle2 size={14} /> BUY BIAS CONFIRMED
+          <CheckCircle2 size={14} /> BUY CONFIRMED
         </div>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>EUR/USD · Daily → H4 aligned</div>
       </div>

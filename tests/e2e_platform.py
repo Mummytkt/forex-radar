@@ -528,7 +528,7 @@ tv(type="CONFIRMED", instrument="CHFJPY", direction="bullish", source="daily_bre
    breakout_level=180.0, source_level=180.0, h4_level=181.0, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='CHFJPY' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("Origin describes the close above the External high", "A Daily candle closed above the most recent External high @ 180.000" in t)
-check("alert titles name the market type (Forex)", "BUY BIAS CONFIRMED — CHFJPY (Forex)" in t)
+check("Origin headline: BUY CONFIRMED — Look for entry and buy CHFJPY (Forex)", t.startswith("BUY CONFIRMED — Look for entry and buy CHFJPY (Forex)"))
 check("an Origin without level_type says the Daily breakout level is External", "Daily breakout level: External" in t)
 tv(type="PRICE_UPDATE", instrument="XAGUSD", price=48.235, timeframe="240", snapshot=dict(snap, stage="breakout"))
 b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
@@ -586,7 +586,7 @@ tv(type="CONFIRMED", instrument=SYN, exchange="DERIV", direction="bullish", sour
    breakout_level=131500.25, source_level=131500.25, h4_level=132100.5, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument=? ORDER BY id DESC LIMIT 1", (SYN,)).fetchone()[0]
 check("synthetic levels print with 2 decimals", "@ 131500.25" in t and "@ 132100.50" in t)
-check("synthetic alert titles say (Synthetic)", f"— {SYN} (Synthetic)" in t)
+check("synthetic alert titles say (Synthetic)", t.splitlines()[0].endswith(f"{SYN} (Synthetic)"))
 from alerts.feed_monitor import is_market_open as _imo
 from datetime import datetime as _dt, timezone as _tz
 _sat = _dt(2026, 10, 24, 12, tzinfo=_tz.utc)
@@ -736,7 +736,7 @@ check("a Weekly-confirmed Origin states the Weekly storyline",
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="oc_cont", level_type="external",
    breakout_level=0.9100, h4_level=0.9120, timeframe="240", wk_rel="against", wk_dir="bearish", wk_level=0.9300)
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("continuation headline reads 'Buy is still on (continuation)'", t.startswith("Buy is still on (continuation) — AUDCAD (Forex)"))
+check("continuation headline: CONTINUATION CONFIRMED — keep buying", t.startswith("CONTINUATION CONFIRMED, BUY IS STILL ON — Look for entry and keep buying AUDCAD (Forex)"))
 check("a setup against the Weekly is marked", "AGAINST the Weekly direction" in t and "Weekly: Bearish breakout @ 0.93000" in t)
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="engulfing", level_type="external",
    breakout_level=0.9100, h4_level=0.9135, timeframe="240")

@@ -76,6 +76,17 @@ _SHORT_KEEP = ("Daily breakout:", "Weekly", "Daily reaction source:", "H4 confir
                "Daily breakout level:", "⚠️")
 
 
+def _headline(direction: Direction, instrument: str, continuation: bool) -> str:
+    """First line of a bias alert.
+    Origin:        'BUY CONFIRMED — Look for entry and buy AUDCAD (Forex)'
+    Continuation:  'CONTINUATION CONFIRMED, BUY IS STILL ON — Look for entry and keep buying AUDCAD (Forex)'"""
+    bull = direction == Direction.BULLISH
+    if continuation:
+        return (f"CONTINUATION CONFIRMED, {'BUY' if bull else 'SELL'} IS STILL ON — "
+                f"Look for entry and keep {'buying' if bull else 'selling'} {tagged(instrument)}")
+    return f"{'BUY' if bull else 'SELL'} CONFIRMED — Look for entry and {'buy' if bull else 'sell'} {tagged(instrument)}"
+
+
 def _signature() -> str:
     """Footer on every alert: '— MummyTKT © <current year>'."""
     return f"— MummyTKT © {datetime.now(timezone.utc).year}"
@@ -161,7 +172,7 @@ def _format_origin(alert: AlertRecord) -> str:
     source = alert.reaction_source
     h4 = alert.h4_event
 
-    bias_label = "BUY BIAS CONFIRMED" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED"
+    bias_label = _headline(direction, instrument, continuation=False)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -211,7 +222,7 @@ def _format_origin(alert: AlertRecord) -> str:
     reason = _reason_origin(source.source_type, direction_label, classification_label, direction_lower)
 
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         "Daily → H4 aligned",
         "",
         f"Daily breakout: {direction_label} — broken level @ {breakout_level_str}",
@@ -242,7 +253,7 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
     instrument = alert.instrument
     h4 = alert.h4_event
 
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -267,7 +278,7 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         f"Daily → H4 continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -296,7 +307,7 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -330,7 +341,7 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         f"Daily → H4 Breaker continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -356,7 +367,7 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
     instrument = alert.instrument
     oc_level = alert.h4_oc_level
 
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -376,7 +387,7 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         f"Daily → H4 OC continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -403,7 +414,7 @@ def _format_h4_breaker_origin(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -431,7 +442,7 @@ def _format_h4_breaker_origin(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         "H4 Breaker Origin",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -457,7 +468,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -483,7 +494,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
             src_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape inside the range"
         src_str = _fmt_level(instrument, src.level)
         lines = [
-            f"{bias_label} — {tagged(instrument)}",
+            bias_label,
             "H4 back in line with the Daily",
             "",
             f"Daily breakout: {direction_label} (active)",
@@ -501,7 +512,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
     else:
         # A new H4 breakout while H4 is already in line with the Daily
         lines = [
-            f"{bias_label} — {tagged(instrument)}",
+            bias_label,
             "H4 breakout in line with the Daily",
             "",
             f"Daily breakout: {direction_label} (active)",
@@ -531,7 +542,7 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -559,7 +570,7 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         "H4 Breaker Continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -584,7 +595,7 @@ def _format_h4_engulfing(alert: AlertRecord) -> str:
     direction = alert.direction
     instrument = alert.instrument
     level = alert.h4_breaker_level
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
     level_str = _fmt_level(instrument, level) if level is not None else "—"
@@ -595,7 +606,7 @@ def _format_h4_engulfing(alert: AlertRecord) -> str:
         desc = (f"A bearish H4 candle engulfed the previous bullish candle: it opened at or above that candle's "
                 f"close and closed below its open @ {level_str}.")
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         f"H4 Engulfing in the Daily direction",
         "",
         f"Daily breakout: {direction_label} (active)",
@@ -620,7 +631,7 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
     instrument = alert.instrument
     oc_level = alert.h4_oc_level
 
-    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
+    bias_label = _headline(direction, instrument, continuation=True)
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -640,7 +651,7 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
         )
 
     lines = [
-        f"{bias_label} — {tagged(instrument)}",
+        bias_label,
         "H4 OC Continuation",
         "",
         f"Daily breakout: {direction_label} (active)",
