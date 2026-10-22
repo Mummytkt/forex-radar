@@ -694,7 +694,9 @@ def get_preferences(request: Request):
     user = getattr(request.state, "user", None)
     with _db(request) as conn:
         prefs = get_alert_prefs(conn, user["id"] if user else None, user["role"] if user else None)
-    return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"], newsAlerts=prefs["news"])
+    return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"], newsAlerts=prefs["news"],
+                            alertOrigin=prefs["origin"], contInline=prefs["cont_inline"], contBreaker=prefs["cont_breaker"],
+                            contOc=prefs["cont_oc"], contRealign=prefs["cont_realign"], contEngulfing=prefs["engulfing"])
 
 
 @router.patch("/preferences")
@@ -709,6 +711,11 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
             set_alert_pref(conn, uid, "internal", body.alertInternal)
         if body.newsAlerts is not None:
             set_alert_pref(conn, uid, "news", body.newsAlerts)
+        for field, kind in (("alertOrigin", "origin"), ("contInline", "cont_inline"), ("contBreaker", "cont_breaker"),
+                            ("contOc", "cont_oc"), ("contRealign", "cont_realign"), ("contEngulfing", "engulfing")):
+            value = getattr(body, field)
+            if value is not None:
+                set_alert_pref(conn, uid, kind, value)
     return {"ok": True}
 
 
@@ -835,6 +842,8 @@ STRATEGY_CONTENT = {
     "alert_classifications": [
         {"term": "Origin", "body": "The first confirmed bias alert for a setup. Requires the complete 4-step chain: Daily breakout → eligible reaction source → retest of that source → qualifying H4 A/V breakout. After an Origin fires, the engine enters continuation mode for that instrument until the next Daily breakout."},
         {"term": "Continuation — H4 breakout in line", "body": "While H4 is in line with the Daily, every new H4 close beyond the latest H4 A-shape (buys) or V-shape (sells) sends an “H4 breakout in line with the Daily” alert. No Daily reaction is needed. Its level becomes the new H4 Breaker and only its leg's H4 OCs (and later ones) are watched."},
+        {"term": "Continuation — H4 engulfing", "body": "After the Origin and while H4 is in line, an H4 candle whose body covers the previous opposite candle's body (buys: opens at or below a bearish candle's close and closes above its open), in the Daily direction."},
+        {"term": "Weekly storyline", "body": "The same technique one level up: a Weekly close beyond the Weekly External high/low is a Weekly breakout; a reaction at a Weekly level (Weekly Breaker, Weekly V/A-shape or OC inside the range, post-breakout Weekly OC), checked on Daily candles, holds; then a Daily breakout in the Weekly direction is Weekly-confirmed (External or Internal by when the broken Daily level formed). Alerts state it; a Daily setup against the Weekly is marked AGAINST. No Weekly setup: the Daily rules as before."},
         {"term": "Continuation — H4 Breaker Retest", "body": "The H4 A/V broken at the Origin becomes the H4 Breaker; each newer in-line H4 breakout replaces it with the level it broke. When price comes back, the H4 candle must open on the bias side, wick exactly to the level and close beyond it. The first time is the H4 Breaker Origin; each later visit (after price moves away) is an H4 Breaker Continuation."},
         {"term": "Continuation — H4 OC", "body": "Two H4 candles in a row in the Daily direction form an H4 OC. After each H4 breakout in the Daily direction, every OC of that breakout's leg (from its swing low/high) and any formed after it is watched. A later candle that opens on the bias side, wicks exactly to an OC and closes beyond it sends one alert naming the furthest OC reached; those OCs are then used up. An OC closed through against the bias is dropped; all are dropped when H4 breaks the other way or a new Daily breakout forms."},
         {"term": "Out of line → back in line", "body": "An H4 close beyond the latest H4 V (buys) or A (sells) puts H4 out of line with the Daily: no alert, an OUT OF LINE tag on the chart and dashboard, and every H4 OC is dropped. H4 comes back in line only after a fresh Daily reaction followed by an H4 break in the Daily direction, which sends the “H4 back in line with the Daily” continuation."},

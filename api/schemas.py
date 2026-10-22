@@ -44,12 +44,24 @@ class AlertPreferences(BaseModel):
     alertExternal: bool
     alertInternal: bool
     newsAlerts: bool = True
+    alertOrigin: bool = True
+    contInline: bool = True
+    contBreaker: bool = True
+    contOc: bool = True
+    contRealign: bool = True
+    contEngulfing: bool = True
 
 
 class AlertPreferencesUpdate(BaseModel):
     alertExternal: bool | None = None
     alertInternal: bool | None = None
     newsAlerts: bool | None = None
+    alertOrigin: bool | None = None
+    contInline: bool | None = None
+    contBreaker: bool | None = None
+    contOc: bool | None = None
+    contRealign: bool | None = None
+    contEngulfing: bool | None = None
 
 
 class VideoEntry(BaseModel):

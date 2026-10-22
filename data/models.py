@@ -40,6 +40,7 @@ class AlertClassification(str, Enum):
     H4_BREAKOUT_CONT = "h4_breakout_cont"
     H4_BREAKER_CONT = "h4_breaker_cont"
     H4_OC_CONT = "h4_oc_cont"
+    H4_ENGULFING_CONT = "h4_engulfing_cont"
 
 
 class ReactionSourceType(str, Enum):
@@ -145,3 +146,4 @@ class AlertRecord:
     h4_oc_level: Optional[float] = None         # set for CONTINUATION_H4_OC
     h4_breaker_level: Optional[float] = None    # set for CONTINUATION_H4_BREAKER
     daily_level_context: str = "internal"       # "external" or "internal" Daily level
+    weekly: Optional[dict] = None               # Weekly storyline (wk_rel, wk_dir, wk_level, wk_src, wk_src_level, wk_cls)

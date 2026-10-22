@@ -24,19 +24,25 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled?: 
   )
 }
 
-type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts'
+type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts' | 'alertOrigin' | 'contInline' | 'contBreaker' | 'contOc' | 'contRealign' | 'contEngulfing'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
-const TYPES: { key: Key; label: string; desc: string }[] = [
+const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
+  { key: 'alertOrigin', group: 'Origin', label: 'Origin alerts', desc: 'The first confirmation of a Daily setup: a Daily reaction followed by an H4 break. External / Internal below choose which kinds.' },
   { key: 'alertExternal', label: 'External breakouts', desc: 'Bias confirmed by an H4 close beyond the last structure formed before price reached the daily level. The standard alert.' },
   { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level.' },
-  { key: 'newsAlerts', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
+  { key: 'contInline', group: 'Continuations', label: 'H4 breakout in line', desc: 'A new H4 breakout in the Daily direction while H4 is in line with the Daily.' },
+  { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'Price comes back to the H4 Breaker, touches it exactly and closes beyond it.' },
+  { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
+  { key: 'contRealign', label: 'H4 back in line', desc: 'After H4 went against the Daily, a fresh Daily reaction and an H4 break bring it back in line.' },
+  { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle whose body covers the previous opposite candle\'s body, in the Daily direction.' },
+  { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
 ]
 
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
-  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle' })
+  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle', alertOrigin: 'idle', contInline: 'idle', contBreaker: 'idle', contOc: 'idle', contRealign: 'idle', contEngulfing: 'idle' })
 
   const { user } = useAuth()
   useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
@@ -44,7 +50,9 @@ export default function PreferencesPage() {
   useEffect(() => {
     fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })
       .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setPrefs({ alertExternal: !!d.alertExternal, alertInternal: !!d.alertInternal, newsAlerts: d.newsAlerts !== false }))
+      .then(d => setPrefs({ alertExternal: !!d.alertExternal, alertInternal: !!d.alertInternal, newsAlerts: d.newsAlerts !== false,
+        alertOrigin: d.alertOrigin !== false, contInline: d.contInline !== false, contBreaker: d.contBreaker !== false,
+        contOc: d.contOc !== false, contRealign: d.contRealign !== false, contEngulfing: d.contEngulfing !== false }))
       .catch(() => setLoadError(true))
   }, [])
 
@@ -69,7 +77,7 @@ export default function PreferencesPage() {
     }
   }
 
-  const bothOff = prefs && !prefs.alertExternal && !prefs.alertInternal
+  const bothOff = prefs && prefs.alertOrigin && !prefs.alertExternal && !prefs.alertInternal
 
   return (
     <>
@@ -93,8 +101,12 @@ export default function PreferencesPage() {
             <div style={{ padding: '18px 20px', fontSize: 13, color: 'var(--text-secondary)' }}>Loading…</div>
           ) : (
             <div>
-              {TYPES.map(({ key, label, desc }) => (
-                <div key={key} style={{
+              {TYPES.map(({ key, label, desc, group }) => (
+                <div key={key}>
+                {group && (
+                  <div style={{ padding: '12px 20px 6px', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>{group}</div>
+                )}
+                <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
                   padding: '14px 20px', borderBottom: '1px solid var(--border)',
                 }}>
@@ -119,6 +131,7 @@ export default function PreferencesPage() {
                   </div>
                   <Toggle checked={prefs[key]} disabled={status[key] === 'saving'} onChange={v => change(key, v)} />
                 </div>
+                </div>
               ))}
 
               {bothOff && (
@@ -129,7 +142,7 @@ export default function PreferencesPage() {
               )}
 
               <div style={{ padding: '12px 20px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Continuation alerts (H4 breakout in line, H4 Breaker retest, H4 OC reaction, H4 back in line) always reach you. They follow an Origin you already received.
+                Continuation alerts follow an Origin. External / Internal apply to Origins only.
               </div>
             </div>
           )}

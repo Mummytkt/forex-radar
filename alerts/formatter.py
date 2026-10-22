@@ -68,6 +68,44 @@ def _fmt_ts(dt: datetime | None) -> str:
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 def format_alert(alert: AlertRecord) -> str:
+    return _with_weekly(alert, _format_body(alert))
+
+
+def _weekly_lines(alert: AlertRecord) -> list[str]:
+    """The Weekly storyline above this Daily setup, if there is one."""
+    w = alert.weekly or {}
+    rel = (w.get("wk_rel") or "").lower()
+    if rel not in ("confirmed", "inline", "against"):
+        return []
+    wdir = "Bullish" if (w.get("wk_dir") or "").lower() == "bullish" else "Bearish"
+    lvl = w.get("wk_level")
+    lvl_s = _fmt_level(alert.instrument, lvl) if lvl is not None else "—"
+    if rel == "confirmed":
+        src_lvl = w.get("wk_src_level")
+        src_s = _fmt_level(alert.instrument, src_lvl) if src_lvl is not None else "—"
+        cls = "External" if (w.get("wk_cls") or "").lower() == "external" else "Internal"
+        return [f"Weekly: {wdir} breakout @ {lvl_s} → reaction at {w.get('wk_src') or 'a Weekly level'} @ {src_s}",
+                f"Weekly-confirmed: the Daily breakout is an {cls} breakout in the Weekly direction."]
+    if rel == "inline":
+        return [f"Weekly: {wdir} breakout @ {lvl_s} · the Daily is in line with the Weekly (no Weekly reaction yet)."]
+    return [f"Weekly: {wdir} breakout @ {lvl_s} · ⚠️ this Daily setup is AGAINST the Weekly direction."]
+
+
+def _with_weekly(alert: AlertRecord, text: str) -> str:
+    """Insert the Weekly lines right after the 'Daily breakout:' line."""
+    extra = _weekly_lines(alert)
+    if not extra:
+        return text
+    lines = text.split("\n")
+    for i, ln in enumerate(lines):
+        if ln.startswith("Daily breakout:"):
+            return "\n".join(lines[:i + 1] + extra + lines[i + 1:])
+    return "\n".join(lines[:2] + [""] + extra + lines[2:])
+
+
+def _format_body(alert: AlertRecord) -> str:
+    if alert.classification == AlertClassification.H4_ENGULFING_CONT:
+        return _format_h4_engulfing(alert)
     if alert.classification == AlertClassification.CONTINUATION_H4_OC:
         return _format_continuation_h4_oc(alert)
     if alert.classification == AlertClassification.CONTINUATION_ASHAPE:
@@ -512,6 +550,41 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
 
 
 # ── H4 OC Continuation alert ──────────────────────────────────────────────────
+
+def _format_h4_engulfing(alert: AlertRecord) -> str:
+    direction = alert.direction
+    instrument = alert.instrument
+    level = alert.h4_breaker_level
+    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
+    direction_lower = direction_label.lower()
+    level_str = _fmt_level(instrument, level) if level is not None else "—"
+    if direction == Direction.BULLISH:
+        desc = (f"A bullish H4 candle engulfed the previous bearish candle: it opened at or below that candle's "
+                f"close and closed above its open @ {level_str}.")
+    else:
+        desc = (f"A bearish H4 candle engulfed the previous bullish candle: it opened at or above that candle's "
+                f"close and closed below its open @ {level_str}.")
+    lines = [
+        f"{bias_label} — {tagged(instrument)}",
+        f"H4 Engulfing in the Daily direction",
+        "",
+        f"Daily breakout: {direction_label} (active)",
+        "",
+        f"H4 {direction_lower} engulfing @ {level_str}",
+        desc,
+        "",
+        f"Reason: A {direction_lower} H4 engulfing candle formed while H4 is in line with the active Daily "
+        f"{direction_lower} bias.",
+        "",
+        _context_line(alert),
+        "",
+        "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        "— TradingView Feed",
+    ]
+    return "\n".join(lines)
+
 
 def _format_h4_oc_cont(alert: AlertRecord) -> str:
     direction = alert.direction

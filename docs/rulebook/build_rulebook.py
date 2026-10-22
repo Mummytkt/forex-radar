@@ -205,6 +205,16 @@ def make_images():
         levels=[(17.8, "H4 OC (C1 close / C2 open)", ACCENT)], zones=[(17.3, 18.3, "", ZONE)],
         notes=[(1, 19.0, "completing candle\ncan't trigger it", MUTED), (2, 17.6, "later candle wicks in, closes above\n→ continuation", GREEN, (2.7, 16.3))],
         labels=["C1", "C2", "later"], ylim=(15.8, 19.6))
+    im["h4engulf"] = chart("h4engulf", [(17.6, 17.75, 16.9, 17.0), (16.95, 17.95, 16.85, 17.85)],
+        levels=[(17.6, "bearish candle's open (top of its body)", MUTED)],
+        notes=[(1, 17.95, "opens at/below its close, closes above its open\n→ engulfing continuation", GREEN, (0.7, 18.7))],
+        labels=["bearish", "engulfing"], ylim=(16.4, 19.2))
+    im["weekly"] = chart("weekly", [(15.0, 15.7, 14.9, 15.6), (15.6, 17.3, 15.5, 17.1), (17.1, 17.2, 16.0, 16.3), (16.3, 17.9, 16.1, 17.7)],
+        levels=[(16.0, "Weekly Breaker (broken Weekly External high)", RED)],
+        notes=[(1, 17.1, "Weekly close above\n→ Weekly breakout", GREEN, (0.4, 18.4)),
+               (2, 16.0, "Daily touches the Weekly Breaker\nand holds → Weekly reaction", ACCENT, (2.1, 14.9)),
+               (3, 17.7, "Daily breakout in the Weekly direction\n→ Weekly-confirmed", GREEN, (3.2, 18.6))],
+        labels=["week", "week", "day", "day"], ylim=(14.2, 19.2))
     im["realign"] = chart("realign", [(17.0, 17.1, 14.8, 15.0), (15.0, 15.7, 14.9, 15.6), (15.6, 15.7, 15.1, 15.2), (15.2, 16.1, 15.1, 15.95)],
         levels=[(16.4, "latest H4 V-shape", MUTED), (15.6, "latest H4 A-shape", RED, 1)],
         notes=[(0, 14.25, "closes below the latest V-shape\n→ OUT OF LINE (no alert)", RED), (3, 16.0, "closes above\n→ continuation", GREEN, (3.0, 17.0))],
@@ -286,6 +296,16 @@ def make_rules(im):
          "Before any retest counts, an H4 candle must first <b>close beyond the zone</b> — proving price moved away.",
          "An H4 close above the breaker zone, then a later dip back into it", "An H4 close below the breaker zone, then a later rise back into it",
          "This stops a breakout that is still sitting on its level from counting as a retest straight away.", im["zone"]),
+        ("C. Daily bias", "The Weekly storyline above the Daily",
+         "The same technique one level up. The <b>Weekly External high/low</b> is built by the Daily rules on Weekly candles; a <b>Weekly close</b> "
+         "beyond it is a Weekly breakout. After price moves away, it must react at a <b>Weekly level</b> — the Weekly Breaker, a Weekly V/A-shape or OC "
+         "inside the broken Weekly range, or a post-breakout Weekly OC — with an exact Daily wick touch that holds. While it holds, a <b>Daily breakout in "
+         "the Weekly direction is Weekly-confirmed</b>: External if the Daily level it broke formed before the reaction started, Internal if after. "
+         "Then the Daily reaction and H4 Origin follow as usual, and every alert states the Weekly storyline.",
+         "Weekly breakout up, Daily touches a Weekly level and holds, then a Daily breakout up",
+         "Weekly breakout down, Daily touches a Weekly level and holds, then a Daily breakout down",
+         "A Daily close through the reacting Weekly level ends the Weekly link; a new Weekly breakout starts again. A Daily setup against the Weekly "
+         "direction still alerts, marked AGAINST the Weekly. With no Weekly setup, the Daily rules work exactly as before.", im["weekly"]),
         ("D. Reaction zones (until the Origin)", "Post-breakout Daily OC",
          "After the breakout day, Daily candles that keep closing in the breakout direction, beyond the breakout level, form OCs. "
          "<b>Every completed OC</b> is watched until an opposing breakout.",
@@ -344,6 +364,11 @@ def make_rules(im):
          "Out of line on a close below the latest H4 V-shape; back in after a Daily reaction plus a close above the latest H4 A-shape",
          "Out of line on a close above the latest H4 A-shape; back in after a Daily reaction plus a close below the latest H4 V-shape",
          "Going out of line sends no alert. While out of line no H4 OC or H4 Breaker alerts fire, and the dashboard shows the pair as OUT OF LINE.", im["realign"]),
+        ("F. Continuations (after the Origin)", "H4 engulfing",
+         "After the Origin and while H4 is in line, an H4 candle whose <b>body covers the previous opposite candle's body</b>, in the Daily direction, "
+         "sends an engulfing continuation.",
+         "After a bearish candle: opens at/below its close and closes above its open", "After a bullish candle: opens at/above its close and closes below its open",
+         "One alert per candle: if a Breaker, OC or in-line breakout alert fires on the same candle, the engulfing alert is not sent.", im["h4engulf"]),
         ("G. A new breakout", "When the setup changes",
          "Pulling back into the range is not a cancellation — that's where reactions happen. The setup only changes at the "
          "<b>next Daily breakout</b> on any layer, in either direction.",
@@ -372,8 +397,8 @@ def make_rules(im):
          "When US clocks change in November, all these times move one hour later.", im["timing"]),
         ("I. Timing and delivery", "Who receives an alert",
          "An alert reaches a member only if their plan is active, their Telegram is linked, they follow that pair (Settings → My Instruments), "
-         "and — for Origins — they allow that type (External / Internal).",
-         "Buy and Sell alerts follow the same rules", "Continuations always go out, whatever the type setting",
+         "and they allow that alert type in Alert Filters (Origin, each continuation type, engulfing; for Origins also External / Internal).",
+         "Buy and Sell alerts follow the same rules", "Every type is on until the member switches it off",
          "Members without Telegram linked still see every alert on the dashboard and in History.", im["delivery"]),
     ]
 

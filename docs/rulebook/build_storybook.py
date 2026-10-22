@@ -317,6 +317,9 @@ def chapters():
             "<b>Giants decide the direction. Little Twins find the moment.</b>",
         ]),
         ("Houses Inside Houses", "#8a5cf6", "house", [
+            "Above the Giants live the <b>Titan Twins</b>. Each Titan is a whole <b>week</b>. Titans have their own Big House, built by the same rules. "
+            "When a Titan breaks out, a Giant must visit a Titan safe spot and hold, and then a Giant breakout in the same direction becomes a "
+            "<b>Titan-blessed</b> breakout. The bells then say so. If the Titans are quiet, the Giants play exactly as before.",
             "The Giant Twins live in a <b>Big House</b>. Its floor is the lowest spot a Giant's <b>shirt</b> reached before Ben broke out through a rooftop. Grown-ups call it the <b>external low</b>.",
             "While the Giants keep climbing, the roof keeps rising with them. It's <b>still being built</b>. When a Giant slides back down past the last valley, the roof is finished. That's the <b>external high</b>.",
             "Inside the Big House, a <b>smaller house</b> can be built in exactly the same way. And inside that one, an even smaller one, as small as you like!",
@@ -378,6 +381,7 @@ def chapters():
             "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. Each newer rooftop the twins break becomes the new little trampoline. If a later twin <b>starts above it</b>, comes down to touch its exact line and closes <b>above</b> it, ENCORE!",
             "<b>The little hand-off steps.</b> When two Little Bens climb one after the other, they make a little step. Every step on the newest climb is kept. If a <b>later</b> twin starts above one, touches it and closes above, ENCORE! That step is then used up. (A twin climbing up through it from below doesn't count.)",
             "Each visit to a spot rings <b>once</b>. The twins must leave and come back to ring it again.",
+            "<b>The big hug step.</b> When a Little Ben's shirt starts at or below a sliding Bella's shirt-end and finishes above where her shirt started, he has covered her shirt completely. ENCORE!",
         ]),
         (None, None, "encore2", []),
         ("The Wobble", "#ff7a59", "wobble", [

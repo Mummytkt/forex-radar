@@ -722,6 +722,37 @@ _tgm.send_alert = _old_send
 config.telegram_enabled = False
 dbw = sqlite3.connect(DB); dbw.execute("UPDATE users SET watched_instruments = NULL WHERE id = ?", (sid,)); dbw.commit(); dbw.close()
 
+# ── Weekly storyline, engulfing, alert-type switches (2026-10-22) ─────────
+tv(type="BREAKOUT", instrument="AUDCAD", direction="bullish", level=0.9100, level_type="external", range_level=0.9000, timeframe="240")
+tv(type="CONFIRMED", instrument="AUDCAD", direction="bullish", source="daily_breaker", h4_class="external", level_type="external",
+   breakout_level=0.9100, source_level=0.9100, h4_level=0.9150, timeframe="240",
+   wk_rel="confirmed", wk_dir="bullish", wk_level=0.9050, wk_src="Weekly Breaker", wk_src_level=0.9050, wk_cls="external")
+t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("a Weekly-confirmed Origin states the Weekly storyline",
+      "Weekly: Bullish breakout @ 0.90500 → reaction at Weekly Breaker @ 0.90500" in t
+      and "Weekly-confirmed: the Daily breakout is an External breakout in the Weekly direction." in t
+      and t.index("Daily breakout:") < t.index("Weekly: Bullish"))
+tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="oc_cont", level_type="external",
+   breakout_level=0.9100, h4_level=0.9120, timeframe="240", wk_rel="against", wk_dir="bearish", wk_level=0.9300)
+t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("a setup against the Weekly is marked", "AGAINST the Weekly direction" in t and "Weekly: Bearish breakout @ 0.93000" in t)
+tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="engulfing", level_type="external",
+   breakout_level=0.9100, h4_level=0.9135, timeframe="240")
+t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("engulfing alert reads right and has no Weekly line without a Weekly setup",
+      "H4 Engulfing in the Daily direction" in t and "closed above its open @ 0.91350" in t and "Weekly:" not in t)
+c.patch("/api/preferences", headers=H(ts_), json={"contOc": False, "contEngulfing": False})
+_pp = c.get("/api/preferences", headers=H(ts_)).json()
+check("alert-type switches save", _pp["contOc"] is False and _pp["contEngulfing"] is False and _pp["alertOrigin"] is True)
+sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", pref="cont_oc"))
+check(f"a subscriber who switched OC alerts off doesn't get them {sorted(sent)}", "chatS" not in sent and len(sent) >= 1)
+sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", pref="cont_breaker"))
+check("…but still gets the types left on", "chatS" in sent)
+c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": False})
+sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="external", pref="origin"))
+check("switching Origin off stops Origins", "chatS" not in sent)
+c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": True, "contOc": True, "contEngulfing": True})
+
 # ── Testers (2026-10-21) ───────────────────────────────────────────────────
 _tok = c.post("/api/auth/invite", headers=H(owner), json={"email": "tester@x.com", "plan": "TESTER", "plan_days": 21}).json()["token"]
 dbw = sqlite3.connect(DB)
