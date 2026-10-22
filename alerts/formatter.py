@@ -242,7 +242,7 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
     instrument = alert.instrument
     h4 = alert.h4_event
 
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -296,7 +296,7 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -356,7 +356,7 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
     instrument = alert.instrument
     oc_level = alert.h4_oc_level
 
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -403,7 +403,7 @@ def _format_h4_breaker_origin(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -457,7 +457,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -531,7 +531,7 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
     instrument = alert.instrument
     level = alert.h4_breaker_level
 
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 
@@ -584,7 +584,7 @@ def _format_h4_engulfing(alert: AlertRecord) -> str:
     direction = alert.direction
     instrument = alert.instrument
     level = alert.h4_breaker_level
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
     level_str = _fmt_level(instrument, level) if level is not None else "—"
@@ -620,7 +620,7 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
     instrument = alert.instrument
     oc_level = alert.h4_oc_level
 
-    bias_label = "BUY BIAS CONFIRMED (continuation)" if direction == Direction.BULLISH else "SELL BIAS CONFIRMED (continuation)"
+    bias_label = "Buy is still on (continuation)" if direction == Direction.BULLISH else "Sell is still on (continuation)"
     direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
     direction_lower = direction_label.lower()
 

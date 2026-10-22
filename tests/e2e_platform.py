@@ -736,6 +736,7 @@ check("a Weekly-confirmed Origin states the Weekly storyline",
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="oc_cont", level_type="external",
    breakout_level=0.9100, h4_level=0.9120, timeframe="240", wk_rel="against", wk_dir="bearish", wk_level=0.9300)
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("continuation headline reads 'Buy is still on (continuation)'", t.startswith("Buy is still on (continuation) — AUDCAD (Forex)"))
 check("a setup against the Weekly is marked", "AGAINST the Weekly direction" in t and "Weekly: Bearish breakout @ 0.93000" in t)
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="engulfing", level_type="external",
    breakout_level=0.9100, h4_level=0.9135, timeframe="240")
