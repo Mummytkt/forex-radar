@@ -41,6 +41,8 @@ bool   bt_breaker  = input.bool(true,  "H4 Breaker (Origin + retests)", group=GB
 bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=GBT)
 bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=GBT)
 string bt_eng_mode = input.string("Wick", "Engulfing covers", options=["Wick", "Body only", "Both"], group=GBT)
+int    bt_from     = input.time(timestamp("2020-01-01T00:00:00"), "Backtest from", group=GBT,
+     tooltip="Labels and counts start at this date. Earlier candles still build the levels.")
 bool   bt_table    = input.bool(true,  "Show count table", group=GBT)
 color  bt_buy_col  = input.color(#00C853, "Buy label", group=GBT, inline="btc")
 color  bt_sell_col = input.color(#FF1744, "Sell label", group=GBT, inline="btc")
@@ -56,7 +58,7 @@ f_wk() =>
 f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool on = kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
     bool cls_ok = kind > 1 or (cls == "external" ? bt_ext : bt_int)
-    if on and cls_ok
+    if on and cls_ok and time >= bt_from
         string head = kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
         string tag  = kind <= 1 ? (cls == "external" ? " (External)" : " (Internal)") : ""
         label.new(bar_index, bull ? low : high, "H4 aligned - Alert\\n" + head + tag + (bo_wk_rel == "against" ? "\\nWeekly AGAINST" : ""),
@@ -68,7 +70,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
              + "\\nEntry = next candle's open")
         array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
         array.set(bt_cnt, bull ? 7 : 8, array.get(bt_cnt, bull ? 7 : 8) + 1)
-    on and cls_ok
+    on and cls_ok and time >= bt_from
 
 // Weekly context sent with every bias alert (empty when there is no Weekly setup)
 f_wk() =>
@@ -130,7 +132,7 @@ if bt_table and barstate.islast
     table.cell(bt_tbl, 0, 9, "Sells", text_color=bt_sell_col, text_size=size.small)
     table.cell(bt_tbl, 1, 9, str.tostring(array.get(bt_cnt, 8)), text_color=bt_sell_col, text_size=size.small)
     table.cell(bt_tbl, 0, 10, "Since", text_color=color.gray, text_size=size.tiny)
-    table.cell(bt_tbl, 1, 10, str.format_time(bt_t0, "dd MMM yyyy"), text_color=color.gray, text_size=size.tiny)
+    table.cell(bt_tbl, 1, 10, str.format_time(math.max(bt_from, bt_t0), "dd MMM yyyy"), text_color=color.gray, text_size=size.tiny)
 '''
 open(os.path.join(R, 'MummyTKT_BiasPointer_Backtest.pine'), 'w', encoding='utf-8', newline='\n').write(s)
 print('ok')
