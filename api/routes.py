@@ -586,7 +586,7 @@ async def telegram_update(request: Request):
     # Menu commands (/board, /pricealerts, /news, /help, plain /start …)
     from alerts.bot_menu import handle_command
     with _db_write(request) as conn:
-        if await handle_command(conn, config, chat, text):
+        if await handle_command(conn, config, chat, text, message.get("message_id")):
             return {"ok": True}
     if not text.startswith("/start"):
         return {"ok": True}

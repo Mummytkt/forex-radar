@@ -6,6 +6,10 @@ Telegram as a Mini App; the website signs the person in from Telegram itself
 (see api/auth.py telegram_login), so no browser or password is needed.
 /news is switched on/off right in the chat; /help explains the alert words.
 Only private chats are answered (Mini App buttons don't work in groups).
+
+To keep the chat tidy the typed command is deleted, each menu reply replaces
+the previous one, and every reply has a ✕ Close button (callback "chx", which
+deletes the message it sits on).
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ import logging
 from telegram import Bot, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonCommands, WebAppInfo
 from telegram.error import TelegramError
 
-from alerts.telegram import answer_button, send_alert
+from alerts.telegram import answer_button, delete_message, send_message_id
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +72,29 @@ NOT_LINKED = ("This Telegram isn't linked to a Bias Pointer account yet.\n\n"
               "Log in on the website, open Settings → Connect Telegram, and tap the link it gives you.")
 
 
+_CLOSE = InlineKeyboardButton("✕ Close", callback_data="chx")
+
+
 def _page_markup(base_url: str, label: str, path: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton(label, web_app=WebAppInfo(url=base_url.rstrip("/") + path))]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, web_app=WebAppInfo(url=base_url.rstrip("/") + path))],
+                                 [_CLOSE]])
 
 
 def _news_markup(on: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔕 Turn news off" if on else "🔔 Turn news on",
-                                                       callback_data="nw:0" if on else "nw:1")]])
+                                                       callback_data="nw:0" if on else "nw:1")], [_CLOSE]])
+
+
+async def _reply(conn, token: str, chat_id: str, text: str, markup=None) -> None:
+    """Send a menu reply in place of the last one, so only one is ever in the chat."""
+    key = f"menu_msg:{chat_id}"
+    old = conn.execute("SELECT value FROM user_config WHERE key = ?", (key,)).fetchone()
+    if old and old[0].isdigit():
+        await delete_message(token, chat_id, int(old[0]))
+    mid = await send_message_id(token, chat_id, text, reply_markup=markup or InlineKeyboardMarkup([[_CLOSE]]))
+    if mid:
+        conn.execute("INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                     (key, str(mid)))
 
 
 def _news_text(on: bool) -> str:
@@ -99,7 +119,7 @@ async def setup_bot_menu(bot_token: str) -> None:
         logger.warning("Could not set the bot's command menu: %s", e)
 
 
-async def handle_command(conn, config, chat: dict, text: str) -> bool:
+async def handle_command(conn, config, chat: dict, text: str, message_id: int | None = None) -> bool:
     """Answer a menu command. Returns False if the text isn't one of ours
     (so /start <link token> still goes to the account-linking flow)."""
     if chat.get("type", "private") != "private":
@@ -111,28 +131,30 @@ async def handle_command(conn, config, chat: dict, text: str) -> bool:
         return False
 
     token, chat_id, base = config.telegram_bot_token, str(chat["id"]), config.frontend_url
+    if message_id:
+        await delete_message(token, chat_id, message_id)   # the typed /command
     if cmd == "help":
-        await send_alert(token, chat_id, HELP_TEXT)
+        await _reply(conn, token, chat_id, HELP_TEXT)
         return True
 
     user = linked_user(conn, chat_id)
     if not user:
-        await send_alert(token, chat_id, NOT_LINKED, reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔑 Log in", web_app=WebAppInfo(url=base.rstrip("/") + "/login"))]]))
+        await _reply(conn, token, chat_id, NOT_LINKED, InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔑 Log in", web_app=WebAppInfo(url=base.rstrip("/") + "/login"))], [_CLOSE]]))
         return True
 
     if cmd == "start":
         hi = f"Hi {user['name']}! " if user["name"] else ""
-        await send_alert(token, chat_id,
-                         f"{hi}Your alerts come to this chat.\n\nTap Menu for shortcuts, or open the Bias Pointer here:",
-                         reply_markup=_page_markup(base, "📈 Open Bias Pointer", "/hub"))
+        await _reply(conn, token, chat_id,
+                     f"{hi}Your alerts come to this chat.\n\nTap Menu for shortcuts, or open the Bias Pointer here:",
+                     _page_markup(base, "📈 Open Bias Pointer", "/hub"))
     elif cmd == "news":
         from api.alert_prefs import get_alert_prefs
         on = get_alert_prefs(conn, user["id"], user["role"]).get("news", True)
-        await send_alert(token, chat_id, _news_text(on), reply_markup=_news_markup(on))
+        await _reply(conn, token, chat_id, _news_text(on), _news_markup(on))
     else:
         _, path, label, blurb = PAGES[cmd]
-        await send_alert(token, chat_id, blurb, reply_markup=_page_markup(base, label, path))
+        await _reply(conn, token, chat_id, blurb, _page_markup(base, label, path))
     return True
 
 

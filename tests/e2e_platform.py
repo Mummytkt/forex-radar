@@ -867,12 +867,16 @@ check("forged Mini App data is refused", c.post("/api/auth/telegram", json={"ini
 check("old Mini App data is refused", c.post("/api/auth/telegram", json={"init_data": _init(5550001, age=200000)}).status_code == 401)
 check("an unlinked Telegram gets 'not linked'", c.post("/api/auth/telegram", json={"init_data": _init(5550999)}).status_code == 404)
 _said = []
-async def _sa(token, chat, text, reply_markup=None): _said.append((chat, text, reply_markup)); return True
+_gone = []
+_mid = [100]
+async def _sa(token, chat, text, reply_markup=None): _said.append((chat, text, reply_markup)); _mid[0] += 1; return _mid[0]
 async def _ab2(token, cid, text=""): _said.append(("answer", text, None))
-_old_bm = (_bm.send_alert, _bm.answer_button); _bm.send_alert, _bm.answer_button = _sa, _ab2
-def cmd(text, chat=5550001, ctype="private"):
-    _said.clear()
-    c.post("/api/telegram/update", headers=TG, json={"update_id": 2, "message": {"text": text, "chat": {"id": chat, "type": ctype}}})
+async def _dm2(token, chat, mid): _gone.append(mid); return True, ""
+_old_bm = (_bm.send_message_id, _bm.answer_button, _bm.delete_message)
+_bm.send_message_id, _bm.answer_button, _bm.delete_message = _sa, _ab2, _dm2
+def cmd(text, chat=5550001, ctype="private", mid=None):
+    _said.clear(); _gone.clear()
+    c.post("/api/telegram/update", headers=TG, json={"update_id": 2, "message": {"message_id": mid, "text": text, "chat": {"id": chat, "type": ctype}}})
     return _said
 _m = cmd("/pricealerts")
 check("/pricealerts answers with a button opening Level Watch inside Telegram",
@@ -894,7 +898,12 @@ check("the news switch turns news off for that person only",
 _said.clear()
 c.post("/api/telegram/update", headers=TG, json={"update_id": 4, "message": {"text": "/start nosuchtoken", "chat": {"id": 5550001, "type": "private"}}})
 check("/start <link> still goes to account linking", _said == [])
-_bm.send_alert, _bm.answer_button = _old_bm
+_m = cmd("/board", mid=50); _first = _mid[0]
+_m = cmd("/settings", mid=51)
+check("the typed command is deleted and the last menu reply is replaced (one reply at a time)",
+      _gone == [51, _first] and len(_m) == 1)
+check("every menu reply has a Close button", _m[0][2].inline_keyboard[-1][0].callback_data == "chx")
+_bm.send_message_id, _bm.answer_button, _bm.delete_message = _old_bm
 config.telegram_bot_token = ""
 
 passed = sum(ok for _, ok in results)

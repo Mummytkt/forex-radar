@@ -92,6 +92,19 @@ async def send_alert(bot_token: str, chat_id: str, text: str, reply_markup=None)
             await asyncio.sleep(2.0 * errors)
 
 
+async def send_message_id(bot_token: str, chat_id: str, text: str, reply_markup=None) -> int | None:
+    """Send one message (paced like the rest) and return its message id, so it can be removed later."""
+    delay = _reserve_slot()
+    if delay > 0:
+        await asyncio.sleep(delay)
+    try:
+        msg = await Bot(token=bot_token).send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
+        return msg.message_id
+    except TelegramError as e:
+        logger.warning("Telegram send to %s failed: %s", chat_id, e)
+        return None
+
+
 async def send_many(bot_token: str, chat_ids: list[str], text: str, concurrency: int = 20) -> int:
     """Send the same text to many chats. Up to `concurrency` sends are in flight at
     once, all paced by send_alert. Returns how many were delivered."""
