@@ -437,9 +437,25 @@ def _set_setup_class(conn, instrument: str, cls: Optional[str]) -> None:
     conn.commit()
 
 
-def _setup_class(conn, instrument: str) -> Optional[str]:
+def _setup_class(conn, instrument: str, breakout_id: Optional[int] = None) -> Optional[str]:
     row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"setup_h4_class:{instrument}",)).fetchone()
-    return row[0] if row else None
+    if row:
+        return row[0]
+    if breakout_id is None:
+        return None
+    # Not recorded (setup confirmed before this was kept): read it from this
+    # setup's latest Origin (stored class) or "back in line" alert (named in its text)
+    for r in conn.execute(
+            "SELECT h4_classification, alert_text FROM alerts WHERE daily_breakout_id = ? ORDER BY id DESC",
+            (breakout_id,)).fetchall():
+        if r[0] in ("external", "internal"):
+            return r[0]
+        txt = r[1] or ""
+        if "H4 External breakout @" in txt:
+            return "external"
+        if "H4 Internal breakout @" in txt:
+            return "internal"
+    return None
 
 
 async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
@@ -754,7 +770,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         setup_kind = confirmation_kind(payload.h4_class)
         _set_setup_class(conn, instrument, setup_kind)
     else:
-        setup_kind = _setup_class(conn, instrument)   # None (unknown) = no External/Internal filter
+        setup_kind = _setup_class(conn, instrument, breakout.db_id)   # None (unknown) = no External/Internal filter
 
     if config.telegram_enabled:
         _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id,

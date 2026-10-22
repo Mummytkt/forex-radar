@@ -864,6 +864,12 @@ _dl.clear(); tv(type="H4_CONTINUATION", instrument="CHFJPY", direction="bullish"
 _dl.clear(); tv(type="H4_CONTINUATION", instrument="CHFJPY", direction="bullish", cont_type="engulfing", eng_wick=True,
                breakout_level=180.0, h4_level=182.5, timeframe="240")
 check("after an External 'back in line', continuations count as External again", _dl == ["external"])
+tv(type="BREAKOUT", instrument="CADJPY", direction="bearish", level=110.0, level_type="external", range_level=115.0, timeframe="240")
+tv(type="CONFIRMED", instrument="CADJPY", direction="bearish", source="daily_breaker", h4_class="internal",
+   breakout_level=110.0, source_level=110.0, h4_level=109.5, timeframe="240")
+conn.execute("DELETE FROM user_config WHERE key = 'setup_h4_class:CADJPY'"); conn.commit()   # as if confirmed before the class was kept
+_dl.clear(); tv(type="H4_CONTINUATION", instrument="CADJPY", direction="bearish", cont_type="oc_cont", breakout_level=110.0, h4_level=109.0, timeframe="240")
+check("an older setup's class is read from its stored Origin alert", _dl == ["internal"])
 tvw._deliver_alert = _old_dl
 config.telegram_enabled = False
 
