@@ -113,6 +113,8 @@ bool   show_wk_lbls     = input.bool(true, "Show Weekly labels (W.BK / W.A / W.V
      group="Labels")
 bool   show_wk_ext      = input.bool(true, "Show Weekly External high / low lines", group="Labels")
 color  wk_col           = input.color(#FFB74D, "Weekly lines & labels color", group="Labels")
+string wk_style         = input.string("Dashed", "Weekly External line style", options=["Solid", "Dashed", "Dotted"], group="Labels")
+int    wk_width         = input.int(2, "Weekly External line width", minval=1, maxval=4, group="Labels")
 string wk_lbl_max_tf    = input.string("Daily", "Weekly labels & lines visible on",
      options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
      tooltip="Weekly level labels and lines appear on this timeframe and all lower timeframes.",
@@ -1478,8 +1480,8 @@ if barstate.islast
         f_draw_lvl(show_ext, s_clot, s_clo, f_dirw(s_cdir) + "External low" + (s_cdir == "bear" and not s_clof ? forming : ""), c_el, s_el, w_ext)
     if show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"
         string wforming = " (still forming)"
-        f_draw_lvl(true, w_chit, w_chi, f_dirw(w_cdir) + "Weekly External high" + (w_cdir == "bull" and not w_chif ? wforming : ""), wk_col, "Dashed", 2)
-        f_draw_lvl(true, w_clot, w_clo, f_dirw(w_cdir) + "Weekly External low" + (w_cdir == "bear" and not w_clof ? wforming : ""), wk_col, "Dashed", 2)
+        f_draw_lvl(true, w_chit, w_chi, f_dirw(w_cdir) + "Weekly External high" + (w_cdir == "bull" and not w_chif ? wforming : ""), wk_col, wk_style, wk_width)
+        f_draw_lvl(true, w_clot, w_clo, f_dirw(w_cdir) + "Weekly External low" + (w_cdir == "bear" and not w_clof ? wforming : ""), wk_col, wk_style, wk_width)
 
 // ── State label — shows script's current understanding at the latest bar ──────
 f_src_name(string src, string kind) =>
