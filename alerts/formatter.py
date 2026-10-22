@@ -12,7 +12,7 @@ Handles four alert classifications:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import tagged
 
@@ -74,6 +74,11 @@ def format_alert(alert: AlertRecord) -> str:
 # Lines kept in the Short message style: the headline of each part, no explanations
 _SHORT_KEEP = ("Daily breakout:", "Weekly", "Daily reaction source:", "H4 confirmation:", "Reason:",
                "Daily breakout level:", "⚠️")
+
+
+def _signature() -> str:
+    """Footer on every alert: '— MummyTKT © <current year>'."""
+    return f"— MummyTKT © {datetime.now(timezone.utc).year}"
 
 
 def short_text(full: str) -> str:
@@ -225,7 +230,7 @@ def _format_origin(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -279,7 +284,7 @@ def _format_continuation_ashape(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -339,7 +344,7 @@ def _format_continuation_h4_breaker(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -386,7 +391,7 @@ def _format_continuation_h4_oc(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -440,7 +445,7 @@ def _format_h4_breaker_origin(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -514,7 +519,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -568,7 +573,7 @@ def _format_h4_breaker_cont(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -605,7 +610,7 @@ def _format_h4_engulfing(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -650,7 +655,7 @@ def _format_h4_oc_cont(alert: AlertRecord) -> str:
         "",
         "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
 
@@ -802,6 +807,6 @@ def format_entry_alert(
         "",
         "⚠️ Entry confirmation — not financial advice. Trade your own risk.",
         "",
-        "— TradingView Feed",
+        _signature(),
     ]
     return "\n".join(lines)
