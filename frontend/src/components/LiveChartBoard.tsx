@@ -95,6 +95,61 @@ function weeklyLine(w: WeeklySnap, inst: string): string | null {
   return `${dir} · waiting for a Weekly reaction`
 }
 
+// Subscriber row: three even columns (pair + Daily status, Weekly, price)
+function Badge({ text, color }: { text: string; color: string }) {
+  return (
+    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 700,
+      letterSpacing: '0.03em', color, border: `1px solid ${color}`, background: 'transparent', whiteSpace: 'nowrap' }}>
+      {text}
+    </span>
+  )
+}
+
+function SubscriberRow({ r }: { r: BoardRow }) {
+  const s = r.snapshot
+  const i = r.instrument
+  const dirCol = s?.bias === 'bullish' ? 'var(--bullish)' : s?.bias === 'bearish' ? 'var(--bearish)' : 'var(--text-muted)'
+  const w = (s ?? {}) as Snapshot & WeeklySnap
+  const line = s ? weeklyLine(w, i) : null
+  const against = w.wk_rel === 'against'
+  const wkCol = against ? '#F87171' : WK
+  const [wkBadge, ...wkRest] = (line ?? '').split(' · ')
+  const extra = s ? [
+    s.stage === 'retest' && s.retest_source ? (SOURCE[s.retest_source] ?? s.retest_source) : null,
+    s.level_type && s.stage !== 'idle' ? `${LEVEL_TYPE[s.level_type] ?? s.level_type} break` : null,
+  ].filter(Boolean).join(' · ') : ''
+  return (
+    <div className="board-grid" style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{i}</div>
+        {s ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+            {s.bias && <Badge text={s.bias === 'bullish' ? 'BUY' : 'SELL'} color={dirCol} />}
+            <span style={{ fontSize: 12, fontWeight: 600, color: dirCol }}>{STAGE[s.stage]}</span>
+            {extra && <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{extra}</span>}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 5 }}>Waiting for the next H4 close</div>
+        )}
+      </div>
+      <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {line ? (
+          <>
+            <Badge text={wkBadge.toUpperCase()} color={wkCol} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: wkCol }}>{wkRest.join(' · ')}</span>
+          </>
+        ) : (
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s ? 'No Weekly setup' : '—'}</span>
+        )}
+      </div>
+      <div className="board-price" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+        {r.price !== null && <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{fmt(i, r.price)}</div>}
+        {r.updated_at && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{timeAgo(r.updated_at)}</div>}
+      </div>
+    </div>
+  )
+}
+
 export default function LiveChartBoard() {
   const { data } = useSWR<{ pairs: BoardRow[] }>('/api/chart-board', fetcher, { refreshInterval: 60000 })
   const [filter, setFilter] = useState('all')
@@ -158,7 +213,13 @@ export default function LiveChartBoard() {
         </div>
       ) : (
         <div style={{ maxHeight: 520, overflowY: 'auto' }}>
-          {rows.map(r => {
+          {!showLevels && (
+            <div className="board-grid board-head" style={{ padding: '10px 24px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1,
+              fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+              <div>Pair · Daily / H4</div><div>Weekly</div><div className="board-price" style={{ textAlign: 'right' }}>Price</div>
+            </div>
+          )}
+          {!showLevels ? rows.map(r => <SubscriberRow key={r.instrument} r={r} />) : rows.map(r => {
             const s = r.snapshot
             const dirCol = s?.bias === 'bullish' ? 'var(--bullish)' : s?.bias === 'bearish' ? 'var(--bearish)' : 'var(--text-muted)'
             const i = r.instrument
@@ -183,7 +244,7 @@ export default function LiveChartBoard() {
                   const against = w.wk_rel === 'against'
                   return (
                     <div style={{ minWidth: 170, flex: '0 1 230px', fontSize: 11, fontWeight: 600, lineHeight: 1.45,
-                      color: against ? 'var(--warning)' : WK, borderLeft: `2px solid ${against ? 'var(--warning)' : WK}`, paddingLeft: 8 }}>
+                      color: against ? '#F87171' : WK, borderLeft: `2px solid ${against ? '#F87171' : WK}`, paddingLeft: 8 }}>
                       {line}
                     </div>
                   )
