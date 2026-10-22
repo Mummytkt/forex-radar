@@ -80,7 +80,7 @@ export default function PreferencesPage() {
   const bothOff = prefs && prefs.alertOrigin && !prefs.alertExternal && !prefs.alertInternal
 
   // Message style: the full explanation, or Short (headlines only)
-  const [style, setStyle] = useState<'full' | 'short'>('full')
+  const [style, setStyle] = useState<'full' | 'short'>('short')
   const [styleStatus, setStyleStatus] = useState<Status>('idle')
   useEffect(() => {
     fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })

@@ -50,7 +50,7 @@ class AlertPreferences(BaseModel):
     contOc: bool = True
     contRealign: bool = True
     contEngulfing: bool = True
-    alertStyle: str = "full"            # "full" | "short"
+    alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
 
 
 class AlertPreferencesUpdate(BaseModel):

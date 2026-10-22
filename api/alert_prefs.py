@@ -35,11 +35,15 @@ def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, 
 
 
 def get_alert_style(conn, uid: Optional[int]) -> str:
-    """'full' (default) or 'short': how bias alerts are written to this person."""
+    """'full' or 'short': how bias alerts are written to this person. Subscribers
+    get Short unless they chose Full; the owner gets Full unless they chose Short."""
     if uid is None:
         return "full"
     row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"pref_alert_style:{uid}",)).fetchone()
-    return "short" if row and row[0] == "short" else "full"
+    if row and row[0] in ("full", "short"):
+        return row[0]
+    role = conn.execute("SELECT role FROM users WHERE id = ?", (uid,)).fetchone()
+    return "full" if role and role[0] == "OWNER" else "short"
 
 
 def set_alert_style(conn, uid: Optional[int], style: str) -> None:
