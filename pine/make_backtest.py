@@ -69,6 +69,8 @@ bool   bt_latest   = input.bool(true,  "Keep only the latest alert label (clean 
 bool   bt_grey     = input.bool(true,  "Show alerts that are not counted (grey, with the reason)", group=GBT,
      tooltip="Alerts before the start date, Internal ones while Internal is off, and types switched off above.")
 bool   bt_table    = input.bool(true,  "Show count table", group=GBT)
+bool   bt_lvls     = input.bool(true,  "Show the Daily reaction levels being watched (4H)", group=GBT,
+     tooltip="Every Daily level the script would accept a reaction at right now. A level that is missing here can't trigger an alert.")
 color  bt_buy_col  = input.color(#00C853, "Buy label", group=GBT, inline="btc")
 color  bt_sell_col = input.color(#FF1744, "Sell label", group=GBT, inline="btc")
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
@@ -293,6 +295,39 @@ if bt_table and barstate.islast and timeframe.period == "240"
     table.cell(bt_tbl, 1, 10, str.tostring(array.get(bt_cnt, 9)), text_color=bt_sell_col, text_size=size.small)
     table.cell(bt_tbl, 0, 11, "Since", text_color=color.gray, text_size=size.tiny)
     table.cell(bt_tbl, 1, 11, str.format_time(math.max(bt_from, bt_t0), "dd MMM yyyy"), text_color=color.gray, text_size=size.tiny)
+'''
+s = s.rstrip('\n') + '''
+
+// ── Backtest: the Daily reaction levels being watched right now ──────────────
+var array<line>  bt_lv_lines = array.new<line>()
+var array<label> bt_lv_lbls  = array.new<label>()
+f_bt_lv(float y, string txt) =>
+    if not na(y) and array.size(bt_lv_lines) < 30
+        array.push(bt_lv_lines, line.new(bar_index - 40, y, bar_index + 3, y, color=color.new(color.aqua, 25), style=line.style_dotted))
+        array.push(bt_lv_lbls, label.new(bar_index + 3, y, txt + "  " + str.tostring(y, format.mintick),
+             style=label.style_label_left, color=color.new(color.black, 100), textcolor=color.aqua, size=size.small))
+if barstate.islast
+    for ln in bt_lv_lines
+        line.delete(ln)
+    for lb in bt_lv_lbls
+        label.delete(lb)
+    array.clear(bt_lv_lines)
+    array.clear(bt_lv_lbls)
+    if bt_lvls and timeframe.period == "240" and not na(bo_dir) and not na(bo_level)
+        bool bb = bo_dir == "bullish"
+        f_bt_lv(bo_level, "Daily Breaker")
+        for L in pb_ocs
+            f_bt_lv(L, "Daily OC after the breakout")
+        array<float> shp = bb ? d_vs : d_as
+        for L in shp
+            if bb ? L > bo_level + tol : L < bo_level - tol
+                f_bt_lv(L, bb ? "Daily V-shape after the breakout" : "Daily A-shape after the breakout")
+            else if not na(bo_opp) and (bb ? (L > bo_opp and L < bo_level - tol) : (L < bo_opp and L > bo_level + tol))
+                f_bt_lv(L, bb ? "Daily V-shape inside the range" : "Daily A-shape inside the range")
+        array<float> ocs = bb ? d_boc : d_soc
+        for L in ocs
+            if not na(bo_opp) and (bb ? (L > bo_opp and L < bo_level - tol) : (L < bo_opp and L > bo_level + tol))
+                f_bt_lv(L, "Daily OC inside the range")
 '''
 open(os.path.join(R, 'MummyTKT_BiasPointer_Backtest.pine'), 'w', encoding='utf-8', newline='\n').write(s)
 print('ok')
