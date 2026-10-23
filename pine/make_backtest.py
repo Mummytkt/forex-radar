@@ -85,6 +85,7 @@ var bt_last = array.new<label>(1, na)   // the alert label currently on the char
 // V (sells) when the reaction started, i.e. formed BEFORE it
 var float bt_ext_a = na
 var float bt_ext_v = na
+var bt_seen = array.new<float>()   // Daily levels already touched since they formed
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout")''')
 
 # Label function: after f_wk(), so it can read the Weekly relation
@@ -226,14 +227,12 @@ rep('''        float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
 #    is an External breakout, even if newer (Internal) A/V-shapes formed during the
 #    pullback. A close beyond a newer A/V only is Internal, and with Internal off it
 #    does NOT use up the reaction: the script keeps waiting for the External one.
-#    Every reaction (also one restarting at the same Daily level after a failed
-#    one) starts fresh: its External level is the closest H4 A (V for sells)
-#    formed before THAT reaction candle.
+#    The External level is set at the FIRST H4 touch of a Daily level (see 6).
 for v in ("pb_hit", "pv_hit", "bo_level", "ir_hit"):
     rep(f'''            if na(anchor_lvl) or math.abs(anchor_lvl - {v}) > pip * 0.1
                 anchor_lvl := {v}
                 anchor_bar := bar_index
-''', f'''            if true   // backtest: each reaction starts its own External check
+''', f'''            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := {v}
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -325,15 +324,46 @@ rep('''        if eng and barstate.isrealtime
         if eng and barstate.isrealtime
 ''')
 
-# 5. The reaction candle is the LATEST candle that touches a Daily level and holds:
-#    every new touch while the reaction is on moves the reaction start there, and
-#    the External level becomes the closest H4 A (V for sells) before that candle.
-rep('''        bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
-''', '''        bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
-        if (pb_oc_zone or pv_zone or db_zone or ir_zone) and bar_index > anchor_bar
-            anchor_bar := bar_index
-            bt_ext_a   := h4_a_lvl
-            bt_ext_v   := h4_v_lvl
+# 6. The touch that matters is the FIRST H4 touch of a Daily level after that level
+#    formed (a level only exists once its Daily candle has closed). External = the
+#    closest H4 A (V for sells) formed before that first touch; everything formed
+#    after it is Internal. A first touch of a NEW level starts a new check, even
+#    while price is already reacting at another level.
+rep('''// ── Post-breakout OC tracking ─''', '''f_bt_seen(float L) =>
+    bool found = false
+    for x in bt_seen
+        if math.abs(x - L) <= pip * 0.1
+            found := true
+    found
+
+// ── Post-breakout OC tracking ─''')
+rep('''    // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
+''', '''    // ── Backtest: first H4 touch of each Daily level since it formed ──────
+    bool bt_bull = bo_dir == "bullish"
+    array<float> bt_cand = array.new<float>()
+    array.push(bt_cand, bo_level)
+    for L in pb_ocs
+        array.push(bt_cand, L)
+    array<float> bt_shp = bt_bull ? d_vs : d_as
+    array<float> bt_ocl = bt_bull ? d_boc : d_soc
+    for L in bt_shp
+        array.push(bt_cand, L)
+    for L in bt_ocl
+        array.push(bt_cand, L)
+    bool bt_first = false
+    for L in bt_cand
+        bool bt_held = bt_bull ? close >= L - tol : close <= L + tol
+        if low <= L and high >= L and bt_held and not f_bt_seen(L)
+            array.push(bt_seen, L)
+            bt_first := true
+    if array.size(bt_seen) > 300
+        array.shift(bt_seen)
+    if bt_first
+        anchor_bar := bar_index
+        bt_ext_a   := h4_a_lvl
+        bt_ext_v   := h4_v_lvl
+
+    // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
 ''')
 
 # Weekly display follows the backtest's Weekly switch

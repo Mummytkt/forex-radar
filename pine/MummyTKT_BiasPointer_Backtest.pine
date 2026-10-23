@@ -144,6 +144,7 @@ var bt_last = array.new<label>(1, na)   // the alert label currently on the char
 // V (sells) when the reaction started, i.e. formed BEFORE it
 var float bt_ext_a = na
 var float bt_ext_v = na
+var bt_seen = array.new<float>()   // Daily levels already touched since they formed
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout")
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
@@ -1093,6 +1094,13 @@ f_pv_pick(array<float> lv, bool bull, float b_lo, float b_hi, float t) =>
                 best := L
     best
 
+f_bt_seen(float L) =>
+    bool found = false
+    for x in bt_seen
+        if math.abs(x - L) <= pip * 0.1
+            found := true
+    found
+
 // ── Post-breakout OC tracking ─────────────────────────────────────────────────
 if new_daily and not na(bo_dir) and not just_broke
     bool d_bull = d_close >= d_open
@@ -1217,6 +1225,31 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     float pv_hit  = f_pv_pick(bo_dir == "bullish" ? d_vs : d_as, bo_dir == "bullish", band_lo, band_hi, tol)
     bool  pv_zone = not na(pv_hit)
 
+    // ── Backtest: first H4 touch of each Daily level since it formed ──────
+    bool bt_bull = bo_dir == "bullish"
+    array<float> bt_cand = array.new<float>()
+    array.push(bt_cand, bo_level)
+    for L in pb_ocs
+        array.push(bt_cand, L)
+    array<float> bt_shp = bt_bull ? d_vs : d_as
+    array<float> bt_ocl = bt_bull ? d_boc : d_soc
+    for L in bt_shp
+        array.push(bt_cand, L)
+    for L in bt_ocl
+        array.push(bt_cand, L)
+    bool bt_first = false
+    for L in bt_cand
+        bool bt_held = bt_bull ? close >= L - tol : close <= L + tol
+        if low <= L and high >= L and bt_held and not f_bt_seen(L)
+            array.push(bt_seen, L)
+            bt_first := true
+    if array.size(bt_seen) > 300
+        array.shift(bt_seen)
+    if bt_first
+        anchor_bar := bar_index
+        bt_ext_a   := h4_a_lvl
+        bt_ext_v   := h4_v_lvl
+
     // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
     // A reaction stays valid on later candles: any later H4 close beyond the
     // H4 A/V level still confirms it. It fails only when an H4 candle closes
@@ -1250,7 +1283,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "post_breakout_oc"
             retest_lvl := pb_hit
-            if true   // backtest: each reaction starts its own External check
+            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := pb_hit
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1266,7 +1299,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "post_breakout_v"
             retest_lvl := pv_hit
-            if true   // backtest: each reaction starts its own External check
+            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := pv_hit
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1276,7 +1309,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "daily_breaker"
             retest_lvl := bo_level
-            if true   // backtest: each reaction starts its own External check
+            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := bo_level
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1292,7 +1325,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "inside_range"
             retest_lvl := ir_hit
-            if true   // backtest: each reaction starts its own External check
+            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := ir_hit
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1311,10 +1344,6 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     if retest_on
         float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
         bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
-        if (pb_oc_zone or pv_zone or db_zone or ir_zone) and bar_index > anchor_bar
-            anchor_bar := bar_index
-            bt_ext_a   := h4_a_lvl
-            bt_ext_v   := h4_v_lvl
 
         bool bt_xb = not na(bt_ext_a) and close > bt_ext_a                      // External level broken
         bool bt_lb = not na(h4_a_lvl) and not new_a and close > h4_a_lvl       // latest A broken
