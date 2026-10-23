@@ -57,6 +57,8 @@ function load(key: string, fallback: string): string {
 function save(key: string, v: string) {
   try { localStorage.setItem(key, v) } catch { /* private mode */ }
 }
+// Pairs are stored like EURUSD: capitals, no slash or spaces
+const cleanPair = (s: string) => s.toUpperCase().replace(/[^A-Z0-9_.]/g, '')
 const today = () => new Date().toISOString().slice(0, 10)
 const fmtR = (r: number) => `${r > 0 ? '+' : ''}${r.toFixed(2)}R`
 
@@ -218,7 +220,12 @@ function TradeCard({ trade, open, onToggle, onChange, onDelete }: {
               </div>
             )
           })}
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Fix a misspelt pair on this trade */}
+            <input defaultValue={trade.instrument} title="Pair (fix a spelling mistake here)"
+              onInput={e => { e.currentTarget.value = cleanPair(e.currentTarget.value) }}
+              onBlur={e => { const p = cleanPair(e.target.value); if (p && p !== trade.instrument) onChange({ ...trade, instrument: p }); else e.target.value = trade.instrument }}
+              style={{ ...selStyle, width: 110 }} />
             <input defaultValue={trade.notes} placeholder="Note (optional)" onBlur={e => e.target.value !== trade.notes && onChange({ ...trade, notes: e.target.value })}
               style={{ ...selStyle, flex: 1 }} />
             <button onClick={() => { if (confirm(`Delete this ${trade.instrument} trade?`)) onDelete() }}
@@ -250,7 +257,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
   const [fDir, setFDir] = useState('')
 
   useEffect(() => {
-    setPair(load('mbp_et_pair', 'XAUUSD'))
+    setPair(cleanPair(load('mbp_et_pair', 'XAUUSD')) || 'XAUUSD')
     setAlertType(load('mbp_et_alert', 'Origin'))
     fetch(`${API_BASE}/api/entry-tests`, { headers: hdrs() })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
@@ -265,7 +272,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
   }) }
 
   const addTrade = async () => {
-    const p = pair.trim().toUpperCase().replace('/', '')
+    const p = cleanPair(pair)
     if (!p) return
     save('mbp_et_pair', p)
     save('mbp_et_alert', alertType)
@@ -313,7 +320,11 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
   const shown = trades.filter(t => (!fPair || t.instrument === fPair) && (!fAlert || t.alert_type === fAlert) && (!fDir || t.direction === fDir))
   const pairs = Array.from(new Set(trades.map(t => t.instrument))).sort()
   // The remembered pair stays selectable even if it isn't in the standard list
-  const pairOptions = Array.from(new Set([...(pair && !typing ? [pair] : []), ...INSTRUMENTS.map(i => i.replace('/', ''))]))
+  const stdPairs = INSTRUMENTS.map(i => i.replace('/', ''))
+  const pairOptions = Array.from(new Set([...(pair && !typing ? [pair] : []), ...stdPairs]))
+  // A pair typed under "Other…" that has no trades yet can be removed again
+  const customPair = !typing && !!pair && !stdPairs.includes(pair) && !pairs.includes(pair)
+  const removePair = () => { setPair('XAUUSD'); save('mbp_et_pair', 'XAUUSD') }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -332,7 +343,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
         {/* New trade */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 20 }}>
           {typing ? (
-            <input autoFocus value={pair} onChange={e => setPair(e.target.value)} onBlur={() => pair.trim() && setTyping(false)}
+            <input autoFocus value={pair} onChange={e => setPair(cleanPair(e.target.value))} onBlur={() => pair.trim() && setTyping(false)}
               placeholder="Type the pair" style={{ ...selStyle, width: 140 }} />
           ) : (
             <select value={pair} onChange={e => e.target.value === '__other' ? (setPair(''), setTyping(true)) : setPair(e.target.value)} style={selStyle}>
@@ -344,6 +355,12 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
               </optgroup>
               <option value="__other">Other… (type it)</option>
             </select>
+          )}
+          {customPair && (
+            <button onClick={removePair} title={`Remove ${pair} from the list`}
+              style={{ padding: '6px 9px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+              ✕ Remove {pair}
+            </button>
           )}
           <input type="date" value={date} onChange={e => setDate(e.target.value)} style={selStyle} />
           <Chip on={dir === 'buy'} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => setDir('buy')}>BUY</Chip>
