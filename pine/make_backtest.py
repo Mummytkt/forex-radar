@@ -325,6 +325,17 @@ rep('''        if eng and barstate.isrealtime
         if eng and barstate.isrealtime
 ''')
 
+# 5. The reaction candle is the LATEST candle that touches a Daily level and holds:
+#    every new touch while the reaction is on moves the reaction start there, and
+#    the External level becomes the closest H4 A (V for sells) before that candle.
+rep('''        bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
+''', '''        bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
+        if (pb_oc_zone or pv_zone or db_zone or ir_zone) and bar_index > anchor_bar
+            anchor_bar := bar_index
+            bt_ext_a   := h4_a_lvl
+            bt_ext_v   := h4_v_lvl
+''')
+
 # Weekly display follows the backtest's Weekly switch
 rep('    if show_wk_lbls and show_wk_on_tf and not na(wk_dir)', '    if bt_weekly and show_wk_lbls and show_wk_on_tf and not na(wk_dir)')
 rep('    if show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"',

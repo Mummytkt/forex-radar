@@ -1311,6 +1311,10 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     if retest_on
         float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
         bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
+        if (pb_oc_zone or pv_zone or db_zone or ir_zone) and bar_index > anchor_bar
+            anchor_bar := bar_index
+            bt_ext_a   := h4_a_lvl
+            bt_ext_v   := h4_v_lvl
 
         bool bt_xb = not na(bt_ext_a) and close > bt_ext_a                      // External level broken
         bool bt_lb = not na(h4_a_lvl) and not new_a and close > h4_a_lvl       // latest A broken
