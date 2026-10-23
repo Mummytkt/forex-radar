@@ -240,6 +240,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
   const [openId, setOpenId] = useState<number | null>(null)
   // New-trade bar: remembers the last pair / alert so the next one is one tap
   const [pair, setPair] = useState('')
+  const [typing, setTyping] = useState(false)   // "Other…": a pair that isn't in the list
   const [date, setDate] = useState(today())
   const [dir, setDir] = useState<'buy' | 'sell'>('buy')
   const [alertType, setAlertType] = useState('')
@@ -311,7 +312,8 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
 
   const shown = trades.filter(t => (!fPair || t.instrument === fPair) && (!fAlert || t.alert_type === fAlert) && (!fDir || t.direction === fDir))
   const pairs = Array.from(new Set(trades.map(t => t.instrument))).sort()
-  const pairOptions = Array.from(new Set([...pairs, ...INSTRUMENTS.map(i => i.replace('/', ''))]))
+  // The remembered pair stays selectable even if it isn't in the standard list
+  const pairOptions = Array.from(new Set([...(pair && !typing ? [pair] : []), ...INSTRUMENTS.map(i => i.replace('/', ''))]))
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -329,8 +331,20 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
 
         {/* New trade */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 20 }}>
-          <input list="et-pairs" value={pair} onChange={e => setPair(e.target.value)} placeholder="Pair" style={{ ...selStyle, width: 120 }} />
-          <datalist id="et-pairs">{pairOptions.map(p => <option key={p} value={p} />)}</datalist>
+          {typing ? (
+            <input autoFocus value={pair} onChange={e => setPair(e.target.value)} onBlur={() => pair.trim() && setTyping(false)}
+              placeholder="Type the pair" style={{ ...selStyle, width: 140 }} />
+          ) : (
+            <select value={pair} onChange={e => e.target.value === '__other' ? (setPair(''), setTyping(true)) : setPair(e.target.value)} style={selStyle}>
+              {pairs.length > 0 && (
+                <optgroup label="Tested already">{pairs.map(p => <option key={p} value={p}>{p}</option>)}</optgroup>
+              )}
+              <optgroup label="All pairs">
+                {pairOptions.filter(p => !pairs.includes(p)).map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+              <option value="__other">Other… (type it)</option>
+            </select>
+          )}
           <input type="date" value={date} onChange={e => setDate(e.target.value)} style={selStyle} />
           <Chip on={dir === 'buy'} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => setDir('buy')}>BUY</Chip>
           <Chip on={dir === 'sell'} color="var(--bearish)" bg="var(--bearish-bg)" onClick={() => setDir('sell')}>SELL</Chip>
