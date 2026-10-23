@@ -126,9 +126,7 @@ bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=GBT)
 bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=GBT,
      tooltip="After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line: if the NEXT H4 candle completes an FVG (buys: its low stays above the high of the candle before the breakout), one alert. Checked once per breakout.")
 bool   bt_dfvg     = input.bool(true,  "Daily FVGs as reaction levels", group=GBT,
-     tooltip="Bullish Daily FVGs (bearish for sells) inside the range that was just broken, or formed after the breakout beyond the Daily Breaker. An H4 wick entering the gap is a reaction. A Daily close through the gap kills it.")
-bool   bt_dfvg_bo  = input.bool(false, "Count the FVG the Daily breakout candle makes", group=GBT,
-     tooltip="Off: an FVG whose middle candle is the Daily breakout candle is not a reaction level.")
+     tooltip="Bullish Daily FVGs (bearish for sells) inside the range that was just broken, or formed after the breakout beyond the Daily Breaker. An H4 wick entering the gap is a reaction. A Daily close through the gap kills it. The gap only exists once its third candle has closed; the middle candle can be the Daily breakout candle.")
 string bt_eng_mode = input.string("Wick", "Engulfing covers", options=["Wick", "Body only", "Both"], group=GBT)
 int    bt_from     = input.time(timestamp("2020-01-01T00:00:00"), "Backtest from", group=GBT,
      tooltip="Labels and counts start at this date. Earlier candles still build the levels.")
@@ -710,9 +708,9 @@ float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barm
 [d_high, d_low, d_open2, d_close2, d_high2, d_low2] = request.security(syminfo.tickerid, "D",
      [f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body)], lookahead=barmerge.lookahead_on)
 
-// Daily FVGs: the last three completed Daily candles (wicks), and the middle one's time
-[dg_t2, dg_h1, dg_l1, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
-     [time[2], high[1], low[1], high[3], low[3]], lookahead=barmerge.lookahead_on)
+// Daily FVGs: the first and third of the last three completed Daily candles (wicks)
+[dg_h1, dg_l1, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
+     [high[1], low[1], high[3], low[3]], lookahead=barmerge.lookahead_on)
 
 f_layer_name(string l) =>
     l == "external" ? "External" : l == "internal" ? "Internal" : l == "inner_internal" ? "Inner internal" : l == "sub_internal" ? "Sub-internal" : ""
@@ -757,7 +755,6 @@ var array<float> d_sf_hi = array.new<float>()
 var array<float> d_sf_lo = array.new<float>()
 // H4 FVG after an H4 breakout in line with the Daily: checked on the next candle
 var int    h4f_bar  = na
-var int    bo_t     = na   // open time of the Daily breakout candle
 var bool   h4f_bull = false
 var float  h4f_ref  = na   // high (buys) / low (sells) of the candle before the breakout
 var int    retest_bar = na   // bar the current reaction started on
@@ -1016,7 +1013,6 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     bool bt_same = bo_dir == s_bdir and h4_bo_fired   // same direction, H4 already riding
     bo_dir    := s_bdir
     bo_level  := s_blvl
-    bo_t      := dr_t
     bo_layer  := "external"
     bo_opp    := s_bopp
     est_above := s_bdir == "bullish" and not na(d_close) and d_close > s_blvl + tol   // backtest: breakout candle's close counts
@@ -1126,16 +1122,16 @@ if new_daily and not na(d_close)
     f_fvg_kill(d_bf_hi, d_bf_lo, d_close, true)
     f_fvg_kill(d_sf_hi, d_sf_lo, d_close, false)
 if new_daily and not na(dg_h3) and not na(dg_l1)
-    bool fvg_bo_mid = not na(bo_t) and dg_t2 == bo_t   // the Daily breakout candle is the middle one
-    if not fvg_bo_mid or bt_dfvg_bo
-        if dg_l1 > dg_h3
-            f_fvg_keep(d_bf_hi, d_bf_lo, dg_l1, dg_h3)
-        if dg_h1 < dg_l3
-            f_fvg_keep(d_sf_hi, d_sf_lo, dg_l3, dg_h1)
+    // The middle candle can be anything (even the Daily breakout candle): the gap
+    // only exists once the third candle closes without reaching the first one.
+    if dg_l1 > dg_h3
+        f_fvg_keep(d_bf_hi, d_bf_lo, dg_l1, dg_h3)
+    if dg_h1 < dg_l3
+        f_fvg_keep(d_sf_hi, d_sf_lo, dg_l3, dg_h1)
 
 // Deepest Daily FVG this H4 candle's wick enters. inside: the whole gap sits inside
-// the range that was just broken; otherwise the whole gap is beyond the Daily
-// Breaker (formed in the move after the breakout). Returns its index, or -1.
+// the range that was just broken; otherwise the gap reaches beyond the Daily Breaker
+// (after the breakout, incl. the breakout candle's own gap). Returns its index, or -1.
 f_fvg_pick(array<float> his, array<float> los, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
     int   best = -1
     float bv   = na
@@ -1143,7 +1139,7 @@ f_fvg_pick(array<float> his, array<float> los, bool bull, bool inside, float opp
         for i = 0 to array.size(his) - 1
             float H = array.get(his, i)
             float L = array.get(los, i)
-            bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? L > b_hi : H < b_lo)
+            bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? H > b_hi : L < b_lo)
             bool touched = low <= H and high >= L
             float edge   = bull ? L : H
             if in_pos and touched and (na(bv) or (bull ? edge < bv : edge > bv))
@@ -2013,7 +2009,7 @@ if barstate.islast
                 for i = 0 to array.size(fhs) - 1
                     float H = array.get(fhs, i)
                     float L = array.get(fls, i)
-                    if bb ? L > bo_level + tol : H < bo_level - tol
+                    if bb ? H > bo_level + tol : L < bo_level - tol
                         f_bt_fvg(H, L, "Daily FVG after the breakout")
                     else if not na(bo_opp) and (bb ? (L > bo_opp and H < bo_level - tol) : (H < bo_opp and L > bo_level + tol))
                         f_bt_fvg(H, L, "Daily FVG inside the range")
