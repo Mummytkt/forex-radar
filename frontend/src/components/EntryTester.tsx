@@ -24,18 +24,18 @@ const POIS: { key: string; label: string }[] = [
   { key: 'fvg', label: 'H4 FVG' },
   { key: 'engulfing', label: 'H4 Engulfing' },
   { key: 'h4_key', label: 'H4 fresh key level' },
+  { key: '3cr', label: '4H / 2H 3CR' },
 ]
 const MODELS: { key: string; label: string }[] = [
   { key: 'direct', label: 'Direct entry' },
   { key: 'h1_smc', label: '1H SMC confirmation' },
+  { key: 'h1_cisd', label: '1H CISD' },
   { key: 'h1_engulfing', label: '1H Engulfing' },
   { key: 'h2_engulfing', label: '2H Engulfing' },
   { key: 'm5_cisd', label: '5M CISD' },
   { key: 'm5_smc', label: '5M SMC' },
   { key: 'm15_smc', label: '15M SMC' },
   { key: 'm15_cisd', label: '15M CISD' },
-  { key: 'h4_3cr', label: '4H 3CR' },
-  { key: 'h2_3cr', label: '2H 3CR' },
 ]
 const ENTRY_TYPES: { key: string; label: string; model: string; poi: string }[] = POIS.flatMap(p =>
   MODELS.map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, poi: p.key })))
@@ -259,8 +259,9 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   const [customFor, setCustomFor] = useState<string | null>(null)
   const [poi, setPoi] = useState(POIS[0].key)
   const [customVal, setCustomVal] = useState('')
-  const done = Object.keys(trade.results).length
-  const tradeR = Object.values(trade.results).map(rOf).filter((v): v is number => v != null)
+  const shownRes = ENTRY_TYPES.map(t => trade.results[t.key]).filter((r): r is EntryResult => !!r)   // hidden old keys not counted
+  const done = shownRes.length
+  const tradeR = shownRes.map(rOf).filter((v): v is number => v != null)
 
   const setResult = (key: string, r: EntryResult | null) => {
     const results = { ...trade.results }

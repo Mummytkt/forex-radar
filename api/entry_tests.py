@@ -32,24 +32,26 @@ POIS: list[tuple[str, str]] = [
     ("fvg", "H4 FVG"),
     ("engulfing", "H4 Engulfing"),
     ("h4_key", "H4 fresh key level"),
+    ("3cr", "4H / 2H 3CR"),
 ]
 MODELS: list[tuple[str, str]] = [
     ("direct", "Direct entry"),
     ("h1_smc", "1H SMC confirmation"),
+    ("h1_cisd", "1H CISD"),
     ("h1_engulfing", "1H Engulfing"),
     ("h2_engulfing", "2H Engulfing"),
     ("m5_cisd", "5M CISD"),
     ("m5_smc", "5M SMC"),
     ("m15_smc", "15M SMC"),
     ("m15_cisd", "15M CISD"),
-    ("h4_3cr", "4H 3CR"),
-    ("h2_3cr", "2H 3CR"),
 ]
 ENTRY_TYPES: list[tuple[str, str]] = [
     (f"{m}_{p}", f"{ml} on {pl}") for p, pl in POIS for m, ml in MODELS
 ]
-# Keys from the first version (one list, no POI) still load and save
-_LEGACY = {"h1_smc", "h1_engulfing", "h2_engulfing", "m5_cisd", "m5_smc", "m15_smc", "m15_cisd", "h4_3cr", "h2_3cr"}
+# Keys from earlier versions still load and save (one list with no POI; then
+# 4H / 2H 3CR as entry models before they became a POI)
+_LEGACY = {"h1_smc", "h1_engulfing", "h2_engulfing", "m5_cisd", "m5_smc", "m15_smc", "m15_cisd", "h4_3cr", "h2_3cr"} | {
+    f"{m}_{p}" for m in ("h4_3cr", "h2_3cr") for p in ("fvg", "engulfing", "h4_key")}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 
