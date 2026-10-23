@@ -126,7 +126,7 @@ bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=GBT)
 bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=GBT,
      tooltip="After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line: if the NEXT H4 candle completes an FVG (buys: its low stays above the high of the candle before the breakout), one alert. Checked once per breakout.")
 bool   bt_dfvg     = input.bool(true,  "Daily FVGs as reaction levels", group=GBT,
-     tooltip="Bullish Daily FVGs (bearish for sells) inside the range that was just broken, or formed after the breakout beyond the Daily Breaker. An H4 wick entering the gap is a reaction. A Daily close through the gap kills it. The gap only exists once its third candle has closed; the middle candle can be the Daily breakout candle.")
+     tooltip="Bullish Daily FVGs (bearish for sells) inside the range that was just broken, or formed after the breakout beyond the Daily Breaker. An H4 wick entering the gap is a reaction. Each Daily candle that dips below the previous Daily low inside it (above the high for sells) restarts the External check from when that candle entered the gap. A Daily close through the gap kills it. The gap only exists once its third candle has closed; the middle candle can be the Daily breakout candle.")
 string bt_eng_mode = input.string("Wick", "Engulfing covers", options=["Wick", "Body only", "Both"], group=GBT)
 int    bt_from     = input.time(timestamp("2020-01-01T00:00:00"), "Backtest from", group=GBT,
      tooltip="Labels and counts start at this date. Earlier candles still build the levels.")
@@ -757,6 +757,11 @@ var array<float> d_sf_lo = array.new<float>()
 var int    h4f_bar  = na
 var bool   h4f_bull = false
 var float  h4f_ref  = na   // high (buys) / low (sells) of the candle before the breakout
+// Daily FVG reactions: today's first H4 entry into the gap, and the H4 A / V then
+var int    fz_day_bar  = na
+var float  fz_day_a    = na
+var float  fz_day_v    = na
+var bool   fz_day_done = false
 var int    retest_bar = na   // bar the current reaction started on
 // External/Internal is judged from the FIRST reaction at the daily level that
 // confirms: a failed reaction that restarts at the same level keeps that start;
@@ -1493,6 +1498,26 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                       + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(retest_lvl) + ',"source_level2":' + str.tostring(retest_lvl2) + '}',
                       alert.freq_once_per_bar)
+
+    // ── Daily FVG reactions: each deeper Daily candle restarts the check ──
+    // A Daily FVG is a zone, so the reaction moves with price. While price reacts
+    // inside it, a Daily candle that dips below the previous Daily candle's low
+    // (above its high for sells) becomes the reaction: the External H4 level is
+    // the latest H4 A (V for sells) from when that Daily candle first entered the
+    // FVG. A higher H4 A made after the earlier reaction is no longer External.
+    if new_daily
+        fz_day_bar  := na
+        fz_day_done := false
+    bool fz_on = retest_on and (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg")
+    if fz_on and na(fz_day_bar) and low <= math.max(retest_lvl, retest_lvl2) and high >= math.min(retest_lvl, retest_lvl2)
+        fz_day_bar := bar_index
+        fz_day_a   := h4_a_lvl
+        fz_day_v   := h4_v_lvl
+    if fz_on and not fz_day_done and not na(fz_day_bar) and not na(dr_l) and (bo_dir == "bullish" ? low < dr_l : high > dr_h)
+        fz_day_done := true
+        anchor_bar  := fz_day_bar
+        bt_ext_a    := fz_day_a
+        bt_ext_v    := fz_day_v
 
     // ── H4 CONFIRMED ──────────────────────────────────────────────────────
     bool confirmed_this_bar = false
