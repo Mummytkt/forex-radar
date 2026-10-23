@@ -74,7 +74,7 @@ bool   bt_lvls     = input.bool(true,  "Show the Daily reaction levels being wat
 color  bt_buy_col  = input.color(#00C853, "Buy label", group=GBT, inline="btc")
 color  bt_sell_col = input.color(#FF1744, "Sell label", group=GBT, inline="btc")
 color  bt_txt_col  = input.color(color.white, "Label text", group=GBT, inline="btc")
-color  bt_grey_col = input.color(bt_grey_col, "Not-counted label", group=GBT, inline="btg")
+color  bt_grey_col = input.color(color.new(color.gray, 35), "Not-counted label", group=GBT, inline="btg")
 color  bt_lv_col   = input.color(color.new(color.aqua, 25), "Daily levels watched", group=GBT, inline="btg")
 color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", group=GBT, inline="btt")
 color  bt_tbl_txt  = input.color(color.white, "Table text", group=GBT, inline="btt")
