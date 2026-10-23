@@ -233,6 +233,8 @@ BIAS_TIMEFRAME = "240"
 def _source_type_from_str(source: Optional[str], kind: Optional[str] = None) -> ReactionSourceType:
     if source == "post_breakout_oc":
         return ReactionSourceType.POST_BREAKOUT_DAILY_OC
+    if source == "post_breakout_v":
+        return ReactionSourceType.AV_AFTER_BREAKOUT
     if source == "inside_range":
         return ReactionSourceType.OC_INSIDE_RANGE if kind == "oc" else ReactionSourceType.AV_INSIDE_RANGE
     return ReactionSourceType.DAILY_BREAKER
@@ -351,9 +353,10 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 
 # ── Event handlers ────────────────────────────────────────────────────────────
 
-_CONT_LEVEL_NAMES = {"inline_break": "H4 breakout (new H4 Breaker)", "breakout_cont": "H4 breakout",
+_CONT_LEVEL_NAMES = {"inline_break": "H4 breakout (new H4 Breaker)", "breakout_cont": "H4 breakout", "daily_react": "H4 breakout",
                      "breaker_origin": "H4 Breaker", "breaker_cont": "H4 Breaker", "oc_cont": "H4 OC"}
 _CONT_TITLES = {"inline_break": "H4 breakout in line with the Daily", "breakout_cont": "H4 back in line with the Daily",
+                "daily_react": "Daily reaction + H4 breakout",
                 "breaker_origin": "H4 Breaker Origin", "breaker_cont": "H4 Breaker Continuation",
                 "oc_cont": "H4 OC Continuation"}
 
@@ -461,7 +464,10 @@ def _setup_class(conn, instrument: str, breakout_id: Optional[int] = None) -> Op
 async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
     direction = Direction(payload.direction)
     broken_type = FormationType.A_SHAPE if direction == Direction.BULLISH else FormationType.V_SHAPE
-    _set_setup_class(conn, instrument, None)   # a new Daily setup starts without an H4 confirmation
+    prev = conn.execute("SELECT direction FROM daily_breakouts WHERE instrument = ? AND is_active = 1 "
+                        "ORDER BY id DESC LIMIT 1", (instrument,)).fetchone()
+    if not prev or prev[0] != direction.value:
+        _set_setup_class(conn, instrument, None)   # direction changed: no H4 confirmation yet
 
     # Deactivate any prior breakout and its reaction sources
     old_state = get_instrument_state(conn, instrument)
@@ -679,6 +685,7 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
 
 _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
     "breakout_cont":  AlertClassification.H4_BREAKOUT_CONT,
+    "daily_react":    AlertClassification.H4_BREAKOUT_CONT,
     "inline_break":   AlertClassification.H4_BREAKOUT_CONT,   # new H4 breakout while in line
     "breaker_origin": AlertClassification.H4_BREAKER_ORIGIN,
     "breaker_cont":   AlertClassification.H4_BREAKER_CONT,
@@ -686,7 +693,7 @@ _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
     "engulfing":      AlertClassification.H4_ENGULFING_CONT,
 }
 # Which subscriber switch each continuation type answers to (Alert Filters)
-_CONT_PREF = {"inline_break": "cont_inline", "breakout_cont": "cont_realign", "breaker_origin": "cont_breaker",
+_CONT_PREF = {"inline_break": "cont_inline", "breakout_cont": "cont_realign", "daily_react": "cont_realign", "breaker_origin": "cont_breaker",
               "breaker_cont": "cont_breaker", "oc_cont": "cont_oc", "engulfing": "engulfing"}
 
 
@@ -734,7 +741,8 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         h4_breaker_level=h4_level if classification != AlertClassification.H4_OC_CONT else None,
         daily_level_context=payload.level_type or "external",
         weekly=_weekly_ctx(payload),
-        h4_class=payload.h4_class if cont_type == "breakout_cont" else None,
+        h4_class=payload.h4_class if cont_type in ("breakout_cont", "daily_react") else None,
+        daily_react=cont_type == "daily_react",
         eng_wick=(payload.eng_wick is not False) if cont_type == "engulfing" else None,
     )
 
@@ -766,7 +774,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     # it follows each person's External / Internal choice and becomes the
     # setup's class. Every other continuation follows the setup's latest
     # confirmation, so it only reaches people who received that confirmation.
-    if cont_type == "breakout_cont" and payload.h4_class:
+    if cont_type in ("breakout_cont", "daily_react") and payload.h4_class:
         setup_kind = confirmation_kind(payload.h4_class)
         _set_setup_class(conn, instrument, setup_kind)
     else:

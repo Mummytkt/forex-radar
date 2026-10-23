@@ -31,6 +31,7 @@ _SOURCE_NAMES: dict[ReactionSourceType, str] = {
     ReactionSourceType.OC_INSIDE_RANGE:        "Daily OC inside the range",
     ReactionSourceType.AV_INSIDE_RANGE:        "Daily V/A-shape inside the range",
     ReactionSourceType.POST_BREAKOUT_DAILY_OC: "Post-Breakout OC",
+    ReactionSourceType.AV_AFTER_BREAKOUT:      "Daily V/A-shape after the breakout",
 }
 
 _BROKEN_TYPE_NAMES: dict[FormationType, str] = {
@@ -497,23 +498,43 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
         src_name = _SOURCE_NAMES.get(src.source_type, "Daily level")
         if src.source_type == ReactionSourceType.AV_INSIDE_RANGE:
             src_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape inside the range"
+        if src.source_type == ReactionSourceType.AV_AFTER_BREAKOUT:
+            src_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape after the breakout"
         src_str = _fmt_level(instrument, src.level)
-        lines = [
-            bias_label,
-            "H4 back in line with the Daily",
-            "",
-            f"Daily breakout: {direction_label} (active)",
-            "",
-            f"Daily reaction source: {src_name} @ {src_str}",
-            f"H4 had broken against the Daily {direction_lower} bias. Price then reacted at this Daily level.",
-            "",
-            _h4_break_line(alert, level_str),
-            desc,
-            "",
-            f"Reason: The reaction from the {src_name} brought H4 back in line with the Daily "
-            f"{direction_lower} bias.",
-            "",
-        ]
+        if alert.daily_react:
+            # H4 was still in line: a fresh Daily reaction and a new H4 breakout from it
+            lines = [
+                bias_label,
+                "Daily reaction + H4 breakout",
+                "",
+                f"Daily breakout: {direction_label} (active)",
+                "",
+                f"Daily reaction source: {src_name} @ {src_str}",
+                f"Price came back to this Daily level and held, in the Daily {direction_lower} direction.",
+                "",
+                _h4_break_line(alert, level_str),
+                desc,
+                "",
+                f"Reason: A fresh reaction from the {src_name} and an H4 breakout from it.",
+                "",
+            ]
+        else:
+            lines = [
+                bias_label,
+                "H4 back in line with the Daily",
+                "",
+                f"Daily breakout: {direction_label} (active)",
+                "",
+                f"Daily reaction source: {src_name} @ {src_str}",
+                f"H4 had broken against the Daily {direction_lower} bias. Price then reacted at this Daily level.",
+                "",
+                _h4_break_line(alert, level_str),
+                desc,
+                "",
+                f"Reason: The reaction from the {src_name} brought H4 back in line with the Daily "
+                f"{direction_lower} bias.",
+                "",
+            ]
     else:
         # A new H4 breakout while H4 is already in line with the Daily
         lines = [

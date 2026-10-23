@@ -1,16 +1,16 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v6 — BACKTEST EDITION (on-chart labels)
+// MummyTKT's Bias Pointer v7 — live alerts + on-chart labels (2026-10-23)
 //
-// The live alert script plus labels: wherever the live script sends a bias
-// alert, this one puts an "H4 aligned - Alert" label on that H4 candle,
-// filtered the way Alert Filters filter Telegram (defaults = defaults):
+// The logic proven in the backtest edition is now the live logic. Every bias
+// alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
+// item can be switched off under "Chart labels"), filtered like Alert Filters:
 //   Origin (BUY / SELL CONFIRMED)   External on, Internal off
 //   H4 back in line                 External on, Internal off
 //   H4 breakout in line, Breaker Origin / retest, OC reaction, Engulfing (wick)
 // Continuations follow the setup's latest H4 confirmation (External / Internal).
 //
-// BEING TRIED OUT HERE FIRST (not in the live alerts yet):
+// Since v7:
 //   • Daily V-shapes (A-shapes for sells) formed after the Daily breakout,
 //     beyond the Daily Breaker, are reaction levels while the direction holds
 //     (they die on a Daily close through them, like every Daily level).
@@ -25,7 +25,8 @@
 //
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
-// No alert needs to be created on this copy.
+// The "Internal H4 breakouts" switch also decides whether Internal confirmations
+// are SENT: off (default) = only External breakouts confirm a reaction.
 //
 //
 // Apply to a 4H chart for each instrument.
@@ -108,11 +109,13 @@
 indicator("MummyTKT Bias Pointer — Backtest", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=500)
 
 // ── Backtest labels (same switches as Alert Filters) ──────────────────────────
-GBT = "Backtest labels"
+GBT = "Chart labels"
+bool   bt_show     = input.bool(true,  "Show alert labels on the chart", group=GBT)
 bool   bt_weekly   = input.bool(false, "Weekly (lines, labels, Weekly AGAINST marks)", group=GBT,
      tooltip="Off: Daily + H4 only. The Weekly never changes which alerts fire; it only adds context.")
 bool   bt_ext      = input.bool(true,  "External H4 breakouts", group=GBT)
-bool   bt_int      = input.bool(false, "Internal H4 breakouts", group=GBT)
+bool   bt_int      = input.bool(false, "Internal H4 breakouts", group=GBT,
+     tooltip="Off: only an External H4 breakout confirms a Daily reaction, and only those are sent. On: Internal ones are sent too.")
 bool   bt_origin   = input.bool(true,  "Origin — BUY / SELL CONFIRMED", group=GBT)
 bool   bt_react    = input.bool(true,  "Daily reaction + H4 breakout (after the Origin)", group=GBT)
 bool   bt_realign  = input.bool(true,  "H4 back in line", group=GBT)
@@ -943,7 +946,7 @@ f_bt_src(string s) =>
 // Backtest: label where an alert is sent (returns true if labelled)
 f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool conf = kind <= 1 or kind == 7   // an H4 confirmation after a Daily reaction
-    bool tf_ok = timeframe.period == "240"   // the H4 steps only mean something on 4H candles
+    bool tf_ok = timeframe.period == "240" and bt_show   // the H4 steps only mean something on 4H candles
     bool on = kind == 7 ? bt_react : kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
     if conf
         array.set(bt_scls, 0, cls)
@@ -1375,7 +1378,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + '","breakout_level":' + str.tostring(bo_level)
                           + ',"source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
-                          + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
+                          + ',"h4_level":' + str.tostring(bt_brk) + '}',
                           alert.freq_once_per_bar)
             else
                 h4_aligned            := true
@@ -1388,11 +1391,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_btlbl(true, bt_was_aligned ? 7 : 1, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
-                          + '","direction":"bullish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
+                          + '","direction":"bullish","cont_type":"' + (bt_was_aligned ? "daily_react" : "breakout_cont") + '","h4_class":"' + h4_cls + '"'
                           + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
-                          + ',"h4_level":' + str.tostring(h4_a_lvl) + '}',
+                          + ',"h4_level":' + str.tostring(bt_brk) + '}',
                           alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na
@@ -1422,7 +1425,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + '","breakout_level":' + str.tostring(bo_level)
                           + ',"source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
-                          + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
+                          + ',"h4_level":' + str.tostring(bt_brkv) + '}',
                           alert.freq_once_per_bar)
             else
                 h4_aligned            := true
@@ -1435,11 +1438,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_btlbl(false, bt_was_aligned ? 7 : 1, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
-                          + '","direction":"bearish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
+                          + '","direction":"bearish","cont_type":"' + (bt_was_aligned ? "daily_react" : "breakout_cont") + '","h4_class":"' + h4_cls + '"'
                           + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
-                          + ',"h4_level":' + str.tostring(h4_v_lvl) + '}',
+                          + ',"h4_level":' + str.tostring(bt_brkv) + '}',
                           alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na

@@ -48,6 +48,7 @@ class ReactionSourceType(str, Enum):
     OC_INSIDE_RANGE = "oc_inside_range"
     AV_INSIDE_RANGE = "av_inside_range"
     POST_BREAKOUT_DAILY_OC = "post_breakout_daily_oc"
+    AV_AFTER_BREAKOUT = "av_after_breakout"   # Daily V (buys) / A (sells) formed after the breakout
 
 
 @dataclass
@@ -147,5 +148,6 @@ class AlertRecord:
     h4_breaker_level: Optional[float] = None    # set for CONTINUATION_H4_BREAKER
     daily_level_context: str = "internal"       # "external" or "internal" Daily level
     h4_class: Optional[str] = None              # external | internal, for back-in-line continuations
+    daily_react: bool = False                   # a fresh Daily reaction + H4 breakout while H4 was aligned
     eng_wick: Optional[bool] = None             # H4 engulfing: also closed beyond the previous candle's wick
     weekly: Optional[dict] = None               # Weekly storyline (wk_rel, wk_dir, wk_level, wk_src, wk_src_level, wk_cls)

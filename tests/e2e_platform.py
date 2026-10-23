@@ -851,8 +851,9 @@ _dl = []
 async def _rec_deliver(conn_, cfg_, instrument, text, **kw): _dl.append(kw.get("h4_class"))
 _old_dl, tvw._deliver_alert = tvw._deliver_alert, _rec_deliver
 config.telegram_enabled = True
+tv(type="BREAKOUT", instrument="CHFJPY", direction="bearish", level=176.0, level_type="external", range_level=181.0, timeframe="240")
 tv(type="BREAKOUT", instrument="CHFJPY", direction="bullish", level=180.0, level_type="external", range_level=175.0, timeframe="240")
-check("a new Daily breakout clears the setup's class", tvw._setup_class(conn, "CHFJPY") is None)
+check("a Daily breakout the other way clears the setup's class", tvw._setup_class(conn, "CHFJPY") is None)
 _dl.clear(); tv(type="H4_CONTINUATION", instrument="CHFJPY", direction="bullish", cont_type="oc_cont", breakout_level=180.0, h4_level=181.0, timeframe="240")
 check("with no confirmation known, a continuation isn't filtered by External/Internal", _dl == [None])
 tv(type="CONFIRMED", instrument="CHFJPY", direction="bullish", source="daily_breaker", h4_class="internal",
@@ -870,6 +871,19 @@ tv(type="CONFIRMED", instrument="CADJPY", direction="bearish", source="daily_bre
 conn.execute("DELETE FROM user_config WHERE key = 'setup_h4_class:CADJPY'"); conn.commit()   # as if confirmed before the class was kept
 _dl.clear(); tv(type="H4_CONTINUATION", instrument="CADJPY", direction="bearish", cont_type="oc_cont", breakout_level=110.0, h4_level=109.0, timeframe="240")
 check("an older setup's class is read from its stored Origin alert", _dl == ["internal"])
+# v7 script: Daily V-shape after the breakout, "Daily reaction + H4 breakout", same-direction breakout
+tv(type="BREAKOUT", instrument="AUDCHF", direction="bullish", level=0.55, level_type="external", range_level=0.53, timeframe="240")
+r7 = tv(type="CONFIRMED", instrument="AUDCHF", direction="bullish", source="post_breakout_v", h4_class="external",
+        breakout_level=0.55, source_level=0.56, h4_level=0.565, timeframe="240")
+_t7 = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCHF' ORDER BY id DESC LIMIT 1").fetchone()
+check("an Origin from a Daily V-shape after the breakout is accepted and named", r7.status_code == 200 and _t7 and "after the breakout" in _t7[0])
+_dl.clear(); tv(type="H4_CONTINUATION", instrument="AUDCHF", direction="bullish", cont_type="daily_react", h4_class="external",
+               source="post_breakout_v", source_level=0.57, breakout_level=0.55, h4_level=0.58, timeframe="240")
+_t7 = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCHF' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("'Daily reaction + H4 breakout' is written as such (not 'back in line')",
+      "Daily reaction + H4 breakout" in _t7 and "back in line" not in _t7 and _dl == ["external"])
+tv(type="BREAKOUT", instrument="AUDCHF", direction="bullish", level=0.58, level_type="external", range_level=0.55, timeframe="240")
+check("a new Daily breakout in the same direction keeps the setup's External/Internal", tvw._setup_class(conn, "AUDCHF") == "external")
 tvw._deliver_alert = _old_dl
 config.telegram_enabled = False
 
