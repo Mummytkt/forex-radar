@@ -1250,7 +1250,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "post_breakout_oc"
             retest_lvl := pb_hit
-            if na(anchor_lvl) or math.abs(anchor_lvl - pb_hit) > pip * 0.1
+            if true   // backtest: each reaction starts its own External check
                 anchor_lvl := pb_hit
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1266,7 +1266,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "post_breakout_v"
             retest_lvl := pv_hit
-            if na(anchor_lvl) or math.abs(anchor_lvl - pv_hit) > pip * 0.1
+            if true   // backtest: each reaction starts its own External check
                 anchor_lvl := pv_hit
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1276,7 +1276,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "daily_breaker"
             retest_lvl := bo_level
-            if na(anchor_lvl) or math.abs(anchor_lvl - bo_level) > pip * 0.1
+            if true   // backtest: each reaction starts its own External check
                 anchor_lvl := bo_level
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1292,7 +1292,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_bar := bar_index
             retest_src := "inside_range"
             retest_lvl := ir_hit
-            if na(anchor_lvl) or math.abs(anchor_lvl - ir_hit) > pip * 0.1
+            if true   // backtest: each reaction starts its own External check
                 anchor_lvl := ir_hit
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
@@ -1661,7 +1661,7 @@ else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned" + (retest_on ? "\nDaily reaction at " + f_bt_src(retest_src) + " @ " + str.tostring(retest_lvl, format.mintick) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick)) : "")
 else if h4_bo_fired
     _state_txt := retest_on
-         ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + str.tostring(retest_lvl, "#.#####") + " · waiting for H4 to break " + bo_dir
+         ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + str.tostring(retest_lvl, "#.#####") + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick))
          : "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · waiting for a daily reaction, then an H4 " + bo_dir + " break"
 // Off the 4H chart, show only what the DAILY candles decided (direction and the
 // broken level) — the H4 steps would run on the wrong candles there.

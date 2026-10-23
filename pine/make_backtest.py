@@ -226,13 +226,22 @@ rep('''        float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
 #    is an External breakout, even if newer (Internal) A/V-shapes formed during the
 #    pullback. A close beyond a newer A/V only is Internal, and with Internal off it
 #    does NOT use up the reaction: the script keeps waiting for the External one.
+#    Every reaction (also one restarting at the same Daily level after a failed
+#    one) starts fresh: its External level is the closest H4 A (V for sells)
+#    formed before THAT reaction candle.
 for v in ("pb_hit", "pv_hit", "bo_level", "ir_hit"):
-    rep(f'''                anchor_lvl := {v}
+    rep(f'''            if na(anchor_lvl) or math.abs(anchor_lvl - {v}) > pip * 0.1
+                anchor_lvl := {v}
                 anchor_bar := bar_index
-''', f'''                anchor_lvl := {v}
+''', f'''            if true   // backtest: each reaction starts its own External check
+                anchor_lvl := {v}
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
                 bt_ext_v   := h4_v_lvl
+''')
+# Out-of-line status label names the External level awaited
+rep('''" · waiting for H4 to break " + bo_dir
+''', '''" · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick))
 ''')
 rep('''        if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
             string h4_cls = h4a_origin <= anchor_bar ? "external" : "internal"
