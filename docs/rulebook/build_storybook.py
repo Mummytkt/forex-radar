@@ -336,7 +336,7 @@ def chapters():
         ("The Old Ceiling Becomes a Trampoline", "#ff7a59", "trampoline", [
             "Here's some magic. The roof that got broken flips into a <b>Trampoline</b>! The old ceiling is now a floor to bounce on. Grown-ups call it the <b>Daily Breaker</b>.",
             "The trampoline has a cushion around it called the <b>Wiggle Mat</b>. It's 5 <b>pips</b> thick on each side. (Pips are the tiniest steps a price can take. Crypto coins and Deriv's make-believe markets have no pips, so there the mat is a tiny slice of the price: 0.01%.)",
-            "But first, the Little Twins must <b>go out to play</b>. A Little Twin has to close <b>above the Trampoline's Wiggle Mat</b>.",
+            "But first, the twins must <b>go out to play</b>. If the Giant who broke out already closed <b>above the Trampoline's Wiggle Mat</b>, they're out! If not, a Little Twin has to close above it.",
             "A twin still sitting on the trampoline hasn't left, so it doesn't count.",
             "Only after they've gone out to play can a twin come back for a <b>bounce</b>. That's when it's a real <b>visit</b>.",
         ]),
@@ -350,8 +350,9 @@ def chapters():
         ("The Safe Spots", SKY, "spots", [
             "Now the Little Twins go looking for a safe place to land. Bella slides down... and stretches her leg to touch a Wiggle Mat.",
             "If her toe (or shirt) touches the safe spot's <b>exact line</b> (almost touching doesn't count), and her shirt <b>doesn't close through it</b>, she has made a <b>visit</b>. Grown-ups call it a <b>reaction</b>.",
-            "There are three kinds of safe spots. Candle Town checks them in this order:",
-            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> The <b>Trampoline</b>. <b>3.</b> A <b>valley floor or hand-off step inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
+            "There are four kinds of safe spots. Candle Town checks them in this order:",
+            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> A <b>new Giant valley floor</b> built during the climb, above the trampoline. <b>3.</b> The <b>Trampoline</b>. <b>4.</b> A <b>valley floor or hand-off step inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
+            "A safe spot only appears once the Giants who built it have finished. The Giants who built it can't visit it themselves.",
             "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
             "<b>Cracked spots don't count.</b> A Giant valley floor or hand-off step that a Giant twin has already <b>closed below</b> is cracked (closed above, when the twins are sliding down). Cracked spots are never safe again.",
         ]),
@@ -363,20 +364,20 @@ def chapters():
         ]),
         ("The Golden Bell", SUN, "goldbell", [
             "While a visit is alive, the Little Twins build little rooftops (little A-shapes) of their own.",
-            "Then it happens. A Little Twin closes his shirt <b>above the newest little rooftop</b>. (It's almost always Ben!)",
+            "Then it happens. A Little Twin closes his shirt <b>above the Outside roof</b> (you'll meet it on the next page). (It's almost always Ben!)",
             "<b>DING DING DING!</b> That's the <b>Golden Bell</b>. Grown-ups call it the <b>Origin</b>, and it's the main alert!",
             "It doesn't have to be the twin who visited. Any <b>later</b> Little Twin can ring it. The twin who just finished building a rooftop can't break it at the same moment.",
             "The Golden Bell rings <b>only once</b> for each Giant breakout.",
         ]),
         ("Outside Roof or Inside Roof?", "#8a5cf6", "inout", [
-            "The Golden Bell always uses the <b>newest</b> little rooftop. But where was it built?",
-            "If it was built <b>before</b> the visit started, it's an <b>Outside roof</b>. Grown-ups say <b>External</b>. "
-            "(If a visit fails and the twins come back to the <b>same</b> spot, the first visit there still counts as the start.)",
-            "If it was built <b>during</b> the visit, it's an <b>Inside roof</b>. Grown-ups say <b>Internal</b>.",
+            "What matters is the <b>first touch</b> of a safe spot after it appeared. The closest little rooftop built <b>before</b> that first touch is the <b>Outside roof</b>. Grown-ups say <b>External</b>.",
+            "Every little rooftop built <b>after</b> the first touch is an <b>Inside roof</b>, however low the twins go. Grown-ups say <b>Internal</b>. "
+            "If inside bells are switched off, breaking an inside roof doesn't use up the visit: the twins keep waiting for the outside roof.",
             "Each grown-up can choose which bells they want on their phone: outside, inside, or both.",
         ]),
         ("Encore Bells!", GREEN_D, "encore1", [
             "After the Golden Bell, the Little Twins keep climbing. Every new good bounce rings an <b>Encore Bell</b>. Grown-ups call these <b>continuations</b>.",
+            "<b>A new Giant visit.</b> Every time the twins visit a Giant safe spot again and then close above that visit's Outside roof, ENCORE! Grown-ups call it a <b>Daily reaction + H4 breakout</b>.",
             "<b>A new little rooftop.</b> While the twins stay in line, every time a Little Ben closes above the <b>newest</b> little rooftop, ENCORE! No Giant visit is needed for this one.",
             "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. Each newer rooftop the twins break becomes the new little trampoline. If a later twin <b>starts above it</b>, comes down to touch its exact line and closes <b>above</b> it, ENCORE!",
             "<b>The little hand-off steps.</b> When two Little Bens climb one after the other, they make a little step. Every step on the newest climb is kept. If a <b>later</b> twin starts above one, touches it and closes above, ENCORE! That step is then used up. (A twin climbing up through it from below doesn't count.)",
@@ -394,7 +395,8 @@ def chapters():
         ("A Brand-New Game", RED_D, "gameover", [
             "Giants can slide back <b>inside the house that just broke</b>, below the trampoline. That's okay! That's where visits happen.",
             "But if a Giant's shirt closes past the <b>other side</b> of that house (the newest house's floor), that's a <b>breakout the other way</b>.",
-            "The old game ends and a <b>brand-new game</b> begins, going DOWN. Any new Giant breakout starts a new game.",
+            "The old game ends and a <b>brand-new game</b> begins, going DOWN.",
+            "But a new Giant breakout <b>the same way</b> (UP again) doesn't end the game! The Little Twins keep climbing and their Encore Bells keep ringing.",
         ]),
         ("Bella's Turn: The Mirror World", RED_D, "mirror", [
             "Everything you learned works for Bella too. Just flip it upside down, like a mirror!",
