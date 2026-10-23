@@ -532,9 +532,14 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
                 poi        TEXT    NOT NULL,           -- fvg | engulfing | h4_key
                 file_name  TEXT    NOT NULL,
                 created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                backed_up_at TEXT,                     -- when the weekly image backup sent it off-site
                 UNIQUE (test_id, poi)
             )
         """)
+    else:
+        img_cols = {row[1] for row in conn.execute("PRAGMA table_info(entry_test_images)").fetchall()}
+        if "backed_up_at" not in img_cols:
+            conn.execute("ALTER TABLE entry_test_images ADD COLUMN backed_up_at TEXT")
     if "announcements" not in existing:
         conn.execute("""
             CREATE TABLE announcements (

@@ -125,6 +125,26 @@ _up2 = c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(owner), file
 check("a new image for the same POI replaces the old one",
       c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner)).status_code == 404
       and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": _up2.json()["id"]})
+# Weekly image backup: sends each new image once, as a zip with a manifest
+import asyncio as _aio, zipfile as _zf
+import alerts.telegram as _tgm
+_sent_docs = []
+async def _fake_doc(token, chat, path, fname, caption=""):
+    with _zf.ZipFile(path) as z:
+        _sent_docs.append((fname, sorted(z.namelist())))
+    return 77
+_old_doc, _tgm.send_document = _tgm.send_document, _fake_doc
+_old_tg = (config.telegram_enabled, config.telegram_bot_token, config.telegram_chat_id)
+config.telegram_enabled, config.telegram_bot_token, config.telegram_chat_id = True, "123:TEST", "999"
+from alerts.image_backup import run_image_backup
+_ib = _aio.run(run_image_backup(config.db_path, config))
+check("the weekly image backup sends the new image in a zip with a manifest",
+      _ib["images"] == 1 and len(_sent_docs) == 1 and "manifest.json" in _sent_docs[0][1]
+      and any("XAUUSD_H4-FVG" in n for n in _sent_docs[0][1]))
+_ib2 = _aio.run(run_image_backup(config.db_path, config))
+check("an image is only sent once", _ib2["images"] == 0 and len(_sent_docs) == 1)
+_tgm.send_document = _old_doc
+config.telegram_enabled, config.telegram_bot_token, config.telegram_chat_id = _old_tg
 c.delete(f"/api/entry-tests/{_et['id']}", headers=H(owner))
 check("owner deletes an entry test", c.get("/api/entry-tests", headers=H(owner)).json() == [])
 check("deleting a trade deletes its images",

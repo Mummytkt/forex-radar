@@ -27,6 +27,7 @@ from api.app import app as fastapi_app
 from alerts.price_monitor import run_price_check
 from alerts.billing_cycle import run_billing_cycle
 from alerts.backup import run_backup
+from alerts.image_backup import run_image_backup
 from alerts.feed_monitor import run_feed_check
 from alerts.reminders import run_reminders
 from alerts.news import refresh_calendar, run_news_summary, run_news_reminders
@@ -159,6 +160,15 @@ async def main(dry_run: bool = False) -> None:
         id="daily_backup",
         name="Daily database backup (local + encrypted off-site to owner Telegram)",
         misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        run_image_backup,
+        "cron",
+        day_of_week="sun", hour=3, minute=30,  # Sundays 03:30 UTC — markets closed, between H4 closes
+        kwargs={"db_path": config.db_path, "config": config},
+        id="weekly_image_backup",
+        name="Weekly off-site copy of new Entry Tester chart images (owner Telegram)",
+        misfire_grace_time=6 * 3600,
     )
     scheduler.add_job(
         run_feed_check,
