@@ -35,6 +35,10 @@ rep('''// MummyTKT's Bias Pointer v6 — TradingView Edition
 //     also while H4 is still aligned after the Origin:
 //     "Daily reaction + H4 breakout". Each fresh reaction after a confirmation
 //     starts its own External / Internal check.
+//   • A new Daily breakout in the SAME direction doesn't reset H4: in-line
+//     breakouts and H4 reactions keep firing. A reaction at the new breakout's
+//     Daily levels + an H4 breakout then becomes what H4 rides on. Only a Daily
+//     breakout the other way resets H4.
 //
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
@@ -78,10 +82,44 @@ var bt_last = array.new<label>(1, na)   // the alert label currently on the char
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout")''')
 
 # Label function: after f_wk(), so it can read the Weekly relation
-rep('''    h4_brk_lvl            := na
+# 3. A new Daily breakout in the SAME direction carries the H4 ride on: H4 stays
+#    confirmed / aligned with its Breaker, OCs and levels, so in-line breakouts and
+#    H4 reactions keep firing. A reaction at the new breakout's Daily levels + an H4
+#    breakout ("Daily reaction + H4 breakout") then becomes what H4 rides on.
+#    Only a Daily breakout the other way resets H4.
+rep('''    last_bcnt := s_bcnt
+    bo_dir    := s_bdir
+''', '''    last_bcnt := s_bcnt
+    bool bt_same = bo_dir == s_bdir and h4_bo_fired   // same direction, H4 already riding
+    bo_dir    := s_bdir
+''')
+rep('''    h4_a_lvl  := na
+    h4_v_lvl  := na
+    pb_consec := 0
+''', '''    if not bt_same
+        h4_a_lvl  := na
+        h4_v_lvl  := na
+    pb_consec := 0
+''')
+rep('''    h4_bo_fired           := false
+    h4_breaker_orig_fired := false
+    h4_breaker_lvl        := na
+    h4_invalid_lvl        := na
+    h4_aligned            := false
+    array.clear(h4_ocs)
+    array.clear(h4_ocb)
+    h4_brk_lvl            := na
     bo_wk_rel := ""
-''', '''    h4_brk_lvl            := na
-    array.set(bt_scls, 0, "")
+''', '''    if not bt_same
+        h4_bo_fired           := false
+        h4_breaker_orig_fired := false
+        h4_breaker_lvl        := na
+        h4_invalid_lvl        := na
+        h4_aligned            := false
+        array.clear(h4_ocs)
+        array.clear(h4_ocb)
+        h4_brk_lvl            := na
+        array.set(bt_scls, 0, "")
     bo_wk_rel := ""
 ''')
 rep('''// Weekly context sent with every bias alert (empty when there is no Weekly setup)

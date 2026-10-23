@@ -18,6 +18,10 @@
 //     also while H4 is still aligned after the Origin:
 //     "Daily reaction + H4 breakout". Each fresh reaction after a confirmation
 //     starts its own External / Internal check.
+//   • A new Daily breakout in the SAME direction doesn't reset H4: in-line
+//     breakouts and H4 reactions keep firing. A reaction at the new breakout's
+//     Daily levels + an H4 breakout then becomes what H4 rides on. Only a Daily
+//     breakout the other way resets H4.
 //
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
@@ -964,6 +968,7 @@ f_hdrw(string t) =>
 
 if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     last_bcnt := s_bcnt
+    bool bt_same = bo_dir == s_bdir and h4_bo_fired   // same direction, H4 already riding
     bo_dir    := s_bdir
     bo_level  := s_blvl
     bo_layer  := "external"
@@ -975,23 +980,25 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     retest_kind := na
     anchor_lvl := na
     anchor_bar := na
-    h4_a_lvl  := na
-    h4_v_lvl  := na
+    if not bt_same
+        h4_a_lvl  := na
+        h4_v_lvl  := na
     pb_consec := 0
     pb_close1 := na
     pb_oc_lvl := na
     array.clear(pb_ocs)
     retest_lvl := na
     just_broke:= true
-    h4_bo_fired           := false
-    h4_breaker_orig_fired := false
-    h4_breaker_lvl        := na
-    h4_invalid_lvl        := na
-    h4_aligned            := false
-    array.clear(h4_ocs)
-    array.clear(h4_ocb)
-    h4_brk_lvl            := na
-    array.set(bt_scls, 0, "")
+    if not bt_same
+        h4_bo_fired           := false
+        h4_breaker_orig_fired := false
+        h4_breaker_lvl        := na
+        h4_invalid_lvl        := na
+        h4_aligned            := false
+        array.clear(h4_ocs)
+        array.clear(h4_ocb)
+        h4_brk_lvl            := na
+        array.set(bt_scls, 0, "")
     bo_wk_rel := ""
     if not na(wk_dir)
         bo_wk_dir := wk_dir
