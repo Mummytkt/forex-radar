@@ -7,7 +7,8 @@ import { API_BASE } from '@/lib/api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Outcome = 'win' | 'loss' | 'be' | 'none'
-interface EntryResult { outcome: Outcome; rr: number | null }
+// takes: trades taken on this entry (a stop-out then a re-entry = 2); unset = 1
+interface EntryResult { outcome: Outcome; rr: number | null; takes?: number }
 interface Trade {
   id: number
   trade_date: string
@@ -16,7 +17,7 @@ interface Trade {
   alert_type: string
   notes: string
   results: Record<string, EntryResult>
-  images: Record<string, number>   // {poi: image id}
+  images: Record<string, number[]>   // {slot: image ids} — slot = a POI key or an entry key
 }
 
 // Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
@@ -69,10 +70,13 @@ const today = () => new Date().toISOString().slice(0, 10)
 const fmtR = (r: number) => `${r > 0 ? '+' : ''}${r.toFixed(2)}R`
 
 // R a result made: win = its RR (unknown until set), loss = -1R, BE = 0
+// Net R over every trade taken on the entry: each earlier stop-out is -1R, then
+// the last one counts (win = its RR, loss = -1R, BE = 0)
 function rOf(r: EntryResult): number | null {
-  if (r.outcome === 'win') return r.rr
-  if (r.outcome === 'loss') return -1
-  if (r.outcome === 'be') return 0
+  const before = Math.max((r.takes ?? 1) - 1, 0)
+  if (r.outcome === 'win') return r.rr == null ? null : r.rr - before
+  if (r.outcome === 'loss') return -1 - before
+  if (r.outcome === 'be') return -before
   return null
 }
 
@@ -96,7 +100,7 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
   const [poi, setPoi] = useState('')
   const [showAll, setShowAll] = useState(false)
   const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
-    let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0
+    let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0
     for (const tr of trades) {
       const r = tr.results[t.key]
       if (!r) continue
@@ -104,11 +108,12 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
       else if (r.outcome === 'loss') l++
       else if (r.outcome === 'be') be++
       else none++
+      if (r.outcome !== 'none') trades_ += r.takes ?? 1
       const v = rOf(r)
       if (v != null) totalR += v
     }
     const taken = w + l + be
-    return { ...t, w, l, be, none, taken, noRR, totalR,
+    return { ...t, w, l, be, none, taken, trades: trades_, noRR, totalR,
       winRate: taken ? (w / taken) * 100 : null,
       avgRR: rrN ? rrSum / rrN : null,
       expectancy: taken ? totalR / taken : null }
@@ -125,7 +130,7 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
         <Trophy size={16} color="var(--accent)" />
         <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Which entry holds up best</span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {trades.length} trade{trades.length === 1 ? '' : 's'} · ranked by total R · loss = −1R, BE = 0
+          {trades.length} setup{trades.length === 1 ? '' : 's'} · ranked by total R · each stop-out = −1R, BE = 0
         </span>
         {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>Leader: {best.label}</span>}
       </div>
@@ -143,7 +148,8 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <th style={{ ...th, textAlign: 'left' }}>Entry</th>
-              <th style={th}>Taken</th><th style={th}>Win</th><th style={th}>Loss</th><th style={th}>BE</th>
+              <th style={th} title="Setups where this entry was taken">Taken</th>
+              <th style={th} title="Trades placed, re-entries included">Trades</th><th style={th}>Win</th><th style={th}>Loss</th><th style={th}>BE</th>
               <th style={th}>No entry</th><th style={th}>Win %</th><th style={th}>Avg RR (wins)</th>
               <th style={th}>Total R</th><th style={th}>R / trade</th>
             </tr>
@@ -153,6 +159,7 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
               <tr key={r.key} style={{ borderBottom: '1px solid var(--border)', opacity: r.taken || r.none ? 1 : 0.45 }}>
                 <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{r.label}</td>
                 <td style={td}>{r.taken}</td>
+                <td style={{ ...td, color: r.trades > r.taken ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.trades}</td>
                 <td style={{ ...td, color: 'var(--bullish)' }}>{r.w}</td>
                 <td style={{ ...td, color: 'var(--bearish)' }}>{r.l}</td>
                 <td style={{ ...td, color: '#f59e0b' }}>{r.be}</td>
@@ -170,79 +177,37 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
   )
 }
 
-// ── Chart screenshot for one POI of a trade ──────────────────────────────────
-// Stored on the server (so it's there on every device). Click / drop / paste.
-function PoiImage({ tradeId, poi, poiLabel, imageId, onSet }: {
-  tradeId: number; poi: string; poiLabel: string; imageId?: number; onSet: (id: number | null) => void
-}) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  const [big, setBig] = useState(false)
-  const input = useRef<HTMLInputElement>(null)
+// ── Chart screenshots: several per POI, and per entry under a POI ──────────────
+// Stored on the server (so they're there on every device). Click / drop / paste.
+function authHdr(): HeadersInit {
+  const t = typeof window !== 'undefined' ? localStorage.getItem('mbp_token') : null
+  return t ? { Authorization: `Bearer ${t}` } : {}
+}
 
+function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove: () => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [big, setBig] = useState(false)
   useEffect(() => {
-    if (!imageId) { setUrl(null); return }
     let gone = false, made: string | null = null
-    const t = localStorage.getItem('mbp_token')
-    fetch(`${API_BASE}/api/entry-tests/images/${imageId}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    fetch(`${API_BASE}/api/entry-tests/images/${id}`, { headers: authHdr() })
       .then(r => r.ok ? r.blob() : Promise.reject())
       .then(b => { if (!gone) { made = URL.createObjectURL(b); setUrl(made) } })
-      .catch(() => !gone && setErr('Could not load the image.'))
+      .catch(() => {})
     return () => { gone = true; if (made) URL.revokeObjectURL(made) }
-  }, [imageId])
-
-  const upload = async (file: File | null | undefined) => {
-    if (!file || !file.type.startsWith('image/')) { setErr('That isn\'t an image file.'); return }
-    setBusy(true); setErr('')
-    const fd = new FormData()
-    fd.append('file', file)
-    const t = localStorage.getItem('mbp_token')
-    try {
-      const r = await fetch(`${API_BASE}/api/entry-tests/${tradeId}/images/${poi}`, {
-        method: 'POST', headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd })
-      if (!r.ok) throw new Error()
-      onSet((await r.json()).id)
-    } catch { setErr('The image did not upload. Try again.') }
-    setBusy(false)
-  }
-  const remove = async () => {
-    if (!confirm(`Remove the ${poiLabel} image?`)) return
-    const t = localStorage.getItem('mbp_token')
-    const r = await fetch(`${API_BASE}/api/entry-tests/${tradeId}/images/${poi}`, {
-      method: 'DELETE', headers: t ? { Authorization: `Bearer ${t}` } : {} })
-    if (r.ok) onSet(null)
-  }
-
+  }, [id])
   return (
-    <div style={{ margin: '8px 0 4px' }}>
-      <input ref={input} type="file" accept="image/*" hidden onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }} />
-      {url ? (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <img src={url} alt={`${poiLabel} chart`} onClick={() => setBig(true)}
-            style={{ maxWidth: 360, width: '100%', borderRadius: 8, border: '1px solid var(--border)', cursor: 'zoom-in' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button onClick={() => input.current?.click()} disabled={busy} style={{ ...selStyle, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-              {busy ? 'Uploading…' : 'Replace image'}
-            </button>
-            <button onClick={remove} style={{ ...selStyle, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--bearish)' }}>Remove</button>
-          </div>
-        </div>
-      ) : (
-        <div tabIndex={0} onClick={() => input.current?.click()}
-          onPaste={e => upload(Array.from(e.clipboardData.files)[0])}
-          onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(e.dataTransfer.files[0]) }}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderRadius: 8, border: '1px dashed var(--border)',
-            color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer', outline: 'none' }}>
-          <Camera size={16} />
-          {busy ? 'Uploading…' : <>Add the <b style={{ color: 'var(--text-secondary)' }}>{poiLabel}</b> chart image: click to choose, drop a file here, or click then paste (Ctrl+V)</>}
-        </div>
-      )}
-      {err && <div style={{ color: 'var(--bearish)', fontSize: 12, marginTop: 4 }}>{err}</div>}
+    <div style={{ position: 'relative', width: 150, height: 96, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
+      {url
+        ? <img src={url} alt={label} onClick={() => setBig(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} />
+        : <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: 8 }}>Loading…</div>}
+      <button onClick={onRemove} aria-label="Remove image" title="Remove this image"
+        style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: 6, padding: 3, color: 'white', cursor: 'pointer', display: 'flex' }}>
+        <X size={13} />
+      </button>
       {big && url && (
         <div onClick={() => setBig(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, cursor: 'zoom-out' }}>
-          <img src={url} alt={`${poiLabel} chart`} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8 }} />
+          <img src={url} alt={label} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8 }} />
           <button aria-label="Close" style={{ position: 'absolute', top: 16, right: 16, background: 'var(--card)', border: '1px solid var(--border)',
             borderRadius: 8, padding: 6, color: 'var(--text-primary)', cursor: 'pointer' }}><X size={18} /></button>
         </div>
@@ -251,14 +216,76 @@ function PoiImage({ tradeId, poi, poiLabel, imageId, onSet }: {
   )
 }
 
+function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
+  tradeId: number; slot: string; label: string; ids: number[]; onChange: (ids: number[]) => void; compact?: boolean
+}) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const input = useRef<HTMLInputElement>(null)
+
+  const upload = async (files: File[]) => {
+    const imgs = files.filter(f => f.type.startsWith('image/'))
+    if (!imgs.length) { setErr('That isn\'t an image file.'); return }
+    setBusy(true); setErr('')
+    let now = ids
+    for (const f of imgs) {
+      const fd = new FormData()
+      fd.append('file', f)
+      try {
+        const r = await fetch(`${API_BASE}/api/entry-tests/${tradeId}/images/${slot}`, { method: 'POST', headers: authHdr(), body: fd })
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '')
+        now = [...now, (await r.json()).id]
+        onChange(now)
+      } catch (e) { setErr((e as Error).message || 'An image did not upload. Try again.'); break }
+    }
+    setBusy(false)
+  }
+  const remove = async (id: number) => {
+    if (!confirm('Remove this image?')) return
+    const r = await fetch(`${API_BASE}/api/entry-tests/images/${id}`, { method: 'DELETE', headers: authHdr() })
+    if (r.ok) onChange(ids.filter(x => x !== id))
+  }
+
+  return (
+    <div style={{ margin: compact ? '4px 0 2px' : '8px 0 6px', flexBasis: '100%' }}>
+      <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { upload(Array.from(e.target.files || [])); e.target.value = '' }} />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'stretch' }}>
+        {ids.map(id => <Thumb key={id} id={id} label={label} onRemove={() => remove(id)} />)}
+        <div tabIndex={0} onClick={() => input.current?.click()}
+          onPaste={e => upload(Array.from(e.clipboardData.files))}
+          onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(Array.from(e.dataTransfer.files)) }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 8, border: '1px dashed var(--border)',
+            color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', outline: 'none', minHeight: ids.length ? 96 : undefined,
+            maxWidth: ids.length ? 170 : undefined }}>
+          <Camera size={15} style={{ flexShrink: 0 }} />
+          {busy ? 'Uploading…' : ids.length
+            ? <>Add another: click, drop, or click then paste</>
+            : <>Add <b style={{ color: 'var(--text-secondary)' }}>{label}</b> images: click to choose (several at once is fine), drop files here, or click then paste (Ctrl+V)</>}
+        </div>
+      </div>
+      {err && <div style={{ color: 'var(--bearish)', fontSize: 12, marginTop: 4 }}>{err}</div>}
+    </div>
+  )
+}
+
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   trade: Trade; open: boolean; onToggle: () => void
-  onChange: (t: Trade) => void; onImages: (images: Record<string, number>) => void; onDelete: () => void
+  onChange: (t: Trade) => void; onImages: (images: Record<string, number[]>) => void; onDelete: () => void
 }) {
   const [customFor, setCustomFor] = useState<string | null>(null)
   const [poi, setPoi] = useState(POIS[0].key)
   const [customVal, setCustomVal] = useState('')
+  const [picsFor, setPicsFor] = useState<string | null>(null)   // entry row whose image strip is open
+  const imgs = trade.images || {}
+  const setSlot = (slot: string, ids: number[]) => {
+    const images = { ...imgs }
+    if (ids.length) images[slot] = ids
+    else delete images[slot]
+    onImages(images)
+  }
+  // Every picture under a POI: its own and its entries'
+  const poiPics = (p: string) => Object.entries(imgs).filter(([k]) => k === p || k.endsWith(`_${p}`)).reduce((n, [, v]) => n + v.length, 0)
   const shownRes = ENTRY_TYPES.map(t => trade.results[t.key]).filter((r): r is EntryResult => !!r)   // hidden old keys not counted
   const done = shownRes.length
   const tradeR = shownRes.map(rOf).filter((v): v is number => v != null)
@@ -272,7 +299,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   const tapOutcome = (key: string, o: Outcome) => {
     const cur = trade.results[key]
     if (cur?.outcome === o) setResult(key, null)   // tap again to clear
-    else setResult(key, { outcome: o, rr: o === 'win' ? cur?.rr ?? null : null })
+    else setResult(key, { outcome: o, rr: o === 'win' ? cur?.rr ?? null : null, ...(o !== 'none' && cur?.takes ? { takes: cur.takes } : {}) })
   }
 
   return (
@@ -297,19 +324,13 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
               const n = ENTRY_TYPES.filter(t => t.poi === p.key && trade.results[t.key]).length
               return (
                 <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>
-                  {p.label}{n ? ` · ${n}` : ''}{trade.images?.[p.key] ? ' · 📷' : ''}
+                  {p.label}{n ? ` · ${n}` : ''}{poiPics(p.key) ? ` · 📷${poiPics(p.key)}` : ''}
                 </Chip>
               )
             })}
           </div>
-          <PoiImage tradeId={trade.id} poi={poi} poiLabel={POIS.find(p => p.key === poi)?.label ?? poi}
-            imageId={trade.images?.[poi]}
-            onSet={id => {
-              const images = { ...(trade.images || {}) }
-              if (id) images[poi] = id
-              else delete images[poi]
-              onImages(images)
-            }} />
+          <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
+            ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />
           {ENTRY_TYPES.filter(t => t.poi === poi).map(t => {
             const r = trade.results[t.key]
             return (
@@ -318,14 +339,22 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
                 {OUTCOMES.map(o => (
                   <Chip key={o.key} on={r?.outcome === o.key} color={o.color} bg={o.bg} onClick={() => tapOutcome(t.key, o.key)}>{o.label}</Chip>
                 ))}
+                <Chip on={picsFor === t.key || !!imgs[t.key]?.length} color="var(--accent)" bg="var(--accent-bg)"
+                  onClick={() => setPicsFor(picsFor === t.key ? null : t.key)}>
+                  📷{imgs[t.key]?.length ? ` ${imgs[t.key].length}` : ''}
+                </Chip>
+                {(picsFor === t.key || !!imgs[t.key]?.length) && (
+                  <ImageStrip compact tradeId={trade.id} slot={t.key} label={t.label} ids={imgs[t.key] || []}
+                    onChange={ids => setSlot(t.key, ids)} />
+                )}
                 {r?.outcome === 'win' && (
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexBasis: '100%', paddingLeft: 4, marginTop: 2 }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2 }}>RR</span>
                     {RR_QUICK.map(n => (
-                      <Chip key={n} on={r.rr === n} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => setResult(t.key, { outcome: 'win', rr: n })}>1:{n}</Chip>
+                      <Chip key={n} on={r.rr === n} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => setResult(t.key, { ...r, outcome: 'win', rr: n })}>1:{n}</Chip>
                     ))}
                     {customFor === t.key ? (
-                      <form onSubmit={e => { e.preventDefault(); const v = parseFloat(customVal); if (v > 0) setResult(t.key, { outcome: 'win', rr: v }); setCustomFor(null) }}>
+                      <form onSubmit={e => { e.preventDefault(); const v = parseFloat(customVal); if (v > 0) setResult(t.key, { ...r, outcome: 'win', rr: v }); setCustomFor(null) }}>
                         <input autoFocus value={customVal} onChange={e => setCustomVal(e.target.value)} onBlur={() => setCustomFor(null)}
                           inputMode="decimal" placeholder="e.g. 2.7" style={{ ...selStyle, width: 80, padding: '4px 8px' }} />
                       </form>
@@ -337,15 +366,42 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
                     )}
                   </div>
                 )}
+                {r && r.outcome !== 'none' && (
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexBasis: '100%', paddingLeft: 4, marginTop: 2 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2 }} title="Stopped out and re-entered? Count every trade; the result above is the last one">Trades taken</span>
+                    {[1, 2, 3, 4].map(n => (
+                      <Chip key={n} on={(r.takes ?? 1) === n} color="var(--accent)" bg="var(--accent-bg)"
+                        onClick={() => { const { takes: _t, ...rest } = r; setResult(t.key, n > 1 ? { ...rest, takes: n } : rest) }}>{n}</Chip>
+                    ))}
+                    <input type="number" min={1} max={50} inputMode="numeric" placeholder="5+" title="Type any number"
+                      defaultValue={(r.takes ?? 1) > 4 ? r.takes : ''} key={`${t.key}-${r.takes ?? 1}`}
+                      onBlur={e => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50 && n !== (r.takes ?? 1)) { const { takes: _t, ...rest } = r; setResult(t.key, n > 1 ? { ...rest, takes: n } : rest) } }}
+                      style={{ ...selStyle, width: 58, padding: '4px 8px' }} />
+                    {(r.takes ?? 1) > 1 && (() => { const v = rOf(r); return (
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 4 }}>
+                        {(r.takes ?? 1) - 1} stop-out{(r.takes ?? 1) > 2 ? 's' : ''} then {r.outcome === 'win' ? 'a win' : r.outcome === 'loss' ? 'a loss' : 'BE'}
+                        {v != null && <> = <b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(v)}</b> overall</>}
+                      </span>) })()}
+                  </div>
+                )}
               </div>
             )
           })}
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Fix a misspelt pair on this trade */}
+            {/* Edit the trade's details: pair, date, direction, H4 alert (each saves straight away) */}
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexBasis: '100%' }}>Trade details (edit any of them; changes save straight away)</span>
             <input defaultValue={trade.instrument} title="Pair (fix a spelling mistake here)"
               onInput={e => { e.currentTarget.value = cleanPair(e.currentTarget.value) }}
               onBlur={e => { const p = cleanPair(e.target.value); if (p && p !== trade.instrument) onChange({ ...trade, instrument: p }); else e.target.value = trade.instrument }}
               style={{ ...selStyle, width: 110 }} />
+            <input type="date" value={trade.trade_date} title="Date"
+              onChange={e => e.target.value && onChange({ ...trade, trade_date: e.target.value })} style={selStyle} />
+            <Chip on={trade.direction === 'buy'} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => trade.direction !== 'buy' && onChange({ ...trade, direction: 'buy' })}>BUY</Chip>
+            <Chip on={trade.direction === 'sell'} color="var(--bearish)" bg="var(--bearish-bg)" onClick={() => trade.direction !== 'sell' && onChange({ ...trade, direction: 'sell' })}>SELL</Chip>
+            <select value={trade.alert_type} title="H4 alert" onChange={e => onChange({ ...trade, alert_type: e.target.value })} style={selStyle}>
+              {!ALERT_TYPES.includes(trade.alert_type) && <option value={trade.alert_type}>{trade.alert_type || '—'}</option>}
+              {ALERT_TYPES.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
             <input defaultValue={trade.notes} placeholder="Note (optional)" onBlur={e => e.target.value !== trade.notes && onChange({ ...trade, notes: e.target.value })}
               style={{ ...selStyle, flex: 1 }} />
             <button onClick={() => { if (confirm(`Delete this ${trade.instrument} trade?`)) onDelete() }}

@@ -70,6 +70,7 @@ def _db(request: Request):
 class EntryResult(BaseModel):
     outcome: str
     rr: Optional[float] = None
+    takes: Optional[int] = None   # trades taken on this entry (re-entries after a stop-out); 1 when unset
 
 
 class TradeBody(BaseModel):
@@ -92,6 +93,8 @@ def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str]:
             raise HTTPException(400, f"unknown entry type or outcome: {k}")
         rr = r.rr if r.outcome == "win" and r.rr is not None and 0 < r.rr <= 100 else None
         res[k] = {"outcome": r.outcome, "rr": rr}
+        if r.outcome != "none" and r.takes is not None and 1 < r.takes <= 50:
+            res[k]["takes"] = int(r.takes)
     return (body.trade_date.strip()[:10], body.instrument.strip().upper()[:20], body.direction,
             body.alert_type.strip()[:40], body.notes.strip()[:500], json.dumps(res))
 
@@ -99,15 +102,18 @@ def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str]:
 def _row(r: sqlite3.Row, images: Optional[dict] = None) -> dict:
     d = dict(r)
     d["results"] = json.loads(d.pop("results_json") or "{}")
-    d["images"] = images or {}   # {poi: image id}
+    d["images"] = images or {}   # {slot: [image ids]} — slot = a POI key or an entry key
     return d
 
 
-# ── Trade screenshots: one per POI per trade ──────────────────────────────────
-# Stored as JPEG files on the data volume next to the database (not inside it,
-# so the nightly Telegram backup stays small); the table keeps who owns which.
+# ── Trade screenshots ─────────────────────────────────────────────────────────
+# Several per "slot": a POI of the trade (its general chart) or one entry model
+# under that POI. Stored as JPEG files on the data volume next to the database
+# (not inside it, so the nightly Telegram backup stays small).
 _POI_KEYS = {k for k, _ in POIS}
+_SLOT_POI = {k: k for k in _POI_KEYS} | {f"{m}_{p}": p for p, _ in POIS for m, _ in MODELS}
 MAX_UPLOAD = 15 * 1024 * 1024
+MAX_PER_SLOT = 12
 
 
 def _img_dir(request: Request) -> Path:
@@ -118,8 +124,8 @@ def _img_dir(request: Request) -> Path:
 
 def _images_by_trade(conn, uid: int) -> dict[int, dict]:
     out: dict[int, dict] = {}
-    for r in conn.execute("SELECT id, test_id, poi FROM entry_test_images WHERE user_id = ?", (uid,)):
-        out.setdefault(r["test_id"], {})[r["poi"]] = r["id"]
+    for r in conn.execute("SELECT id, test_id, slot FROM entry_test_images WHERE user_id = ? ORDER BY id", (uid,)):
+        out.setdefault(r["test_id"], {}).setdefault(r["slot"], []).append(r["id"])
     return out
 
 
@@ -186,12 +192,13 @@ def delete_trade(trade_id: int, request: Request):
     return {"ok": True}
 
 
-@router.post("/entry-tests/{trade_id}/images/{poi}")
-async def upload_image(trade_id: int, poi: str, request: Request, file: UploadFile = File(...)):
-    """Add (or replace) the screenshot for one POI of a trade."""
+@router.post("/entry-tests/{trade_id}/images/{slot}")
+async def upload_image(trade_id: int, slot: str, request: Request, file: UploadFile = File(...)):
+    """Add a screenshot to a trade: to one of its POIs, or to one entry under a POI."""
     u = require_owner(request)
-    if poi not in _POI_KEYS:
-        raise HTTPException(400, "unknown POI")
+    poi = _SLOT_POI.get(slot)
+    if poi is None:
+        raise HTTPException(400, "unknown POI or entry")
     raw = await file.read(MAX_UPLOAD + 1)
     if len(raw) > MAX_UPLOAD:
         raise HTTPException(413, "Image is too large (15 MB max)")
@@ -208,14 +215,13 @@ async def upload_image(trade_id: int, poi: str, request: Request, file: UploadFi
     with _db(request) as conn:
         if not conn.execute("SELECT 1 FROM entry_tests WHERE id = ? AND user_id = ?", (trade_id, u["id"])).fetchone():
             raise HTTPException(404, "Trade not found")
+        n = conn.execute("SELECT COUNT(*) FROM entry_test_images WHERE test_id = ? AND slot = ?", (trade_id, slot)).fetchone()[0]
+        if n >= MAX_PER_SLOT:
+            raise HTTPException(400, f"{MAX_PER_SLOT} images is the most for one POI or entry")
         (_img_dir(request) / name).write_bytes(buf.getvalue())
-        old = conn.execute("SELECT id, file_name FROM entry_test_images WHERE test_id = ? AND poi = ?",
-                           (trade_id, poi)).fetchone()
-        if old:
-            _drop_image(request, conn, old)
-        cur = conn.execute("INSERT INTO entry_test_images (test_id, user_id, poi, file_name) VALUES (?, ?, ?, ?)",
-                           (trade_id, u["id"], poi, name))
-    return {"id": cur.lastrowid, "poi": poi}
+        cur = conn.execute("INSERT INTO entry_test_images (test_id, user_id, poi, slot, file_name) VALUES (?, ?, ?, ?, ?)",
+                           (trade_id, u["id"], poi, slot, name))
+    return {"id": cur.lastrowid, "slot": slot}
 
 
 @router.get("/entry-tests/images/{image_id}")
@@ -230,12 +236,12 @@ def get_image(image_id: int, request: Request):
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
-@router.delete("/entry-tests/{trade_id}/images/{poi}")
-def delete_image(trade_id: int, poi: str, request: Request):
+@router.delete("/entry-tests/images/{image_id}")
+def delete_image(image_id: int, request: Request):
     u = require_owner(request)
     with _db(request) as conn:
-        row = conn.execute("SELECT id, file_name FROM entry_test_images WHERE test_id = ? AND poi = ? AND user_id = ?",
-                           (trade_id, poi, u["id"])).fetchone()
+        row = conn.execute("SELECT id, file_name FROM entry_test_images WHERE id = ? AND user_id = ?",
+                           (image_id, u["id"])).fetchone()
         if row:
             _drop_image(request, conn, row)
     return {"ok": True}

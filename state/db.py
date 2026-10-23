@@ -529,17 +529,38 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 test_id    INTEGER NOT NULL REFERENCES entry_tests(id),
                 user_id    INTEGER NOT NULL REFERENCES users(id),
-                poi        TEXT    NOT NULL,           -- fvg | engulfing | h4_key
+                poi        TEXT    NOT NULL,           -- fvg | engulfing | h4_key | 3cr
+                slot       TEXT    NOT NULL,           -- the POI key, or an entry key under it (e.g. h1_cisd_fvg)
                 file_name  TEXT    NOT NULL,
                 created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                backed_up_at TEXT,                     -- when the weekly image backup sent it off-site
-                UNIQUE (test_id, poi)
+                backed_up_at TEXT                      -- when the weekly image backup sent it off-site
             )
         """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_test_images ON entry_test_images (test_id, slot)")
     else:
         img_cols = {row[1] for row in conn.execute("PRAGMA table_info(entry_test_images)").fetchall()}
         if "backed_up_at" not in img_cols:
             conn.execute("ALTER TABLE entry_test_images ADD COLUMN backed_up_at TEXT")
+        if "slot" not in img_cols:
+            # First version allowed one image per POI (UNIQUE test_id, poi): rebuild without
+            # that limit; existing images become the POI's general chart (slot = poi).
+            conn.execute("""
+                CREATE TABLE entry_test_images_new (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    test_id      INTEGER NOT NULL REFERENCES entry_tests(id),
+                    user_id      INTEGER NOT NULL REFERENCES users(id),
+                    poi          TEXT    NOT NULL,
+                    slot         TEXT    NOT NULL,
+                    file_name    TEXT    NOT NULL,
+                    created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                    backed_up_at TEXT
+                )
+            """)
+            conn.execute("""INSERT INTO entry_test_images_new (id, test_id, user_id, poi, slot, file_name, created_at, backed_up_at)
+                            SELECT id, test_id, user_id, poi, poi, file_name, created_at, backed_up_at FROM entry_test_images""")
+            conn.execute("DROP TABLE entry_test_images")
+            conn.execute("ALTER TABLE entry_test_images_new RENAME TO entry_test_images")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_test_images ON entry_test_images (test_id, slot)")
     if "announcements" not in existing:
         conn.execute("""
             CREATE TABLE announcements (

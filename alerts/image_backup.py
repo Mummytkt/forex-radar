@@ -33,7 +33,7 @@ POI_NAMES = {"fvg": "H4-FVG", "engulfing": "H4-Engulfing", "h4_key": "H4-fresh-k
 
 def _pending(conn, img_dir: Path) -> list[dict]:
     rows = conn.execute(
-        "SELECT i.id, i.file_name, i.poi, i.test_id, t.instrument, t.trade_date "
+        "SELECT i.id, i.file_name, i.poi, i.test_id, t.instrument, t.trade_date, i.slot "
         "FROM entry_test_images i JOIN entry_tests t ON t.id = i.test_id "
         "WHERE i.backed_up_at IS NULL ORDER BY i.id").fetchall()
     out = []
@@ -41,7 +41,7 @@ def _pending(conn, img_dir: Path) -> list[dict]:
         f = img_dir / r[1]
         if f.is_file():
             out.append({"id": r[0], "file_name": r[1], "poi": r[2], "test_id": r[3],
-                        "instrument": r[4], "trade_date": r[5], "path": f, "size": f.stat().st_size})
+                        "instrument": r[4], "trade_date": r[5], "slot": r[6], "path": f, "size": f.stat().st_size})
     return out
 
 
@@ -64,10 +64,13 @@ def _zip(part: list[dict]) -> Path:
     manifest = []
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:   # JPEGs are already compressed
         for it in part:
-            name = f"{it['trade_date']}_{it['instrument']}_{POI_NAMES.get(it['poi'], it['poi'])}_trade{it['test_id']}.jpg"
+            entry = "" if it["slot"] == it["poi"] else "_" + it["slot"][: -len(it["poi"]) - 1]
+            name = (f"{it['trade_date']}_{it['instrument']}_{POI_NAMES.get(it['poi'], it['poi'])}{entry}"
+                    f"_trade{it['test_id']}_img{it['id']}.jpg")
             z.write(it["path"], name)
             manifest.append({"file": name, "stored_as": it["file_name"], "trade_id": it["test_id"],
-                             "poi": it["poi"], "instrument": it["instrument"], "trade_date": it["trade_date"]})
+                             "poi": it["poi"], "slot": it["slot"], "instrument": it["instrument"],
+                             "trade_date": it["trade_date"]})
         z.writestr("manifest.json", json.dumps(manifest, indent=1))
     return Path(tmp)
 

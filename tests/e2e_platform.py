@@ -111,9 +111,9 @@ import io as _io
 from PIL import Image as _PImage
 _png = _io.BytesIO(); _PImage.new("RGB", (40, 30), (200, 20, 20)).save(_png, "PNG")
 _up = c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(owner), files={"file": ("chart.png", _png.getvalue(), "image/png")})
-check("owner adds a chart image for one POI of a trade", _up.status_code == 200 and _up.json().get("poi") == "fvg")
+check("owner adds a chart image for one POI of a trade", _up.status_code == 200 and _up.json().get("slot") == "fvg")
 _img_id = _up.json().get("id")
-check("the trade lists which POI has an image", c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": _img_id})
+check("the trade lists which POI has an image", c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": [_img_id]})
 _gi = c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner))
 check("the image comes back as a JPEG", _gi.status_code == 200 and _gi.content[:2] == b"\xff\xd8")
 check("a subscriber can't see or add Entry Tester images",
@@ -122,9 +122,25 @@ check("a subscriber can't see or add Entry Tester images",
 check("a non-image upload is refused", c.post(f"/api/entry-tests/{_et['id']}/images/engulfing", headers=H(owner),
       files={"file": ("x.txt", b"hello", "text/plain")}).status_code == 400)
 _up2 = c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(owner), files={"file": ("c2.png", _png.getvalue(), "image/png")})
-check("a new image for the same POI replaces the old one",
+_ue = c.post(f"/api/entry-tests/{_et['id']}/images/h1_cisd_fvg", headers=H(owner), files={"file": ("e.png", _png.getvalue(), "image/png")})
+check("several images per POI, and images for one entry under it",
+      c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": [_img_id, _up2.json()["id"]], "h1_cisd_fvg": [_ue.json()["id"]]})
+check("an image slot that isn't a POI or entry is refused", c.post(f"/api/entry-tests/{_et['id']}/images/bogus", headers=H(owner),
+      files={"file": ("e.png", _png.getvalue(), "image/png")}).status_code == 400)
+c.delete(f"/api/entry-tests/images/{_img_id}", headers=H(owner))
+check("one image can be removed, the others stay",
       c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner)).status_code == 404
-      and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": _up2.json()["id"]})
+      and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": [_up2.json()["id"]], "h1_cisd_fvg": [_ue.json()["id"]]})
+_ed = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
+      "direction": "sell", "alert_type": "H4 back in line", "results": {"direct_fvg": {"outcome": "loss"}}}).json()
+_tk = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
+      "direction": "sell", "alert_type": "H4 back in line", "results": {"m5_cisd_fvg": {"outcome": "win", "rr": 3, "takes": 2},
+      "m5_smc_fvg": {"outcome": "none", "takes": 3}}}).json()["results"]
+check("re-entries are kept with the result (not on 'No entry')",
+      _tk["m5_cisd_fvg"] == {"outcome": "win", "rr": 3, "takes": 2} and "takes" not in _tk["m5_smc_fvg"])
+check("a trade's date, direction, alert and results can all be edited",
+      _ed["trade_date"] == "2020-01-09" and _ed["direction"] == "sell" and _ed["alert_type"] == "H4 back in line"
+      and _ed["results"] == {"direct_fvg": {"outcome": "loss", "rr": None}})
 # Weekly image backup: sends each new image once, as a zip with a manifest
 import asyncio as _aio, zipfile as _zf
 import alerts.telegram as _tgm
@@ -139,7 +155,7 @@ config.telegram_enabled, config.telegram_bot_token, config.telegram_chat_id = Tr
 from alerts.image_backup import run_image_backup
 _ib = _aio.run(run_image_backup(config.db_path, config))
 check("the weekly image backup sends the new image in a zip with a manifest",
-      _ib["images"] == 1 and len(_sent_docs) == 1 and "manifest.json" in _sent_docs[0][1]
+      _ib["images"] == 2 and len(_sent_docs) == 1 and "manifest.json" in _sent_docs[0][1]
       and any("XAUUSD_H4-FVG" in n for n in _sent_docs[0][1]))
 _ib2 = _aio.run(run_image_backup(config.db_path, config))
 check("an image is only sent once", _ib2["images"] == 0 and len(_sent_docs) == 1)
