@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v7 — live alerts + on-chart labels (2026-10-23)
+// MummyTKT's Bias Pointer v8 — live alerts + on-chart labels (2026-10-23)
 //
 // The logic proven in the backtest edition is now the live logic. Every bias
 // alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
@@ -23,6 +23,20 @@
 //     Daily levels + an H4 breakout then becomes what H4 rides on. Only a Daily
 //     breakout the other way resets H4.
 //
+// Since v8 (FVGs):
+//   • Daily FVGs are reaction levels: inside the range that was just broken
+//     ("inside_fvg") and reaching beyond the Daily Breaker ("post_breakout_fvg").
+//     A gap is an FVG once its third Daily candle closes without reaching the
+//     first (the middle one can be the breakout candle). An H4 wick entering the
+//     gap is a reaction; only a Daily CLOSE through the gap kills it. While price
+//     reacts inside it, each Daily candle that dips below the previous Daily low
+//     (above the high for sells) restarts the External check from when that
+//     candle entered the gap. Other Daily levels keep the first-touch rule.
+//   • H4 FVG after an H4 breakout in line (Origin, Daily reaction + H4 breakout,
+//     back in line, in line): the NEXT H4 candle is checked once; if it completes
+//     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
+//     after breakout has formed", no buy / sell).
+//
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
 // The "Internal H4 breakouts" switch also decides whether Internal confirmations
@@ -41,7 +55,7 @@
 //   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
 //   INVALIDATED      — no longer sent: a break the other way is a new BREAKOUT
 //   H4_CONTINUATION  — H4 continuation event after Origin has fired
-//                      cont_type: breakout_cont | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing
+//                      cont_type: breakout_cont | daily_react | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing | h4_fvg
 //   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
 //
 // v5 change: added PRICE_UPDATE event — fires at every realtime H4 close.

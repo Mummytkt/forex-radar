@@ -908,6 +908,34 @@ check("'Daily reaction + H4 breakout' is written as such (not 'back in line')",
       "Daily reaction + H4 breakout" in _t7 and "back in line" not in _t7 and _dl == ["external"])
 tv(type="BREAKOUT", instrument="AUDCHF", direction="bullish", level=0.58, level_type="external", range_level=0.55, timeframe="240")
 check("a new Daily breakout in the same direction keeps the setup's External/Internal", tvw._setup_class(conn, "AUDCHF") == "external")
+# v8 script: Daily FVG reactions and the H4 FVG liquidity marker
+from api.alert_prefs import get_alert_prefs
+_dlp = []
+async def _rec_deliver2(conn_, cfg_, instrument, text, **kw): _dlp.append((text, kw.get("pref"), kw.get("h4_class")))
+tvw._deliver_alert = _rec_deliver2
+r8 = tv(type="H4_CONTINUATION", instrument="AUDCHF", direction="bullish", cont_type="daily_react", h4_class="external",
+        source="post_breakout_fvg", source_level=0.595, source_level2=0.59, breakout_level=0.58, h4_level=0.60, timeframe="240")
+check("a Daily reaction at a Daily FVG after the breakout is accepted and named",
+      r8.status_code == 200 and _dlp and "Daily FVG after the breakout" in _dlp[-1][0])
+_bk8 = conn.execute("SELECT last_h4_breaker_level FROM instrument_state WHERE instrument='AUDCHF'").fetchone()[0]
+_dlp.clear(); tv(type="H4_CONTINUATION", instrument="AUDCHF", direction="bullish", cont_type="h4_fvg",
+                 breakout_level=0.58, h4_level=0.601, fvg_low=0.601, fvg_high=0.603, timeframe="240")
+check("the H4 FVG alert is only the pair and the message (no buy / sell)",
+      _dlp and _dlp[0][0] == "AUDCHF\nH4 FVG candle after breakout has formed")
+check("the H4 FVG alert answers to its own Alert Filters switch and follows the setup's class",
+      _dlp and _dlp[0][1] == "h4_fvg" and _dlp[0][2] == "external")
+check("the H4 FVG alert doesn't move the H4 Breaker",
+      conn.execute("SELECT last_h4_breaker_level FROM instrument_state WHERE instrument='AUDCHF'").fetchone()[0] == _bk8)
+_r8 = tv(type="CONFIRMED", instrument="CADJPY", direction="bearish", source="inside_fvg", h4_class="external",
+         breakout_level=110.0, source_level=111.0, source_level2=111.6, h4_level=110.5, timeframe="240")
+check("a confirmation from a Daily FVG inside the range is accepted", _r8.status_code == 200)
+check("subscribers get the H4 FVG alert off by default; the owner on",
+      get_alert_prefs(conn, bid, "SUBSCRIBER")["h4_fvg"] is False and get_alert_prefs(conn, None, "OWNER")["h4_fvg"] is True)
+_F8 = make_sub("fvg@x.com")
+check("the H4 FVG switch shows in Alert Filters, off for a subscriber",
+      c.get("/api/preferences", headers=H(_F8["token"])).json().get("h4Fvg") is False)
+c.patch("/api/preferences", headers=H(_F8["token"]), json={"h4Fvg": True})
+check("a subscriber can switch the H4 FVG alert on", get_alert_prefs(conn, _F8["user"]["id"], "SUBSCRIBER")["h4_fvg"] is True)
 tvw._deliver_alert = _old_dl
 config.telegram_enabled = False
 

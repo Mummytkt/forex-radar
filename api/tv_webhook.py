@@ -195,7 +195,10 @@ class TVWebhookPayload(BaseModel):
     instrument: str                     # e.g. "USDCHF" or "USD/CHF"
     direction: Optional[str] = None     # "bullish" | "bearish"
     level: Optional[float] = None       # daily broken level (BREAKOUT)
-    source: Optional[str] = None        # "daily_breaker" | "inside_range" | "post_breakout_oc"
+    source: Optional[str] = None        # "daily_breaker" | "inside_range" | "post_breakout_oc" | "post_breakout_v" | "post_breakout_fvg" | "inside_fvg"
+    source_level2: Optional[float] = None  # Daily FVG reactions: the far edge of the gap (source_level = the near edge)
+    fvg_low: Optional[float] = None     # H4_CONTINUATION h4_fvg: the gap
+    fvg_high: Optional[float] = None
     h4_class: Optional[str] = None      # "external" | "internal" (CONFIRMED, and back-in-line continuations)
     breakout_level: Optional[float] = None   # daily broken level
     source_level: Optional[float] = None     # the Daily level that reacted (Breaker, inside-range V/A or OC, post-breakout OC)
@@ -235,6 +238,10 @@ def _source_type_from_str(source: Optional[str], kind: Optional[str] = None) -> 
         return ReactionSourceType.POST_BREAKOUT_DAILY_OC
     if source == "post_breakout_v":
         return ReactionSourceType.AV_AFTER_BREAKOUT
+    if source == "post_breakout_fvg":
+        return ReactionSourceType.FVG_AFTER_BREAKOUT
+    if source == "inside_fvg":
+        return ReactionSourceType.FVG_INSIDE_RANGE
     if source == "inside_range":
         return ReactionSourceType.OC_INSIDE_RANGE if kind == "oc" else ReactionSourceType.AV_INSIDE_RANGE
     return ReactionSourceType.DAILY_BREAKER
@@ -354,11 +361,12 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 # ── Event handlers ────────────────────────────────────────────────────────────
 
 _CONT_LEVEL_NAMES = {"inline_break": "H4 breakout (new H4 Breaker)", "breakout_cont": "H4 breakout", "daily_react": "H4 breakout",
-                     "breaker_origin": "H4 Breaker", "breaker_cont": "H4 Breaker", "oc_cont": "H4 OC"}
+                     "breaker_origin": "H4 Breaker", "breaker_cont": "H4 Breaker", "oc_cont": "H4 OC",
+                     "h4_fvg": "High of the candle before the breakout (FVG edge)"}
 _CONT_TITLES = {"inline_break": "H4 breakout in line with the Daily", "breakout_cont": "H4 back in line with the Daily",
                 "daily_react": "Daily reaction + H4 breakout",
                 "breaker_origin": "H4 Breaker Origin", "breaker_cont": "H4 Breaker Continuation",
-                "oc_cont": "H4 OC Continuation"}
+                "oc_cont": "H4 OC Continuation", "h4_fvg": "H4 FVG candle after breakout"}
 
 
 def _save_chart_levels(conn, instrument: str, alert_id: int, direction: Direction, breaker: Optional[float],
@@ -691,10 +699,12 @@ _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
     "breaker_cont":   AlertClassification.H4_BREAKER_CONT,
     "oc_cont":        AlertClassification.H4_OC_CONT,
     "engulfing":      AlertClassification.H4_ENGULFING_CONT,
+    "h4_fvg":         AlertClassification.H4_FVG,
 }
 # Which subscriber switch each continuation type answers to (Alert Filters)
 _CONT_PREF = {"inline_break": "cont_inline", "breakout_cont": "cont_realign", "daily_react": "cont_realign", "breaker_origin": "cont_breaker",
-              "breaker_cont": "cont_breaker", "oc_cont": "cont_oc", "engulfing": "engulfing"}
+              "breaker_cont": "cont_breaker", "oc_cont": "cont_oc", "engulfing": "engulfing",
+              "h4_fvg": "h4_fvg"}
 
 
 def _weekly_ctx(payload: "TVWebhookPayload") -> Optional[dict]:
@@ -754,19 +764,20 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
                        subtitle=_CONT_TITLES.get(cont_type, "H4 continuation"))
 
     state = get_instrument_state(conn, instrument)
-    upsert_instrument_state(conn, InstrumentStateRow(
-        instrument=instrument,
-        last_daily_candle_ts=state.last_daily_candle_ts if state else None,
-        last_h4_candle_ts=state.last_h4_candle_ts if state else None,
-        active_breakout_id=breakout.db_id,
-        retest_in_progress=False,
-        active_reaction_src_id=None,
-        updated_at=now,
-        continuation_mode=True,
-        last_alert_h4_ts=now,
-        last_h4_breaker_level=h4_level,
-        retest_started_h4_ts=None,
-    ))
+    if cont_type != "h4_fvg":   # the FVG marker doesn't change the H4 Breaker or the setup's stage
+        upsert_instrument_state(conn, InstrumentStateRow(
+            instrument=instrument,
+            last_daily_candle_ts=state.last_daily_candle_ts if state else None,
+            last_h4_candle_ts=state.last_h4_candle_ts if state else None,
+            active_breakout_id=breakout.db_id,
+            retest_in_progress=False,
+            active_reaction_src_id=None,
+            updated_at=now,
+            continuation_mode=True,
+            last_alert_h4_ts=now,
+            last_h4_breaker_level=h4_level,
+            retest_started_h4_ts=None,
+        ))
 
     logger.info("%s H4_CONTINUATION %s (cont_type=%s) — alert stored", instrument, direction.value, cont_type)
 

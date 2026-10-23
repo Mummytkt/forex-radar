@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v7 — live alerts + on-chart labels (2026-10-23)
+// MummyTKT's Bias Pointer v8 — live alerts + on-chart labels (2026-10-23)
 //
 // The logic proven in the backtest edition is now the live logic. Every bias
 // alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
@@ -23,6 +23,20 @@
 //     Daily levels + an H4 breakout then becomes what H4 rides on. Only a Daily
 //     breakout the other way resets H4.
 //
+// Since v8 (FVGs):
+//   • Daily FVGs are reaction levels: inside the range that was just broken
+//     ("inside_fvg") and reaching beyond the Daily Breaker ("post_breakout_fvg").
+//     A gap is an FVG once its third Daily candle closes without reaching the
+//     first (the middle one can be the breakout candle). An H4 wick entering the
+//     gap is a reaction; only a Daily CLOSE through the gap kills it. While price
+//     reacts inside it, each Daily candle that dips below the previous Daily low
+//     (above the high for sells) restarts the External check from when that
+//     candle entered the gap. Other Daily levels keep the first-touch rule.
+//   • H4 FVG after an H4 breakout in line (Origin, Daily reaction + H4 breakout,
+//     back in line, in line): the NEXT H4 candle is checked once; if it completes
+//     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
+//     after breakout has formed", no buy / sell).
+//
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
 // The "Internal H4 breakouts" switch also decides whether Internal confirmations
@@ -41,7 +55,7 @@
 //   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
 //   INVALIDATED      — no longer sent: a break the other way is a new BREAKOUT
 //   H4_CONTINUATION  — H4 continuation event after Origin has fired
-//                      cont_type: breakout_cont | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing
+//                      cont_type: breakout_cont | daily_react | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing | h4_fvg
 //   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
 //
 // v5 change: added PRICE_UPDATE event — fires at every realtime H4 close.
@@ -106,7 +120,7 @@
 //             Origin, in line, in the Daily direction: cont_type "engulfing".
 // ─────────────────────────────────────────────────────────────────────────────
 
-indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=500)
+indicator("MummyTKT Bias Pointer", overlay=true, max_bars_back=2000, max_lines_count=100, max_labels_count=500, max_boxes_count=50)
 
 // ── Backtest labels (same switches as Alert Filters) ──────────────────────────
 GBT = "Chart labels"
@@ -123,6 +137,10 @@ bool   bt_inline   = input.bool(true,  "H4 breakout in line", group=GBT)
 bool   bt_breaker  = input.bool(true,  "H4 Breaker (Origin + retests)", group=GBT)
 bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=GBT)
 bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=GBT)
+bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=GBT,
+     tooltip="After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line: if the NEXT H4 candle completes an FVG (buys: its low stays above the high of the candle before the breakout), one alert. Checked once per breakout.")
+bool   bt_dfvg     = input.bool(true,  "Daily FVGs as reaction levels", group=GBT,
+     tooltip="Bullish Daily FVGs (bearish for sells) inside the range that was just broken, or formed after the breakout beyond the Daily Breaker. An H4 wick entering the gap is a reaction. Each Daily candle that dips below the previous Daily low inside it (above the high for sells) restarts the External check from when that candle entered the gap. A Daily close through the gap kills it. The gap only exists once its third candle has closed; the middle candle can be the Daily breakout candle.")
 string bt_eng_mode = input.string("Wick", "Engulfing covers", options=["Wick", "Body only", "Both"], group=GBT)
 int    bt_from     = input.time(timestamp("2020-01-01T00:00:00"), "Backtest from", group=GBT,
      tooltip="Labels and counts start at this date. Earlier candles still build the levels.")
@@ -138,13 +156,15 @@ color  bt_sell_col = input.color(#FF1744, "Sell label", group=GBT, inline="btc")
 color  bt_txt_col  = input.color(color.white, "Label text", group=GBT, inline="btc")
 color  bt_grey_col = input.color(color.new(color.gray, 35), "Not-counted label", group=GBT, inline="btg")
 color  bt_lv_col   = input.color(color.new(color.aqua, 25), "Daily levels watched", group=GBT, inline="btg")
+color  bt_fvg_col  = input.color(color.new(color.aqua, 85), "Daily FVGs watched", group=GBT, inline="btg")
+color  bt_h4fvg_col = input.color(color.new(#FF9800, 10), "H4 FVG label", group=GBT, inline="btg")
 color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", group=GBT, inline="btt")
 color  bt_tbl_txt  = input.color(color.white, "Table text", group=GBT, inline="btt")
 color  bt_state_txt = input.color(color.white, "Status label text", group=GBT, inline="bts")
 color  bt_ext_txt   = input.color(#E0E0E0, "External high / low text", group=GBT, inline="bts")
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
-//         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells
-var bt_cnt  = array.new_int(10, 0)
+//         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells, 10 H4 FVG after breakout
+var bt_cnt  = array.new_int(11, 0)
 var int bt_t0 = time
 // External / Internal of the setup's latest H4 confirmation (Origin, Daily reaction
 // + H4 breakout, or back in line); continuations follow it, like the server
@@ -155,7 +175,7 @@ var bt_last = array.new<label>(1, na)   // the alert label currently on the char
 var float bt_ext_a = na
 var float bt_ext_v = na
 var bt_seen = array.new<float>()   // Daily levels already touched since they formed
-var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout")
+var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout", "Buys", "Sells", "H4 FVG after breakout")
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
 string wh_secret       = input.string("", "Webhook Secret",
@@ -702,6 +722,10 @@ float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barm
 [d_high, d_low, d_open2, d_close2, d_high2, d_low2] = request.security(syminfo.tickerid, "D",
      [f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body)], lookahead=barmerge.lookahead_on)
 
+// Daily FVGs: the first and third of the last three completed Daily candles (wicks)
+[dg_h1, dg_l1, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
+     [high[1], low[1], high[3], low[3]], lookahead=barmerge.lookahead_on)
+
 f_layer_name(string l) =>
     l == "external" ? "External" : l == "internal" ? "Internal" : l == "inner_internal" ? "Inner internal" : l == "sub_internal" ? "Sub-internal" : ""
 
@@ -737,6 +761,21 @@ var float  pb_close1  = na
 var float  pb_oc_lvl  = na   // most recent post-breakout OC (for the label)
 var array<float> pb_ocs = array.new<float>()   // every completed post-breakout OC
 var float  retest_lvl = na   // level of the zone price is currently reacting from
+var float  retest_lvl2 = na  // Daily FVG reactions: the far edge of the gap (retest_lvl = the near edge)
+// Daily FVGs (gap top / bottom). Bullish = buy reaction zones, bearish = sell.
+var array<float> d_bf_hi = array.new<float>()
+var array<float> d_bf_lo = array.new<float>()
+var array<float> d_sf_hi = array.new<float>()
+var array<float> d_sf_lo = array.new<float>()
+// H4 FVG after an H4 breakout in line with the Daily: checked on the next candle
+var int    h4f_bar  = na
+var bool   h4f_bull = false
+var float  h4f_ref  = na   // high (buys) / low (sells) of the candle before the breakout
+// Daily FVG reactions: today's first H4 entry into the gap, and the H4 A / V then
+var int    fz_day_bar  = na
+var float  fz_day_a    = na
+var float  fz_day_v    = na
+var bool   fz_day_done = false
 var int    retest_bar = na   // bar the current reaction started on
 // External/Internal is judged from the FIRST reaction at the daily level that
 // confirms: a failed reaction that restarts at the same level keeps that start;
@@ -940,20 +979,25 @@ if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not
 f_wsrc_name(string src, string kind) =>
     src == "breaker" ? "Weekly Breaker" : src == "post_breakout_oc" ? "post-breakout Weekly OC" : kind == "oc" ? "Weekly OC inside the range" : kind == "a_shape" ? "Weekly A-shape inside the range" : "Weekly V-shape inside the range"
 
+// The reacting level as text: a Daily FVG shows its gap (bottom – top)
+f_bt_lvtxt(float v) =>
+    na(retest_lvl2) ? str.tostring(v, format.mintick) : str.tostring(math.min(retest_lvl, retest_lvl2), format.mintick) + " – " + str.tostring(math.max(retest_lvl, retest_lvl2), format.mintick)
+
 f_bt_src(string s) =>
-    s == "daily_breaker" ? "Daily Breaker" : s == "post_breakout_oc" ? "Daily OC after the breakout" : s == "post_breakout_v" ? "Daily V/A-shape after the breakout" : s == "inside_range" ? "Daily level inside the broken range" : "-"
+    s == "daily_breaker" ? "Daily Breaker" : s == "post_breakout_oc" ? "Daily OC after the breakout" : s == "post_breakout_v" ? "Daily V/A-shape after the breakout" : s == "inside_range" ? "Daily level inside the broken range" : s == "post_breakout_fvg" ? "Daily FVG after the breakout" : s == "inside_fvg" ? "Daily FVG inside the range" : "-"
 
 // Backtest: label where an alert is sent (returns true if labelled)
 f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool conf = kind <= 1 or kind == 7   // an H4 confirmation after a Daily reaction
     bool tf_ok = timeframe.period == "240" and bt_show   // the H4 steps only mean something on 4H candles
-    bool on = kind == 7 ? bt_react : kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
+    bool on = kind == 10 ? bt_h4fvg : kind == 7 ? bt_react : kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
     if conf
         array.set(bt_scls, 0, cls)
     string c = array.get(bt_scls, 0)
     bool cls_ok = c == "" or (c == "external" ? bt_ext : bt_int)
-    string head = kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
-    string tag  = c == "" ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
+    // H4 FVG: no buy / sell, just the pair and the message (for tracking liquidity)
+    string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
+    string tag  = c == "" or kind == 10 ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
     if tf_ok and bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         if bt_latest
@@ -964,8 +1008,8 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     if tf_ok and on and cls_ok and time >= bt_from
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
-             style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, (kind == 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
+             style=bull ? label.style_label_up : label.style_label_down, color=kind == 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col,
              textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small,
              tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
              + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
@@ -1005,6 +1049,7 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     pb_oc_lvl := na
     array.clear(pb_ocs)
     retest_lvl := na
+    retest_lvl2 := na
     just_broke:= true
     if not bt_same
         h4_bo_fired           := false
@@ -1075,6 +1120,51 @@ if new_daily and not na(d_close2)
         f_keep(d_boc, d_close2)
     if p_bear and y_bear
         f_keep(d_soc, d_close2)
+
+// Daily FVGs. A gap is only an FVG once its third Daily candle has closed. A Daily
+// close through the gap kills it (bullish: below the bottom; bearish: above the top).
+f_fvg_kill(array<float> his, array<float> los, float c, bool bull) =>
+    int k = array.size(his) - 1
+    while k >= 0
+        if bull ? c < array.get(los, k) : c > array.get(his, k)
+            array.remove(his, k)
+            array.remove(los, k)
+        k -= 1
+f_fvg_keep(array<float> his, array<float> los, float h, float l) =>
+    array.push(his, h)
+    array.push(los, l)
+    if array.size(his) > 60
+        array.shift(his)
+        array.shift(los)
+
+if new_daily and not na(d_close)
+    f_fvg_kill(d_bf_hi, d_bf_lo, d_close, true)
+    f_fvg_kill(d_sf_hi, d_sf_lo, d_close, false)
+if new_daily and not na(dg_h3) and not na(dg_l1)
+    // The middle candle can be anything (even the Daily breakout candle): the gap
+    // only exists once the third candle closes without reaching the first one.
+    if dg_l1 > dg_h3
+        f_fvg_keep(d_bf_hi, d_bf_lo, dg_l1, dg_h3)
+    if dg_h1 < dg_l3
+        f_fvg_keep(d_sf_hi, d_sf_lo, dg_l3, dg_h1)
+
+// Deepest Daily FVG this H4 candle's wick enters. inside: the whole gap sits inside
+// the range that was just broken; otherwise the gap reaches beyond the Daily Breaker
+// (after the breakout, incl. the breakout candle's own gap). Returns its index, or -1.
+f_fvg_pick(array<float> his, array<float> los, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
+    int   best = -1
+    float bv   = na
+    if array.size(his) > 0
+        for i = 0 to array.size(his) - 1
+            float H = array.get(his, i)
+            float L = array.get(los, i)
+            bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? H > b_hi : L < b_lo)
+            bool touched = low <= H and high >= L
+            float edge   = bull ? L : H
+            if in_pos and touched and (na(bv) or (bull ? edge < bv : edge > bv))
+                bv   := edge
+                best := i
+    best
 
 // Deepest Daily level in `lv` that sits inside the broken range and that this
 // H4 candle touches exactly and holds (buy: lowest; sell: highest).
@@ -1178,6 +1268,25 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         h4_v_lvl   := math.min(open[1], close[1])
         h4v_origin := bar_index
 
+    // ── H4 FVG after an H4 breakout in line with the Daily ────────────────
+    // Checked once, on the candle right after the breakout candle. Buys: its low
+    // stays above the high of the candle before the breakout (sells: mirror).
+    if not na(h4f_bar) and bar_index == h4f_bar + 1
+        bool fvg_ok = h4_bo_fired and (h4f_bull == (bo_dir == "bullish")) and (h4f_bull ? low > h4f_ref : high < h4f_ref)
+        if fvg_ok
+            float fv_lo = h4f_bull ? h4f_ref : high
+            float fv_hi = h4f_bull ? low : h4f_ref
+            f_btlbl(h4f_bull, 10, "", h4f_ref, bo_level, "H4 FVG " + str.tostring(fv_lo, format.mintick) + " – " + str.tostring(fv_hi, format.mintick))
+            if barstate.isrealtime
+                alert(f_hdrw("H4_CONTINUATION")
+                      + '","direction":"' + bo_dir + '","cont_type":"h4_fvg"'
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"h4_level":' + str.tostring(h4f_ref)
+                      + ',"fvg_low":' + str.tostring(fv_lo) + ',"fvg_high":' + str.tostring(fv_hi) + '}',
+                      alert.freq_once_per_bar)
+    if not na(h4f_bar) and bar_index > h4f_bar
+        h4f_bar := na
+
     // ── Establishment tracking ────────────────────────────────────────────
     // Read BEFORE this bar updates it: "an EARLIER H4 bar closed beyond the band".
     // (est_above[1] leaked the previous breakout's flag onto the bar of a new
@@ -1235,6 +1344,13 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     float pv_hit  = f_pv_pick(bo_dir == "bullish" ? d_vs : d_as, bo_dir == "bullish", band_lo, band_hi, tol)
     bool  pv_zone = not na(pv_hit)
 
+    // ── Zone 5 (backtest): Daily FVGs, after the breakout and inside the range ─
+    bool  fz_bull = bo_dir == "bullish"
+    array<float> fz_his = fz_bull ? d_bf_hi : d_sf_hi
+    array<float> fz_los = fz_bull ? d_bf_lo : d_sf_lo
+    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_bull, false, bo_opp, band_lo, band_hi) : -1
+    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
+
     // ── Backtest: first H4 touch of each Daily level since it formed ──────
     bool bt_bull = bo_dir == "bullish"
     array<float> bt_cand = array.new<float>()
@@ -1253,6 +1369,14 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         if low <= L and high >= L and bt_held and not f_bt_seen(L)
             array.push(bt_seen, L)
             bt_first := true
+    if bt_dfvg and array.size(fz_his) > 0
+        for i = 0 to array.size(fz_his) - 1
+            float fH = array.get(fz_his, i)
+            float fL = array.get(fz_los, i)
+            float fK = bt_bull ? fH : fL
+            if low <= fH and high >= fL and not f_bt_seen(fK)
+                array.push(bt_seen, fK)
+                bt_first := true
     if array.size(bt_seen) > 300
         array.shift(bt_seen)
     if bt_first
@@ -1275,11 +1399,14 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
         else if retest_src == "post_breakout_v"
             failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
+        else if retest_src == "post_breakout_fvg" or retest_src == "inside_fvg"
+            failed := new_daily and not na(d_close) and (bo_dir == "bullish" ? d_close < retest_lvl2 : d_close > retest_lvl2)
 
         if failed
             retest_on  := false
             retest_src := na
             retest_lvl := na
+            retest_lvl2 := na
             if barstate.isrealtime
                 alert(f_hdr("RETEST_CANCELLED") + '"}',
                       alert.freq_once_per_bar)
@@ -1292,6 +1419,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_on  := true
             retest_bar := bar_index
             retest_src := "post_breakout_oc"
+            retest_lvl2 := na
             retest_lvl := pb_hit
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := pb_hit
@@ -1308,16 +1436,35 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_on  := true
             retest_bar := bar_index
             retest_src := "post_breakout_v"
+            retest_lvl2 := na
             retest_lvl := pv_hit
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := pv_hit
                 anchor_bar := bar_index
                 bt_ext_a   := h4_a_lvl
                 bt_ext_v   := h4_v_lvl
+        else if pf_i >= 0 and was_est
+            retest_on  := true
+            retest_bar := bar_index
+            retest_src := "post_breakout_fvg"
+            retest_lvl := fz_bull ? array.get(fz_his, pf_i) : array.get(fz_los, pf_i)
+            retest_lvl2 := fz_bull ? array.get(fz_los, pf_i) : array.get(fz_his, pf_i)
+            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
+                anchor_lvl := retest_lvl
+                anchor_bar := bar_index
+                bt_ext_a   := h4_a_lvl
+                bt_ext_v   := h4_v_lvl
+            if barstate.isrealtime
+                alert(f_hdr("RETEST")
+                      + '","direction":"' + bo_dir + '","source":"post_breakout_fvg"'
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"source_level":' + str.tostring(retest_lvl) + ',"source_level2":' + str.tostring(retest_lvl2) + '}',
+                      alert.freq_once_per_bar)
         else if db_zone and was_est
             retest_on  := true
             retest_bar := bar_index
             retest_src := "daily_breaker"
+            retest_lvl2 := na
             retest_lvl := bo_level
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := bo_level
@@ -1334,6 +1481,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_on  := true
             retest_bar := bar_index
             retest_src := "inside_range"
+            retest_lvl2 := na
             retest_lvl := ir_hit
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := ir_hit
@@ -1347,6 +1495,43 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                       + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                       + ',"source_level":' + str.tostring(ir_hit) + '}',
                       alert.freq_once_per_bar)
+        else if if_i >= 0 and was_est
+            retest_on  := true
+            retest_bar := bar_index
+            retest_src := "inside_fvg"
+            retest_lvl := fz_bull ? array.get(fz_his, if_i) : array.get(fz_los, if_i)
+            retest_lvl2 := fz_bull ? array.get(fz_los, if_i) : array.get(fz_his, if_i)
+            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
+                anchor_lvl := retest_lvl
+                anchor_bar := bar_index
+                bt_ext_a   := h4_a_lvl
+                bt_ext_v   := h4_v_lvl
+            if barstate.isrealtime
+                alert(f_hdr("RETEST")
+                      + '","direction":"' + bo_dir + '","source":"inside_fvg"'
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"source_level":' + str.tostring(retest_lvl) + ',"source_level2":' + str.tostring(retest_lvl2) + '}',
+                      alert.freq_once_per_bar)
+
+    // ── Daily FVG reactions: each deeper Daily candle restarts the check ──
+    // A Daily FVG is a zone, so the reaction moves with price. While price reacts
+    // inside it, a Daily candle that dips below the previous Daily candle's low
+    // (above its high for sells) becomes the reaction: the External H4 level is
+    // the latest H4 A (V for sells) from when that Daily candle first entered the
+    // FVG. A higher H4 A made after the earlier reaction is no longer External.
+    if new_daily
+        fz_day_bar  := na
+        fz_day_done := false
+    bool fz_on = retest_on and (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg")
+    if fz_on and na(fz_day_bar) and low <= math.max(retest_lvl, retest_lvl2) and high >= math.min(retest_lvl, retest_lvl2)
+        fz_day_bar := bar_index
+        fz_day_a   := h4_a_lvl
+        fz_day_v   := h4_v_lvl
+    if fz_on and not fz_day_done and not na(fz_day_bar) and not na(dr_l) and (bo_dir == "bullish" ? low < dr_l : high > dr_h)
+        fz_day_done := true
+        anchor_bar  := fz_day_bar
+        bt_ext_a    := fz_day_a
+        bt_ext_v    := fz_day_v
 
     // ── H4 CONFIRMED ──────────────────────────────────────────────────────
     bool confirmed_this_bar = false
@@ -1370,7 +1555,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
-                f_btlbl(true, 0, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(true, 0, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
                           + '","direction":"bullish","source":"' + retest_src
@@ -1378,6 +1563,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + '","breakout_level":' + str.tostring(bo_level)
                           + ',"source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + (na(retest_lvl2) ? '' : ',"source_level2":' + str.tostring(retest_lvl2))
                           + ',"h4_level":' + str.tostring(bt_brk) + '}',
                           alert.freq_once_per_bar)
             else
@@ -1388,18 +1574,20 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_brk_lvl            := h4_a_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 confirmed_this_bar    := true
-                f_btlbl(true, bt_was_aligned ? 7 : 1, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(true, bt_was_aligned ? 7 : 1, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"' + (bt_was_aligned ? "daily_react" : "breakout_cont") + '","h4_class":"' + h4_cls + '"'
                           + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + (na(retest_lvl2) ? '' : ',"source_level2":' + str.tostring(retest_lvl2))
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brk) + '}',
                           alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na
             retest_lvl := na
+            retest_lvl2 := na
             anchor_lvl := na
 
         bool bt_xs = not na(bt_ext_v) and close < bt_ext_v
@@ -1417,7 +1605,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
-                f_btlbl(false, 0, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(false, 0, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
                           + '","direction":"bearish","source":"' + retest_src
@@ -1425,6 +1613,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + '","breakout_level":' + str.tostring(bo_level)
                           + ',"source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + (na(retest_lvl2) ? '' : ',"source_level2":' + str.tostring(retest_lvl2))
                           + ',"h4_level":' + str.tostring(bt_brkv) + '}',
                           alert.freq_once_per_bar)
             else
@@ -1435,18 +1624,20 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_brk_lvl            := h4_v_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 confirmed_this_bar    := true
-                f_btlbl(false, bt_was_aligned ? 7 : 1, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(false, bt_was_aligned ? 7 : 1, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"' + (bt_was_aligned ? "daily_react" : "breakout_cont") + '","h4_class":"' + h4_cls + '"'
                           + ',"source":"' + retest_src + '","source_level":' + str.tostring(src_lvl)
                           + (retest_src == "inside_range" and not na(retest_kind) ? ',"source_kind":"' + retest_kind + '"' : '')
+                          + (na(retest_lvl2) ? '' : ',"source_level2":' + str.tostring(retest_lvl2))
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brkv) + '}',
                           alert.freq_once_per_bar)
             retest_on  := false
             retest_src := na
             retest_lvl := na
+            retest_lvl2 := na
             anchor_lvl := na
 
     // ── H4 Continuation block ─────────────────────────────────────────────
@@ -1486,6 +1677,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(brk_lvl) + '}',
                           alert.freq_once_per_bar)
+
+        if confirmed_this_bar
+            h4f_bar  := bar_index
+            h4f_bull := bo_dir == "bullish"
+            h4f_ref  := h4f_bull ? high[1] : low[1]
 
         if h4_aligned and not confirmed_this_bar
             if not na(h4_breaker_lvl)
@@ -1693,7 +1889,7 @@ if barstate.islast
 
 // ── State label — shows script's current understanding at the latest bar ──────
 f_src_name(string src, string kind) =>
-    src == "daily_breaker" ? "Daily Breaker" : src == "post_breakout_oc" ? "post-breakout Daily OC" : kind == "oc" ? "Daily OC" : kind == "a_shape" ? "Daily A-shape" : "Daily V-shape"
+    src == "daily_breaker" ? "Daily Breaker" : src == "post_breakout_oc" ? "post-breakout Daily OC" : src == "post_breakout_fvg" ? "Daily FVG after the breakout" : src == "inside_fvg" ? "Daily FVG inside the range" : kind == "oc" ? "Daily OC" : kind == "a_shape" ? "Daily A-shape" : "Daily V-shape"
 
 string _state_txt = "IDLE - no breakout detected"
 if not na(bo_dir) and not h4_bo_fired and retest_on
@@ -1701,10 +1897,10 @@ if not na(bo_dir) and not h4_bo_fired and retest_on
 else if not na(bo_dir) and not h4_bo_fired
     _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest" + ((bo_dir == "bullish" ? est_above : est_below) ? "" : " · price hasn't moved away from the breakout yet")
 else if h4_bo_fired and h4_aligned
-    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned" + (retest_on ? "\nDaily reaction at " + f_bt_src(retest_src) + " @ " + str.tostring(retest_lvl, format.mintick) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick)) : "")
+    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned" + (retest_on ? "\nDaily reaction at " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(retest_lvl) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick)) : "")
 else if h4_bo_fired
     _state_txt := retest_on
-         ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + str.tostring(retest_lvl, "#.#####") + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick))
+         ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + f_bt_lvtxt(retest_lvl) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick))
          : "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · waiting for a daily reaction, then an H4 " + bo_dir + " break" + ((bo_dir == "bullish" ? est_above : est_below) ? "" : " (price hasn't moved away from the breakout yet)")
 // Off the 4H chart, show only what the DAILY candles decided (direction and the
 // broken level) — the H4 steps would run on the wrong candles there.
@@ -1787,7 +1983,7 @@ string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " (" + f_layer_name(bo
 _state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=bt_state_txt, size=size.small, tooltip=_tip)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
-var table bt_tbl = table.new(position.top_right, 2, 12, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
+var table bt_tbl = table.new(position.top_right, 2, 13, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
 if bt_table and barstate.islast and timeframe.period != "240"
     table.cell(bt_tbl, 0, 0, "Backtest labels show on the 4H chart only", text_color=bt_tbl_txt, text_size=size.small)
 if bt_table and barstate.islast and timeframe.period == "240"
@@ -1797,6 +1993,8 @@ if bt_table and barstate.islast and timeframe.period == "240"
     for i = 0 to 7
         table.cell(bt_tbl, 0, i + 1, array.get(BT_NAMES, i), text_color=bt_tbl_txt, text_size=size.tiny)
         table.cell(bt_tbl, 1, i + 1, str.tostring(array.get(bt_cnt, i)), text_color=bt_tbl_txt, text_size=size.tiny)
+    table.cell(bt_tbl, 0, 12, array.get(BT_NAMES, 10), text_color=bt_tbl_txt, text_size=size.tiny)
+    table.cell(bt_tbl, 1, 12, str.tostring(array.get(bt_cnt, 10)), text_color=bt_tbl_txt, text_size=size.tiny)
     table.cell(bt_tbl, 0, 9, "Buys", text_color=bt_buy_col, text_size=size.small)
     table.cell(bt_tbl, 1, 9, str.tostring(array.get(bt_cnt, 8)), text_color=bt_buy_col, text_size=size.small)
     table.cell(bt_tbl, 0, 10, "Sells", text_color=bt_sell_col, text_size=size.small)
@@ -1807,6 +2005,12 @@ if bt_table and barstate.islast and timeframe.period == "240"
 // ── Backtest: the Daily reaction levels being watched right now ──────────────
 var array<line>  bt_lv_lines = array.new<line>()
 var array<label> bt_lv_lbls  = array.new<label>()
+var array<box>   bt_fvg_bxs  = array.new<box>()
+f_bt_fvg(float H, float L, string txt) =>
+    if array.size(bt_fvg_bxs) < 20
+        array.push(bt_fvg_bxs, box.new(bar_index - 40, H, bar_index + 3, L, border_color=bt_fvg_col, bgcolor=bt_fvg_col,
+             text=txt + "  " + str.tostring(L, format.mintick) + " – " + str.tostring(H, format.mintick),
+             text_color=bt_lv_col, text_size=size.small, text_halign=text.align_right))
 f_bt_lv(float y, string txt) =>
     if not na(y) and array.size(bt_lv_lines) < 30
         array.push(bt_lv_lines, line.new(bar_index - 40, y, bar_index + 3, y, color=bt_lv_col, style=line.style_dotted))
@@ -1819,6 +2023,9 @@ if barstate.islast
         label.delete(lb)
     array.clear(bt_lv_lines)
     array.clear(bt_lv_lbls)
+    for bx in bt_fvg_bxs
+        box.delete(bx)
+    array.clear(bt_fvg_bxs)
     if bt_lvls and timeframe.period == "240" and not na(bo_dir) and not na(bo_level)
         bool bb = bo_dir == "bullish"
         f_bt_lv(bo_level, "Daily Breaker")
@@ -1834,3 +2041,14 @@ if barstate.islast
         for L in ocs
             if not na(bo_opp) and (bb ? (L > bo_opp and L < bo_level - tol) : (L < bo_opp and L > bo_level + tol))
                 f_bt_lv(L, "Daily OC inside the range")
+        if bt_dfvg
+            array<float> fhs = bb ? d_bf_hi : d_sf_hi
+            array<float> fls = bb ? d_bf_lo : d_sf_lo
+            if array.size(fhs) > 0
+                for i = 0 to array.size(fhs) - 1
+                    float H = array.get(fhs, i)
+                    float L = array.get(fls, i)
+                    if bb ? H > bo_level + tol : L < bo_level - tol
+                        f_bt_fvg(H, L, "Daily FVG after the breakout")
+                    else if not na(bo_opp) and (bb ? (L > bo_opp and H < bo_level - tol) : (H < bo_opp and L > bo_level + tol))
+                        f_bt_fvg(H, L, "Daily FVG inside the range")

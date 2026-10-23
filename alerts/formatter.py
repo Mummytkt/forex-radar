@@ -32,6 +32,8 @@ _SOURCE_NAMES: dict[ReactionSourceType, str] = {
     ReactionSourceType.AV_INSIDE_RANGE:        "Daily V/A-shape inside the range",
     ReactionSourceType.POST_BREAKOUT_DAILY_OC: "Post-Breakout OC",
     ReactionSourceType.AV_AFTER_BREAKOUT:      "Daily V/A-shape after the breakout",
+    ReactionSourceType.FVG_AFTER_BREAKOUT:     "Daily FVG after the breakout",
+    ReactionSourceType.FVG_INSIDE_RANGE:       "Daily FVG inside the range",
 }
 
 _BROKEN_TYPE_NAMES: dict[FormationType, str] = {
@@ -69,6 +71,9 @@ def _fmt_ts(dt: datetime | None) -> str:
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 def format_alert(alert: AlertRecord) -> str:
+    if alert.classification == AlertClassification.H4_FVG:
+        # Liquidity marker: just the pair and the message, no buy / sell
+        return f"{alert.instrument}\nH4 FVG candle after breakout has formed"
     return _with_weekly(alert, _format_body(alert))
 
 

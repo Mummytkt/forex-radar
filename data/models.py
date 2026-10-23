@@ -41,6 +41,7 @@ class AlertClassification(str, Enum):
     H4_BREAKER_CONT = "h4_breaker_cont"
     H4_OC_CONT = "h4_oc_cont"
     H4_ENGULFING_CONT = "h4_engulfing_cont"
+    H4_FVG = "h4_fvg"   # the candle after an H4 breakout in line completed an FVG (liquidity marker)
 
 
 class ReactionSourceType(str, Enum):
@@ -49,6 +50,8 @@ class ReactionSourceType(str, Enum):
     AV_INSIDE_RANGE = "av_inside_range"
     POST_BREAKOUT_DAILY_OC = "post_breakout_daily_oc"
     AV_AFTER_BREAKOUT = "av_after_breakout"   # Daily V (buys) / A (sells) formed after the breakout
+    FVG_AFTER_BREAKOUT = "fvg_after_breakout"  # Daily FVG reaching beyond the Daily Breaker
+    FVG_INSIDE_RANGE = "fvg_inside_range"      # Daily FVG inside the range that was just broken
 
 
 @dataclass

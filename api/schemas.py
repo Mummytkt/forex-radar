@@ -50,6 +50,7 @@ class AlertPreferences(BaseModel):
     contOc: bool = True
     contRealign: bool = True
     contEngulfing: bool = True
+    h4Fvg: bool = False
     alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
     engulfMode: str = "wick"            # "wick" | "body" | "both"
 
@@ -64,6 +65,7 @@ class AlertPreferencesUpdate(BaseModel):
     contOc: bool | None = None
     contRealign: bool | None = None
     contEngulfing: bool | None = None
+    h4Fvg: bool | None = None
     alertStyle: str | None = None
     engulfMode: str | None = None
 

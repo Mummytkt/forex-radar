@@ -713,7 +713,7 @@ def get_preferences(request: Request):
     return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"], newsAlerts=prefs["news"],
                             alertOrigin=prefs["origin"], contInline=prefs["cont_inline"], contBreaker=prefs["cont_breaker"],
                             contOc=prefs["cont_oc"], contRealign=prefs["cont_realign"], contEngulfing=prefs["engulfing"],
-                            alertStyle=style, engulfMode=engulf)
+                            h4Fvg=prefs["h4_fvg"], alertStyle=style, engulfMode=engulf)
 
 
 @router.patch("/preferences")
@@ -729,7 +729,8 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
         if body.newsAlerts is not None:
             set_alert_pref(conn, uid, "news", body.newsAlerts)
         for field, kind in (("alertOrigin", "origin"), ("contInline", "cont_inline"), ("contBreaker", "cont_breaker"),
-                            ("contOc", "cont_oc"), ("contRealign", "cont_realign"), ("contEngulfing", "engulfing")):
+                            ("contOc", "cont_oc"), ("contRealign", "cont_realign"), ("contEngulfing", "engulfing"),
+                            ("h4Fvg", "h4_fvg")):
             value = getattr(body, field)
             if value is not None:
                 set_alert_pref(conn, uid, kind, value)
@@ -840,7 +841,7 @@ def remove_video(request: Request, url: str = Query(...)):
 STRATEGY_CONTENT = {
     "chain": [
         {"n": 1, "title": "Daily Breakout", "body": "The Daily chart is read as market structure. A structure's high and low are candle-body levels (like H4; a setting can switch them to wicks) built by fixed rules, and a new structure can form inside the current range at any depth. Only the most recent one counts, shown as the External high and low. A breakout is a Daily candle BODY closing beyond it — no tolerance — and the level it broke becomes the Daily Breaker."},
-        {"n": 2, "title": "Reaction Source Identification", "body": "After a breakout, price is watched at four kinds of reaction source: post-breakout Daily OC levels, Daily V-shapes (A-shapes for sells) formed after the breakout, a retest of the Daily Breaker, and a Daily V-shape (A-shape for sells) or Daily OC level inside the range that was just broken. A level only exists once the Daily candle that forms it has closed. Only reactions in the breakout direction count."},
+        {"n": 2, "title": "Reaction Source Identification", "body": "After a breakout, price is watched at five kinds of reaction source: post-breakout Daily OC levels, Daily V-shapes (A-shapes for sells) formed after the breakout, Daily FVGs (after the breakout or inside the broken range), a retest of the Daily Breaker, and a Daily V-shape (A-shape for sells) or Daily OC level inside the range that was just broken. A level only exists once the Daily candle that forms it has closed. Only reactions in the breakout direction count."},
         {"n": 3, "title": "Retest Detection", "body": "Price must first move away: the breakout's own Daily close, or a later H4 close, more than 5 pips beyond the Daily Breaker. Then an H4 wick has to touch a reaction level exactly and hold. A close through the level (beyond a 5-pip allowance) means the reaction failed, and the engine waits for the next one."},
         {"n": 4, "title": "H4 Confirmation", "body": "While a reaction holds, an H4 candle that closes beyond the reaction's External H4 A-shape (buys) or V-shape (sells) body level confirms Daily + H4 alignment. The first is the Origin alert, one per Daily breakout; every later Daily reaction + H4 breakout sends a continuation."},
     ],
@@ -872,6 +873,8 @@ STRATEGY_CONTENT = {
     "reaction_sources": [
         {"term": "Daily Breaker", "body": "The External high or low the Daily close broke. Price often returns to test it from the other side (role reversal)."},
         {"term": "Inside Range", "body": "A Daily V-shape (A-shape for sells) or Daily OC level that sits inside the range that was just broken — between the Daily Breaker and the other side of that range. The H4 wick must reach that exact level and hold. Simply being back inside the range does not count. It fails if a candle closes through that level. A Daily level is dead once a Daily candle has closed through it and never counts again."},
+        {"term": "Daily FVG", "body": "Three Daily candles where the third closes without reaching the first (bullish: the third's low stays above the first's high). The middle candle can be the Daily breakout candle. Bullish FVGs count for buys, bearish for sells: one reaching beyond the Daily Breaker is \u201cafter the breakout\u201d, one fully inside the broken range is \u201cinside the range\u201d. An H4 wick entering the gap is a reaction; only a Daily close through the gap kills it. Because it is a zone, each Daily candle that dips below the previous Daily low inside it (above the high for sells) restarts the External check from when that candle entered the gap. Other Daily levels keep the first-touch rule."},
+        {"term": "H4 FVG after breakout", "body": "After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line, the next H4 candle is checked once: if it completes an FVG (buys: its low stays above the high of the candle before the breakout) the alert reads only the pair and \u201cH4 FVG candle after breakout has formed\u201d. A liquidity marker, not a buy or sell signal. Off for subscribers unless they switch it on."},
         {"term": "Daily V/A-shape after the breakout", "body": "A Daily V-shape (A-shape for sells) that formed in the move after the breakout, beyond the Daily Breaker. The H4 wick must reach that exact level and hold. It is dead once a Daily candle closes through it."},
         {"term": "Post-Breakout OC", "body": "Two consecutive Daily candles in the breakout direction after the breakout. The level is where the first one closed. The H4 wick must reach that exact level and hold. It is dead once a Daily candle closes through it."},
     ],
