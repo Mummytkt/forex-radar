@@ -140,6 +140,10 @@ var int bt_t0 = time
 // + H4 breakout, or back in line); continuations follow it, like the server
 var bt_scls = array.from("")
 var bt_last = array.new<label>(1, na)   // the alert label currently on the chart
+// The External H4 level of the current Daily reaction: the latest H4 A (buys) /
+// V (sells) when the reaction started, i.e. formed BEFORE it
+var float bt_ext_a = na
+var float bt_ext_v = na
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout")
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
@@ -1249,6 +1253,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl) or math.abs(anchor_lvl - pb_hit) > pip * 0.1
                 anchor_lvl := pb_hit
                 anchor_bar := bar_index
+                bt_ext_a   := h4_a_lvl
+                bt_ext_v   := h4_v_lvl
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
@@ -1263,6 +1269,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl) or math.abs(anchor_lvl - pv_hit) > pip * 0.1
                 anchor_lvl := pv_hit
                 anchor_bar := bar_index
+                bt_ext_a   := h4_a_lvl
+                bt_ext_v   := h4_v_lvl
         else if db_zone and was_est
             retest_on  := true
             retest_bar := bar_index
@@ -1271,6 +1279,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl) or math.abs(anchor_lvl - bo_level) > pip * 0.1
                 anchor_lvl := bo_level
                 anchor_bar := bar_index
+                bt_ext_a   := h4_a_lvl
+                bt_ext_v   := h4_v_lvl
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"daily_breaker"'
@@ -1285,6 +1295,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl) or math.abs(anchor_lvl - ir_hit) > pip * 0.1
                 anchor_lvl := ir_hit
                 anchor_bar := bar_index
+                bt_ext_a   := h4_a_lvl
+                bt_ext_v   := h4_v_lvl
             retest_kind := ir_kind
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
@@ -1300,19 +1312,22 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
         bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
 
-        if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
-            string h4_cls = h4a_origin <= anchor_bar ? "external" : "internal"
+        bool bt_xb = not na(bt_ext_a) and close > bt_ext_a                      // External level broken
+        bool bt_lb = not na(h4_a_lvl) and not new_a and close > h4_a_lvl       // latest A broken
+        if bo_dir == "bullish" and (bt_xb or (bt_lb and (h4a_origin <= anchor_bar or bt_int)))
+            string h4_cls = (bt_xb or h4a_origin <= anchor_bar) ? "external" : "internal"
+            float  bt_brk = bt_xb ? bt_ext_a : h4_a_lvl
             if not h4_bo_fired
                 h4_bo_fired           := true
                 h4_aligned            := true
-                h4_breaker_lvl        := h4_a_lvl
+                h4_breaker_lvl        := bt_brk
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_v_lvl
                 h4_brk_lvl            := h4_a_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
-                f_btlbl(true, 0, h4_cls, h4_a_lvl, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(true, 0, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
                           + '","direction":"bullish","source":"' + retest_src
@@ -1324,13 +1339,13 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           alert.freq_once_per_bar)
             else
                 h4_aligned            := true
-                h4_breaker_lvl        := h4_a_lvl
+                h4_breaker_lvl        := bt_brk
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_v_lvl
                 h4_brk_lvl            := h4_a_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 confirmed_this_bar    := true
-                f_btlbl(true, bt_was_aligned ? 7 : 1, h4_cls, h4_a_lvl, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(true, bt_was_aligned ? 7 : 1, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
                           + '","direction":"bullish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
@@ -1344,19 +1359,22 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_lvl := na
             anchor_lvl := na
 
-        if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
-            string h4_cls = h4v_origin <= anchor_bar ? "external" : "internal"
+        bool bt_xs = not na(bt_ext_v) and close < bt_ext_v
+        bool bt_ls = not na(h4_v_lvl) and not new_v and close < h4_v_lvl
+        if bo_dir == "bearish" and (bt_xs or (bt_ls and (h4v_origin <= anchor_bar or bt_int)))
+            string h4_cls = (bt_xs or h4v_origin <= anchor_bar) ? "external" : "internal"
+            float  bt_brkv = bt_xs ? bt_ext_v : h4_v_lvl
             if not h4_bo_fired
                 h4_bo_fired           := true
                 h4_aligned            := true
-                h4_breaker_lvl        := h4_v_lvl
+                h4_breaker_lvl        := bt_brkv
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_a_lvl
                 h4_brk_lvl            := h4_v_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
-                f_btlbl(false, 0, h4_cls, h4_v_lvl, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(false, 0, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
                           + '","direction":"bearish","source":"' + retest_src
@@ -1368,13 +1386,13 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           alert.freq_once_per_bar)
             else
                 h4_aligned            := true
-                h4_breaker_lvl        := h4_v_lvl
+                h4_breaker_lvl        := bt_brkv
                 bk_origin             := bar_index
                 h4_invalid_lvl        := h4_a_lvl
                 h4_brk_lvl            := h4_v_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 confirmed_this_bar    := true
-                f_btlbl(false, bt_was_aligned ? 7 : 1, h4_cls, h4_v_lvl, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
+                f_btlbl(false, bt_was_aligned ? 7 : 1, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
                           + '","direction":"bearish","cont_type":"breakout_cont","h4_class":"' + h4_cls + '"'
@@ -1640,7 +1658,7 @@ if not na(bo_dir) and not h4_bo_fired and retest_on
 else if not na(bo_dir) and not h4_bo_fired
     _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest"
 else if h4_bo_fired and h4_aligned
-    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
+    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned" + (retest_on ? "\nDaily reaction at " + f_bt_src(retest_src) + " @ " + str.tostring(retest_lvl, format.mintick) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick)) : "")
 else if h4_bo_fired
     _state_txt := retest_on
          ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + str.tostring(retest_lvl, "#.#####") + " · waiting for H4 to break " + bo_dir

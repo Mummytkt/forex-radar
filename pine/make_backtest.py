@@ -81,6 +81,10 @@ var int bt_t0 = time
 // + H4 breakout, or back in line); continuations follow it, like the server
 var bt_scls = array.from("")
 var bt_last = array.new<label>(1, na)   // the alert label currently on the chart
+// The External H4 level of the current Daily reaction: the latest H4 A (buys) /
+// V (sells) when the reaction started, i.e. formed BEFORE it
+var float bt_ext_a = na
+var float bt_ext_v = na
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout")''')
 
 # Label function: after f_wk(), so it can read the Weekly relation
@@ -217,6 +221,47 @@ rep('''        float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
 ''', '''        float src_lvl = na(retest_lvl) ? bo_level : retest_lvl
         bool  bt_was_aligned = h4_bo_fired and h4_aligned   // a fresh Daily reaction while H4 is still aligned
 ''')
+# 4. External / Internal against the reaction's OWN External level. When a reaction
+#    starts, the latest H4 A (V for sells) is its External level. A close beyond it
+#    is an External breakout, even if newer (Internal) A/V-shapes formed during the
+#    pullback. A close beyond a newer A/V only is Internal, and with Internal off it
+#    does NOT use up the reaction: the script keeps waiting for the External one.
+for v in ("pb_hit", "pv_hit", "bo_level", "ir_hit"):
+    rep(f'''                anchor_lvl := {v}
+                anchor_bar := bar_index
+''', f'''                anchor_lvl := {v}
+                anchor_bar := bar_index
+                bt_ext_a   := h4_a_lvl
+                bt_ext_v   := h4_v_lvl
+''')
+rep('''        if bo_dir == "bullish" and not na(h4_a_lvl) and not new_a and close > h4_a_lvl
+            string h4_cls = h4a_origin <= anchor_bar ? "external" : "internal"
+''', '''        bool bt_xb = not na(bt_ext_a) and close > bt_ext_a                      // External level broken
+        bool bt_lb = not na(h4_a_lvl) and not new_a and close > h4_a_lvl       // latest A broken
+        if bo_dir == "bullish" and (bt_xb or (bt_lb and (h4a_origin <= anchor_bar or bt_int)))
+            string h4_cls = (bt_xb or h4a_origin <= anchor_bar) ? "external" : "internal"
+            float  bt_brk = bt_xb ? bt_ext_a : h4_a_lvl
+''')
+rep('''        if bo_dir == "bearish" and not na(h4_v_lvl) and not new_v and close < h4_v_lvl
+            string h4_cls = h4v_origin <= anchor_bar ? "external" : "internal"
+''', '''        bool bt_xs = not na(bt_ext_v) and close < bt_ext_v
+        bool bt_ls = not na(h4_v_lvl) and not new_v and close < h4_v_lvl
+        if bo_dir == "bearish" and (bt_xs or (bt_ls and (h4v_origin <= anchor_bar or bt_int)))
+            string h4_cls = (bt_xs or h4v_origin <= anchor_bar) ? "external" : "internal"
+            float  bt_brkv = bt_xs ? bt_ext_v : h4_v_lvl
+''')
+rep('''                h4_breaker_lvl        := h4_a_lvl
+''', '''                h4_breaker_lvl        := bt_brk
+''', n=2)
+rep('''                h4_breaker_lvl        := h4_v_lvl
+''', '''                h4_breaker_lvl        := bt_brkv
+''', n=2)
+
+# Status label: while H4 is aligned, show the Daily reaction and the H4 level awaited
+rep('''    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned"
+''', '''    _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned" + (retest_on ? "\\nDaily reaction at " + f_bt_src(retest_src) + " @ " + str.tostring(retest_lvl, format.mintick) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick)) : "")
+''')
+
 # each fresh reaction after a confirmation starts its own External / Internal check
 rep('''                          alert.freq_once_per_bar)
             retest_on  := false
@@ -233,14 +278,15 @@ ALERT = "                if barstate.isrealtime\n                    alert(f_hdr
 NOTE = '"Daily reaction: " + f_bt_src(retest_src) + " @ " + str.tostring(src_lvl, format.mintick)'
 for d, lvl in (("bullish", "h4_a_lvl"), ("bearish", "h4_v_lvl")):
     bull = "true" if d == "bullish" else "false"
+    brk = "bt_brk" if d == "bullish" else "bt_brkv"
     rep(f'''{ALERT}"CONFIRMED")
                           + '","direction":"{d}","source":"' + retest_src''',
-        f'''                f_btlbl({bull}, 0, h4_cls, {lvl}, bo_level, {NOTE})
+        f'''                f_btlbl({bull}, 0, h4_cls, {brk}, bo_level, {NOTE})
 {ALERT}"CONFIRMED")
                           + '","direction":"{d}","source":"' + retest_src''')
     rep(f'''{ALERT}"H4_CONTINUATION")
                           + '","direction":"{d}","cont_type":"breakout_cont"''',
-        f'''                f_btlbl({bull}, bt_was_aligned ? 7 : 1, h4_cls, {lvl}, bo_level, {NOTE})
+        f'''                f_btlbl({bull}, bt_was_aligned ? 7 : 1, h4_cls, {brk}, bo_level, {NOTE})
 {ALERT}"H4_CONTINUATION")
                           + '","direction":"{d}","cont_type":"breakout_cont"''')
 
