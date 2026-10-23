@@ -610,6 +610,10 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
         )
         src_ids = insert_reaction_sources(conn, [source], breakout.db_id)
         source.db_id = src_ids[0]
+    if payload.source_level2 is not None and src_type in (ReactionSourceType.FVG_AFTER_BREAKOUT, ReactionSourceType.FVG_INSIDE_RANGE):
+        # A Daily FVG: the alert shows the whole gap, not one edge
+        source.level_band_low = min(source.level, payload.source_level2)
+        source.level_band_high = max(source.level, payload.source_level2)
 
     now = datetime.utcnow()
 
@@ -734,8 +738,8 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
             source_type=_source_type_from_str(payload.source, payload.source_kind),
             direction=direction,
             level=payload.source_level,
-            level_band_low=payload.source_level,
-            level_band_high=payload.source_level,
+            level_band_low=min(payload.source_level, payload.source_level2 if payload.source_level2 is not None else payload.source_level),
+            level_band_high=max(payload.source_level, payload.source_level2 if payload.source_level2 is not None else payload.source_level),
             daily_breakout_ts=breakout.breakout_ts,
         )
 

@@ -62,6 +62,17 @@ def _fmt_level(instrument: str, level: float) -> str:
     return fmt_price(instrument, level)
 
 
+_FVG_SOURCES = (ReactionSourceType.FVG_AFTER_BREAKOUT, ReactionSourceType.FVG_INSIDE_RANGE)
+
+
+def _src_level(instrument: str, src) -> str:
+    """The reacting level as text. A Daily FVG is a zone, so it shows the whole gap."""
+    if src.source_type in _FVG_SOURCES and src.level_band_low is not None and src.level_band_high is not None \
+            and src.level_band_high - src.level_band_low > 1e-9:
+        return f"{_fmt_level(instrument, src.level_band_low)} – {_fmt_level(instrument, src.level_band_high)}"
+    return _fmt_level(instrument, src.level)
+
+
 def _fmt_ts(dt: datetime | None) -> str:
     if dt is None:
         return "—"
@@ -203,7 +214,7 @@ def _format_origin(alert: AlertRecord) -> str:
     source_name = _SOURCE_NAMES[source.source_type]
     if source.source_type == ReactionSourceType.AV_INSIDE_RANGE:
         source_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape inside the range"
-    source_level_str = _fmt_level(instrument, source.level)
+    source_level_str = _src_level(instrument, source)
 
     source_desc = _source_description(source.source_type, direction_lower, source_name)
     source_header = f"Daily reaction source: {source_name} @ {source_level_str}"
@@ -505,7 +516,7 @@ def _format_h4_breakout_cont(alert: AlertRecord) -> str:
             src_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape inside the range"
         if src.source_type == ReactionSourceType.AV_AFTER_BREAKOUT:
             src_name = f"Daily {'V' if direction == Direction.BULLISH else 'A'}-shape after the breakout"
-        src_str = _fmt_level(instrument, src.level)
+        src_str = _src_level(instrument, src)
         if alert.daily_react:
             # H4 was still in line: a fresh Daily reaction and a new H4 breakout from it
             lines = [

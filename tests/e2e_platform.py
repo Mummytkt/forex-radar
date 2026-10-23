@@ -975,8 +975,8 @@ async def _rec_deliver2(conn_, cfg_, instrument, text, **kw): _dlp.append((text,
 tvw._deliver_alert = _rec_deliver2
 r8 = tv(type="H4_CONTINUATION", instrument="AUDCHF", direction="bullish", cont_type="daily_react", h4_class="external",
         source="post_breakout_fvg", source_level=0.595, source_level2=0.59, breakout_level=0.58, h4_level=0.60, timeframe="240")
-check("a Daily reaction at a Daily FVG after the breakout is accepted and named",
-      r8.status_code == 200 and _dlp and "Daily FVG after the breakout" in _dlp[-1][0])
+check("a Daily reaction at a Daily FVG after the breakout is accepted and named with its whole gap",
+      r8.status_code == 200 and _dlp and "Daily FVG after the breakout @ 0.59000" in _dlp[-1][0] and "0.59500" in _dlp[-1][0])
 _bk8 = conn.execute("SELECT last_h4_breaker_level FROM instrument_state WHERE instrument='AUDCHF'").fetchone()[0]
 _dlp.clear(); tv(type="H4_CONTINUATION", instrument="AUDCHF", direction="bullish", cont_type="h4_fvg",
                  breakout_level=0.58, h4_level=0.601, fvg_low=0.601, fvg_high=0.603, timeframe="240")
