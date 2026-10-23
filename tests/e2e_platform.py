@@ -96,11 +96,11 @@ _et = c.post("/api/entry-tests", headers=H(owner), json={
 check("owner adds an entry-test trade", _et.get("id") and _et["instrument"] == "XAUUSD" and _et["results"] == {})
 _r = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={
     "trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy", "alert_type": "Origin",
-    "results": {"direct_fvg": {"outcome": "win", "rr": 3}, "m5_cisd": {"outcome": "loss", "rr": 5}, "h4_3cr": {"outcome": "none"}}})
+    "results": {"direct_fvg": {"outcome": "win", "rr": 3}, "m5_cisd_engulfing": {"outcome": "loss", "rr": 5}, "h4_3cr_h4_key": {"outcome": "none"}}})
 _res = _r.json().get("results", {})
 check("ticked entry results are saved (a loss keeps no RR)",
-      _res.get("direct_fvg") == {"outcome": "win", "rr": 3} and _res.get("m5_cisd") == {"outcome": "loss", "rr": None}
-      and _res.get("h4_3cr", {}).get("outcome") == "none")
+      _res.get("direct_fvg") == {"outcome": "win", "rr": 3} and _res.get("m5_cisd_engulfing") == {"outcome": "loss", "rr": None}
+      and _res.get("h4_3cr_h4_key", {}).get("outcome") == "none")
 check("an unknown entry type is refused", c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={
     "trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy", "results": {"bogus": {"outcome": "win"}}}).status_code == 400)
 check("the owner's entry tests list back", [t["id"] for t in c.get("/api/entry-tests", headers=H(owner)).json()] == [_et["id"]])

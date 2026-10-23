@@ -18,11 +18,14 @@ interface Trade {
   results: Record<string, EntryResult>
 }
 
-// Must match ENTRY_TYPES in api/entry_tests.py (the keys are stored)
-const ENTRY_TYPES: { key: string; label: string }[] = [
-  { key: 'direct_fvg', label: 'Direct entry on FVG' },
-  { key: 'direct_engulfing', label: 'Direct entry on Engulfing' },
-  { key: 'direct_h4_key', label: 'Direct entry on H4 fresh key level' },
+// Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
+const POIS: { key: string; label: string }[] = [
+  { key: 'fvg', label: 'H4 FVG' },
+  { key: 'engulfing', label: 'H4 Engulfing' },
+  { key: 'h4_key', label: 'H4 fresh key level' },
+]
+const MODELS: { key: string; label: string }[] = [
+  { key: 'direct', label: 'Direct entry' },
   { key: 'h1_smc', label: '1H SMC confirmation' },
   { key: 'h1_engulfing', label: '1H Engulfing' },
   { key: 'h2_engulfing', label: '2H Engulfing' },
@@ -33,6 +36,8 @@ const ENTRY_TYPES: { key: string; label: string }[] = [
   { key: 'h4_3cr', label: '4H 3CR' },
   { key: 'h2_3cr', label: '2H 3CR' },
 ]
+const ENTRY_TYPES: { key: string; label: string; model: string; poi: string }[] = POIS.flatMap(p =>
+  MODELS.map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, poi: p.key })))
 // The H4 alert each trade came from (same names as Alert Filters)
 const ALERT_TYPES = [
   'Origin', 'Daily reaction + H4 breakout', 'H4 back in line', 'H4 breakout in line',
@@ -87,7 +92,9 @@ const selStyle: React.CSSProperties = {
 
 // ── Scoreboard: every entry pattern compared across the trades ───────────────
 function Scoreboard({ trades }: { trades: Trade[] }) {
-  const rows = useMemo(() => ENTRY_TYPES.map(t => {
+  const [poi, setPoi] = useState('')
+  const [showAll, setShowAll] = useState(false)
+  const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
     let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0
     for (const tr of trades) {
       const r = tr.results[t.key]
@@ -104,9 +111,11 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
       winRate: taken ? (w / taken) * 100 : null,
       avgRR: rrN ? rrSum / rrN : null,
       expectancy: taken ? totalR / taken : null }
-  }).sort((a, b) => (b.taken ? 1 : 0) - (a.taken ? 1 : 0) || b.totalR - a.totalR), [trades])
+  }).sort((a, b) => (b.taken ? 1 : 0) - (a.taken ? 1 : 0) || b.totalR - a.totalR), [trades, poi])
 
-  const best = rows.find(r => r.taken > 0)
+  const tested = all.filter(r => r.taken || r.none)
+  const rows = showAll || tested.length === 0 ? all : tested
+  const best = all.find(r => r.taken > 0)
   const th: React.CSSProperties = { padding: '8px 10px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.3 }
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   return (
@@ -118,6 +127,15 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
           {trades.length} trade{trades.length === 1 ? '' : 's'} · ranked by total R · loss = −1R, BE = 0
         </span>
         {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>Leader: {best.label}</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Chip on={!poi} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi('')}>All POIs</Chip>
+        {POIS.map(p => <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>{p.label}</Chip>)}
+        {tested.length > 0 && tested.length < all.length && (
+          <button onClick={() => setShowAll(v => !v)} style={{ marginLeft: 'auto', border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
+            {showAll ? 'Hide the untested ones' : `Show all ${all.length} (incl. untested)`}
+          </button>
+        )}
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
@@ -157,6 +175,7 @@ function TradeCard({ trade, open, onToggle, onChange, onDelete }: {
   onChange: (t: Trade) => void; onDelete: () => void
 }) {
   const [customFor, setCustomFor] = useState<string | null>(null)
+  const [poi, setPoi] = useState(POIS[0].key)
   const [customVal, setCustomVal] = useState('')
   const done = Object.keys(trade.results).length
   const tradeR = Object.values(trade.results).map(rOf).filter((v): v is number => v != null)
@@ -184,17 +203,27 @@ function TradeCard({ trade, open, onToggle, onChange, onDelete }: {
         <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{trade.trade_date}</span>
         {trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
-          {done}/{ENTRY_TYPES.length} ticked
+          {done} ticked
           {tradeR.length > 0 && <> · best <b style={{ color: 'var(--bullish)' }}>{fmtR(Math.max(...tradeR))}</b></>}
         </span>
       </div>
       {open && (
-        <div style={{ borderTop: '1px solid var(--border)', padding: '6px 14px 12px' }}>
-          {ENTRY_TYPES.map(t => {
+        <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 12px' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+            {POIS.map(p => {
+              const n = ENTRY_TYPES.filter(t => t.poi === p.key && trade.results[t.key]).length
+              return (
+                <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>
+                  {p.label}{n ? ` · ${n}` : ''}
+                </Chip>
+              )
+            })}
+          </div>
+          {ENTRY_TYPES.filter(t => t.poi === poi).map(t => {
             const r = trade.results[t.key]
             return (
               <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 0', borderBottom: '1px dashed var(--border)', flexWrap: 'wrap' }}>
-                <span style={{ flex: '1 1 210px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.label}</span>
+                <span style={{ flex: '1 1 210px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.model}</span>
                 {OUTCOMES.map(o => (
                   <Chip key={o.key} on={r?.outcome === o.key} color={o.color} bg={o.bg} onClick={() => tapOutcome(t.key, o.key)}>{o.label}</Chip>
                 ))}

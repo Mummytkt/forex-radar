@@ -23,10 +23,14 @@ from api.auth import require_owner
 router = APIRouter()
 
 # The entry patterns being compared (key → label). Keys are stored, so never rename one.
-ENTRY_TYPES: list[tuple[str, str]] = [
-    ("direct_fvg", "Direct entry on FVG"),
-    ("direct_engulfing", "Direct entry on Engulfing"),
-    ("direct_h4_key", "Direct entry on H4 fresh key level"),
+# Each entry model is tested on each POI: key = "<model>_<poi>", e.g. "h1_smc_fvg".
+POIS: list[tuple[str, str]] = [
+    ("fvg", "H4 FVG"),
+    ("engulfing", "H4 Engulfing"),
+    ("h4_key", "H4 fresh key level"),
+]
+MODELS: list[tuple[str, str]] = [
+    ("direct", "Direct entry"),
     ("h1_smc", "1H SMC confirmation"),
     ("h1_engulfing", "1H Engulfing"),
     ("h2_engulfing", "2H Engulfing"),
@@ -37,7 +41,12 @@ ENTRY_TYPES: list[tuple[str, str]] = [
     ("h4_3cr", "4H 3CR"),
     ("h2_3cr", "2H 3CR"),
 ]
-_KEYS = {k for k, _ in ENTRY_TYPES}
+ENTRY_TYPES: list[tuple[str, str]] = [
+    (f"{m}_{p}", f"{ml} on {pl}") for p, pl in POIS for m, ml in MODELS
+]
+# Keys from the first version (one list, no POI) still load and save
+_LEGACY = {"h1_smc", "h1_engulfing", "h2_engulfing", "m5_cisd", "m5_smc", "m15_smc", "m15_cisd", "h4_3cr", "h2_3cr"}
+_KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 
 
