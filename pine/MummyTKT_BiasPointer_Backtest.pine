@@ -137,6 +137,8 @@ color  bt_grey_col = input.color(color.new(color.gray, 35), "Not-counted label",
 color  bt_lv_col   = input.color(color.new(color.aqua, 25), "Daily levels watched", group=GBT, inline="btg")
 color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", group=GBT, inline="btt")
 color  bt_tbl_txt  = input.color(color.white, "Table text", group=GBT, inline="btt")
+color  bt_state_txt = input.color(color.white, "Status label text", group=GBT, inline="bts")
+color  bt_ext_txt   = input.color(#E0E0E0, "External high / low text", group=GBT, inline="bts")
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
 //         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells
 var bt_cnt  = array.new_int(10, 0)
@@ -1665,7 +1667,7 @@ f_draw_lvl(bool show, int t1, float y, string txt, color c, string st, int w) =>
         int t2 = time + 5 * timeframe.in_seconds() * 1000
         array.push(_st_lines, line.new(t1, y, t2, y, xloc = xloc.bar_time, color = c, style = f_style(st), width = w))
         array.push(_st_labels, label.new(bar_index + 6, y, txt + "  " + str.tostring(y, format.mintick),
-          style = label.style_label_left, color = color.new(color.black, 100), textcolor = c, size = size.small))
+          style = label.style_label_left, color = color.new(color.black, 100), textcolor = bt_ext_txt, size = size.small))
 
 f_dirw(string d) =>
     d == "bull" ? "Bullish " : "Bearish "
@@ -1779,7 +1781,7 @@ if not _is_4h
 var label _state_lbl = na
 label.delete(_state_lbl)
 string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " (" + f_layer_name(bo_layer) + ") range=" + str.tostring(bo_opp, "#.#####") + " D.A=" + str.tostring(a_lvl, "#.#####") + " D.V=" + str.tostring(v_lvl, "#.#####") + " D.OC=" + str.tostring(pb_oc_lvl, "#.#####") + " H4.A=" + str.tostring(h4_a_lvl, "#.#####") + " H4.V=" + str.tostring(h4_v_lvl, "#.#####") + " H4.BK=" + str.tostring(h4_breaker_lvl, "#.#####") + " H4.OC=" + str.tostring(h4c_oc_lvl, "#.#####")
-_state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=color.white, size=size.small, tooltip=_tip)
+_state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=bt_state_txt, size=size.small, tooltip=_tip)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
 var table bt_tbl = table.new(position.top_right, 2, 12, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))

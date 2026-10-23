@@ -78,6 +78,8 @@ color  bt_grey_col = input.color(color.new(color.gray, 35), "Not-counted label",
 color  bt_lv_col   = input.color(color.new(color.aqua, 25), "Daily levels watched", group=GBT, inline="btg")
 color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", group=GBT, inline="btt")
 color  bt_tbl_txt  = input.color(color.white, "Table text", group=GBT, inline="btt")
+color  bt_state_txt = input.color(color.white, "Status label text", group=GBT, inline="bts")
+color  bt_ext_txt   = input.color(#E0E0E0, "External high / low text", group=GBT, inline="bts")
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
 //         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells
 var bt_cnt  = array.new_int(10, 0)
@@ -370,6 +372,12 @@ rep('''    // ── RETEST_CANCELLED — only when the reaction FAILS ───
 
     // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
 ''')
+
+# Text colours (with opacity) for the status label and the External high / low labels
+rep('_state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=color.white',
+    '_state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=bt_state_txt')
+rep('style = label.style_label_left, color = color.new(color.black, 100), textcolor = c, size = size.small))',
+    'style = label.style_label_left, color = color.new(color.black, 100), textcolor = bt_ext_txt, size = size.small))')
 
 # Weekly display follows the backtest's Weekly switch
 rep('    if show_wk_lbls and show_wk_on_tf and not na(wk_dir)', '    if bt_weekly and show_wk_lbls and show_wk_on_tf and not na(wk_dir)')
