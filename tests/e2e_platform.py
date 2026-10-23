@@ -107,8 +107,29 @@ check("the owner's entry tests list back", [t["id"] for t in c.get("/api/entry-t
 check("a subscriber can't touch the owner's entry test",
       c.delete(f"/api/entry-tests/{_et['id']}", headers=H(ta)).status_code == 403
       and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 1)
+import io as _io
+from PIL import Image as _PImage
+_png = _io.BytesIO(); _PImage.new("RGB", (40, 30), (200, 20, 20)).save(_png, "PNG")
+_up = c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(owner), files={"file": ("chart.png", _png.getvalue(), "image/png")})
+check("owner adds a chart image for one POI of a trade", _up.status_code == 200 and _up.json().get("poi") == "fvg")
+_img_id = _up.json().get("id")
+check("the trade lists which POI has an image", c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": _img_id})
+_gi = c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner))
+check("the image comes back as a JPEG", _gi.status_code == 200 and _gi.content[:2] == b"\xff\xd8")
+check("a subscriber can't see or add Entry Tester images",
+      c.get(f"/api/entry-tests/images/{_img_id}", headers=H(ta)).status_code == 403
+      and c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(ta), files={"file": ("x.png", _png.getvalue(), "image/png")}).status_code == 403)
+check("a non-image upload is refused", c.post(f"/api/entry-tests/{_et['id']}/images/engulfing", headers=H(owner),
+      files={"file": ("x.txt", b"hello", "text/plain")}).status_code == 400)
+_up2 = c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(owner), files={"file": ("c2.png", _png.getvalue(), "image/png")})
+check("a new image for the same POI replaces the old one",
+      c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner)).status_code == 404
+      and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": _up2.json()["id"]})
 c.delete(f"/api/entry-tests/{_et['id']}", headers=H(owner))
 check("owner deletes an entry test", c.get("/api/entry-tests", headers=H(owner)).json() == [])
+check("deleting a trade deletes its images",
+      c.get(f"/api/entry-tests/images/{_up2.json()['id']}", headers=H(owner)).status_code == 404
+      and conn.execute("SELECT COUNT(*) FROM entry_test_images").fetchone()[0] == 0)
 for _d in ("rulebook", "storybook"):
     _r = c.get(f"/api/strategy-docs/{_d}", headers=H(owner))
     check(f"owner downloads {_d} PDF", _r.status_code == 200 and _r.content[:4] == b"%PDF")

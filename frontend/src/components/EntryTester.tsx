@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
 import { API_BASE } from '@/lib/api'
@@ -16,6 +16,7 @@ interface Trade {
   alert_type: string
   notes: string
   results: Record<string, EntryResult>
+  images: Record<string, number>   // {poi: image id}
 }
 
 // Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
@@ -169,10 +170,91 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
   )
 }
 
+// ── Chart screenshot for one POI of a trade ──────────────────────────────────
+// Stored on the server (so it's there on every device). Click / drop / paste.
+function PoiImage({ tradeId, poi, poiLabel, imageId, onSet }: {
+  tradeId: number; poi: string; poiLabel: string; imageId?: number; onSet: (id: number | null) => void
+}) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [big, setBig] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!imageId) { setUrl(null); return }
+    let gone = false, made: string | null = null
+    const t = localStorage.getItem('mbp_token')
+    fetch(`${API_BASE}/api/entry-tests/images/${imageId}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} })
+      .then(r => r.ok ? r.blob() : Promise.reject())
+      .then(b => { if (!gone) { made = URL.createObjectURL(b); setUrl(made) } })
+      .catch(() => !gone && setErr('Could not load the image.'))
+    return () => { gone = true; if (made) URL.revokeObjectURL(made) }
+  }, [imageId])
+
+  const upload = async (file: File | null | undefined) => {
+    if (!file || !file.type.startsWith('image/')) { setErr('That isn\'t an image file.'); return }
+    setBusy(true); setErr('')
+    const fd = new FormData()
+    fd.append('file', file)
+    const t = localStorage.getItem('mbp_token')
+    try {
+      const r = await fetch(`${API_BASE}/api/entry-tests/${tradeId}/images/${poi}`, {
+        method: 'POST', headers: t ? { Authorization: `Bearer ${t}` } : {}, body: fd })
+      if (!r.ok) throw new Error()
+      onSet((await r.json()).id)
+    } catch { setErr('The image did not upload. Try again.') }
+    setBusy(false)
+  }
+  const remove = async () => {
+    if (!confirm(`Remove the ${poiLabel} image?`)) return
+    const t = localStorage.getItem('mbp_token')
+    const r = await fetch(`${API_BASE}/api/entry-tests/${tradeId}/images/${poi}`, {
+      method: 'DELETE', headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    if (r.ok) onSet(null)
+  }
+
+  return (
+    <div style={{ margin: '8px 0 4px' }}>
+      <input ref={input} type="file" accept="image/*" hidden onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }} />
+      {url ? (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <img src={url} alt={`${poiLabel} chart`} onClick={() => setBig(true)}
+            style={{ maxWidth: 360, width: '100%', borderRadius: 8, border: '1px solid var(--border)', cursor: 'zoom-in' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button onClick={() => input.current?.click()} disabled={busy} style={{ ...selStyle, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              {busy ? 'Uploading…' : 'Replace image'}
+            </button>
+            <button onClick={remove} style={{ ...selStyle, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--bearish)' }}>Remove</button>
+          </div>
+        </div>
+      ) : (
+        <div tabIndex={0} onClick={() => input.current?.click()}
+          onPaste={e => upload(Array.from(e.clipboardData.files)[0])}
+          onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(e.dataTransfer.files[0]) }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderRadius: 8, border: '1px dashed var(--border)',
+            color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer', outline: 'none' }}>
+          <Camera size={16} />
+          {busy ? 'Uploading…' : <>Add the <b style={{ color: 'var(--text-secondary)' }}>{poiLabel}</b> chart image: click to choose, drop a file here, or click then paste (Ctrl+V)</>}
+        </div>
+      )}
+      {err && <div style={{ color: 'var(--bearish)', fontSize: 12, marginTop: 4 }}>{err}</div>}
+      {big && url && (
+        <div onClick={() => setBig(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, cursor: 'zoom-out' }}>
+          <img src={url} alt={`${poiLabel} chart`} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8 }} />
+          <button aria-label="Close" style={{ position: 'absolute', top: 16, right: 16, background: 'var(--card)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: 6, color: 'var(--text-primary)', cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── One trade: tick each entry pattern's result ──────────────────────────────
-function TradeCard({ trade, open, onToggle, onChange, onDelete }: {
+function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   trade: Trade; open: boolean; onToggle: () => void
-  onChange: (t: Trade) => void; onDelete: () => void
+  onChange: (t: Trade) => void; onImages: (images: Record<string, number>) => void; onDelete: () => void
 }) {
   const [customFor, setCustomFor] = useState<string | null>(null)
   const [poi, setPoi] = useState(POIS[0].key)
@@ -214,11 +296,19 @@ function TradeCard({ trade, open, onToggle, onChange, onDelete }: {
               const n = ENTRY_TYPES.filter(t => t.poi === p.key && trade.results[t.key]).length
               return (
                 <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>
-                  {p.label}{n ? ` · ${n}` : ''}
+                  {p.label}{n ? ` · ${n}` : ''}{trade.images?.[p.key] ? ' · 📷' : ''}
                 </Chip>
               )
             })}
           </div>
+          <PoiImage tradeId={trade.id} poi={poi} poiLabel={POIS.find(p => p.key === poi)?.label ?? poi}
+            imageId={trade.images?.[poi]}
+            onSet={id => {
+              const images = { ...(trade.images || {}) }
+              if (id) images[poi] = id
+              else delete images[poi]
+              onImages(images)
+            }} />
           {ENTRY_TYPES.filter(t => t.poi === poi).map(t => {
             const r = trade.results[t.key]
             return (
@@ -307,7 +397,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
     save('mbp_et_alert', alertType)
     const r = await fetch(`${API_BASE}/api/entry-tests`, {
       method: 'POST', headers: hdrs(),
-      body: body({ trade_date: date, instrument: p, direction: dir, alert_type: alertType, notes: '', results: {} }),
+      body: body({ trade_date: date, instrument: p, direction: dir, alert_type: alertType, notes: '', results: {}, images: {} }),
     })
     if (!r.ok) { setErr('Could not add the trade.'); return }
     const t: Trade = await r.json()
@@ -438,7 +528,8 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
           : <div style={{ marginBottom: 20 }}>{shown.map(t => (
             <TradeCard key={t.id} trade={t} open={openId === t.id}
               onToggle={() => setOpenId(openId === t.id ? null : t.id)}
-              onChange={update} onDelete={() => remove(t.id)} />
+              onChange={update} onDelete={() => remove(t.id)}
+              onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />
           ))}</div>}
 
         {trades.length > 0 && <Scoreboard trades={shown} />}

@@ -10,12 +10,16 @@ Journal is separate and unchanged.
 
 from __future__ import annotations
 
+import io
 import json
 import sqlite3
+import uuid
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from api.auth import require_owner
@@ -90,10 +94,39 @@ def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str]:
             body.alert_type.strip()[:40], body.notes.strip()[:500], json.dumps(res))
 
 
-def _row(r: sqlite3.Row) -> dict:
+def _row(r: sqlite3.Row, images: Optional[dict] = None) -> dict:
     d = dict(r)
     d["results"] = json.loads(d.pop("results_json") or "{}")
+    d["images"] = images or {}   # {poi: image id}
     return d
+
+
+# ── Trade screenshots: one per POI per trade ──────────────────────────────────
+# Stored as JPEG files on the data volume next to the database (not inside it,
+# so the nightly Telegram backup stays small); the table keeps who owns which.
+_POI_KEYS = {k for k, _ in POIS}
+MAX_UPLOAD = 15 * 1024 * 1024
+
+
+def _img_dir(request: Request) -> Path:
+    d = Path(request.app.state.config.db_path).resolve().parent / "entry_images"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _images_by_trade(conn, uid: int) -> dict[int, dict]:
+    out: dict[int, dict] = {}
+    for r in conn.execute("SELECT id, test_id, poi FROM entry_test_images WHERE user_id = ?", (uid,)):
+        out.setdefault(r["test_id"], {})[r["poi"]] = r["id"]
+    return out
+
+
+def _drop_image(request: Request, conn, row) -> None:
+    conn.execute("DELETE FROM entry_test_images WHERE id = ?", (row["id"],))
+    try:
+        (_img_dir(request) / row["file_name"]).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 @router.get("/entry-tests/types")
@@ -108,7 +141,8 @@ def list_trades(request: Request):
     with _db(request) as conn:
         rows = conn.execute(
             "SELECT * FROM entry_tests WHERE user_id = ? ORDER BY trade_date DESC, id DESC", (u["id"],)).fetchall()
-    return [_row(r) for r in rows]
+        imgs = _images_by_trade(conn, u["id"])
+    return [_row(r, imgs.get(r["id"])) for r in rows]
 
 
 @router.post("/entry-tests")
@@ -135,12 +169,71 @@ def update_trade(trade_id: int, request: Request, body: TradeBody):
         if cur.rowcount == 0:
             raise HTTPException(404, "Trade not found")
         row = conn.execute("SELECT * FROM entry_tests WHERE id = ?", (trade_id,)).fetchone()
-    return _row(row)
+        imgs = _images_by_trade(conn, u["id"])
+    return _row(row, imgs.get(trade_id))
 
 
 @router.delete("/entry-tests/{trade_id}")
 def delete_trade(trade_id: int, request: Request):
     u = require_owner(request)
     with _db(request) as conn:
+        for img in conn.execute("SELECT id, file_name FROM entry_test_images WHERE test_id = ? AND user_id = ?",
+                                (trade_id, u["id"])).fetchall():
+            _drop_image(request, conn, img)
         conn.execute("DELETE FROM entry_tests WHERE id = ? AND user_id = ?", (trade_id, u["id"]))
+    return {"ok": True}
+
+
+@router.post("/entry-tests/{trade_id}/images/{poi}")
+async def upload_image(trade_id: int, poi: str, request: Request, file: UploadFile = File(...)):
+    """Add (or replace) the screenshot for one POI of a trade."""
+    u = require_owner(request)
+    if poi not in _POI_KEYS:
+        raise HTTPException(400, "unknown POI")
+    raw = await file.read(MAX_UPLOAD + 1)
+    if len(raw) > MAX_UPLOAD:
+        raise HTTPException(413, "Image is too large (15 MB max)")
+    try:
+        from PIL import Image, ImageOps
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+        im = im.convert("RGB")
+        im.thumbnail((2400, 2400))
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=85, optimize=True)
+    except Exception:
+        raise HTTPException(400, "That file isn't an image")
+    name = f"{uuid.uuid4().hex}.jpg"
+    with _db(request) as conn:
+        if not conn.execute("SELECT 1 FROM entry_tests WHERE id = ? AND user_id = ?", (trade_id, u["id"])).fetchone():
+            raise HTTPException(404, "Trade not found")
+        (_img_dir(request) / name).write_bytes(buf.getvalue())
+        old = conn.execute("SELECT id, file_name FROM entry_test_images WHERE test_id = ? AND poi = ?",
+                           (trade_id, poi)).fetchone()
+        if old:
+            _drop_image(request, conn, old)
+        cur = conn.execute("INSERT INTO entry_test_images (test_id, user_id, poi, file_name) VALUES (?, ?, ?, ?)",
+                           (trade_id, u["id"], poi, name))
+    return {"id": cur.lastrowid, "poi": poi}
+
+
+@router.get("/entry-tests/images/{image_id}")
+def get_image(image_id: int, request: Request):
+    u = require_owner(request)
+    with _db(request) as conn:
+        row = conn.execute("SELECT file_name FROM entry_test_images WHERE id = ? AND user_id = ?",
+                           (image_id, u["id"])).fetchone()
+    path = _img_dir(request) / row["file_name"] if row else None
+    if not path or not path.is_file():
+        raise HTTPException(404, "Image not found")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.delete("/entry-tests/{trade_id}/images/{poi}")
+def delete_image(trade_id: int, poi: str, request: Request):
+    u = require_owner(request)
+    with _db(request) as conn:
+        row = conn.execute("SELECT id, file_name FROM entry_test_images WHERE test_id = ? AND poi = ? AND user_id = ?",
+                           (trade_id, poi, u["id"])).fetchone()
+        if row:
+            _drop_image(request, conn, row)
     return {"ok": True}

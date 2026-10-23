@@ -522,6 +522,19 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tests_user ON entry_tests (user_id, trade_date DESC)")
+    # Entry Tester screenshots (files live in <db dir>/entry_images): one per POI per trade
+    if "entry_test_images" not in existing:
+        conn.execute("""
+            CREATE TABLE entry_test_images (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_id    INTEGER NOT NULL REFERENCES entry_tests(id),
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                poi        TEXT    NOT NULL,           -- fvg | engulfing | h4_key
+                file_name  TEXT    NOT NULL,
+                created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                UNIQUE (test_id, poi)
+            )
+        """)
     if "announcements" not in existing:
         conn.execute("""
             CREATE TABLE announcements (
