@@ -100,6 +100,10 @@ const selStyle: React.CSSProperties = {
 function Scoreboard({ trades }: { trades: Trade[] }) {
   const [poi, setPoi] = useState('')
   const [showAll, setShowAll] = useState(false)
+  // Folded by default so the page stays calm; the choice is remembered
+  const [open, setOpenState] = useState(false)
+  useEffect(() => { setOpenState(load('mbp_et_score_open', '0') === '1') }, [])
+  const setOpen = (v: boolean) => { setOpenState(v); save('mbp_et_score_open', v ? '1' : '0') }
   const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
     let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0
     for (const tr of trades) {
@@ -127,7 +131,8 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 4px 6px', marginBottom: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px 10px', flexWrap: 'wrap' }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: open ? '0 14px 10px' : '0 14px 8px', flexWrap: 'wrap', cursor: 'pointer' }}>
+        {open ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
         <Trophy size={16} color="var(--accent)" />
         <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Which entry holds up best</span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -135,6 +140,7 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
         </span>
         {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>Leader: {best.label}</span>}
       </div>
+      {open && <>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <Chip on={!poi} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi('')}>All POIs</Chip>
         {POIS.map(p => <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>{p.label}</Chip>)}
@@ -174,6 +180,7 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
           </tbody>
         </table>
       </div>
+      </>}
     </div>
   )
 }
@@ -451,7 +458,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
     setAlertType(load('mbp_et_alert', 'Origin'))
     fetch(`${API_BASE}/api/entry-tests`, { headers: hdrs() })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then((d: Trade[]) => { setTrades(d); if (d[0]) setOpenId(d[0].id) })
+      .then((d: Trade[]) => setTrades(d))   // every trade starts folded; tap one to open it
       .catch(() => setErr('Could not load your entry tests.'))
       .finally(() => setLoading(false))
   }, [])
