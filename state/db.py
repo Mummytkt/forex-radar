@@ -505,6 +505,23 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
 
     # Owner → subscriber updates (Tutorials page) and each user's read position
     existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    # Entry Tester (owner only): per trade, how each entry pattern did
+    if "entry_tests" not in existing:
+        conn.execute("""
+            CREATE TABLE entry_tests (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      INTEGER NOT NULL REFERENCES users(id),
+                trade_date   TEXT    NOT NULL,             -- YYYY-MM-DD (chart date of the trade)
+                instrument   TEXT    NOT NULL,
+                direction    TEXT    NOT NULL,             -- buy | sell
+                alert_type   TEXT    NOT NULL DEFAULT '',  -- the H4 alert it came from
+                notes        TEXT    NOT NULL DEFAULT '',
+                results_json TEXT    NOT NULL DEFAULT '{}', -- {entry_key: {"outcome": win|loss|be|none, "rr": float|null}}
+                created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tests_user ON entry_tests (user_id, trade_date DESC)")
     if "announcements" not in existing:
         conn.execute("""
             CREATE TABLE announcements (

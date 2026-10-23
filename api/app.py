@@ -9,6 +9,7 @@ from api.tv_webhook import router as tv_webhook_router
 from api.billing import router as billing_router
 from api.business import router as business_router
 from api.announcements import router as announcements_router
+from api.entry_tests import router as entry_tests_router
 
 app = FastAPI(title="MummyTKT's Bias Pointer API", version="1.0.0")
 
@@ -26,3 +27,4 @@ app.include_router(tv_webhook_router, prefix="/api")
 app.include_router(billing_router, prefix="/api")
 app.include_router(business_router, prefix="/api")
 app.include_router(announcements_router, prefix="/api")
+app.include_router(entry_tests_router, prefix="/api")

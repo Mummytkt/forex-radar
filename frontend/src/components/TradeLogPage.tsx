@@ -88,7 +88,7 @@ function getSetupLabel(setupType: string, setupNotes: string | null): string {
 const SESSION_LABELS: Record<string, string> = {
   london: 'London', new_york: 'New York', asian: 'Asian', other: 'Other',
 }
-const INSTRUMENTS = [
+export const INSTRUMENTS = [
   'EUR/USD','GBP/USD','USD/JPY','USD/CHF','USD/CAD','AUD/USD','NZD/USD',
   'EUR/JPY','EUR/GBP','EUR/AUD','EUR/CAD','EUR/NZD','EUR/CHF',
   'GBP/JPY','GBP/AUD','GBP/CAD','GBP/NZD','GBP/CHF',
@@ -913,7 +913,7 @@ function TradeModal({
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
+export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig; tabs?: React.ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>([])
   const [period, setPeriod] = useState<Period>('month')
   const [loading, setLoading] = useState(true)
@@ -1135,6 +1135,7 @@ export default function TradeLogPage({ config }: { config: TradeLogConfig }) {
       <TopBar title={config.pageTitle} />
 
       <main style={{ flex: 1, width: '100%', padding: '20px 24px' }}>
+        {tabs}
 
         {/* ── Page header ── */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>

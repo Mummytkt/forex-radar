@@ -79,12 +79,36 @@ owner_only = [
     ("DELETE", "/api/videos?url=x", None),
     ("PUT", "/api/config/instruments", {"instruments": ["EURUSD"]}),
     ("POST", "/api/admin/reset-instrument", {"instrument": "EURUSD"}),
+    ("GET", "/api/entry-tests", None),
+    ("POST", "/api/entry-tests", {"trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy"}),
+    ("PUT", "/api/entry-tests/1", {"trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy"}),
+    ("DELETE", "/api/entry-tests/1", None),
 ]
 for method, path, body in owner_only:
     st = c.request(method, path, headers=H(ta), json=body).status_code
     check(f"subscriber refused: {method} {path} (got {st})", st in (401, 403))
 check("owner can list users", c.get("/api/auth/users", headers=H(owner)).status_code == 200)
 check("owner can read strategy content", c.get("/api/strategy-content", headers=H(owner)).status_code == 200)
+
+# ── Entry Tester (owner only) ─────────────────────────────────────────────
+_et = c.post("/api/entry-tests", headers=H(owner), json={
+    "trade_date": "2020-01-08", "instrument": "xauusd", "direction": "buy", "alert_type": "Origin"}).json()
+check("owner adds an entry-test trade", _et.get("id") and _et["instrument"] == "XAUUSD" and _et["results"] == {})
+_r = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={
+    "trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy", "alert_type": "Origin",
+    "results": {"direct_fvg": {"outcome": "win", "rr": 3}, "m5_cisd": {"outcome": "loss", "rr": 5}, "h4_3cr": {"outcome": "none"}}})
+_res = _r.json().get("results", {})
+check("ticked entry results are saved (a loss keeps no RR)",
+      _res.get("direct_fvg") == {"outcome": "win", "rr": 3} and _res.get("m5_cisd") == {"outcome": "loss", "rr": None}
+      and _res.get("h4_3cr", {}).get("outcome") == "none")
+check("an unknown entry type is refused", c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={
+    "trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy", "results": {"bogus": {"outcome": "win"}}}).status_code == 400)
+check("the owner's entry tests list back", [t["id"] for t in c.get("/api/entry-tests", headers=H(owner)).json()] == [_et["id"]])
+check("a subscriber can't touch the owner's entry test",
+      c.delete(f"/api/entry-tests/{_et['id']}", headers=H(ta)).status_code == 403
+      and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 1)
+c.delete(f"/api/entry-tests/{_et['id']}", headers=H(owner))
+check("owner deletes an entry test", c.get("/api/entry-tests", headers=H(owner)).json() == [])
 for _d in ("rulebook", "storybook"):
     _r = c.get(f"/api/strategy-docs/{_d}", headers=H(owner))
     check(f"owner downloads {_d} PDF", _r.status_code == 200 and _r.content[:4] == b"%PDF")
