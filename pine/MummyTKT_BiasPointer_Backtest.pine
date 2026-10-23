@@ -987,8 +987,8 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     bo_level  := s_blvl
     bo_layer  := "external"
     bo_opp    := s_bopp
-    est_above := false
-    est_below := false
+    est_above := s_bdir == "bullish" and not na(d_close) and d_close > s_blvl + tol   // backtest: breakout candle's close counts
+    est_below := s_bdir == "bearish" and not na(d_close) and d_close < s_blvl - tol
     retest_on := false
     retest_src:= na
     retest_kind := na
@@ -1696,13 +1696,13 @@ string _state_txt = "IDLE - no breakout detected"
 if not na(bo_dir) and not h4_bo_fired and retest_on
     _state_txt := (bo_dir == "bullish" ? "Bullish" : "Bearish") + " Retest | " + retest_src
 else if not na(bo_dir) and not h4_bo_fired
-    _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest"
+    _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest" + ((bo_dir == "bullish" ? est_above : est_below) ? "" : " · price hasn't moved away from the breakout yet")
 else if h4_bo_fired and h4_aligned
     _state_txt := "CONFIRMED | " + bo_dir + " | H4 aligned" + (retest_on ? "\nDaily reaction at " + f_bt_src(retest_src) + " @ " + str.tostring(retest_lvl, format.mintick) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick)) : "")
 else if h4_bo_fired
     _state_txt := retest_on
          ? "OUT OF LINE | daily " + bo_dir + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + str.tostring(retest_lvl, "#.#####") + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick))
-         : "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · waiting for a daily reaction, then an H4 " + bo_dir + " break"
+         : "OUT OF LINE | daily " + bo_dir + " | H4 broke " + (bo_dir == "bullish" ? "bearish" : "bullish") + " · waiting for a daily reaction, then an H4 " + bo_dir + " break" + ((bo_dir == "bullish" ? est_above : est_below) ? "" : " (price hasn't moved away from the breakout yet)")
 // Off the 4H chart, show only what the DAILY candles decided (direction and the
 // broken level) — the H4 steps would run on the wrong candles there.
 string _wk_txt = not bt_weekly or na(wk_dir) ? "" : "\nWEEKLY " + wk_dir + (wk_react ? " · reacting at " + f_wsrc_name(wk_src, wk_kind) + " @ " + str.tostring(wk_src_lvl, "#.#####") : "")

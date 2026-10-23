@@ -379,6 +379,19 @@ rep('_state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.
 rep('style = label.style_label_left, color = color.new(color.black, 100), textcolor = c, size = size.small))',
     'style = label.style_label_left, color = color.new(color.black, 100), textcolor = bt_ext_txt, size = size.small))')
 
+# 7. The Daily breakout candle's own close beyond the level counts as moving away,
+#    so a pullback straight back to a Daily level can react without needing an H4
+#    close beyond the breakout first.
+rep('''    est_above := false
+    est_below := false
+''', '''    est_above := s_bdir == "bullish" and not na(d_close) and d_close > s_blvl + tol   // backtest: breakout candle's close counts
+    est_below := s_bdir == "bearish" and not na(d_close) and d_close < s_blvl - tol
+''')
+rep('''    _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest"''',
+    '''    _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest" + ((bo_dir == "bullish" ? est_above : est_below) ? "" : " · price hasn't moved away from the breakout yet")''')
+rep('''" · waiting for a daily reaction, then an H4 " + bo_dir + " break"''',
+    '''" · waiting for a daily reaction, then an H4 " + bo_dir + " break" + ((bo_dir == "bullish" ? est_above : est_below) ? "" : " (price hasn't moved away from the breakout yet)")''')
+
 # Weekly display follows the backtest's Weekly switch
 rep('    if show_wk_lbls and show_wk_on_tf and not na(wk_dir)', '    if bt_weekly and show_wk_lbls and show_wk_on_tf and not na(wk_dir)')
 rep('    if show_wk_ext and show_wk_on_tf and not na(w_cdir) and w_cdir != "none"',
