@@ -775,6 +775,12 @@ var array<float> d_bf_x  = array.new<float>()
 var array<int>   d_bf_xb = array.new<int>()
 var array<float> d_sf_x  = array.new<float>()
 var array<int>   d_sf_xb = array.new<int>()
+// Pierced: price has traded beyond the gap's far edge (below a bullish gap, above
+// a bearish one). A bullish FVG only reacts when price dips INTO it from above,
+// so once pierced it can't start a new reaction (coming back up into it from
+// below doesn't count). A reaction already running there is not ended by this.
+var array<bool>  d_bf_p  = array.new<bool>()
+var array<bool>  d_sf_p  = array.new<bool>()
 // H4 FVG after an H4 breakout in line with the Daily: checked on the next candle
 var int    h4f_bar  = na
 var bool   h4f_bull = false
@@ -1131,24 +1137,26 @@ if new_daily and not na(d_close2)
 
 // Daily FVGs. A gap is only an FVG once its third Daily candle has closed. A Daily
 // close through the gap kills it (bullish: below the bottom; bearish: above the top).
-f_fvg_drop(array<float> his, array<float> los, array<float> xs, array<int> xbs, int k) =>
+f_fvg_drop(array<float> his, array<float> los, array<float> xs, array<int> xbs, array<bool> ps, int k) =>
     array.remove(his, k)
     array.remove(los, k)
     array.remove(xs, k)
     array.remove(xbs, k)
-f_fvg_kill(array<float> his, array<float> los, array<float> xs, array<int> xbs, float c, bool bull) =>
+    array.remove(ps, k)
+f_fvg_kill(array<float> his, array<float> los, array<float> xs, array<int> xbs, array<bool> ps, float c, bool bull) =>
     int k = array.size(his) - 1
     while k >= 0
         if bull ? c < array.get(los, k) : c > array.get(his, k)
-            f_fvg_drop(his, los, xs, xbs, k)
+            f_fvg_drop(his, los, xs, xbs, ps, k)
         k -= 1
-f_fvg_keep(array<float> his, array<float> los, array<float> xs, array<int> xbs, float h, float l) =>
+f_fvg_keep(array<float> his, array<float> los, array<float> xs, array<int> xbs, array<bool> ps, float h, float l) =>
     array.push(his, h)
     array.push(los, l)
     array.push(xs, na)
     array.push(xbs, na)
+    array.push(ps, false)
     if array.size(his) > 60
-        f_fvg_drop(his, los, xs, xbs, 0)
+        f_fvg_drop(his, los, xs, xbs, ps, 0)
 // Index of the FVG with this top / bottom, or -1
 f_fvg_idx(array<float> his, array<float> los, float h, float l) =>
     int found = -1
@@ -1159,20 +1167,20 @@ f_fvg_idx(array<float> his, array<float> los, float h, float l) =>
     found
 
 if new_daily and not na(d_close)
-    f_fvg_kill(d_bf_hi, d_bf_lo, d_bf_x, d_bf_xb, d_close, true)
-    f_fvg_kill(d_sf_hi, d_sf_lo, d_sf_x, d_sf_xb, d_close, false)
+    f_fvg_kill(d_bf_hi, d_bf_lo, d_bf_x, d_bf_xb, d_bf_p, d_close, true)
+    f_fvg_kill(d_sf_hi, d_sf_lo, d_sf_x, d_sf_xb, d_sf_p, d_close, false)
 if new_daily and not na(dg_h3) and not na(dg_l1)
     // The middle candle can be anything (even the Daily breakout candle): the gap
     // only exists once the third candle closes without reaching the first one.
     if dg_l1 > dg_h3
-        f_fvg_keep(d_bf_hi, d_bf_lo, d_bf_x, d_bf_xb, dg_l1, dg_h3)
+        f_fvg_keep(d_bf_hi, d_bf_lo, d_bf_x, d_bf_xb, d_bf_p, dg_l1, dg_h3)
     if dg_h1 < dg_l3
-        f_fvg_keep(d_sf_hi, d_sf_lo, d_sf_x, d_sf_xb, dg_l3, dg_h1)
+        f_fvg_keep(d_sf_hi, d_sf_lo, d_sf_x, d_sf_xb, d_sf_p, dg_l3, dg_h1)
 
 // Deepest Daily FVG this H4 candle's wick enters. inside: the whole gap sits inside
 // the range that was just broken; otherwise the gap reaches beyond the Daily Breaker
 // (after the breakout, incl. the breakout candle's own gap). Returns its index, or -1.
-f_fvg_pick(array<float> his, array<float> los, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
+f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
     int   best = -1
     float bv   = na
     if array.size(his) > 0
@@ -1182,7 +1190,7 @@ f_fvg_pick(array<float> his, array<float> los, bool bull, bool inside, float opp
             bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? H > b_hi : L < b_lo)
             bool touched = low <= H and high >= L
             float edge   = bull ? L : H
-            if in_pos and touched and (na(bv) or (bull ? edge < bv : edge > bv))
+            if in_pos and touched and not array.get(ps, i) and (na(bv) or (bull ? edge < bv : edge > bv))
                 bv   := edge
                 best := i
     best
@@ -1371,8 +1379,9 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     array<float> fz_los = fz_bull ? d_bf_lo : d_sf_lo
     array<float> fz_x   = fz_bull ? d_bf_x  : d_sf_x
     array<int>   fz_xb  = fz_bull ? d_bf_xb : d_sf_xb
-    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_bull, false, bo_opp, band_lo, band_hi) : -1
-    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
+    array<bool>  fz_p   = fz_bull ? d_bf_p  : d_sf_p
+    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, false, bo_opp, band_lo, band_hi) : -1
+    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
 
     // ── Backtest: first H4 touch of each Daily level since it formed ──────
     bool bt_bull = bo_dir == "bullish"
@@ -1567,7 +1576,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 float gL = array.get(fz_los, i)
                 bool deeper = fz_bull ? gH < cur_lo : gL > cur_hi
                 bool ok_pos = fz_bull ? (gH > band_hi or (not na(bo_opp) and gL > bo_opp and gH < band_lo)) : (gL < band_lo or (not na(bo_opp) and gH < bo_opp and gL > band_hi))
-                if deeper and ok_pos and low <= gH and high >= gL and (dk < 0 or (fz_bull ? gL < array.get(fz_los, dk) : gH > array.get(fz_his, dk)))
+                if deeper and ok_pos and not array.get(fz_p, i) and low <= gH and high >= gL and (dk < 0 or (fz_bull ? gL < array.get(fz_los, dk) : gH > array.get(fz_his, dk)))
                     dk := i
         if dk >= 0
             float dH = array.get(fz_his, dk)
@@ -1598,6 +1607,16 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         if ak >= 0
             array.set(fz_x, ak, fz_bull ? fz_day_a : fz_day_v)
             array.set(fz_xb, ak, fz_day_bar)
+
+    // ── Pierced Daily FVGs (after this candle's reaction checks) ──────────
+    if array.size(d_bf_lo) > 0
+        for i = 0 to array.size(d_bf_lo) - 1
+            if low < array.get(d_bf_lo, i)
+                array.set(d_bf_p, i, true)
+    if array.size(d_sf_hi) > 0
+        for i = 0 to array.size(d_sf_hi) - 1
+            if high > array.get(d_sf_hi, i)
+                array.set(d_sf_p, i, true)
 
     // ── H4 CONFIRMED ──────────────────────────────────────────────────────
     bool confirmed_this_bar = false
@@ -1658,7 +1677,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                     float UH = array.get(fz_his, uk)
                     float UL = array.get(fz_los, uk)
                     if (fz_bull ? UL > uh : UH < ul) and f_bt_seen(fz_bull ? UH : UL)
-                        f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, uk)
+                        f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, fz_p, uk)
                     uk -= 1
             retest_on  := false
             retest_src := na
@@ -1718,7 +1737,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                     float UH = array.get(fz_his, uk)
                     float UL = array.get(fz_los, uk)
                     if (fz_bull ? UL > uh : UH < ul) and f_bt_seen(fz_bull ? UH : UL)
-                        f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, uk)
+                        f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, fz_p, uk)
                     uk -= 1
             retest_on  := false
             retest_src := na
@@ -2134,6 +2153,8 @@ if barstate.islast
                 for i = 0 to array.size(fhs) - 1
                     float H = array.get(fhs, i)
                     float L = array.get(fls, i)
+                    if array.get(bb ? d_bf_p : d_sf_p, i)
+                        continue
                     if bb ? H > bo_level + tol : L < bo_level - tol
                         f_bt_fvg(H, L, "Daily FVG after the breakout")
                     else if not na(bo_opp) and (bb ? (L > bo_opp and H < bo_level - tol) : (H < bo_opp and L > bo_level + tol))
