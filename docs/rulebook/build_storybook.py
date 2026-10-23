@@ -350,8 +350,9 @@ def chapters():
         ("The Safe Spots", SKY, "spots", [
             "Now the Little Twins go looking for a safe place to land. Bella slides down... and stretches her leg to touch a Wiggle Mat.",
             "If her toe (or shirt) touches the safe spot's <b>exact line</b> (almost touching doesn't count), and her shirt <b>doesn't close through it</b>, she has made a <b>visit</b>. Grown-ups call it a <b>reaction</b>.",
-            "There are four kinds of safe spots. Candle Town checks them in this order:",
-            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> A <b>new Giant valley floor</b> built during the climb, above the trampoline. <b>3.</b> The <b>Trampoline</b>. <b>4.</b> A <b>valley floor or hand-off step inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
+            "There are five kinds of safe spots. Candle Town checks them in this order:",
+            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> A <b>new Giant valley floor</b> built during the climb, above the trampoline. <b>3.</b> A <b>Giant gap</b> left during the climb. <b>4.</b> The <b>Trampoline</b>. <b>5.</b> A <b>valley floor, hand-off step or Giant gap inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
+            "<b>A Giant gap</b> appears when three Giants stand in a row and the third one's feet don't reach the first one's head. The space between them is a big soft cushion. A twin just has to <b>step into the cushion</b> to make a visit, and only a Giant <b>closing through</b> the whole cushion pops it. If a later Giant sinks deeper into the cushion than the Giant before, the twins start looking for a new Outside roof from there.",
             "A safe spot only appears once the Giants who built it have finished. The Giants who built it can't visit it themselves.",
             "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
             "<b>Cracked spots don't count.</b> A Giant valley floor or hand-off step that a Giant twin has already <b>closed below</b> is cracked (closed above, when the twins are sliding down). Cracked spots are never safe again.",
@@ -383,6 +384,7 @@ def chapters():
             "<b>The little hand-off steps.</b> When two Little Bens climb one after the other, they make a little step. Every step on the newest climb is kept. If a <b>later</b> twin starts above one, touches it and closes above, ENCORE! That step is then used up. (A twin climbing up through it from below doesn't count.)",
             "Each visit to a spot rings <b>once</b>. The twins must leave and come back to ring it again.",
             "<b>The big hug step.</b> When a Little Ben's shirt starts at or below a sliding Bella's shirt-end and finishes above even her highest fingertip, he has covered all of her. ENCORE!",
+            "<b>The little gap.</b> Right after a Little Ben breaks a rooftop, the next Little Twin is checked once: if her feet stay above the head of the twin who stood just before Ben, they leave a little gap. A small bell rings with just the town's name: <b>a little gap was left behind</b>. It isn't a buy or sell bell; grown-ups use it to spot where price may come back to.",
         ]),
         (None, None, "encore2", []),
         ("The Wobble", "#ff7a59", "wobble", [
@@ -518,6 +520,7 @@ def build():
              ("Golden Bell", "Origin alert (first H4 confirmation)"),
              ("Outside / Inside roof", "External / Internal H4 break"),
              ("Encore Bell", "continuation alert"),
+             ("Giant gap / little gap", "Daily FVG reaction zone / H4 FVG after breakout alert"),
              ("Wobble", "H4 out of line (chart label: OUT OF LINE)"),
              ("Brand-new game", "the next Daily breakout replaces the setup"),
              ("Peek-and-Hold / Big Hug", "PCL / Engulfing Sweep entry patterns")]

@@ -31,7 +31,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
 HERE = Path(__file__).resolve().parent
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "23 October 2026 (script v7) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "23 October 2026 (script v8, FVGs) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -205,6 +205,18 @@ def make_images():
         levels=[(17.8, "H4 OC (C1 close / C2 open)", ACCENT)], zones=[(17.3, 18.3, "", ZONE)],
         notes=[(1, 19.0, "completing candle\ncan't trigger it", MUTED), (2, 17.6, "later candle wicks in, closes above\n→ continuation", GREEN, (2.7, 16.3))],
         labels=["C1", "C2", "later"], ylim=(15.8, 19.6))
+    im["dfvg"] = chart("dfvg", [(10.0, 12.0, 9.6, 11.8), (11.8, 15.5, 11.6, 15.2), (15.2, 16.0, 13.2, 15.6),
+                                (15.6, 15.7, 13.0, 14.1), (14.1, 15.8, 12.5, 15.5)],
+        levels=[(12.6, "Daily Breaker", ACCENT)], zones=[(12.0, 13.2, "Daily FVG", ZONE)],
+        notes=[(2, 13.2, "3rd candle's low stays above\nthe 1st's high → FVG", GREEN, (2.0, 16.6)),
+               (3, 13.0, "enters the gap\n= reaction", GREEN, (3.3, 11.0)),
+               (4, 12.5, "dips below the previous Daily low,\nstill in the gap → External check restarts", GREEN, (4.4, 9.9))],
+        labels=["1st", "2nd (breakout)", "3rd", "enters", "deeper"], ylim=(9.2, 17.2))
+    im["h4fvg"] = chart("h4fvg", [(17.0, 17.4, 16.8, 17.1), (17.1, 18.6, 17.0, 18.5), (18.5, 19.0, 17.7, 18.9)],
+        levels=[(17.4, "high of the candle before", ACCENT)], zones=[(17.4, 17.7, "H4 FVG", ZONE)],
+        notes=[(1, 18.6, "H4 breakout\nin line", GREEN, (0.9, 19.4)),
+               (2, 17.7, "next candle's low stays above\n→ “H4 FVG candle after breakout has formed”", GREEN, (2.0, 16.5))],
+        labels=["before", "H4 breakout", "next candle"], ylim=(16.2, 19.9))
     im["h4engulf"] = chart("h4engulf", [(17.6, 17.75, 16.9, 17.0), (16.95, 18.05, 16.85, 17.95)],
         levels=[(17.75, "bearish candle's HIGH (top of its wick)", MUTED)],
         notes=[(1, 18.05, "opens at/below its close, closes above its high\n→ engulfing continuation", GREEN, (0.7, 18.8))],
@@ -316,8 +328,8 @@ def make_rules(im):
          "The chart label shows the newest one, e.g. “D.OC 10704.99 (3 watched)”.", im["postoc"]),
         ("D. Daily reaction levels", "What counts as a reaction",
          f"An H4 candle reacts from a zone when its <b>wick reaches the level exactly</b> (a near miss doesn't count) and its close doesn't go through it. Zones are checked in this order:",
-         "1) the deepest post-breakout OC touched · 2) a Daily V-shape formed after the breakout · 3) the Daily Breaker · 4) a Daily V-shape or Daily bullish OC level inside the range that was just broken",
-         "1) the highest post-breakout OC touched · 2) a Daily A-shape formed after the breakout · 3) the Daily Breaker · 4) a Daily A-shape or Daily bearish OC level inside the range that was just broken",
+         "1) the deepest post-breakout OC touched · 2) a Daily V-shape formed after the breakout · 3) a bullish Daily FVG after the breakout · 4) the Daily Breaker · 5) a Daily V-shape or Daily bullish OC level inside the range that was just broken · 6) a bullish Daily FVG inside that range",
+         "1) the highest post-breakout OC touched · 2) a Daily A-shape formed after the breakout · 3) a bearish Daily FVG after the breakout · 4) the Daily Breaker · 5) a Daily A-shape or Daily bearish OC level inside the range that was just broken · 6) a bearish Daily FVG inside that range",
          "A Daily level only exists once the Daily candle that forms it has closed; the candles that formed it can't react to it. "
          "The reaction is reported with its source and level. Simply being back inside the range is not a reaction. It doesn't matter which zone price reaches first. "
          "A Daily level is dead once a Daily candle closes through it (below a buy level, above a sell level) and never counts again.",
@@ -326,7 +338,16 @@ def make_rules(im):
          "Once price has reacted, the reaction stays valid on <b>later candles</b>. It only <b>fails</b> when an H4 candle closes back through the zone "
          "on the wrong side. Then the next zone price reaches takes over.",
          f"Fails on an H4 close below the zone (the level − {T}, or the breaker zone)", f"Fails on an H4 close above the zone (the level + {T}, or the breaker zone)",
-         "A candle that simply doesn't touch the zone any more does NOT cancel the reaction.", im["persist"]),
+         "A candle that simply doesn't touch the zone any more does NOT cancel the reaction. A Daily FVG reaction is different: only a Daily close through the gap ends it.", im["persist"]),
+        ("D. Daily reaction levels", "Daily FVG",
+         "Three Daily candles where the <b>third closes without reaching the first</b> leave a gap: a <b>Daily FVG</b>. It only exists once that third "
+         "candle has closed; the middle one can be the Daily breakout candle. One reaching beyond the Daily Breaker is a <b>Daily FVG after the breakout</b>; "
+         "one fully inside the broken range is a <b>Daily FVG inside the range</b>. An H4 wick <b>entering the gap</b> is a reaction.",
+         "Bullish FVG: the 3rd candle's low stays above the 1st candle's high (buy reactions)",
+         "Bearish FVG: the 3rd candle's high stays below the 1st candle's low (sell reactions)",
+         "Only a <b>Daily close through the gap</b> kills it; a wick past its far edge doesn't. Because it is a zone, each Daily candle that dips below the "
+         "previous Daily low while price reacts inside it (above the high, for sells) <b>restarts the External check</b> from when that candle entered the gap. "
+         "Every other Daily level keeps the first-touch rule.", im["dfvg"]),
         ("E. H4 confirmation", "The Origin alert",
          "While a reaction is alive, an H4 candle <b>closes beyond the External H4 A-shape</b> (buy) or <b>V-shape</b> (sell) of that reaction. "
          "It can be <b>any later candle</b>, not only the one that reacted. The first confirmation of a Daily breakout is the <b>Origin</b>.",
@@ -338,7 +359,8 @@ def make_rules(im):
          "price goes. The first touch of a <b>new</b> Daily level starts its own check, even while price is reacting at another level.",
          "External: the closest A-shape before the first touch · Internal: any A-shape formed after it",
          "External: the closest V-shape before the first touch · Internal: any V-shape formed after it",
-         "With Internal off (the default), breaking only an Internal level does not use up the reaction: the script keeps waiting for the External one.", im["extint"]),
+         "With Internal off (the default), breaking only an Internal level does not use up the reaction: the script keeps waiting for the External one. "
+         "Daily FVGs are the one exception: the check moves with each deeper Daily candle inside the gap (see Daily FVG).", im["extint"]),
         ("F. Continuations (after the Origin)", "Every Daily reaction + H4 breakout",
          "There is one Origin per Daily breakout. After it, <b>every fresh reaction at a Daily level followed by an H4 External breakout</b> sends a "
          "<b>“Daily reaction + H4 breakout”</b> alert, also while H4 is still in line. While H4 is in line, every new H4 close beyond the <b>latest</b> "
@@ -374,6 +396,14 @@ def make_rules(im):
          "After a bearish candle: opens at/below its close, closes above its open (body) or above its HIGH (wick)",
          "After a bullish candle: opens at/above its close, closes below its open (body) or below its LOW (wick)",
          "One alert per candle: if a Breaker, OC or in-line breakout alert fires on the same candle, the engulfing alert is not sent.", im["h4engulf"]),
+        ("F. Continuations (after the Origin)", "H4 FVG after breakout",
+         "After an <b>Origin</b>, a <b>Daily reaction + H4 breakout</b>, <b>H4 back in line</b> or an <b>H4 breakout in line</b>, the <b>next H4 candle</b> is "
+         "checked once. If it completes an FVG, one alert is sent with only the pair and <b>“H4 FVG candle after breakout has formed”</b>. "
+         "It is a liquidity marker, not a buy or sell signal.",
+         "Buys: the next candle's low stays above the high of the candle before the breakout",
+         "Sells: the next candle's high stays below the low of the candle before the breakout",
+         "Checked only on that one candle: if it doesn't form an FVG, nothing more until the next H4 breakout. Breaker, OC and engulfing alerts don't trigger it. "
+         "Off for subscribers unless they switch it on in Alert Filters; it follows the setup's External / Internal like other continuations.", im["h4fvg"]),
         ("G. A new breakout", "When the setup changes",
          "Pulling back into the range is not a cancellation — that's where reactions happen. A new Daily breakout in the <b>same</b> direction "
          "keeps H4 riding: in-line breakouts and H4 reactions keep firing, and a reaction at the new breakout's levels plus an H4 breakout becomes "
@@ -418,6 +448,8 @@ GLOSSARY = [
     ("Reaction / Retest", "An H4 candle's wick entering a Daily zone without closing through it."),
     ("Origin", "The first H4 confirmation of a Daily breakout. One per breakout."),
     ("Continuation", "Every later H4 alert in the same Daily direction: Daily reaction + H4 breakout, in-line breakout, Breaker, OC, engulfing."),
+    ("Daily FVG", "Gap left when the 3rd of three Daily candles closes without reaching the 1st; a reaction zone until a Daily close goes through it."),
+    ("H4 FVG after breakout", "The H4 candle right after an in-line H4 breakout completed an FVG: a liquidity marker alert (pair + message only)."),
     ("H4 External / Internal", "External = the closest H4 A/V-shape before the first touch of the Daily level; anything formed after that touch is Internal."),
     ("Tolerance", "The ± band (default 5 pips) used for moving away from the breaker and for a reaction failing; touches must be exact. Entry alerts use 20 pips. On crypto and Deriv synthetic indices one pip is 0.002% of price, so the 5-pip band is 0.01% of price."),
     ("Next breakout", "Any later Daily break replaces the setup; a break the other way flips the bias."),
