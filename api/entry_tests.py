@@ -91,7 +91,13 @@ def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str]:
     for k, r in body.results.items():
         if k not in _KEYS or r.outcome not in OUTCOMES:
             raise HTTPException(400, f"unknown entry type or outcome: {k}")
-        rr = r.rr if r.outcome == "win" and r.rr is not None and 0 < r.rr <= 100 else None
+        # win: the RR it made; BE: the R it was closed at early (e.g. 0.5, or -0.3 on a rejection)
+        if r.outcome == "win":
+            rr = r.rr if r.rr is not None and 0 < r.rr <= 100 else None
+        elif r.outcome == "be":
+            rr = r.rr if r.rr is not None and -1 < r.rr < 100 and r.rr != 0 else None
+        else:
+            rr = None
         res[k] = {"outcome": r.outcome, "rr": rr}
         if r.outcome != "none" and r.takes is not None and 1 < r.takes <= 50:
             res[k]["takes"] = int(r.takes)

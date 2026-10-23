@@ -135,7 +135,10 @@ _ed = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date
       "direction": "sell", "alert_type": "H4 back in line", "results": {"direct_fvg": {"outcome": "loss"}}}).json()
 _tk = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
       "direction": "sell", "alert_type": "H4 back in line", "results": {"m5_cisd_fvg": {"outcome": "win", "rr": 3, "takes": 2},
-      "m5_smc_fvg": {"outcome": "none", "takes": 3}}}).json()["results"]
+      "m5_smc_fvg": {"outcome": "none", "takes": 3}, "h1_smc_fvg": {"outcome": "be", "rr": -0.3},
+      "h1_cisd_fvg": {"outcome": "be", "rr": 0.5}}}).json()["results"]
+check("a BE keeps the R it was closed at (a small loss or gain)",
+      _tk["h1_smc_fvg"]["rr"] == -0.3 and _tk["h1_cisd_fvg"]["rr"] == 0.5)
 check("re-entries are kept with the result (not on 'No entry')",
       _tk["m5_cisd_fvg"] == {"outcome": "win", "rr": 3, "takes": 2} and "takes" not in _tk["m5_smc_fvg"])
 check("a trade's date, direction, alert and results can all be edited",

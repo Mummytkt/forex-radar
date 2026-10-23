@@ -52,6 +52,7 @@ const OUTCOMES: { key: Outcome; label: string; color: string; bg: string }[] = [
   { key: 'none', label: 'No entry', color: 'var(--text-muted)', bg: 'var(--surface)' },
 ]
 const RR_QUICK = [1, 2, 3, 4, 5, 6, 8, 10]
+const BE_QUICK = [-0.5, -0.25, 0, 0.25, 0.5, 1]   // closed early: the R it was closed at
 
 function hdrs(): HeadersInit {
   const t = typeof window !== 'undefined' ? localStorage.getItem('mbp_token') : null
@@ -76,7 +77,7 @@ function rOf(r: EntryResult): number | null {
   const before = Math.max((r.takes ?? 1) - 1, 0)
   if (r.outcome === 'win') return r.rr == null ? null : r.rr - before
   if (r.outcome === 'loss') return -1 - before
-  if (r.outcome === 'be') return -before
+  if (r.outcome === 'be') return (r.rr ?? 0) - before   // closed early at r.rr (unset = exactly 0)
   return null
 }
 
@@ -130,7 +131,7 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
         <Trophy size={16} color="var(--accent)" />
         <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Which entry holds up best</span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {trades.length} setup{trades.length === 1 ? '' : 's'} · ranked by total R · each stop-out = −1R, BE = 0
+          {trades.length} setup{trades.length === 1 ? '' : 's'} · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)
         </span>
         {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>Leader: {best.label}</span>}
       </div>
@@ -299,7 +300,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   const tapOutcome = (key: string, o: Outcome) => {
     const cur = trade.results[key]
     if (cur?.outcome === o) setResult(key, null)   // tap again to clear
-    else setResult(key, { outcome: o, rr: o === 'win' ? cur?.rr ?? null : null, ...(o !== 'none' && cur?.takes ? { takes: cur.takes } : {}) })
+    else setResult(key, { outcome: o, rr: (o === 'win' && cur?.outcome === 'win') || (o === 'be' && cur?.outcome === 'be') ? cur?.rr ?? null : null, ...(o !== 'none' && cur?.takes ? { takes: cur.takes } : {}) })
   }
 
   return (
@@ -347,6 +348,19 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
                   <ImageStrip compact tradeId={trade.id} slot={t.key} label={t.label} ids={imgs[t.key] || []}
                     onChange={ids => setSlot(t.key, ids)} />
                 )}
+                {r?.outcome === 'be' && (
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexBasis: '100%', paddingLeft: 4, marginTop: 2 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2 }} title="Closed early, e.g. on a rejection: the R you closed at">Closed at</span>
+                    {BE_QUICK.map(n => (
+                      <Chip key={n} on={(r.rr ?? 0) === n} color="#f59e0b" bg="rgba(245,158,11,0.12)"
+                        onClick={() => setResult(t.key, { ...r, rr: n === 0 ? null : n })}>{n > 0 ? `+${n}` : n}R</Chip>
+                    ))}
+                    <input type="number" step="0.1" min={-0.99} max={99} inputMode="decimal" placeholder="other" title="Type the R you closed at, e.g. 0.7 or -0.4"
+                      defaultValue={r.rr != null && !BE_QUICK.includes(r.rr) ? r.rr : ''} key={`${t.key}-be-${r.rr ?? 0}`}
+                      onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v > -1 && v < 100 && v !== (r.rr ?? 0)) setResult(t.key, { ...r, rr: v === 0 ? null : v }) }}
+                      style={{ ...selStyle, width: 70, padding: '4px 8px' }} />
+                  </div>
+                )}
                 {r?.outcome === 'win' && (
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexBasis: '100%', paddingLeft: 4, marginTop: 2 }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2 }}>RR</span>
@@ -379,7 +393,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
                       style={{ ...selStyle, width: 58, padding: '4px 8px' }} />
                     {(r.takes ?? 1) > 1 && (() => { const v = rOf(r); return (
                       <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 4 }}>
-                        {(r.takes ?? 1) - 1} stop-out{(r.takes ?? 1) > 2 ? 's' : ''} then {r.outcome === 'win' ? 'a win' : r.outcome === 'loss' ? 'a loss' : 'BE'}
+                        {(r.takes ?? 1) - 1} stop-out{(r.takes ?? 1) > 2 ? 's' : ''} then {r.outcome === 'win' ? 'a win' : r.outcome === 'loss' ? 'a loss' : r.rr ? `a close at ${fmtR(r.rr)}` : 'BE'}
                         {v != null && <> = <b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(v)}</b> overall</>}
                       </span>) })()}
                   </div>
