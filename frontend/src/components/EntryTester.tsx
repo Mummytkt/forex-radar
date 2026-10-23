@@ -423,15 +423,25 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
           </div>
         )}
 
-        <Scoreboard trades={shown} />
-
+        {/* Your trades first (this is where you tick), the results summary under them */}
         {loading ? <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>
-          : shown.length === 0 ? <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No trades yet. Pick the pair, date, direction and H4 alert above, then Add trade.</p>
-          : shown.map(t => (
+          : trades.length === 0 ? (
+            <div style={{ background: 'var(--card)', border: '1px dashed var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20, color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.7 }}>
+              <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>How to log a trade</div>
+              <div><b>1.</b> In the bar above, pick the <b>pair</b>, the <b>date</b>, <b>BUY</b> or <b>SELL</b>, and the <b>H4 alert</b> it came from.</div>
+              <div><b>2.</b> Tap <b>Add trade</b>. The trade opens right here.</div>
+              <div><b>3.</b> Pick the POI tab (<b>H4 FVG</b>, <b>H4 Engulfing</b> or <b>H4 fresh key level</b>), then tap <b>Win</b>, <b>Loss</b>, <b>BE</b> or <b>No entry</b> on each entry model. On a win, tap the RR.</div>
+              <div><b>4.</b> Every tap saves. The results table fills in by itself.</div>
+            </div>
+          )
+          : shown.length === 0 ? <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 }}>No trades match these filters.</p>
+          : <div style={{ marginBottom: 20 }}>{shown.map(t => (
             <TradeCard key={t.id} trade={t} open={openId === t.id}
               onToggle={() => setOpenId(openId === t.id ? null : t.id)}
               onChange={update} onDelete={() => remove(t.id)} />
-          ))}
+          ))}</div>}
+
+        {trades.length > 0 && <Scoreboard trades={shown} />}
       </main>
     </div>
   )
