@@ -145,6 +145,7 @@ color  bt_txt_col  = input.color(color.white, "Label text", group=GBT, inline="b
 color  bt_grey_col = input.color(color.new(color.gray, 35), "Not-counted label", group=GBT, inline="btg")
 color  bt_lv_col   = input.color(color.new(color.aqua, 25), "Daily levels watched", group=GBT, inline="btg")
 color  bt_fvg_col  = input.color(color.new(color.aqua, 85), "Daily FVGs watched", group=GBT, inline="btg")
+color  bt_h4fvg_col = input.color(color.new(#FF9800, 10), "H4 FVG label", group=GBT, inline="btg")
 color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", group=GBT, inline="btt")
 color  bt_tbl_txt  = input.color(color.white, "Table text", group=GBT, inline="btt")
 color  bt_state_txt = input.color(color.white, "Status label text", group=GBT, inline="bts")
@@ -978,8 +979,9 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
         array.set(bt_scls, 0, cls)
     string c = array.get(bt_scls, 0)
     bool cls_ok = c == "" or (c == "external" ? bt_ext : bt_int)
-    string head = kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
-    string tag  = c == "" ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
+    // H4 FVG: no buy / sell, just the pair and the message (for tracking liquidity)
+    string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
+    string tag  = c == "" or kind == 10 ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
     if tf_ok and bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         if bt_latest
@@ -990,8 +992,8 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     if tf_ok and on and cls_ok and time >= bt_from
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "H4 aligned - Alert\n" + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
-             style=bull ? label.style_label_up : label.style_label_down, color=bull ? bt_buy_col : bt_sell_col,
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, (kind == 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
+             style=bull ? label.style_label_up : label.style_label_down, color=kind == 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col,
              textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small,
              tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
              + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
