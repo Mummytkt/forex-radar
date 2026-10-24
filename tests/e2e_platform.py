@@ -172,6 +172,13 @@ _tgm.send_document = _old_doc
 config.telegram_enabled, config.telegram_bot_token, config.telegram_chat_id = _old_tg
 c.delete(f"/api/entry-tests/{_et['id']}", headers=H(owner))
 check("owner deletes an entry test", c.get("/api/entry-tests", headers=H(owner)).json() == [])
+for _d in ("2020-03-02", "2020-03-03"):
+    c.post("/api/entry-tests", headers=H(owner), json={"trade_date": _d, "instrument": "XAUUSD", "direction": "buy"})
+check("delete-all needs DELETE typed", c.post("/api/entry-tests/delete-all", headers=H(owner), json={"confirm": "yes"}).status_code == 400
+      and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 2)
+check("a subscriber can't delete-all", c.post("/api/entry-tests/delete-all", headers=H(ta), json={"confirm": "DELETE"}).status_code == 403)
+_da = c.post("/api/entry-tests/delete-all", headers=H(owner), json={"confirm": "DELETE"}).json()
+check("delete-all clears every Entry Tester trade", _da.get("deleted") == 2 and c.get("/api/entry-tests", headers=H(owner)).json() == [])
 check("deleting a trade deletes its images",
       c.get(f"/api/entry-tests/images/{_up2.json()['id']}", headers=H(owner)).status_code == 404
       and conn.execute("SELECT COUNT(*) FROM entry_test_images").fetchone()[0] == 0)

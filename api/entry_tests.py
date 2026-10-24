@@ -195,6 +195,24 @@ def update_trade(trade_id: int, request: Request, body: TradeBody):
     return _row(row, imgs.get(trade_id))
 
 
+class DeleteAllBody(BaseModel):
+    confirm: str
+
+
+@router.post("/entry-tests/delete-all")
+def delete_all_trades(request: Request, body: DeleteAllBody):
+    """Start afresh: delete every Entry Tester trade of the owner, with its images.
+    The page asks the owner to type DELETE; the server checks it too."""
+    u = require_owner(request)
+    if body.confirm != "DELETE":
+        raise HTTPException(400, "Type DELETE to confirm")
+    with _db(request) as conn:
+        for img in conn.execute("SELECT id, file_name FROM entry_test_images WHERE user_id = ?", (u["id"],)).fetchall():
+            _drop_image(request, conn, img)
+        n = conn.execute("DELETE FROM entry_tests WHERE user_id = ?", (u["id"],)).rowcount
+    return {"ok": True, "deleted": n}
+
+
 @router.delete("/entry-tests/{trade_id}")
 def delete_trade(trade_id: int, request: Request):
     u = require_owner(request)

@@ -769,6 +769,14 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
     flush(t.id)
   }, [flush])
 
+  const removeAll = async () => {
+    const typed = prompt(`This deletes ALL ${trades.length} Entry Tester trades, with their ticks, notes and chart images. It can't be undone.\n\nType DELETE to confirm.`)
+    if (typed !== 'DELETE') return
+    const r = await fetch(`${API_BASE}/api/entry-tests/delete-all`, { method: 'POST', headers: hdrs(), body: JSON.stringify({ confirm: 'DELETE' }) })
+    if (r.ok) { setTrades([]); setOpenId(null); setErr('') }
+    else setErr('Could not delete the trades. Try again.')
+  }
+
   const remove = async (id: number) => {
     const r = await fetch(`${API_BASE}/api/entry-tests/${id}`, { method: 'DELETE', headers: hdrs() })
     if (r.ok) setTrades(prev => prev.filter(x => x.id !== id))
@@ -889,6 +897,17 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
           ))}</div>}
 
         {trades.length > 0 && <Scoreboard trades={shown} />}
+
+        {/* Start afresh: one button instead of deleting trades one by one */}
+        {trades.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4, marginBottom: 30 }}>
+            <button onClick={removeAll}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              <Trash2 size={13} /> Delete all {trades.length} trades (start afresh)
+            </button>
+          </div>
+        )}
       </main>
     </div>
   )
