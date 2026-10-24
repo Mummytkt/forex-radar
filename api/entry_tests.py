@@ -36,13 +36,10 @@ POIS: list[tuple[str, str]] = [
 ]
 MODELS: list[tuple[str, str]] = [
     ("direct", "Direct entry"),
-    ("h1_smc", "1H SMC confirmation"),
     ("h1_cisd", "1H CISD"),
     ("h1_engulfing", "1H Engulfing"),
     ("h2_engulfing", "2H Engulfing"),
     ("m5_cisd", "5M CISD"),
-    ("m5_smc", "5M SMC"),
-    ("m15_smc", "15M SMC"),
     ("m15_cisd", "15M CISD"),
 ]
 ENTRY_TYPES: list[tuple[str, str]] = [
@@ -51,7 +48,9 @@ ENTRY_TYPES: list[tuple[str, str]] = [
 # Keys from earlier versions still load and save (one list with no POI; then
 # 4H / 2H 3CR as entry models before they became a POI)
 _LEGACY = {"h1_smc", "h1_engulfing", "h2_engulfing", "m5_cisd", "m5_smc", "m15_smc", "m15_cisd", "h4_3cr", "h2_3cr"} | {
-    f"{m}_{p}" for m in ("h4_3cr", "h2_3cr") for p in ("fvg", "engulfing", "h4_key")}
+    f"{m}_{p}" for m in ("h4_3cr", "h2_3cr") for p in ("fvg", "engulfing", "h4_key")} | {
+    # SMC entries, taken off the list on 2026-10-24 (ticks already made stay stored)
+    f"{m}_{p}" for m in ("h1_smc", "m5_smc", "m15_smc") for p in ("fvg", "engulfing", "h4_key", "3cr")}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 
