@@ -219,6 +219,14 @@ const selStyle: React.CSSProperties = {
 }
 
 // ── Scoreboard: every entry pattern compared across the trades ───────────────
+// Muted colours for the summaries (full-strength ones were too loud next to each other)
+const SOFT = {
+  up: 'color-mix(in srgb, var(--bullish) 72%, transparent)', dn: 'color-mix(in srgb, var(--bearish) 72%, transparent)',
+  be: 'rgba(245,158,11,0.72)', ac: 'color-mix(in srgb, var(--accent) 75%, var(--text-secondary))',
+  row: 'rgba(127,127,127,0.07)', upBg: 'color-mix(in srgb, var(--bullish) 9%, transparent)',
+  dnBg: 'color-mix(in srgb, var(--bearish) 9%, transparent)', beBg: 'rgba(245,158,11,0.08)',
+}
+
 // The results table: for all trades (title "Which entry holds up best"), or one
 // month / year of them (kind "month" / "year": a summary header above its trades)
 // children: shown inside the box under the table when it's open (a month's trades)
@@ -234,6 +242,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
   const chrono = useMemo(() => [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id), [trades])
   // Folded by default so the page stays calm; the overall table remembers the choice
   const [open, setOpenState] = useState(false)
+  const [report, setReport] = useState(false)   // a month's report table, folded inside the month
   useEffect(() => { if (!kind) setOpenState(load('mbp_et_score_open', '0') === '1') }, [kind])
   useEffect(() => { if (openWith) setOpenState(true) }, [openWith])   // e.g. the month of a trade just added
   const setOpen = (v: boolean) => { setOpenState(v); if (!kind) save('mbp_et_score_open', v ? '1' : '0') }
@@ -309,16 +318,22 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         {open ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
         <Trophy size={kind === 'month' ? 14 : 16} color="var(--accent)" />
         <span style={{ fontSize: kind === 'month' ? 14 : 15, fontWeight: 800, color: 'var(--text-primary)' }}>{title || 'Which entry holds up best'}</span>
-        {note && <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b' }}>{note}</span>}
+        {note && <span style={{ fontSize: 11, fontWeight: 700, color: SOFT.be }}>{note}</span>}
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {trades.length} setup{trades.length === 1 ? '' : 's'} · <b style={{ color: 'var(--bullish)' }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: 'var(--bearish)' }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
-          {' · '}entries: <b style={{ color: 'var(--bullish)' }}>{tot.w} W</b> · <b style={{ color: 'var(--bearish)' }}>{tot.l} L</b> · <b style={{ color: '#f59e0b' }}>{tot.be} BE</b>
-          {' · '}<b style={{ color: tot.r > 0 ? 'var(--bullish)' : tot.r < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
+          {trades.length} setup{trades.length === 1 ? '' : 's'} · <b style={{ color: SOFT.up }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: SOFT.dn }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
+          {' · '}entries: <b style={{ color: SOFT.up }}>{tot.w} W</b> · <b style={{ color: SOFT.dn }}>{tot.l} L</b> · <b style={{ color: SOFT.be }}>{tot.be} BE</b>
+          {' · '}<b style={{ color: tot.r > 0 ? SOFT.up : tot.r < 0 ? SOFT.dn : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
           {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
-        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins (all POIs)</span>}
+        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins (all POIs)</span>}
       </div>
-      {open && <>
+      {open && children && (
+        <div onClick={() => setReport(!report)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 14px 8px', padding: '7px 10px',
+          borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
+          {report ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {title} report: results by entry pattern
+        </div>
+      )}
+      {open && (report || !children) && <>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Group by</span>
         <Chip on={by === 'entry'} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setBy('entry')}>Entry pattern</Chip>
@@ -357,17 +372,17 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                 be: a.be + r.be, none: a.none + r.none, totalR: a.totalR + r.totalR }), { taken: 0, trades: 0, w: 0, l: 0, be: 0, none: 0, totalR: 0 })
               const gTaken = g.w + g.l + g.be
               return [
-                <tr key={`grp-${p.key}`} style={{ background: 'var(--accent-bg)', borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ ...td, textAlign: 'left', fontWeight: 800, color: 'var(--accent)' }}>{p.label}</td>
+                <tr key={`grp-${p.key}`} style={{ background: SOFT.row, borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ ...td, textAlign: 'left', fontWeight: 800, color: SOFT.ac }}>{p.label}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{g.taken}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{g.trades}</td>
-                  <td style={{ ...td, fontWeight: 700, color: 'var(--bullish)' }}>{g.w}</td>
-                  <td style={{ ...td, fontWeight: 700, color: 'var(--bearish)' }}>{g.l}</td>
-                  <td style={{ ...td, fontWeight: 700, color: '#f59e0b' }}>{g.be}</td>
+                  <td style={{ ...td, fontWeight: 700, color: SOFT.up }}>{g.w}</td>
+                  <td style={{ ...td, fontWeight: 700, color: SOFT.dn }}>{g.l}</td>
+                  <td style={{ ...td, fontWeight: 700, color: SOFT.be }}>{g.be}</td>
                   <td style={{ ...td, color: 'var(--text-muted)' }}>{g.none}</td>
                   <td style={{ ...td, fontWeight: 800 }}>{gTaken ? `${((g.w / gTaken) * 100).toFixed(0)}%` : '–'}</td>
                   <td style={td}></td>
-                  <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? 'var(--bullish)' : g.totalR < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
+                  <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? SOFT.up : g.totalR < 0 ? SOFT.dn : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
                   <td style={td}>{gTaken ? fmtR(g.totalR / gTaken) : '–'}</td>
                   <td style={td}></td>
                 </tr>,
@@ -376,21 +391,21 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                 <td style={{ ...td, textAlign: 'left', fontWeight: 600, paddingLeft: 24 }} title={r.label}>{by === 'entry' ? r.poiLabel : r.model}</td>
                 <td style={td}>{r.taken}</td>
                 <td style={{ ...td, color: r.trades > r.taken ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.trades}</td>
-                <td style={{ ...td, color: 'var(--bullish)' }}>{r.w}</td>
-                <td style={{ ...td, color: 'var(--bearish)' }}>{r.l}</td>
-                <td style={{ ...td, color: '#f59e0b' }}>{r.be}</td>
+                <td style={{ ...td, color: SOFT.up }}>{r.w}</td>
+                <td style={{ ...td, color: SOFT.dn }}>{r.l}</td>
+                <td style={{ ...td, color: SOFT.be }}>{r.be}</td>
                 <td style={{ ...td, color: 'var(--text-muted)' }}>{r.none}</td>
                 <td style={{ ...td, fontWeight: 700 }}>{r.winRate == null ? '–' : `${r.winRate.toFixed(0)}%`}</td>
                 <td style={td}>{r.avgRR == null ? '–' : r.avgRR.toFixed(2)}{r.noRR ? <span title="Wins with no RR set" style={{ color: 'var(--text-muted)' }}> ({r.noRR}?)</span> : null}</td>
-                <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? 'var(--bullish)' : r.totalR < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
+                <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? SOFT.up : r.totalR < 0 ? SOFT.dn : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
                 <td style={td}>{r.expectancy == null ? '–' : fmtR(r.expectancy)}</td>
                 <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal' }}>
                   <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', maxWidth: 380 }}>
                     {r.seq.map((x, i) => (
                       <span key={i} title={`${x.tip}${x.r != null ? ` · ${fmtR(x.r)}` : ''}`}
                         style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 5px', borderRadius: 5,
-                          color: x.o === 'win' ? 'var(--bullish)' : x.o === 'loss' ? 'var(--bearish)' : '#f59e0b',
-                          background: x.o === 'win' ? 'var(--bullish-bg)' : x.o === 'loss' ? 'var(--bearish-bg)' : 'rgba(245,158,11,0.12)' }}>
+                          color: x.o === 'win' ? SOFT.up : x.o === 'loss' ? SOFT.dn : SOFT.be,
+                          background: x.o === 'win' ? SOFT.upBg : x.o === 'loss' ? SOFT.dnBg : SOFT.beBg }}>
                         {x.o === 'win' ? 'W' : x.o === 'loss' ? 'L' : 'BE'}{x.r != null && x.o !== 'loss' ? ` ${x.r > 0 ? '+' : ''}${+x.r.toFixed(2)}` : x.r != null && x.r !== -1 ? ` ${+x.r.toFixed(2)}` : ''}
                       </span>
                     ))}
@@ -403,8 +418,8 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
           </tbody>
         </table>
       </div>
-      {children && <div style={{ padding: '12px 10px 4px', borderTop: '1px solid var(--border)', marginTop: 6 }}>{children}</div>}
       </>}
+      {open && children && <div style={{ padding: '4px 10px 4px' }}>{children}</div>}
     </div>
   )
 }
