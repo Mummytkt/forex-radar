@@ -91,6 +91,26 @@ function heldFor(a?: string | null, b?: string | null): string {
   return `held ${days} day${days === 1 ? '' : 's'}${wk !== days ? ` (${wk} trading day${wk === 1 ? '' : 's'})` : ''}`
 }
 
+// Trades grouped by year, then month (newest first), by the trade's entry date
+function groupByPeriod(list: Trade[]) {
+  const sorted = [...list].sort((a, b) => b.trade_date.localeCompare(a.trade_date) || b.id - a.id)
+  const years: { year: string; trades: Trade[]; months: { key: string; trades: Trade[] }[] }[] = []
+  for (const t of sorted) {
+    const yk = t.trade_date.slice(0, 4), mk = t.trade_date.slice(0, 7)
+    let y = years[years.length - 1]
+    if (!y || y.year !== yk) { y = { year: yk, trades: [], months: [] }; years.push(y) }
+    y.trades.push(t)
+    let m = y.months[y.months.length - 1]
+    if (!m || m.key !== mk) { m = { key: mk, trades: [] }; y.months.push(m) }
+    m.trades.push(t)
+  }
+  return years
+}
+const monthName = (key: string) => {
+  const d = dayOf(`${key}-01`)
+  return d ? `${d.toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' })} ${d.getUTCFullYear()}` : key
+}
+
 const today = () => new Date().toISOString().slice(0, 10)
 const fmtR = (r: number) => `${r > 0 ? '+' : ''}${r.toFixed(2)}R`
 
@@ -121,13 +141,30 @@ const selStyle: React.CSSProperties = {
 }
 
 // ── Scoreboard: every entry pattern compared across the trades ───────────────
-function Scoreboard({ trades }: { trades: Trade[] }) {
+// The results table: for all trades (title "Which entry holds up best"), or one
+// month / year of them (kind "month" / "year": a summary header above its trades)
+function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: string; kind?: 'month' | 'year'; note?: string }) {
   const [poi, setPoi] = useState('')
   const [showAll, setShowAll] = useState(false)
-  // Folded by default so the page stays calm; the choice is remembered
+  // Folded by default so the page stays calm; the overall table remembers the choice
   const [open, setOpenState] = useState(false)
-  useEffect(() => { setOpenState(load('mbp_et_score_open', '0') === '1') }, [])
-  const setOpen = (v: boolean) => { setOpenState(v); save('mbp_et_score_open', v ? '1' : '0') }
+  useEffect(() => { if (!kind) setOpenState(load('mbp_et_score_open', '0') === '1') }, [kind])
+  const setOpen = (v: boolean) => { setOpenState(v); if (!kind) save('mbp_et_score_open', v ? '1' : '0') }
+  // Period totals: buys / sells, and every entry's result added up (all POIs)
+  const tot = useMemo(() => {
+    let w = 0, l = 0, be = 0, r = 0
+    for (const tr of trades)
+      for (const t of ENTRY_TYPES) {
+        const x = tr.results[t.key]
+        if (!x) continue
+        if (x.outcome === 'win') w++
+        else if (x.outcome === 'loss') l++
+        else if (x.outcome === 'be') be++
+        const v = rOf(x)
+        if (v != null) r += v
+      }
+    return { w, l, be, r, buys: trades.filter(t => t.direction === 'buy').length, sells: trades.filter(t => t.direction === 'sell').length }
+  }, [trades])
   const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
     let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0
     for (const tr of trades) {
@@ -154,15 +191,20 @@ function Scoreboard({ trades }: { trades: Trade[] }) {
   const th: React.CSSProperties = { padding: '8px 10px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.3 }
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 4px 6px', marginBottom: 20 }}>
-      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: open ? '0 14px 10px' : '0 14px 8px', flexWrap: 'wrap', cursor: 'pointer' }}>
+    <div style={{ background: kind ? 'var(--surface)' : 'var(--card)', border: `1px solid ${kind === 'year' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 12,
+      padding: kind ? '10px 4px 4px' : '14px 4px 6px', marginBottom: kind ? 10 : 20, marginTop: kind === 'year' ? 6 : 0 }}>
+      <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: open ? '0 14px 10px' : '0 14px 6px', flexWrap: 'wrap', cursor: 'pointer' }}>
         {open ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
-        <Trophy size={16} color="var(--accent)" />
-        <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Which entry holds up best</span>
+        <Trophy size={kind === 'month' ? 14 : 16} color="var(--accent)" />
+        <span style={{ fontSize: kind === 'month' ? 14 : 15, fontWeight: 800, color: 'var(--text-primary)' }}>{title || 'Which entry holds up best'}</span>
+        {note && <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b' }}>{note}</span>}
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {trades.length} setup{trades.length === 1 ? '' : 's'} · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)
+          {trades.length} setup{trades.length === 1 ? '' : 's'} · <b style={{ color: 'var(--bullish)' }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: 'var(--bearish)' }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
+          {' · '}entries: <b style={{ color: 'var(--bullish)' }}>{tot.w} W</b> · <b style={{ color: 'var(--bearish)' }}>{tot.l} L</b> · <b style={{ color: '#f59e0b' }}>{tot.be} BE</b>
+          {' · '}<b style={{ color: tot.r > 0 ? 'var(--bullish)' : tot.r < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
+          {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
-        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>Leader: {best.label}</span>}
+        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>{kind ? 'Best' : 'Leader'}: {best.label} {fmtR(best.totalR)}</span>}
       </div>
       {open && <>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -557,6 +599,8 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
 
   const shown = trades.filter(t => (!fPair || t.instrument === fPair) && (!fAlert || t.alert_type === fAlert) && (!fDir || t.direction === fDir))
   const pairs = Array.from(new Set(trades.map(t => t.instrument))).sort()
+  // The newest month you've logged is still running; earlier months are complete
+  const latestMonth = trades.reduce((m, t) => (t.trade_date.slice(0, 7) > m ? t.trade_date.slice(0, 7) : m), '')
   // The remembered pair stays selectable even if it isn't in the standard list
   const stdPairs = INSTRUMENTS.map(i => i.replace('/', ''))
   const pairOptions = Array.from(new Set([...(pair && !typing ? [pair] : []), ...stdPairs]))
@@ -644,11 +688,23 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
             </div>
           )
           : shown.length === 0 ? <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 }}>No trades match these filters.</p>
-          : <div style={{ marginBottom: 20 }}>{shown.map(t => (
-            <TradeCard key={t.id} trade={t} open={openId === t.id}
-              onToggle={() => setOpenId(openId === t.id ? null : t.id)}
-              onChange={update} onDelete={() => remove(t.id)}
-              onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />
+          : <div style={{ marginBottom: 20 }}>{groupByPeriod(shown).map(y => (
+            <div key={y.year}>
+              <Scoreboard kind="year" title={`${y.year}: year summary`} trades={y.trades}
+                note={y.year === latestMonth.slice(0, 4) ? 'year so far' : undefined} />
+              {y.months.map(m => (
+                <div key={m.key} style={{ marginLeft: 10 }}>
+                  <Scoreboard kind="month" title={monthName(m.key)} trades={m.trades}
+                    note={m.key === latestMonth ? 'month so far' : undefined} />
+                  {m.trades.map(t => (
+                    <TradeCard key={t.id} trade={t} open={openId === t.id}
+                      onToggle={() => setOpenId(openId === t.id ? null : t.id)}
+                      onChange={update} onDelete={() => remove(t.id)}
+                      onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />
+                  ))}
+                </div>
+              ))}
+            </div>
           ))}</div>}
 
         {trades.length > 0 && <Scoreboard trades={shown} />}
