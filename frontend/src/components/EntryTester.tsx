@@ -146,6 +146,7 @@ const selStyle: React.CSSProperties = {
 function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: string; kind?: 'month' | 'year'; note?: string }) {
   const [poi, setPoi] = useState('')
   const [showAll, setShowAll] = useState(false)
+  const chrono = useMemo(() => [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id), [trades])
   // Folded by default so the page stays calm; the overall table remembers the choice
   const [open, setOpenState] = useState(false)
   useEffect(() => { if (!kind) setOpenState(load('mbp_et_score_open', '0') === '1') }, [kind])
@@ -167,6 +168,14 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
   }, [trades])
   const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
     let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0
+    // Each trade's result for this entry, oldest first: the run of wins and losses
+    const seq: { o: Outcome; r: number | null; tip: string }[] = []
+    for (const tr of chrono) {
+      const x = tr.results[t.key]
+      if (x && x.outcome !== 'none')
+        seq.push({ o: x.outcome, r: rOf(x), tip: `${fmtDay(tr.trade_date)} · ${tr.instrument} ${tr.direction.toUpperCase()}` +
+          `${(x.takes ?? 1) > 1 ? ` · ${x.takes} trades` : ''}` })
+    }
     for (const tr of trades) {
       const r = tr.results[t.key]
       if (!r) continue
@@ -179,11 +188,11 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
       if (v != null) totalR += v
     }
     const taken = w + l + be
-    return { ...t, w, l, be, none, taken, trades: trades_, noRR, totalR,
+    return { ...t, w, l, be, none, taken, trades: trades_, noRR, totalR, seq,
       winRate: taken ? (w / taken) * 100 : null,
       avgRR: rrN ? rrSum / rrN : null,
       expectancy: taken ? totalR / taken : null }
-  }).sort((a, b) => (b.taken ? 1 : 0) - (a.taken ? 1 : 0) || b.totalR - a.totalR), [trades, poi])
+  }).sort((a, b) => (b.taken ? 1 : 0) - (a.taken ? 1 : 0) || b.totalR - a.totalR), [trades, poi, chrono])
 
   const tested = all.filter(r => r.taken || r.none)
   const rows = showAll || tested.length === 0 ? all : tested
@@ -217,7 +226,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
         )}
       </div>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <th style={{ ...th, textAlign: 'left' }}>Entry</th>
@@ -225,6 +234,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
               <th style={th} title="Trades placed, re-entries included">Trades</th><th style={th}>Win</th><th style={th}>Loss</th><th style={th}>BE</th>
               <th style={th}>No entry</th><th style={th}>Win %</th><th style={th}>Avg RR (wins)</th>
               <th style={th}>Total R</th><th style={th}>R / trade</th>
+              <th style={{ ...th, textAlign: 'left' }} title="Each setup's result for this entry, oldest first. Hover a badge for the date and pair.">Results (oldest → newest)</th>
             </tr>
           </thead>
           <tbody>
@@ -248,6 +258,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
                   <td style={td}></td>
                   <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? 'var(--bullish)' : g.totalR < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
                   <td style={td}>{gTaken ? fmtR(g.totalR / gTaken) : '–'}</td>
+                  <td style={td}></td>
                 </tr>,
                 ...grp.map(r => (
               <tr key={r.key} style={{ borderBottom: '1px solid var(--border)', opacity: r.taken || r.none ? 1 : 0.45 }}>
@@ -262,6 +273,18 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
                 <td style={td}>{r.avgRR == null ? '–' : r.avgRR.toFixed(2)}{r.noRR ? <span title="Wins with no RR set" style={{ color: 'var(--text-muted)' }}> ({r.noRR}?)</span> : null}</td>
                 <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? 'var(--bullish)' : r.totalR < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
                 <td style={td}>{r.expectancy == null ? '–' : fmtR(r.expectancy)}</td>
+                <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal' }}>
+                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', maxWidth: 380 }}>
+                    {r.seq.map((x, i) => (
+                      <span key={i} title={`${x.tip}${x.r != null ? ` · ${fmtR(x.r)}` : ''}`}
+                        style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 5px', borderRadius: 5,
+                          color: x.o === 'win' ? 'var(--bullish)' : x.o === 'loss' ? 'var(--bearish)' : '#f59e0b',
+                          background: x.o === 'win' ? 'var(--bullish-bg)' : x.o === 'loss' ? 'var(--bearish-bg)' : 'rgba(245,158,11,0.12)' }}>
+                        {x.o === 'win' ? 'W' : x.o === 'loss' ? 'L' : 'BE'}{x.r != null && x.o !== 'loss' ? ` ${x.r > 0 ? '+' : ''}${+x.r.toFixed(2)}` : x.r != null && x.r !== -1 ? ` ${+x.r.toFixed(2)}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                </td>
               </tr>
                 )),
               ]
