@@ -228,9 +228,30 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
+            {/* Grouped by POI (each POI's entries together, best first), with that POI's totals */}
+            {POIS.filter(p => !poi || p.key === poi).map(p => {
+              const grp = rows.filter(r => r.poi === p.key)
+              if (!grp.length) return null
+              const g = grp.reduce((a, r) => ({ taken: a.taken + r.taken, trades: a.trades + r.trades, w: a.w + r.w, l: a.l + r.l,
+                be: a.be + r.be, none: a.none + r.none, totalR: a.totalR + r.totalR }), { taken: 0, trades: 0, w: 0, l: 0, be: 0, none: 0, totalR: 0 })
+              const gTaken = g.w + g.l + g.be
+              return [
+                <tr key={`poi-${p.key}`} style={{ background: 'var(--accent-bg)', borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ ...td, textAlign: 'left', fontWeight: 800, color: 'var(--accent)' }}>{p.label}</td>
+                  <td style={{ ...td, fontWeight: 700 }}>{g.taken}</td>
+                  <td style={{ ...td, fontWeight: 700 }}>{g.trades}</td>
+                  <td style={{ ...td, fontWeight: 700, color: 'var(--bullish)' }}>{g.w}</td>
+                  <td style={{ ...td, fontWeight: 700, color: 'var(--bearish)' }}>{g.l}</td>
+                  <td style={{ ...td, fontWeight: 700, color: '#f59e0b' }}>{g.be}</td>
+                  <td style={{ ...td, color: 'var(--text-muted)' }}>{g.none}</td>
+                  <td style={{ ...td, fontWeight: 800 }}>{gTaken ? `${((g.w / gTaken) * 100).toFixed(0)}%` : '–'}</td>
+                  <td style={td}></td>
+                  <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? 'var(--bullish)' : g.totalR < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
+                  <td style={td}>{gTaken ? fmtR(g.totalR / gTaken) : '–'}</td>
+                </tr>,
+                ...grp.map(r => (
               <tr key={r.key} style={{ borderBottom: '1px solid var(--border)', opacity: r.taken || r.none ? 1 : 0.45 }}>
-                <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{r.label}</td>
+                <td style={{ ...td, textAlign: 'left', fontWeight: 600, paddingLeft: 24 }} title={r.label}>{r.model}</td>
                 <td style={td}>{r.taken}</td>
                 <td style={{ ...td, color: r.trades > r.taken ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.trades}</td>
                 <td style={{ ...td, color: 'var(--bullish)' }}>{r.w}</td>
@@ -242,7 +263,9 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
                 <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? 'var(--bullish)' : r.totalR < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
                 <td style={td}>{r.expectancy == null ? '–' : fmtR(r.expectancy)}</td>
               </tr>
-            ))}
+                )),
+              ]
+            })}
           </tbody>
         </table>
       </div>
