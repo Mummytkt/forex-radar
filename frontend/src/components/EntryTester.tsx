@@ -221,7 +221,10 @@ const selStyle: React.CSSProperties = {
 // ── Scoreboard: every entry pattern compared across the trades ───────────────
 // The results table: for all trades (title "Which entry holds up best"), or one
 // month / year of them (kind "month" / "year": a summary header above its trades)
-function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: string; kind?: 'month' | 'year'; note?: string }) {
+// children: shown inside the box under the table when it's open (a month's trades)
+function Scoreboard({ trades, title, kind, note, children, openWith }: {
+  trades: Trade[]; title?: string; kind?: 'month' | 'year'; note?: string; children?: React.ReactNode; openWith?: boolean
+}) {
   const [poi, setPoi] = useState('')
   const [showAll, setShowAll] = useState(false)
   // Grouped by entry pattern (its POIs under it) by default, or by POI
@@ -232,6 +235,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
   // Folded by default so the page stays calm; the overall table remembers the choice
   const [open, setOpenState] = useState(false)
   useEffect(() => { if (!kind) setOpenState(load('mbp_et_score_open', '0') === '1') }, [kind])
+  useEffect(() => { if (openWith) setOpenState(true) }, [openWith])   // e.g. the month of a trade just added
   const setOpen = (v: boolean) => { setOpenState(v); if (!kind) save('mbp_et_score_open', v ? '1' : '0') }
   // Period totals: buys / sells, and every entry's result added up (all POIs)
   const tot = useMemo(() => {
@@ -399,6 +403,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
           </tbody>
         </table>
       </div>
+      {children && <div style={{ padding: '12px 10px 4px', borderTop: '1px solid var(--border)', marginTop: 6 }}>{children}</div>}
       </>}
     </div>
   )
@@ -854,14 +859,17 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
                 note={y.year === latestMonth.slice(0, 4) ? 'year so far' : undefined} />
               {y.months.map(m => (
                 <div key={m.key} style={{ marginLeft: 10 }}>
+                  {/* A month is a dropdown: its report, then its trades inside it */}
                   <Scoreboard kind="month" title={monthName(m.key)} trades={m.trades}
-                    note={m.key === latestMonth ? 'month so far' : undefined} />
-                  {m.trades.map(t => (
-                    <TradeCard key={t.id} trade={t} open={openId === t.id}
-                      onToggle={() => setOpenId(openId === t.id ? null : t.id)}
-                      onChange={update} onDelete={() => remove(t.id)}
-                      onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />
-                  ))}
+                    note={m.key === latestMonth ? 'month so far' : undefined}
+                    openWith={m.trades.some(t => t.id === openId)}>
+                    {m.trades.map(t => (
+                      <TradeCard key={t.id} trade={t} open={openId === t.id}
+                        onToggle={() => setOpenId(openId === t.id ? null : t.id)}
+                        onChange={update} onDelete={() => remove(t.id)}
+                        onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />
+                    ))}
+                  </Scoreboard>
                 </div>
               ))}
             </div>
