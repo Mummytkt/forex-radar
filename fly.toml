@@ -21,10 +21,13 @@ primary_region = 'ams'
   min_machines_running = 1
   processes = ['app']
 
+  # Count requests in progress, not open connections: browsers and TradingView keep
+  # connections open, and ~50 webhooks arrive together at every 4H close. With a
+  # 25-connection cap they queued at Fly's proxy and TradingView timed out (2026-10-24).
   [http_service.concurrency]
-    type = "connections"
-    hard_limit = 25
-    soft_limit = 20
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
 
 [[vm]]
   memory = '256mb'
