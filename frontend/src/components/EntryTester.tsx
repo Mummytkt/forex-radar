@@ -200,7 +200,24 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
 
   const tested = all.filter(r => r.taken || r.none)
   const rows = showAll || tested.length === 0 ? all : tested
-  const best = all.find(r => r.taken > 0)
+  // Best entry pattern = its results on ALL POIs added up (not one POI's result)
+  const best = useMemo(() => {
+    let top: { label: string; r: number; w: number; n: number } | null = null
+    for (const m of MODELS) {
+      let r = 0, w = 0, n = 0
+      for (const tr of trades)
+        for (const p of POIS) {
+          const x = tr.results[`${m.key}_${p.key}`]
+          if (!x || x.outcome === 'none') continue
+          n++
+          if (x.outcome === 'win') w++
+          const v = rOf(x)
+          if (v != null) r += v
+        }
+      if (n && (!top || r > top.r)) top = { label: m.label, r, w, n }
+    }
+    return top
+  }, [trades])
   const th: React.CSSProperties = { padding: '8px 10px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.3 }
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   return (
@@ -217,7 +234,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
           {' · '}<b style={{ color: tot.r > 0 ? 'var(--bullish)' : tot.r < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
           {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
-        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>{kind ? 'Best' : 'Leader'}: {best.label} {fmtR(best.totalR)}</span>}
+        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--bullish)' }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins (all POIs)</span>}
       </div>
       {open && <>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
