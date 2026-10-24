@@ -29,18 +29,16 @@ router = APIRouter()
 # The entry patterns being compared (key → label). Keys are stored, so never rename one.
 # Each entry model is tested on each POI: key = "<model>_<poi>", e.g. "h1_smc_fvg".
 POIS: list[tuple[str, str]] = [
-    ("fvg", "H4 FVG"),
     ("engulfing", "H4 Engulfing"),
     ("h4_key", "H4 fresh key level"),
-    ("3cr", "4H / 2H 3CR"),
 ]
 MODELS: list[tuple[str, str]] = [
     ("direct", "Direct entry"),
     ("h1_cisd", "1H CISD"),
+    ("m15_cisd", "15M CISD"),
+    ("m5_cisd", "5M CISD"),
     ("h1_engulfing", "1H Engulfing"),
     ("h2_engulfing", "2H Engulfing"),
-    ("m5_cisd", "5M CISD"),
-    ("m15_cisd", "15M CISD"),
 ]
 ENTRY_TYPES: list[tuple[str, str]] = [
     (f"{m}_{p}", f"{ml} on {pl}") for p, pl in POIS for m, ml in MODELS
@@ -51,6 +49,9 @@ _LEGACY = {"h1_smc", "h1_engulfing", "h2_engulfing", "m5_cisd", "m5_smc", "m15_s
     f"{m}_{p}" for m in ("h4_3cr", "h2_3cr") for p in ("fvg", "engulfing", "h4_key")} | {
     # SMC entries, taken off the list on 2026-10-24 (ticks already made stay stored)
     f"{m}_{p}" for m in ("h1_smc", "m5_smc", "m15_smc") for p in ("fvg", "engulfing", "h4_key", "3cr")}
+# H4 FVG and 4H / 2H 3CR POIs, taken off on 2026-10-24 (results already ticked stay stored)
+_LEGACY |= {f"{m}_{p}" for m in ("direct", "h1_cisd", "m15_cisd", "m5_cisd", "h1_engulfing", "h2_engulfing",
+                                 "h1_smc", "m5_smc", "m15_smc", "h4_3cr", "h2_3cr") for p in ("fvg", "3cr")}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 

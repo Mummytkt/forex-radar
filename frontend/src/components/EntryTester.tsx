@@ -24,18 +24,16 @@ interface Trade {
 
 // Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
 const POIS: { key: string; label: string }[] = [
-  { key: 'fvg', label: 'H4 FVG' },
   { key: 'engulfing', label: 'H4 Engulfing' },
   { key: 'h4_key', label: 'H4 fresh key level' },
-  { key: '3cr', label: '4H / 2H 3CR' },
 ]
 const MODELS: { key: string; label: string }[] = [
   { key: 'direct', label: 'Direct entry' },
   { key: 'h1_cisd', label: '1H CISD' },
+  { key: 'm15_cisd', label: '15M CISD' },
+  { key: 'm5_cisd', label: '5M CISD' },
   { key: 'h1_engulfing', label: '1H Engulfing' },
   { key: 'h2_engulfing', label: '2H Engulfing' },
-  { key: 'm5_cisd', label: '5M CISD' },
-  { key: 'm15_cisd', label: '15M CISD' },
 ]
 const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string }[] = POIS.flatMap(p =>
   MODELS.map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label })))

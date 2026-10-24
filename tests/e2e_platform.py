@@ -110,27 +110,27 @@ check("a subscriber can't touch the owner's entry test",
 import io as _io
 from PIL import Image as _PImage
 _png = _io.BytesIO(); _PImage.new("RGB", (40, 30), (200, 20, 20)).save(_png, "PNG")
-_up = c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(owner), files={"file": ("chart.png", _png.getvalue(), "image/png")})
-check("owner adds a chart image for one POI of a trade", _up.status_code == 200 and _up.json().get("slot") == "fvg")
+_up = c.post(f"/api/entry-tests/{_et['id']}/images/h4_key", headers=H(owner), files={"file": ("chart.png", _png.getvalue(), "image/png")})
+check("owner adds a chart image for one POI of a trade", _up.status_code == 200 and _up.json().get("slot") == "h4_key")
 _img_id = _up.json().get("id")
-check("the trade lists which POI has an image", c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": [_img_id]})
+check("the trade lists which POI has an image", c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"h4_key": [_img_id]})
 _gi = c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner))
 check("the image comes back as a JPEG", _gi.status_code == 200 and _gi.content[:2] == b"\xff\xd8")
 check("a subscriber can't see or add Entry Tester images",
       c.get(f"/api/entry-tests/images/{_img_id}", headers=H(ta)).status_code == 403
-      and c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(ta), files={"file": ("x.png", _png.getvalue(), "image/png")}).status_code == 403)
+      and c.post(f"/api/entry-tests/{_et['id']}/images/h4_key", headers=H(ta), files={"file": ("x.png", _png.getvalue(), "image/png")}).status_code == 403)
 check("a non-image upload is refused", c.post(f"/api/entry-tests/{_et['id']}/images/engulfing", headers=H(owner),
       files={"file": ("x.txt", b"hello", "text/plain")}).status_code == 400)
-_up2 = c.post(f"/api/entry-tests/{_et['id']}/images/fvg", headers=H(owner), files={"file": ("c2.png", _png.getvalue(), "image/png")})
-_ue = c.post(f"/api/entry-tests/{_et['id']}/images/h1_cisd_fvg", headers=H(owner), files={"file": ("e.png", _png.getvalue(), "image/png")})
+_up2 = c.post(f"/api/entry-tests/{_et['id']}/images/h4_key", headers=H(owner), files={"file": ("c2.png", _png.getvalue(), "image/png")})
+_ue = c.post(f"/api/entry-tests/{_et['id']}/images/h1_cisd_h4_key", headers=H(owner), files={"file": ("e.png", _png.getvalue(), "image/png")})
 check("several images per POI, and images for one entry under it",
-      c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": [_img_id, _up2.json()["id"]], "h1_cisd_fvg": [_ue.json()["id"]]})
+      c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"h4_key": [_img_id, _up2.json()["id"]], "h1_cisd_h4_key": [_ue.json()["id"]]})
 check("an image slot that isn't a POI or entry is refused", c.post(f"/api/entry-tests/{_et['id']}/images/bogus", headers=H(owner),
       files={"file": ("e.png", _png.getvalue(), "image/png")}).status_code == 400)
 c.delete(f"/api/entry-tests/images/{_img_id}", headers=H(owner))
 check("one image can be removed, the others stay",
       c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner)).status_code == 404
-      and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"fvg": [_up2.json()["id"]], "h1_cisd_fvg": [_ue.json()["id"]]})
+      and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"h4_key": [_up2.json()["id"]], "h1_cisd_h4_key": [_ue.json()["id"]]})
 _ed = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
       "direction": "sell", "alert_type": "H4 back in line", "results": {"direct_fvg": {"outcome": "loss"}}}).json()
 _tk = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
@@ -165,7 +165,7 @@ from alerts.image_backup import run_image_backup
 _ib = _aio.run(run_image_backup(config.db_path, config))
 check("the weekly image backup sends the new image in a zip with a manifest",
       _ib["images"] == 2 and len(_sent_docs) == 1 and "manifest.json" in _sent_docs[0][1]
-      and any("XAUUSD_H4-FVG" in n for n in _sent_docs[0][1]))
+      and any("XAUUSD_H4-fresh-key-level" in n for n in _sent_docs[0][1]))
 _ib2 = _aio.run(run_image_backup(config.db_path, config))
 check("an image is only sent once", _ib2["images"] == 0 and len(_sent_docs) == 1)
 _tgm.send_document = _old_doc
