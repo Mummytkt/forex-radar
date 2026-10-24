@@ -92,6 +92,83 @@ function heldFor(a?: string | null, b?: string | null): string {
   return `held ${days} day${days === 1 ? '' : 's'}${wk !== days ? ` (${wk} trading day${wk === 1 ? '' : 's'})` : ''}`
 }
 
+// ── Typed dates ───────────────────────────────────────────────────────────────
+// Every date box takes typing: 02/07/2020, 2020-02-07, 7 Feb 2020, Feb 7 2020,
+// with an optional time (02/07/2020 14:00). Slash dates follow the order this
+// browser shows dates in (month first or day first). Stored as YYYY-MM-DD or
+// YYYY-MM-DDTHH:MM; the 📅 button still opens the calendar.
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+const dayFirst = (() => {
+  try {
+    const parts = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(2020, 1, 7))
+    return parts.findIndex(x => x.type === 'day') < parts.findIndex(x => x.type === 'month')
+  } catch { return false }
+})()
+const pad2 = (n: number) => String(n).padStart(2, '0')
+function parseTyped(raw: string, withTime: boolean): string | null {
+  const t = raw.trim().toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ')
+  if (!t) return ''
+  let y = 0, m = 0, d = 0, hh = 0, mi = 0
+  const tm = /(\d{1,2}):(\d{2})\s*(am|pm)?/.exec(t)
+  if (tm) {
+    hh = +tm[1]; mi = +tm[2]
+    if (tm[3] === 'pm' && hh < 12) hh += 12
+    if (tm[3] === 'am' && hh === 12) hh = 0
+  }
+  const datePart = tm ? t.replace(tm[0], ' ').trim() : t
+  let mt
+  if ((mt = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(datePart))) { y = +mt[1]; m = +mt[2]; d = +mt[3] }
+  else if ((mt = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/.exec(datePart))) {
+    const a = +mt[1], b = +mt[2]
+    y = +mt[3] < 100 ? 2000 + +mt[3] : +mt[3]
+    if (a > 12) { d = a; m = b } else if (b > 12) { m = a; d = b } else if (dayFirst) { d = a; m = b } else { m = a; d = b }
+  } else if ((mt = /^(\d{1,2})\s*([a-z]{3,})\s*(\d{2,4})$/.exec(datePart))) {
+    d = +mt[1]; m = MONTHS.indexOf(mt[2].slice(0, 3)) + 1; y = +mt[3] < 100 ? 2000 + +mt[3] : +mt[3]
+  } else if ((mt = /^([a-z]{3,})\s*(\d{1,2})\s+(\d{2,4})$/.exec(datePart))) {
+    m = MONTHS.indexOf(mt[1].slice(0, 3)) + 1; d = +mt[2]; y = +mt[3] < 100 ? 2000 + +mt[3] : +mt[3]
+  } else return null
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  if (!m || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d || y < 1990 || y > 2100 || hh > 23 || mi > 59) return null
+  const date = `${y}-${pad2(m)}-${pad2(d)}`
+  return withTime && tm ? `${date}T${pad2(hh)}:${pad2(mi)}` : date
+}
+function showTyped(v: string | null | undefined): string {
+  if (!v) return ''
+  const [y, m, d] = [v.slice(0, 4), v.slice(5, 7), v.slice(8, 10)]
+  return (dayFirst ? `${d}/${m}/${y}` : `${m}/${d}/${y}`) + (v.length >= 16 ? ` ${v.slice(11, 16)}` : '')
+}
+function DateText({ value, onChange, withTime, min, placeholder, width }: {
+  value: string | null | undefined; onChange: (v: string) => void; withTime?: boolean; min?: string; placeholder?: string; width?: number
+}) {
+  const [text, setText] = useState(showTyped(value))
+  const [bad, setBad] = useState(false)
+  const pick = useRef<HTMLInputElement>(null)
+  useEffect(() => { setText(showTyped(value)); setBad(false) }, [value])
+  const commit = () => {
+    const v = parseTyped(text, !!withTime)
+    if (v === null || (v && min && v.slice(0, 10) < min.slice(0, 10))) { setBad(true); return }
+    setBad(false)
+    if (v !== (value || '')) onChange(v)
+    else setText(showTyped(value))
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <input value={text} placeholder={placeholder || (withTime ? (dayFirst ? 'dd/mm/yyyy hh:mm' : 'mm/dd/yyyy hh:mm') : (dayFirst ? 'dd/mm/yyyy' : 'mm/dd/yyyy'))}
+        title={'Type a date: 02/07/2020, 2020-02-07 or 7 Feb 2020' + (withTime ? ', with a time like 14:00' : '')}
+        onChange={e => { setText(e.target.value); setBad(false) }} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        style={{ ...selStyle, width: width ?? (withTime ? 150 : 112), padding: withTime ? '4px 8px' : selStyle.padding,
+          borderColor: bad ? 'var(--bearish)' : undefined }} />
+      <button type="button" title="Pick from a calendar" onClick={() => { try { pick.current?.showPicker() } catch { pick.current?.click() } }}
+        style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, padding: 2, color: 'var(--text-muted)' }}>📅</button>
+      <input ref={pick} type={withTime ? 'datetime-local' : 'date'} value={value || ''} min={min} tabIndex={-1} aria-hidden
+        onChange={e => onChange(e.target.value)}
+        style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }} />
+      {bad && <span style={{ fontSize: 11, color: 'var(--bearish)' }}>not a date{min ? ' (or before the entry)' : ''}</span>}
+    </span>
+  )
+}
+
 // Trades grouped by year, then month (newest first), by the trade's entry date
 function groupByPeriod(list: Trade[]) {
   const sorted = [...list].sort((a, b) => b.trade_date.localeCompare(a.trade_date) || b.id - a.id)
@@ -549,9 +626,8 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
                         {v != null && <> = <b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(v)}</b> overall</>}
                       </span>) })()}
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 2px 0 12px' }} title="When this entry's trade was closed">Exit</span>
-                    <input type="datetime-local" value={r.exit || ''} min={`${trade.trade_date}T00:00`}
-                      onChange={e => { const { exit: _x, ...rest } = r; setResult(t.key, e.target.value ? { ...rest, exit: e.target.value } : rest) }}
-                      style={{ ...selStyle, padding: '4px 8px' }} />
+                    <DateText withTime value={r.exit} min={trade.trade_date}
+                      onChange={v => { const { exit: _x, ...rest } = r; setResult(t.key, v ? { ...rest, exit: v } : rest) }} />
                     {r.exit && (
                       <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                         <b>{weekday(r.exit.slice(0, 10))}</b> {r.exit.slice(11, 16)} · <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{heldFor(trade.trade_date, r.exit.slice(0, 10))}</span>
@@ -571,14 +647,12 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
               style={{ ...selStyle, width: 110 }} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
               Entry
-              <input type="date" value={trade.trade_date} title="Entry date"
-                onChange={e => e.target.value && onChange({ ...trade, trade_date: e.target.value })} style={selStyle} />
+              <DateText value={trade.trade_date} onChange={v => v && onChange({ ...trade, trade_date: v })} />
               <b style={{ color: 'var(--text-secondary)', minWidth: 28 }}>{weekday(trade.trade_date)}</b>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
               Exit
-              <input type="date" value={trade.exit_date || ''} min={trade.trade_date} title="Exit date (when the trade closed)"
-                onChange={e => onChange({ ...trade, exit_date: e.target.value || null })} style={selStyle} />
+              <DateText value={trade.exit_date} min={trade.trade_date} onChange={v => onChange({ ...trade, exit_date: v || null })} />
               {trade.exit_date && <b style={{ color: 'var(--text-secondary)', minWidth: 28 }}>{weekday(trade.exit_date)}</b>}
               {trade.exit_date && <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{heldFor(trade.trade_date, trade.exit_date)}</span>}
             </label>
@@ -729,7 +803,8 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
               ✕ Remove {pair}
             </button>
           )}
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={selStyle} />
+          <DateText value={date} onChange={v => v && setDate(v)} />
+          {date && <b style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{weekday(date)}</b>}
           <Chip on={dir === 'buy'} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => setDir('buy')}>BUY</Chip>
           <Chip on={dir === 'sell'} color="var(--bearish)" bg="var(--bearish-bg)" onClick={() => setDir('sell')}>SELL</Chip>
           <select value={alertType} onChange={e => setAlertType(e.target.value)} style={selStyle}>
