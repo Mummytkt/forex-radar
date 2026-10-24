@@ -36,8 +36,8 @@ const MODELS: { key: string; label: string }[] = [
   { key: 'm5_cisd', label: '5M CISD' },
   { key: 'm15_cisd', label: '15M CISD' },
 ]
-const ENTRY_TYPES: { key: string; label: string; model: string; poi: string }[] = POIS.flatMap(p =>
-  MODELS.map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, poi: p.key })))
+const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string }[] = POIS.flatMap(p =>
+  MODELS.map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label })))
 // The H4 alert each trade came from (same names as Alert Filters)
 const ALERT_TYPES = [
   'Origin', 'Daily reaction + H4 breakout', 'H4 back in line', 'H4 breakout in line',
@@ -146,6 +146,10 @@ const selStyle: React.CSSProperties = {
 function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: string; kind?: 'month' | 'year'; note?: string }) {
   const [poi, setPoi] = useState('')
   const [showAll, setShowAll] = useState(false)
+  // Grouped by entry pattern (its POIs under it) by default, or by POI
+  const [by, setByState] = useState<'entry' | 'poi'>('entry')
+  useEffect(() => { setByState(load('mbp_et_group', 'entry') === 'poi' ? 'poi' : 'entry') }, [])
+  const setBy = (v: 'entry' | 'poi') => { setByState(v); save('mbp_et_group', v) }
   const chrono = useMemo(() => [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id), [trades])
   // Folded by default so the page stays calm; the overall table remembers the choice
   const [open, setOpenState] = useState(false)
@@ -217,6 +221,10 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
       </div>
       {open && <>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Group by</span>
+        <Chip on={by === 'entry'} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setBy('entry')}>Entry pattern</Chip>
+        <Chip on={by === 'poi'} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setBy('poi')}>POI</Chip>
+        <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px' }} />
         <Chip on={!poi} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi('')}>All POIs</Chip>
         {POIS.map(p => <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>{p.label}</Chip>)}
         {tested.length > 0 && tested.length < all.length && (
@@ -239,14 +247,18 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
           </thead>
           <tbody>
             {/* Grouped by POI (each POI's entries together, best first), with that POI's totals */}
-            {POIS.filter(p => !poi || p.key === poi).map(p => {
-              const grp = rows.filter(r => r.poi === p.key)
+            {(by === 'entry'
+              ? MODELS.map(m => ({ key: m.key, label: m.label, grp: rows.filter(r => r.mkey === m.key) }))
+                  .sort((a, b) => b.grp.reduce((n, r) => n + r.totalR, 0) - a.grp.reduce((n, r) => n + r.totalR, 0))
+              : POIS.filter(x => !poi || x.key === poi).map(x => ({ key: x.key, label: x.label, grp: rows.filter(r => r.poi === x.key) }))
+            ).map(p => {
+              const grp = p.grp
               if (!grp.length) return null
               const g = grp.reduce((a, r) => ({ taken: a.taken + r.taken, trades: a.trades + r.trades, w: a.w + r.w, l: a.l + r.l,
                 be: a.be + r.be, none: a.none + r.none, totalR: a.totalR + r.totalR }), { taken: 0, trades: 0, w: 0, l: 0, be: 0, none: 0, totalR: 0 })
               const gTaken = g.w + g.l + g.be
               return [
-                <tr key={`poi-${p.key}`} style={{ background: 'var(--accent-bg)', borderBottom: '1px solid var(--border)' }}>
+                <tr key={`grp-${p.key}`} style={{ background: 'var(--accent-bg)', borderBottom: '1px solid var(--border)' }}>
                   <td style={{ ...td, textAlign: 'left', fontWeight: 800, color: 'var(--accent)' }}>{p.label}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{g.taken}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{g.trades}</td>
@@ -262,7 +274,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
                 </tr>,
                 ...grp.map(r => (
               <tr key={r.key} style={{ borderBottom: '1px solid var(--border)', opacity: r.taken || r.none ? 1 : 0.45 }}>
-                <td style={{ ...td, textAlign: 'left', fontWeight: 600, paddingLeft: 24 }} title={r.label}>{r.model}</td>
+                <td style={{ ...td, textAlign: 'left', fontWeight: 600, paddingLeft: 24 }} title={r.label}>{by === 'entry' ? r.poiLabel : r.model}</td>
                 <td style={td}>{r.taken}</td>
                 <td style={{ ...td, color: r.trades > r.taken ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.trades}</td>
                 <td style={{ ...td, color: 'var(--bullish)' }}>{r.w}</td>
