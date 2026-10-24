@@ -70,6 +70,7 @@ class EntryResult(BaseModel):
     outcome: str
     rr: Optional[float] = None
     takes: Optional[int] = None   # trades taken on this entry (re-entries after a stop-out); 1 when unset
+    exit: Optional[str] = None    # when this entry's trade was closed: "YYYY-MM-DDTHH:MM" (each entry runs differently)
 
 
 class TradeBody(BaseModel):
@@ -101,6 +102,9 @@ def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str, Optional[str]
         res[k] = {"outcome": r.outcome, "rr": rr}
         if r.outcome != "none" and r.takes is not None and 1 < r.takes <= 50:
             res[k]["takes"] = int(r.takes)
+        ex = (r.exit or "").strip()[:16]
+        if r.outcome != "none" and len(ex) >= 10 and ex[4] == "-" and ex[7] == "-":
+            res[k]["exit"] = ex
     exit_date = (body.exit_date or "").strip()[:10] or None
     if exit_date and exit_date < body.trade_date.strip()[:10]:
         raise HTTPException(400, "the exit date can't be before the entry date")

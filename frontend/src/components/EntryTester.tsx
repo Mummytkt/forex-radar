@@ -8,7 +8,8 @@ import { API_BASE } from '@/lib/api'
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Outcome = 'win' | 'loss' | 'be' | 'none'
 // takes: trades taken on this entry (a stop-out then a re-entry = 2); unset = 1
-interface EntryResult { outcome: Outcome; rr: number | null; takes?: number }
+// exit: when this entry's trade closed ("YYYY-MM-DDTHH:MM"); each entry model can close at a different time
+interface EntryResult { outcome: Outcome; rr: number | null; takes?: number; exit?: string }
 interface Trade {
   id: number
   trade_date: string
@@ -178,7 +179,7 @@ function Scoreboard({ trades, title, kind, note }: { trades: Trade[]; title?: st
       const x = tr.results[t.key]
       if (x && x.outcome !== 'none')
         seq.push({ o: x.outcome, r: rOf(x), tip: `${fmtDay(tr.trade_date)} · ${tr.instrument} ${tr.direction.toUpperCase()}` +
-          `${(x.takes ?? 1) > 1 ? ` · ${x.takes} trades` : ''}` })
+          `${(x.takes ?? 1) > 1 ? ` · ${x.takes} trades` : ''}${x.exit ? ` · closed ${fmtDay(x.exit.slice(0, 10))} ${x.exit.slice(11, 16)} (${heldFor(tr.trade_date, x.exit.slice(0, 10))})` : ''}` })
     }
     for (const tr of trades) {
       const r = tr.results[t.key]
@@ -448,7 +449,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   const tapOutcome = (key: string, o: Outcome) => {
     const cur = trade.results[key]
     if (cur?.outcome === o) setResult(key, null)   // tap again to clear
-    else setResult(key, { outcome: o, rr: (o === 'win' && cur?.outcome === 'win') || (o === 'be' && cur?.outcome === 'be') ? cur?.rr ?? null : null, ...(o !== 'none' && cur?.takes ? { takes: cur.takes } : {}) })
+    else setResult(key, { outcome: o, rr: (o === 'win' && cur?.outcome === 'win') || (o === 'be' && cur?.outcome === 'be') ? cur?.rr ?? null : null, ...(o !== 'none' && cur?.takes ? { takes: cur.takes } : {}), ...(o !== 'none' && cur?.exit ? { exit: cur.exit } : {}) })
   }
 
   return (
@@ -547,6 +548,15 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
                         {(r.takes ?? 1) - 1} stop-out{(r.takes ?? 1) > 2 ? 's' : ''} then {r.outcome === 'win' ? 'a win' : r.outcome === 'loss' ? 'a loss' : r.rr ? `a close at ${fmtR(r.rr)}` : 'BE'}
                         {v != null && <> = <b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(v)}</b> overall</>}
                       </span>) })()}
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 2px 0 12px' }} title="When this entry's trade was closed">Exit</span>
+                    <input type="datetime-local" value={r.exit || ''} min={`${trade.trade_date}T00:00`}
+                      onChange={e => { const { exit: _x, ...rest } = r; setResult(t.key, e.target.value ? { ...rest, exit: e.target.value } : rest) }}
+                      style={{ ...selStyle, padding: '4px 8px' }} />
+                    {r.exit && (
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <b>{weekday(r.exit.slice(0, 10))}</b> {r.exit.slice(11, 16)} · <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{heldFor(trade.trade_date, r.exit.slice(0, 10))}</span>
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

@@ -134,13 +134,14 @@ check("one image can be removed, the others stay",
 _ed = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
       "direction": "sell", "alert_type": "H4 back in line", "results": {"direct_fvg": {"outcome": "loss"}}}).json()
 _tk = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
-      "direction": "sell", "alert_type": "H4 back in line", "results": {"m5_cisd_fvg": {"outcome": "win", "rr": 3, "takes": 2},
+      "direction": "sell", "alert_type": "H4 back in line", "results": {"m5_cisd_fvg": {"outcome": "win", "rr": 3, "takes": 2, "exit": "2020-01-10T14:00"}, "direct_fvg": {"outcome": "none", "exit": "2020-01-10T14:00"},
       "m5_smc_fvg": {"outcome": "none", "takes": 3}, "h1_smc_fvg": {"outcome": "be", "rr": -0.3},
       "h1_cisd_fvg": {"outcome": "be", "rr": 0.5}}}).json()["results"]
 check("a BE keeps the R it was closed at (a small loss or gain)",
       _tk["h1_smc_fvg"]["rr"] == -0.3 and _tk["h1_cisd_fvg"]["rr"] == 0.5)
 check("re-entries are kept with the result (not on 'No entry')",
-      _tk["m5_cisd_fvg"] == {"outcome": "win", "rr": 3, "takes": 2} and "takes" not in _tk["m5_smc_fvg"])
+      _tk["m5_cisd_fvg"] == {"outcome": "win", "rr": 3, "takes": 2, "exit": "2020-01-10T14:00"} and "takes" not in _tk["m5_smc_fvg"]
+      and "exit" not in _tk["direct_fvg"])
 _ex = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-28", "instrument": "XAUUSD",
       "direction": "buy", "exit_date": "2020-01-30", "notes": "x" * 1500}).json()
 check("an exit date and a long note are saved", _ex.get("exit_date") == "2020-01-30" and len(_ex.get("notes", "")) == 1500)
