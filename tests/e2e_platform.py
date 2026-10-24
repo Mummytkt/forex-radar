@@ -141,6 +141,11 @@ check("a BE keeps the R it was closed at (a small loss or gain)",
       _tk["h1_smc_fvg"]["rr"] == -0.3 and _tk["h1_cisd_fvg"]["rr"] == 0.5)
 check("re-entries are kept with the result (not on 'No entry')",
       _tk["m5_cisd_fvg"] == {"outcome": "win", "rr": 3, "takes": 2} and "takes" not in _tk["m5_smc_fvg"])
+_ex = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-28", "instrument": "XAUUSD",
+      "direction": "buy", "exit_date": "2020-01-30", "notes": "x" * 1500}).json()
+check("an exit date and a long note are saved", _ex.get("exit_date") == "2020-01-30" and len(_ex.get("notes", "")) == 1500)
+check("an exit date before the entry date is refused", c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={
+      "trade_date": "2020-01-28", "instrument": "XAUUSD", "direction": "buy", "exit_date": "2020-01-27"}).status_code == 400)
 check("a trade's date, direction, alert and results can all be edited",
       _ed["trade_date"] == "2020-01-09" and _ed["direction"] == "sell" and _ed["alert_type"] == "H4 back in line"
       and _ed["results"] == {"direct_fvg": {"outcome": "loss", "rr": None}})

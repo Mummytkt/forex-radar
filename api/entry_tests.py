@@ -79,9 +79,10 @@ class TradeBody(BaseModel):
     alert_type: str = ""
     notes: str = ""
     results: dict[str, EntryResult] = {}
+    exit_date: Optional[str] = None   # YYYY-MM-DD the trade was closed (unset = still open / not recorded)
 
 
-def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str]:
+def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str, Optional[str]]:
     if body.direction not in ("buy", "sell"):
         raise HTTPException(400, "direction must be buy or sell")
     if not body.instrument.strip() or not body.trade_date.strip():
@@ -100,8 +101,11 @@ def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str]:
         res[k] = {"outcome": r.outcome, "rr": rr}
         if r.outcome != "none" and r.takes is not None and 1 < r.takes <= 50:
             res[k]["takes"] = int(r.takes)
+    exit_date = (body.exit_date or "").strip()[:10] or None
+    if exit_date and exit_date < body.trade_date.strip()[:10]:
+        raise HTTPException(400, "the exit date can't be before the entry date")
     return (body.trade_date.strip()[:10], body.instrument.strip().upper()[:20], body.direction,
-            body.alert_type.strip()[:40], body.notes.strip()[:500], json.dumps(res))
+            body.alert_type.strip()[:40], body.notes.strip()[:4000], json.dumps(res), exit_date)
 
 
 def _row(r: sqlite3.Row, images: Optional[dict] = None) -> dict:
@@ -164,8 +168,8 @@ def create_trade(request: Request, body: TradeBody):
     vals = _clean(body)
     with _db(request) as conn:
         cur = conn.execute(
-            """INSERT INTO entry_tests (trade_date, instrument, direction, alert_type, notes, results_json, user_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""", vals + (u["id"],))
+            """INSERT INTO entry_tests (trade_date, instrument, direction, alert_type, notes, results_json, exit_date, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", vals + (u["id"],))
         row = conn.execute("SELECT * FROM entry_tests WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row(row)
 
@@ -177,7 +181,7 @@ def update_trade(trade_id: int, request: Request, body: TradeBody):
     with _db(request) as conn:
         cur = conn.execute(
             """UPDATE entry_tests SET trade_date = ?, instrument = ?, direction = ?, alert_type = ?, notes = ?,
-                      results_json = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                      results_json = ?, exit_date = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
                WHERE id = ? AND user_id = ?""", vals + (trade_id, u["id"]))
         if cur.rowcount == 0:
             raise HTTPException(404, "Trade not found")

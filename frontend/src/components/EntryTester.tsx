@@ -16,6 +16,7 @@ interface Trade {
   direction: 'buy' | 'sell'
   alert_type: string
   notes: string
+  exit_date?: string | null   // YYYY-MM-DD the trade closed
   results: Record<string, EntryResult>
   images: Record<string, number[]>   // {slot: image ids} — slot = a POI key or an entry key
 }
@@ -64,6 +65,32 @@ function save(key: string, v: string) {
 }
 // Pairs are stored like EURUSD: capitals, no slash or spaces
 const cleanPair = (s: string) => s.toUpperCase().replace(/[^A-Z0-9_.]/g, '')
+// Dates are chart dates (YYYY-MM-DD), read as calendar days, never shifted by timezone
+const WDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+function dayOf(d?: string | null): Date | null {
+  const m = d && /^(\d{4})-(\d{2})-(\d{2})$/.exec(d)
+  return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null
+}
+const weekday = (d?: string | null) => { const x = dayOf(d); return x ? WDAY[x.getUTCDay()] : '' }
+// "Tue 28 Jan 2020"
+const fmtDay = (d?: string | null) => {
+  const x = dayOf(d)
+  return x ? `${WDAY[x.getUTCDay()]} ${x.getUTCDate()} ${x.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })} ${x.getUTCFullYear()}` : ''
+}
+// How long it ran: calendar days, and the weekdays among them when a weekend sits in between
+function heldFor(a?: string | null, b?: string | null): string {
+  const x = dayOf(a), y = dayOf(b)
+  if (!x || !y || y < x) return ''
+  const days = Math.round((y.getTime() - x.getTime()) / 86400000)
+  if (days === 0) return 'closed the same day'
+  let wk = 0
+  for (let t = x.getTime() + 86400000; t <= y.getTime(); t += 86400000) {
+    const wd = new Date(t).getUTCDay()
+    if (wd !== 0 && wd !== 6) wk++
+  }
+  return `held ${days} day${days === 1 ? '' : 's'}${wk !== days ? ` (${wk} trading day${wk === 1 ? '' : 's'})` : ''}`
+}
+
 const today = () => new Date().toISOString().slice(0, 10)
 const fmtR = (r: number) => `${r > 0 ? '+' : ''}${r.toFixed(2)}R`
 
@@ -315,7 +342,10 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
         <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 6,
           color: trade.direction === 'buy' ? 'var(--bullish)' : 'var(--bearish)',
           background: trade.direction === 'buy' ? 'var(--bullish-bg)' : 'var(--bearish-bg)' }}>{trade.direction.toUpperCase()}</span>
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{trade.trade_date}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          {fmtDay(trade.trade_date)}
+          {trade.exit_date && <> → {fmtDay(trade.exit_date)} <span style={{ color: 'var(--text-muted)' }}>· {heldFor(trade.trade_date, trade.exit_date)}</span></>}
+        </span>
         {trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
           {done} ticked
@@ -412,16 +442,30 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
               onInput={e => { e.currentTarget.value = cleanPair(e.currentTarget.value) }}
               onBlur={e => { const p = cleanPair(e.target.value); if (p && p !== trade.instrument) onChange({ ...trade, instrument: p }); else e.target.value = trade.instrument }}
               style={{ ...selStyle, width: 110 }} />
-            <input type="date" value={trade.trade_date} title="Date"
-              onChange={e => e.target.value && onChange({ ...trade, trade_date: e.target.value })} style={selStyle} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+              Entry
+              <input type="date" value={trade.trade_date} title="Entry date"
+                onChange={e => e.target.value && onChange({ ...trade, trade_date: e.target.value })} style={selStyle} />
+              <b style={{ color: 'var(--text-secondary)', minWidth: 28 }}>{weekday(trade.trade_date)}</b>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+              Exit
+              <input type="date" value={trade.exit_date || ''} min={trade.trade_date} title="Exit date (when the trade closed)"
+                onChange={e => onChange({ ...trade, exit_date: e.target.value || null })} style={selStyle} />
+              {trade.exit_date && <b style={{ color: 'var(--text-secondary)', minWidth: 28 }}>{weekday(trade.exit_date)}</b>}
+              {trade.exit_date && <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{heldFor(trade.trade_date, trade.exit_date)}</span>}
+            </label>
             <Chip on={trade.direction === 'buy'} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => trade.direction !== 'buy' && onChange({ ...trade, direction: 'buy' })}>BUY</Chip>
             <Chip on={trade.direction === 'sell'} color="var(--bearish)" bg="var(--bearish-bg)" onClick={() => trade.direction !== 'sell' && onChange({ ...trade, direction: 'sell' })}>SELL</Chip>
             <select value={trade.alert_type} title="H4 alert" onChange={e => onChange({ ...trade, alert_type: e.target.value })} style={selStyle}>
               {!ALERT_TYPES.includes(trade.alert_type) && <option value={trade.alert_type}>{trade.alert_type || '—'}</option>}
               {ALERT_TYPES.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
-            <input defaultValue={trade.notes} placeholder="Note (optional)" onBlur={e => e.target.value !== trade.notes && onChange({ ...trade, notes: e.target.value })}
-              style={{ ...selStyle, flex: 1 }} />
+            <textarea defaultValue={trade.notes} placeholder="Notes (optional): saved when you click away" rows={3}
+              onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight + 2}px` }}
+              ref={t => { if (t && !t.dataset.sized) { t.dataset.sized = '1'; t.style.height = 'auto'; t.style.height = `${Math.max(t.scrollHeight + 2, 72)}px` } }}
+              onBlur={e => e.target.value !== trade.notes && onChange({ ...trade, notes: e.target.value })}
+              style={{ ...selStyle, flexBasis: '100%', width: '100%', minHeight: 72, resize: 'vertical', lineHeight: 1.5, fontFamily: 'inherit' }} />
             <button onClick={() => { if (confirm(`Delete this ${trade.instrument} trade?`)) onDelete() }}
               style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
               <Trash2 size={13} /> Delete
@@ -462,7 +506,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
 
   function body(t: Omit<Trade, 'id'>) { return JSON.stringify({
     trade_date: t.trade_date, instrument: t.instrument, direction: t.direction,
-    alert_type: t.alert_type, notes: t.notes, results: t.results,
+    alert_type: t.alert_type, notes: t.notes, results: t.results, exit_date: t.exit_date || null,
   }) }
 
   const addTrade = async () => {

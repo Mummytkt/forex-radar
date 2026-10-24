@@ -518,10 +518,13 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
                 notes        TEXT    NOT NULL DEFAULT '',
                 results_json TEXT    NOT NULL DEFAULT '{}', -- {entry_key: {"outcome": win|loss|be|none, "rr": float|null}}
                 created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                exit_date    TEXT                          -- YYYY-MM-DD the trade closed
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tests_user ON entry_tests (user_id, trade_date DESC)")
+    elif "exit_date" not in {row[1] for row in conn.execute("PRAGMA table_info(entry_tests)").fetchall()}:
+        conn.execute("ALTER TABLE entry_tests ADD COLUMN exit_date TEXT")
     # Entry Tester screenshots (files live in <db dir>/entry_images): one per POI per trade
     if "entry_test_images" not in existing:
         conn.execute("""
