@@ -29,6 +29,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
                                 Spacer, Table, TableStyle)
 
 HERE = Path(__file__).resolve().parent
+ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
 VERSION = "25 October 2026 (script v10, Weekly = Daily rules) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
@@ -332,6 +333,38 @@ def make_rules(im):
          "Weekly breakout down, Daily touches a Weekly level and holds, then a Daily breakout down",
          "A Daily close through the reacting Weekly level ends the Weekly link; a new Weekly breakout starts again. A Daily setup against the Weekly "
          "direction still alerts, marked AGAINST the Weekly. With no Weekly setup, the Daily rules work exactly as before.", im["weekly"]),
+        ("C. Daily bias", "Weekly reaction → Daily breakout: the old A-shape (External)",
+         "An existing Daily External high/low does <b>not</b> have to break. Price falls inside the existing range and a Daily wick touches a "
+         "<b>Weekly key level</b> and holds: the <b>first touch</b> is the Weekly reaction's start. An A-shape that formed on the way down, "
+         "<b>before</b> that touch (and counts: a later candle traded below its bearish candle), is then closed above by a Daily candle. "
+         "That close is a <b>Daily breakout</b> (a new, smaller structure inside the old range), labelled <b>Weekly-confirmed External</b>.",
+         "Buys: the broken A-shape formed before the first Weekly touch → Weekly-confirmed External",
+         "Sells: the broken V-shape formed before the first Weekly touch → Weekly-confirmed External",
+         "The A-shape becomes the Daily Breaker: the H4 watches the reaction there, then an H4 External breakout sends the Origin alert. "
+         "This Weekly-confirmed breakout uses up that Weekly reaction.", ASSETS / "wk2_before_touch.png"),
+        ("C. Daily bias", "Weekly reaction → Daily breakout: an A-shape made after the touch (Internal)",
+         "Same start, but the A-shape that breaks formed <b>after</b> the first Weekly touch. It is still a <b>Daily breakout</b>, "
+         "and the H4 watches its Breaker as usual. Its Weekly label is <b>Internal</b>: with Internal off (the default) it is shown as "
+         "<b>in line with the Weekly</b>, and the Weekly reaction stays alive, waiting for an External break.",
+         "Buys: A-shape formed after the first Weekly touch → Internal (in line while Internal is off)",
+         "Sells: V-shape formed after the first Weekly touch → Internal (in line while Internal is off)",
+         "The breakout and its alerts are not blocked: only the Weekly label differs.", ASSETS / "wk1_after_touch.png"),
+        ("C. Daily bias", "Weekly reaction → the existing External high breaks",
+         "If the climb from the Weekly level makes no smaller structure first, the Daily close above the <b>existing External high</b> is "
+         "the Daily breakout. That high formed before the Weekly touch, so it is <b>Weekly-confirmed External</b>. The old high becomes the "
+         "Daily Breaker, and the range just broken (down to the External low) holds the Daily levels watched for reactions.",
+         "Buys: Daily close above the existing External high after a Weekly reaction",
+         "Sells: Daily close below the existing External low after a Weekly reaction",
+         "If the climb had made a pullback A-shape first, that smaller breakout comes first and this one follows as a same-direction breakout.",
+         ASSETS / "wk3_external_high.png"),
+        ("C. Daily bias", "Then the main External high breaks too",
+         "After a Weekly-confirmed Daily breakout and its Origin, price can go on to close above the main Daily External high. That is a "
+         "<b>second Daily breakout in the same direction</b>: nothing resets, H4 keeps riding, and there is <b>no new Origin</b>. Its Weekly "
+         "label is <b>in line</b> (the Weekly reaction was used up) unless a fresh Weekly reaction came first. The main high becomes the new "
+         "Daily Breaker; a reaction there plus an H4 External breakout sends a <b>“Daily reaction + H4 breakout”</b> continuation.",
+         "Buys: Daily close above the main External high → same-direction breakout, H4 keeps riding",
+         "Sells: Daily close below the main External low → same-direction breakout, H4 keeps riding",
+         "A Daily breakout the other way resets everything (a new Origin when it confirms).", ASSETS / "wk4_main_high_after.png"),
         ("D. Daily reaction levels", "Post-breakout Daily OC",
          "After the breakout day, Daily candles that keep closing in the breakout direction, beyond the breakout level, form OCs. "
          "<b>Every completed OC</b> is watched until an opposing breakout.",
@@ -548,7 +581,8 @@ def build():
             ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
         block += [tbl, Spacer(1, 3 * mm)]
         pic = Image(str(img))
-        scale = min(W / pic.drawWidth, (62 * mm) / pic.drawHeight)
+        # the Weekly-chain pictures carry their own notes: give them the full page width
+        scale = min(W / pic.drawWidth, ((120 if ASSETS in Path(str(img)).parents else 62) * mm) / pic.drawHeight)
         pic.drawWidth, pic.drawHeight = pic.drawWidth * scale, pic.drawHeight * scale
         block += [pic, Spacer(1, 1.5 * mm), Paragraph(note, ss["note"]), Spacer(1, 6 * mm)]
         story.append(KeepTogether(block))

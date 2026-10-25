@@ -1,6 +1,7 @@
 """
-Builds docs/rulebook/The_Candle_Twins_Storybook.pdf — the strategy told as a children's
-story (ages 7-10). Same rules as MummyTKT_Strategy_Rulebook.pdf; every picture is drawn
+Builds docs/rulebook/The_Candle_Twins_Storybook.pdf — "Pip and the Golden Bell", the
+strategy told as a once-upon-a-time bedtime story (ages 6-10; rewritten 25 Oct 2026 so
+children can follow it: one family, one dream, Grandma = Weekly, Papa = Daily, Pip = H4). Same rules as MummyTKT_Strategy_Rulebook.pdf; every picture is drawn
 from real open/high/low/close values so the shapes stay chart-accurate.
 
     python docs/rulebook/build_storybook.py
@@ -263,6 +264,43 @@ def make_images():
     im["moral"] = scene("moral", [(2, 7.6, 1.2, 6.6, 1.2), (6.6, 7.1, 1.6, 2.4, 1.2)], sx=2.4,
         bubbles=[(0, 7.4, "Wait for the bell!", (-0.5, 1.4)), (1, 7.0, "Shirts count, not arms!", (1.2, 1.6))],
         ylim=(0, 9.6), xpad=(2.0, 2.8), floors=False, size=(5.6, 3.4))
+    W_, P_, K_ = 1.9, 1.15, 0.62   # Grandma Wendy (Weekly), Papa Dan (Daily), little Pip (H4)
+    im["family"] = scene("family", [(2.0, 9.4, 1.4, 8.8, W_), (2.0, 6.8, 1.6, 6.2, P_), (2.0, 4.2, 1.8, 3.8, K_)], sx=2.7,
+        bubbles=[(0, 9.3, "I'm Grandma Wendy.\nOne step takes me\na whole WEEK!", (2.0, 0.7)),
+                 (1, 6.7, "I'm Papa Dan.\nOne step takes me\na whole DAY.", (2.0, 0.4)),
+                 (2, 4.1, "I'm Pip! I take SIX\nquick steps every day!", (1.5, 1.6))],
+        ylim=(0.6, 11.6), xpad=(1.6, 3.4), floors=False, size=(7.0, 4.4))
+    im["cover"] = scene("cover", [(2.0, 9.4, 1.4, 8.8, W_), (2.0, 6.8, 1.6, 6.2, P_), (2.0, 4.2, 1.8, 3.8, K_)], sx=2.4,
+        bubbles=[(2, 4.1, "Can I ring the\nGolden Bell?", (1.5, 1.6))],
+        ylim=(0.6, 10.6), xpad=(1.6, 2.6), floors=False, size=(6.2, 4.0))
+    im["grandma"] = scene("grandma", [(4.0, 5.8, 3.6, 5.4, 1.6), (5.4, 8.2, 5.2, 7.8, 1.6), (7.8, 8.1, 6.0, 6.3, 1.6)], sx=2.3,
+        levels=[(6.0, "old garden fence = now her bench", SKY, 0)], mats=[(5.75, 6.25, "")],
+        bubbles=[(1, 8.15, "I jumped my old fence!\nThis year we go UP!", (-0.4, 1.1)),
+                 (2, 6.05, "Now I'll rest on\nmy bench a while.", (1.9, -1.6))],
+        ylim=(2.4, 10.4), xpad=(1.8, 5.2))
+    im["papa_bench"] = scene("papa_bench", [(8.6, 8.9, 7.6, 7.8, 0.85), (7.8, 8.0, 6.6, 6.8, 0.85), (6.8, 7.5, 6.7, 7.4, 0.85),
+                                            (7.4, 7.5, 6.2, 6.4, 0.85), (6.4, 6.5, 4.6, 4.8, 0.85), (4.8, 4.9, 3.0, 3.3, 0.85),
+                                            (3.3, 5.4, 3.2, 5.2, 0.85), (5.2, 6.9, 5.1, 6.7, 0.85), (6.7, 8.2, 6.6, 7.9, 0.85)], sx=1.2,
+        levels=[(7.4, "the fence Papa built on the way down", SKY, 2)], mats=[(2.8, 3.2, "Grandma's bench")],
+        bubbles=[(3, 7.5, "I built a little\nfence up here.", (-1.8, 1.9)),
+                 (5, 3.0, "My foot touched Grandma's\nbench, and I didn't fall through!", (2.6, -0.9)),
+                 (8, 8.2, "I jumped my OLD fence!\nGrandma: \"PROPER JUMP!\"", (-1.2, 1.5))],
+        ylim=(1.6, 10.6), xpad=(1.4, 4.0), speed=[0, 1, 3, 4, 5])
+    im["cushions"] = scene("cushions", [(1.6, 2.8, 1.4, 2.6, 0.9), (2.6, 5.6, 2.5, 5.4, 0.9), (5.4, 6.2, 3.6, 6.0, 0.9),
+                                        (6.0, 8.6, 5.9, 8.4, 0.9), (8.4, 9.0, 6.8, 8.8, 0.9), None,
+                                        (8.8, 8.9, 6.4, 6.5, 0.55), (6.5, 6.6, 3.3, 3.6, 0.55), (3.6, 5.0, 3.5, 4.9, 0.55),
+                                        (4.9, 6.6, 4.8, 6.5, 0.55)], sx=1.05,
+        mats=[(2.8, 3.6, "soft cushion"), (6.2, 6.8, "soft cushion")],
+        bubbles=[(4, 9.0, "We climbed so fast we\nleft soft cushions behind!", (-2.6, 1.2)),
+                 (7, 3.3, "I fell right through into the\nLOWER cushion. I bounce here!", (2.0, -1.3)),
+                 (9, 6.6, "Climbing back into a cushion\nfrom underneath? No bell!", (0.6, 2.4))],
+        ylim=(0.6, 11.6), xpad=(1.2, 3.4), speed=[6, 7])
+    im["castle"] = scene("castle", [(6.0, 7.6, 5.9, 7.4, 1.0), (7.4, 8.6, 7.2, 8.4, 1.0), (8.4, 9.8, 8.2, 9.5, 1.0),
+                                    (9.5, 9.6, 8.9, 9.1, 1.0), (9.1, 10.6, 9.0, 10.4, 1.0)], sx=1.7,
+        levels=[(9.0, "the great castle wall", "#8a5cf6", 0)],
+        bubbles=[(2, 9.75, "I jumped the CASTLE WALL!\nSame way: the game goes on!", (-1.9, 1.3)),
+                 (3, 8.95, "A new trampoline!\nPip bounces here: ENCORE!", (2.0, -1.8))],
+        ylim=(4.6, 12.2), xpad=(1.5, 3.8), speed=[3])
     return im
 
 
@@ -271,173 +309,127 @@ def make_images():
 
 def chapters():
     return [
-        ("Meet the Candle Twins", GREEN_D, "meet", [
-            "In Candle Town there is a very tall building. Each level is a <b>floor</b>. The higher the floor, the higher the price.",
-            "Two twins live here. <b>Bullish Ben</b> wears a bright <b>green shirt</b>. He is happy, and he loves to <b>climb</b>.",
-            "Ben always starts on a low floor called his <b>Open</b>. Then up, up, UP he goes, to a higher floor called his <b>Close</b>.",
-            "<b>Bearish Bella</b> wears a bright <b>red shirt</b>. She is speedy, and she loves to <b>slide</b>.",
-            "Bella starts on a high floor (her <b>Open</b>) and zooms DOWN to a lower floor (her <b>Close</b>). Wheee!",
-            "Their shirt always stretches from where they started to where they finished. That's the twin's <b>body</b>.",
+        ("Once Upon a Time", GREEN_D, "meet", [
+            "<b>Once upon a time</b>, in a land of very tall towers, there was a kingdom called <b>Candle Kingdom</b>.",
+            "In the tallest tower lived the <b>candle people</b>. Every floor of the tower had a number, and everybody in the kingdom wanted to "
+            "know one thing: <i>will the candle people go UP the tower, or DOWN?</i>",
+            "When a candle person climbs <b>up</b>, they wear a <b>green coat</b>. When they slide <b>down</b>, they wear a <b>red coat</b>.",
+            "Each candle person gets one turn. They start on one floor, and when the <b>Evening Bell</b> rings, they stop on another. "
+            "Their coat stretches all the way from where they started to where they stopped.",
         ]),
-        ("Stretchy Arms and Stretchy Legs", SKY, "arms", [
-            "The twins have a secret. Their arms and legs are <b>STRETCHY</b>!",
-            "While they move, they reach out to see how far they can go. Ben's arm shoots up, up, up. Bella's leg stretches down, down, down.",
-            "The highest floor a fingertip touches is called the <b>High</b>. The lowest floor a toe touches is called the <b>Low</b>.",
-            "But stretching is only exploring. When time is up, <b>SNAP!</b> The arms and legs spring back, and the twin stands at the <b>Close</b>.",
-            "Grown-ups call the arms and legs <b>wicks</b>.",
+        ("Coats Count, Arms Don't!", SKY, "arms", [
+            "Candle people have a funny secret: their arms and legs are <b>stretchy</b>!",
+            "While they walk, they stretch way up and way down to peek at other floors. But when the Evening Bell rings... <b>SNAP!</b> "
+            "Their arms and legs spring right back.",
+            "So the most important rule in all of Candle Kingdom is this:",
+            "<b>Only where your COAT stops counts. Arms and legs never count.</b>",
+            "Can you say it with me? <b>\"Coats count, arms don't!\"</b>",
         ]),
-        ("The Closing Bell", SUN, "bell", [
-            "Every twin gets a turn. When the turn ends, the <b>Closing Bell</b> rings. Ding!",
-            "Only the spot where the <b>shirt finishes</b> counts. Arms and legs can wave and wiggle all they like. They never decide anything.",
-            "Look! A line is painted on the wall. The first Ben stretched his arm right through it... but his shirt finished <b>below</b> it. Not broken!",
-            "The second Ben finished with his whole shirt <b>above</b> the line. Now it's <b>broken</b>.",
-            "<b>Golden rule:</b> lines are only broken by shirts, and only when the bell rings.",
+        ("A Very Special Family", "#8a5cf6", "family", [
+            "At the very top of the tower lived a family.",
+            "<b>Grandma Wendy</b> was the biggest of them all. She is wise and she is slow: one of her steps takes a <b>whole week</b>.",
+            "<b>Papa Dan</b> is big and strong. One of his steps takes a <b>whole day</b>.",
+            "And <b>little Pip</b>, Papa's daughter, is quick as a mouse. She takes <b>six small steps every day</b>.",
+            "Pip had one big dream. On the roof of the tower hung the shiny <b>Golden Bell</b>, and Pip wanted to ring it more than anything.",
+            "But the Golden Bell has a rule: <b>it only rings when the family is going the same way, in the right order.</b> "
+            "Let's find out how Pip did it!",
         ]),
-        ("Rooftops and Valleys", "#8a5cf6", "roof", [
-            "When Ben climbs and Bella slides <b>right after him</b>, they make a pointy <b>rooftop</b>, like the letter A.",
-            "The rooftop line sits at the <b>top of Ben's shirt</b>. That's where Ben closed. His stretchy arm doesn't count!",
-            "Grown-ups call it an <b>A-shape</b>, and it acts like a ceiling. Prices bump into it from below.",
-            "When Bella slides and Ben climbs <b>right after her</b>, they make a <b>valley</b>, like the letter V.",
-            "The valley floor sits at the <b>bottom of Bella's shirt</b>, where she closed. That's a <b>V-shape</b>, and it acts like a floor.",
-            "Little Twins always use the <b>newest</b> rooftop and the <b>newest</b> valley.",
-            "Giant Twins (you'll meet them soon) measure their rooftops and valleys from their <b>shirts</b> too, just like the Little Twins. "
-            "(Grown-ups can switch the Giants to fingertips and toes with the <b>Daily levels from: Wick</b> setting.)",
+        ("Fences and Jumps", SUN, "breakout", [
+            "Whenever a candle person climbs up (green) and the very next one slides down (red), they leave a little <b>fence</b> "
+            "at the top of the green coat.",
+            "A new fence is still a bit wobbly. It becomes a <b>real, strong fence</b> once a later candle walks down below it.",
+            "Now, to <b>jump</b> a fence, your <b>coat</b> must stop above it when the bell rings. Poking your arm over the top doesn't count! "
+            "(Remember: coats count, arms don't.)",
+            "When Papa Dan jumps one of his fences, everyone shouts: <b>\"BREAKOUT!\"</b>",
         ]),
-        ("The Hand-off Step", GREEN_D, "handoff", [
-            "Sometimes two Bens climb <b>one after the other</b>, like a relay race.",
-            "The first Ben finishes his climb and shouts, \"Your turn!\" The second Ben starts right there.",
-            "That spot, where the first twin <b>closed</b> and the next one <b>opened</b>, is a <b>Hand-off Step</b>. Grown-ups call it an <b>OC</b> (Open-Close).",
-            "Three Bens in a row make <b>two</b> hand-off steps. Two Bellas sliding in a row make one too, going down.",
+        ("Grandma Wendy Decides", "#e67700", "grandma", [
+            "One week, Grandma Wendy did something she hadn't done for a long, long time. She jumped right over her big old garden fence!",
+            "<b>\"This year,\"</b> she announced, <b>\"we are going UP!\"</b>",
+            "But Grandma never rushes. After a big jump she always comes back to rest on a <b>bench</b>: her old fence, a soft cushion, "
+            "or one of her favourite resting spots.",
+            "And who do you think watches Grandma's bench very, very carefully? <b>Papa Dan.</b>",
         ]),
-        ("Giants and Little Twins", "#ff7a59", "giants", [
-            "The twins come in sizes! <b>Giant Twins</b> each take a whole day. Grown-ups call them the <b>Daily</b> candles.",
-            "<b>Little Twins</b> take four hours each. Grown-ups call them the <b>H4</b> candles.",
-            "Six Little Twins fit inside one Giant day. Look: the first Little Twin opens where the Giant opens. The last one closes where the Giant closes.",
-            "The highest Little fingertip is the Giant's High. The lowest Little toe is the Giant's Low. Same day, same moves, just different sizes.",
-            "<b>Giants decide the direction. Little Twins find the moment.</b>",
+        ("Papa Touches Grandma's Bench", RED_D, "papa_bench", [
+            "Papa Dan had been sliding <b>down</b>, red day after red day. On the way down, he stopped for a moment and built a little <b>fence</b>.",
+            "Then one evening, Papa's foot touched <b>Grandma's bench</b>... and he did <b>not</b> fall through!",
+            "Grandma smiled. <b>\"Remember this moment, Papa. This is your first touch.\"</b>",
+            "Papa started to climb. Up, up, up... until his coat stopped <b>above the fence he had built on the way down</b>.",
+            "<b>\"PROPER JUMP!\"</b> cheered Grandma. <b>\"That fence was there before you touched my bench.\"</b>",
+            "If Papa had jumped a brand-new fence, one he built <b>after</b> touching the bench, Grandma would only have nodded: "
+            "\"That's nice, Papa, but that's a baby fence. I'll keep waiting for a proper jump.\" Papa's jump still counts. It just isn't Grandma's proper jump.",
         ]),
-        ("Houses Inside Houses", "#8a5cf6", "house", [
-            "Above the Giants live the <b>Titan Twins</b>. Each Titan is a whole <b>week</b>. Titans have their own Big House, built by the same rules. "
-            "When a Titan breaks out, a Giant must visit a Titan safe spot and hold, and then a Giant breakout in the same direction becomes a "
-            "<b>Titan-blessed</b> breakout. The bells then say so. If the Titans are quiet, the Giants play exactly as before.",
-            "The Giant Twins live in a <b>Big House</b>. Its floor is the lowest spot a Giant's <b>shirt</b> reached before Ben broke out through a rooftop. Grown-ups call it the <b>external low</b>.",
-            "While the Giants keep climbing, the roof keeps rising with them. It's <b>still being built</b>. When a Giant slides back down past the last valley, the roof is finished. That's the <b>external high</b>.",
-            "Inside the Big House, a <b>smaller house</b> can be built in exactly the same way. And inside that one, an even smaller one, as small as you like!",
-            "Candle Town only paints the <b>newest</b> house on the wall. Its roof and floor are called the <b>External high and low</b>.",
-            "When a house breaks, every house inside it disappears, and the house around it is the one that counts again.",
+        ("The Trampoline", SKY, "trampoline", [
+            "Something magical happened to the fence Papa jumped. It turned into a <b>trampoline</b>!",
+            "But first, Papa had to go out to play: his coat had to stop clearly above the trampoline's <b>wiggle mat</b>.",
+            "Now it was <b>Pip's turn</b>. Her job was to come back down, touch the trampoline, and <b>not fall through</b>. That's called a <b>bounce</b>.",
+            "Papa has other safe spots too: little <b>stepping stones</b> he left as he climbed, his old <b>dips and steps</b> inside the house he "
+            "jumped out of, and his <b>soft cushions</b>. Pip may bounce on any of them.",
         ]),
-        ("The Great Breakout", SKY, "breakout", [
-            "A Giant Ben climbs and pokes his arm past a roof. At the Closing Bell his shirt finishes... still below it. <b>Not yet!</b>",
-            "The next Giant Ben climbs higher. At the Closing Bell his <b>shirt is above the roof</b>.",
-            "<b>BREAKOUT!</b> Now Candle Town knows the direction: <b>UP</b>.",
-            "It is always the roof or floor of the <b>newest house</b>. The newest breakout is the one that matters.",
-            "A breakout is not a trade yet. It's the <b>start</b> of the adventure.",
+        ("The Soft Cushions", "#8a5cf6", "cushions", [
+            "Sometimes Papa climbs so fast that he leaves a gap. Three Papas stand in a row, and the third one's feet don't reach the first one's head. "
+            "That empty space becomes a <b>soft cushion</b>.",
+            "Cushions have their own rules:",
+            "<b>1.</b> You may only land on a cushion by <b>dropping in from above</b>.",
+            "<b>2.</b> If you fall right through it into a <b>lower cushion</b>, the lower one is where you bounce.",
+            "<b>3.</b> Climbing back up into a cushion <b>from underneath</b> never counts.",
+            "<b>4.</b> A cushion only <b>pops</b> when Papa's coat stops below the whole cushion.",
         ]),
-        ("The Old Ceiling Becomes a Trampoline", "#ff7a59", "trampoline", [
-            "Here's some magic. The roof that got broken flips into a <b>Trampoline</b>! The old ceiling is now a floor to bounce on. Grown-ups call it the <b>Daily Breaker</b>.",
-            "The trampoline has a cushion around it called the <b>Wiggle Mat</b>. It's 5 <b>pips</b> thick on each side. (Pips are the tiniest steps a price can take. Crypto coins and Deriv's make-believe markets have no pips, so there the mat is a tiny slice of the price: 0.01%.)",
-            "But first, the twins must <b>go out to play</b>. If the Giant who broke out already closed <b>above the Trampoline's Wiggle Mat</b>, they're out! If not, a Little Twin has to close above it.",
-            "A twin still sitting on the trampoline hasn't left, so it doesn't count.",
-            "Only after they've gone out to play can a twin come back for a <b>bounce</b>. That's when it's a real <b>visit</b>.",
+        ("Pip Rings the Golden Bell", SUN, "goldbell", [
+            "While Pip bounced, she built little fences of her own.",
+            "The fence that matters is Pip's <b>outside fence</b>: the one she built <b>before</b> she first touched Papa's safe spot.",
+            "Pip took a deep breath. She climbed... and climbed... and her coat stopped <b>above her outside fence</b>.",
+            "<b>DING! DING! DING!</b> The <b>Golden Bell</b> rang across Candle Kingdom!",
+            "<b>Papa jumped. Pip bounced. Pip jumped. The family was going UP!</b>",
+            "Grown-ups call this ring the <b>Origin</b>. It's the most important bell of all.",
         ]),
-        ("Stepping Stones", GREEN_D, "stones", [
-            "After the breakout day, more Giant Bens may keep climbing. Each pair that climbs one after the other makes a <b>Stepping Stone</b>. That's a Giant hand-off step.",
-            "Both Giants in the pair must close <b>above the breakout line</b>. The stone must also sit <b>clear of the Trampoline's mat</b>.",
-            "The breakout day itself doesn't get to start a stone.",
-            "Candle Town keeps <b>every</b> stepping stone it finds, and watches them all, until the next Giant breakout. "
-            "But if a Giant twin ever <b>closes below</b> a stone, that stone is cracked and can never be a safe spot again.",
+        ("Outside Fences and Inside Fences", "#8a5cf6", "inout", [
+            "Fences Pip builds <b>after</b> she touches the safe spot are <b>inside fences</b>.",
+            "Jumping an inside fence doesn't ring the Golden Bell. Pip just keeps waiting for her <b>outside fence</b>. "
+            "(Grown-ups can switch inside bells on if they want them.)",
         ]),
-        ("The Safe Spots", SKY, "spots", [
-            "Now the Little Twins go looking for a safe place to land. Bella slides down... and stretches her leg to touch a Wiggle Mat.",
-            "If her toe (or shirt) touches the safe spot's <b>exact line</b> (almost touching doesn't count), and her shirt <b>doesn't close through it</b>, she has made a <b>visit</b>. Grown-ups call it a <b>reaction</b>.",
-            "There are five kinds of safe spots. Candle Town checks them in this order:",
-            "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> A <b>new Giant valley floor</b> built during the climb, above the trampoline. <b>3.</b> A <b>Giant gap</b> left during the climb. <b>4.</b> The <b>Trampoline</b>. <b>5.</b> A <b>valley floor, hand-off step or Giant gap inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
-            "<b>A Giant gap</b> appears when three Giants stand in a row and the third one's feet don't reach the first one's head. The space between them is a big soft cushion. A twin just has to <b>step into the cushion</b> to make a visit, and only a Giant <b>closing through</b> the whole cushion pops it. If a later Giant sinks deeper into the cushion than the Giant before, the twins start looking for a new Outside roof from there.",
-            "Twins may only <b>drop into</b> a cushion from above. If they fall right through it and land on a deeper cushion, the deeper one becomes their safe spot. "
-            "Climbing back up into the cushion they fell through doesn't count, and once a bell rings from the deeper cushion, the cushions above it are used up.",
-            "A safe spot only appears once the Giants who built it have finished. The Giants who built it can't visit it themselves.",
-            "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
-            "<b>Cracked spots don't count.</b> A Giant valley floor or hand-off step that a Giant twin has already <b>closed below</b> is cracked (closed above, when the twins are sliding down). Cracked spots are never safe again.",
+        ("Encore! Encore!", GREEN_D, "encore1", [
+            "After the Golden Bell, Pip kept climbing, and the bells kept ringing!",
+            "Every new fence she jumped, every bounce on her own little trampoline or step, every <b>big hug</b>: <b>ENCORE!</b>",
+            "And every time she went back to bounce on one of Papa's safe spots and jumped her outside fence again: <b>ENCORE!</b>",
+            "Right after a big jump, if Pip's very next step left a <b>little gap</b> behind her, a tiny bell tinkled: "
+            "<i>\"A little gap was left behind!\"</i>",
         ]),
-        ("Hold On Tight!", "#ff7a59", "hold", [
-            "Once a twin has made a visit, the visit <b>stays alive</b>. Later twins don't have to touch the spot again.",
-            "The visit only ends if a twin's shirt <b>closes back through the spot</b>, below its mat. Then everyone lets go.",
-            "But don't worry! If the twins land on the <b>next</b> safe spot, the adventure carries on from there.",
-            "Not touching is fine. <b>Closing through</b> is what lets go.",
+        ("Papa Jumps the Castle Wall", "#8a5cf6", "castle", [
+            "One day, Papa climbed so high that his coat stopped above the <b>great castle wall</b> at the very top of the old house.",
+            "<b>\"Do we have to start all over again?\"</b> asked Pip.",
+            "<b>\"No!\"</b> laughed Papa. <b>\"We're still going UP. The game goes on!\"</b>",
+            "There was no new Golden Bell. Instead, the castle wall became a <b>brand-new trampoline</b>, and when Pip bounced on it and "
+            "jumped her fence: <b>ENCORE!</b>",
+            "Grandma just nodded from her bench. \"Still going my way.\"",
         ]),
-        ("The Golden Bell", SUN, "goldbell", [
-            "While a visit is alive, the Little Twins build little rooftops (little A-shapes) of their own.",
-            "Then it happens. A Little Twin closes his shirt <b>above the Outside roof</b> (you'll meet it on the next page). (It's almost always Ben!)",
-            "<b>DING DING DING!</b> That's the <b>Golden Bell</b>. Grown-ups call it the <b>Origin</b>, and it's the main alert!",
-            "It doesn't have to be the twin who visited. Any <b>later</b> Little Twin can ring it. The twin who just finished building a rooftop can't break it at the same moment.",
-            "The Golden Bell rings <b>only once</b> for each Giant breakout.",
-        ]),
-        ("Outside Roof or Inside Roof?", "#8a5cf6", "inout", [
-            "What matters is the <b>first touch</b> of a safe spot after it appeared. The closest little rooftop built <b>before</b> that first touch is the <b>Outside roof</b>. Grown-ups say <b>External</b>.",
-            "Every little rooftop built <b>after</b> the first touch is an <b>Inside roof</b>, however low the twins go. Grown-ups say <b>Internal</b>. "
-            "If inside bells are switched off, breaking an inside roof doesn't use up the visit: the twins keep waiting for the outside roof.",
-            "Each grown-up can choose which bells they want on their phone: outside, inside, or both.",
-        ]),
-        ("Encore Bells!", GREEN_D, "encore1", [
-            "After the Golden Bell, the Little Twins keep climbing. Every new good bounce rings an <b>Encore Bell</b>. Grown-ups call these <b>continuations</b>.",
-            "<b>A new Giant visit.</b> Every time the twins visit a Giant safe spot again and then close above that visit's Outside roof, ENCORE! Grown-ups call it a <b>Daily reaction + H4 breakout</b>.",
-            "<b>A new little rooftop.</b> While the twins stay in line, every time a Little Ben closes above the <b>newest</b> little rooftop, ENCORE! No Giant visit is needed for this one.",
-            "<b>The little trampoline.</b> The little rooftop that the Golden Bell broke becomes a little trampoline. Each newer rooftop the twins break becomes the new little trampoline. If a later twin <b>starts above it</b>, comes down to touch its exact line and closes <b>above</b> it, ENCORE!",
-            "<b>The little hand-off steps.</b> When two Little Bens climb one after the other, they make a little step. Every step on the newest climb is kept. If a <b>later</b> twin starts above one, touches it and closes above, ENCORE! That step is then used up. (A twin climbing up through it from below doesn't count.)",
-            "Each visit to a spot rings <b>once</b>. The twins must leave and come back to ring it again.",
-            "<b>The big hug step.</b> When a Little Ben's shirt starts at or below a sliding Bella's shirt-end and finishes above even her highest fingertip, he has covered all of her. ENCORE!",
-            "<b>The little gap.</b> Right after a Little Ben breaks a rooftop, the next Little Twin is checked once: if her feet stay above the head of the twin who stood just before Ben, they leave a little gap. A small bell rings with just the town's name: <b>a little gap was left behind</b>. It isn't a buy or sell bell; grown-ups use it to spot where price may come back to.",
-        ]),
-        (None, None, "encore2", []),
         ("The Wobble", "#ff7a59", "wobble", [
-            "Sometimes the Little Twins slip. A twin closes <b>below the newest little valley floor</b>.",
-            "That's a <b>Wobble</b>. They're out of line, and every little hand-off step is forgotten. No bell rings for a wobble.",
-            "To get back in line, the twins must first <b>visit a Giant safe spot</b> again (the trampoline, a stepping stone, or a Giant valley floor or hand-off step inside the house). "
-            "Then, when a Little Twin closes <b>above the newest little rooftop</b>, ENCORE! The climb is back on.",
-            "Encore Bells keep ringing like this until the next Giant breakout.",
+            "Sometimes, even clever Pip slips. Her coat stops <b>below her newest little dip</b>. <b>Wobble!</b>",
+            "While Pip wobbles, no bells ring at all.",
+            "To get back in line, she must <b>bounce on Papa's safe spot again</b> and <b>jump her fence</b>. Then: ENCORE! The climb is back on.",
         ]),
-        ("A Brand-New Game", RED_D, "gameover", [
-            "Giants can slide back <b>inside the house that just broke</b>, below the trampoline. That's okay! That's where visits happen.",
-            "But if a Giant's shirt closes past the <b>other side</b> of that house (the newest house's floor), that's a <b>breakout the other way</b>.",
-            "The old game ends and a <b>brand-new game</b> begins, going DOWN.",
-            "But a new Giant breakout <b>the same way</b> (UP again) doesn't end the game! The Little Twins keep climbing and their Encore Bells keep ringing.",
+        ("When the Wind Changes", RED_D, "gameover", [
+            "If Papa's coat ever stops <b>below the bottom of the house</b> he jumped out of, the wind has changed.",
+            "The old game ends, and a <b>brand-new game</b> begins: this time going <b>DOWN</b>. Everything happens the mirror way, in red coats.",
+            "And if Papa ever jumps the opposite way to Grandma? Pip can still ring her bell, but it comes with a little warning: "
+            "<b>\"Careful! Grandma is going the other way.\"</b>",
         ]),
-        ("Bella's Turn: The Mirror World", RED_D, "mirror", [
-            "Everything you learned works for Bella too. Just flip it upside down, like a mirror!",
-            "A Giant Bella's shirt closes <b>below the newest house's floor</b>. BREAKOUT DOWN!",
-            "The broken floor becomes a <b>ceiling</b>. Stepping stones are made by two Giant Bellas sliding one after the other.",
-            "The Golden Bell rings when a Little Twin closes <b>below the newest little valley floor</b>. A Giant closing <b>above a roof</b> starts a new game going up.",
-        ]),
-        ("The Tiny Twins' Secret Signals: Peek-and-Hold", "#8a5cf6", "peek", [
-            "Now meet the <b>Tiny Twins</b>. They take just one or two hours each (grown-ups say <b>H1</b> and <b>H2</b>). They help grown-ups pick the exact moment to step in.",
-            "<b>Peek-and-Hold</b> (grown-ups call it a <b>PCL</b>): Bella slides first. Then Ben climbs.",
-            "Ben's stretchy arm <b>peeks above the top of Bella's shirt</b>... but at the bell, his shirt finishes <b>at or below</b> that line. He peeked, and he held.",
-            "Mirror version: Ben climbs first. Then Bella's leg peeks <b>below the bottom of Ben's shirt</b>, and her shirt finishes at or above it.",
-        ]),
-        ("The Big Hug", GREEN_D, "hug", [
-            "The <b>Big Hug</b> (grown-ups call it an <b>Engulfing Sweep</b>) is a super-move!",
-            "Bella slides first. Then Ben's leg stretches <b>below Bella's lowest toe</b>, sweeping underneath her.",
-            "Then Ben climbs so high that his shirt closes <b>above Bella's highest fingertip</b>. He has wrapped her up in a big hug!",
-            "This time it's the <b>arms and legs</b> (the High and Low) that Ben has to beat, not just her shirt.",
-            "Mirror version: Ben climbs first. Bella's arm reaches above his highest fingertip, then her shirt closes below his lowest toe.",
-        ]),
-        ("Only at Your Spot", SKY, "spot", [
-            "Tiny signals happen all over the building. Most of them aren't for you.",
-            "So a grown-up picks <b>their own spot</b> and a direction (up or down). Candle Town only rings the Tiny bell when a signal closes <b>inside their wiggle room</b>. That's 20 pips each way, unless they choose different.",
-            "Once it rings, that spot's bell is done.",
-            "Signals far away from your spot? Shhh. No ring.",
+        ("Tiny Tia's Secret Signals", SKY, "peek", [
+            "Pip has a tiny sister called <b>Tia</b>. Tia's steps are the smallest of all.",
+            "Grown-ups who want to trade pick their own spot on the tower and wait for Tia to give a <b>secret signal</b> right there: "
+            "a <b>Peek-and-Hold</b> (she peeks over a line and holds back) or a <b>Big Hug</b> (she wraps up the candle before her).",
+            "Signals far away from their spot? Shhh. No ring.",
         ]),
     ]
 
 
 MORAL = [
-    "<b>A trade is READY when the story goes in this order:</b>",
-    "<b>1.</b> A <b>Giant</b> twin's shirt closes past the roof or floor of the newest house. Breakout!",
-    "<b>2.</b> A <b>Little</b> twin visits a <b>safe spot</b> (a stepping stone, the trampoline, or a Giant valley floor or hand-off step inside the house that just broke) and doesn't close through it.",
-    "<b>3.</b> A Little twin's shirt closes past the <b>newest little rooftop</b>. The <b>Golden Bell</b> rings!",
-    "<b>4.</b> At <b>your spot</b>, a Tiny twin shows a <b>Peek-and-Hold</b> or a <b>Big Hug</b>.",
-    "<b>The game changes when</b> a Giant's shirt closes past the other side of the house. Then a brand-new game starts the other way.",
-    "<b>And always remember:</b> arms and legs can wiggle all they like. Only <b>shirts</b> count, and only when the <b>bell</b> rings.",
+    "<b>And so, Pip learned the Golden Bell's secret:</b>",
+    "<b>1.</b> Grandma rests on her bench. (When she does, Papa's jump can be a <b>proper jump</b>.)",
+    "<b>2.</b> <b>Papa jumps</b> a fence. It becomes his trampoline.",
+    "<b>3.</b> <b>Pip bounces</b> on one of Papa's safe spots and doesn't fall through.",
+    "<b>4.</b> <b>Pip jumps her outside fence.</b> DING! DING! DING!",
+    "<b>And never forget the kingdom's golden rule:</b> coats count, arms don't. Only where the coat stops, when the bell rings.",
+    "<b>And they bounced happily ever after. The End.</b>",
 ]
 
 
@@ -478,12 +470,12 @@ def build():
         return Paragraph(text, ParagraphStyle("t", fontName="Kid-Bold", fontSize=23, leading=28, textColor=colors.HexColor(col), spaceAfter=6))
 
     story = [Spacer(1, 22 * mm),
-             Paragraph("The Candle Twins", st["cover_t"]), Spacer(1, 3 * mm),
+             Paragraph("Pip", st["cover_t"]), Spacer(1, 3 * mm),
              Paragraph("and the Golden Bell", ParagraphStyle("c2", parent=st["cover_t"], fontSize=24, leading=30, textColor=colors.HexColor(SUN))),
              Spacer(1, 8 * mm), picture(im["cover"], 105 * mm), Spacer(1, 8 * mm),
-             Paragraph("A Candle Town story about how<br/>MummyTKT's Bias Pointer finds its trades", st["cover_s"]),
+             Paragraph("A Candle Kingdom bedtime story", st["cover_s"]),
              Spacer(1, 4 * mm),
-             Paragraph("For curious readers aged 7 to 10 (and their grown-ups)", st["cover_s"]),
+             Paragraph("For children aged 6 to 10 and the grown-ups who read to them", st["cover_s"]),
              PageBreak()]
 
     num = 0
@@ -499,32 +491,33 @@ def build():
         story.append(KeepTogether(block[:5]))
         story += block[5:]
 
-    story += [PageBreak(), title("The Moral of the Story", SUN), picture(im["moral"], 70 * mm), Spacer(1, 5 * mm)]
+    story += [PageBreak(), title("The Golden Bell's Secret", SUN), picture(im["family"], 70 * mm), Spacer(1, 5 * mm)]
     story += [Paragraph(p, st["moral"]) for p in MORAL]
     story += [Spacer(1, 4 * mm),
               Paragraph("<b>Ready doesn't mean sure.</b> Even when every bell rings, the twins can still surprise us. "
                         "That's why grown-ups always plan what to do if they're wrong.", st["moral"])]
 
-    gloss = [("Bullish Ben (green shirt)", "a bullish candle: close above open"),
-             ("Bearish Bella (red shirt)", "a bearish candle: close below open"),
-             ("Shirt", "candle body (open to close)"),
-             ("Stretchy arms and legs", "upper and lower wicks (to the high and low)"),
-             ("Closing Bell", "candle close; nothing is judged before it"),
-             ("Rooftop / Valley floor", "A-shape / V-shape level (bodies; Giants can use wicks via a setting)"),
-             ("Newest house (roof / floor)", "the most recent External high / low (Daily)"),
-             ("Hand-off Step", "OC level (close of candle 1 = open of candle 2)"),
-             ("Giant / Little / Tiny Twins", "Daily / H4 / H1 and H2 candles"),
-             ("Wiggle Mat", "tolerance band for moving away and for a visit failing (5 pips; entry alerts 20 pips); touches must be exact"),
-             ("Great Breakout", "Daily close beyond the most recent External high/low"),
-             ("Trampoline", "Daily Breaker (the broken level)"),
-             ("Stepping Stones", "post-breakout Daily OCs (all watched)"),
-             ("Visit", "reaction / retest of a Daily zone"),
-             ("Golden Bell", "Origin alert (first H4 confirmation)"),
-             ("Outside / Inside roof", "External / Internal H4 break"),
-             ("Encore Bell", "continuation alert"),
-             ("Giant gap / little gap", "Daily FVG reaction zone / H4 FVG after breakout alert"),
-             ("Wobble", "H4 out of line (chart label: OUT OF LINE)"),
-             ("Brand-new game", "the next Daily breakout replaces the setup"),
+    gloss = [("Green coat / red coat", "bullish candle (close above open) / bearish candle (close below open)"),
+             ("Coat", "candle body (open to close): only the close counts, at the candle close"),
+             ("Stretchy arms and legs", "wicks (high and low): never decide anything"),
+             ("Grandma Wendy / Papa Dan / Pip / Tia", "Weekly / Daily / H4 / H1 and H2 candles"),
+             ("Fence (real once a later candle walks below it)", "A-shape (V-shape = a dip, for sells); counts once a later candle trades below its bearish candle"),
+             ("Jumping a fence", "a candle closing beyond the level (breakout)"),
+             ("Grandma's big jump / her bench", "Weekly breakout / a Weekly key level (Weekly Breaker, Weekly V/A, OC or FVG)"),
+             ("Papa's first touch of the bench", "first Daily touch of the Weekly level: the Weekly reaction's External start"),
+             ("Proper jump / baby fence", "Weekly-confirmed External / Internal (in line while Internal is off)"),
+             ("Trampoline / going out to play", "Daily Breaker / moving away (close beyond the Breaker ± 5 pips)"),
+             ("Bounce on a safe spot", "Daily reaction: exact H4 touch that holds at a Daily level"),
+             ("Stepping stones / dips and steps / soft cushions", "post-breakout Daily OCs / V-shapes and OCs in the broken range / Daily FVGs"),
+             ("Cushion rules", "FVG: dip in from above only; a deeper FVG takes over; no re-entry from below; only a Daily close through it kills it"),
+             ("Outside / inside fence", "External / Internal H4 level (formed before / after the first touch of the Daily level)"),
+             ("Golden Bell", "Origin alert"),
+             ("Encore bell", "continuation alert (in-line breakout, Breaker, OC, engulfing, Daily reaction + H4 breakout, back in line)"),
+             ("Little gap bell", "H4 FVG after breakout (liquidity marker)"),
+             ("Castle wall jumped, same way", "same-direction Daily breakout: H4 keeps riding, no new Origin"),
+             ("Wobble", "H4 out of line"),
+             ("Wind changes", "Daily breakout the other way: everything resets"),
+             ("Grandma going the other way", "Daily setup AGAINST the Weekly"),
              ("Peek-and-Hold / Big Hug", "PCL / Engulfing Sweep entry patterns")]
     cell = ParagraphStyle("cell", fontName="Kid", fontSize=9.6, leading=12.5, textColor=colors.HexColor(INK))
     tbl = Table([[Paragraph(f"<b>{a}</b>", cell), Paragraph(b, cell)] for a, b in gloss], colWidths=[62 * mm, W - 62 * mm])
@@ -537,7 +530,7 @@ def build():
               Paragraph("Directional bias education only, not financial advice. Trading carries real risk and is for adults.", st["small"])]
 
     doc = SimpleDocTemplate(str(OUT), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=20 * mm,
-                            title="The Candle Twins and the Golden Bell", author="MummyTKT's Bias Pointer",
+                            title="Pip and the Golden Bell", author="MummyTKT's Bias Pointer",
                             subject="The Bias Pointer strategy as a children's story")
     doc.build(story, onFirstPage=deco, onLaterPages=deco)
     return OUT

@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { Play, Trash2, Film, Plus, Link, FileText, Download } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Play, Trash2, Film, Plus, Link, FileText, Download, BookOpen, X } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -225,12 +225,90 @@ interface StrategyData {
 // is never at a public URL.
 const DOCS = [
   { key: 'rulebook', title: 'Strategy Rulebook', desc: 'Every rule, numbered, with a picture of each condition.', file: 'MummyTKT_Strategy_Rulebook.pdf' },
-  { key: 'storybook', title: 'The Candle Twins', desc: 'The same strategy as a children’s storybook (ages 7–10).', file: 'The_Candle_Twins_Storybook.pdf' },
+  { key: 'storybook', title: 'Pip and the Golden Bell', desc: 'The same strategy as a once-upon-a-time bedtime story for children.', file: 'The_Candle_Twins_Storybook.pdf' },
 ]
+
+// Read a PDF right on the page. Phones (and Telegram's in-app browser) can't show a PDF in
+// a frame, so the pages are drawn with pdf.js (loaded once from a CDN) as images.
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+type PdfJs = { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<{
+  numPages: number; getPage: (n: number) => Promise<{
+    getViewport: (o: { scale: number }) => { width: number; height: number }
+    render: (o: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => { promise: Promise<void> } }> }> } }
+function loadPdfJs(): Promise<PdfJs> {
+  const w = window as unknown as { pdfjsLib?: PdfJs }
+  if (w.pdfjsLib) return Promise.resolve(w.pdfjsLib)
+  return new Promise((resolve, reject) => {
+    const sc = document.createElement('script')
+    sc.src = PDFJS
+    sc.onload = () => { const lib = w.pdfjsLib; if (!lib) return reject(); lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; resolve(lib) }
+    sc.onerror = reject
+    document.head.appendChild(sc)
+  })
+}
+
+function PdfReader({ data, title, onClose }: { data: ArrayBuffer; title: string; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null)
+  const [status, setStatus] = useState('Opening…')
+  useEffect(() => {
+    let stop = false
+    ;(async () => {
+      try {
+        const lib = await loadPdfJs()
+        const doc = await lib.getDocument({ data: data.slice(0) }).promise
+        const width = Math.min((box.current?.clientWidth || 800) - 8, 900)
+        for (let n = 1; n <= doc.numPages && !stop; n++) {
+          const page = await doc.getPage(n)
+          const base = page.getViewport({ scale: 1 })
+          const ratio = window.devicePixelRatio || 1
+          const vp = page.getViewport({ scale: (width / base.width) * ratio })
+          const c = document.createElement('canvas')
+          c.width = vp.width; c.height = vp.height
+          c.style.width = `${width}px`; c.style.display = 'block'; c.style.margin = '0 auto 10px'; c.style.borderRadius = '6px'
+          c.style.boxShadow = '0 4px 18px rgba(0,0,0,0.35)'
+          const ctx = c.getContext('2d')
+          if (!ctx) continue
+          await page.render({ canvasContext: ctx, viewport: vp }).promise
+          if (stop) return
+          box.current?.appendChild(c)
+          setStatus(n < doc.numPages ? `Page ${n} of ${doc.numPages}…` : '')
+        }
+      } catch { if (!stop) setStatus('Couldn’t show this file here. Use Download PDF instead.') }
+    })()
+    return () => { stop = true }
+  }, [data])
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(8,9,18,0.92)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+        <BookOpen size={16} color="white" />
+        <span style={{ color: 'white', fontWeight: 700, fontSize: 14, flex: 1 }}>{title}</span>
+        {status && <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>{status}</span>}
+        <button onClick={onClose} aria-label="Close" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 8,
+          border: '1px solid rgba(255,255,255,0.25)', background: 'transparent', color: 'white', cursor: 'pointer', fontSize: 12 }}>
+          <X size={14} /> Close
+        </button>
+      </div>
+      <div ref={box} style={{ flex: 1, overflowY: 'auto', padding: '14px 4px' }} />
+    </div>
+  )
+}
 
 function StrategyDocs() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [reading, setReading] = useState<{ title: string; data: ArrayBuffer } | null>(null)
+
+  const read = async (d: typeof DOCS[number]) => {
+    setBusy(d.key); setError('')
+    try {
+      const res = await fetch(`${API_BASE}/api/strategy-docs/${d.key}`, { headers: authHdrs() })
+      if (!res.ok) throw new Error('Open failed')
+      setReading({ title: d.title, data: await res.arrayBuffer() })
+    } catch {
+      setError('Couldn’t open that file. Please try again.')
+    } finally { setBusy(null) }
+  }
 
   const download = async (d: typeof DOCS[number]) => {
     setBusy(d.key); setError('')
@@ -259,15 +337,22 @@ function StrategyDocs() {
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{d.desc}</p>
               </div>
             </div>
-            <button onClick={() => download(d)} disabled={busy !== null}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', opacity: busy !== null && busy !== d.key ? 0.5 : 1 }}>
-              <Download size={12} />{busy === d.key ? 'Downloading…' : 'Download PDF'}
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => read(d)} disabled={busy !== null}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer', opacity: busy !== null && busy !== d.key ? 0.5 : 1 }}>
+                <BookOpen size={12} />Read
+              </button>
+              <button onClick={() => download(d)} disabled={busy !== null}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', opacity: busy !== null && busy !== d.key ? 0.5 : 1 }}>
+                <Download size={12} />{busy === d.key ? 'Opening…' : 'Download PDF'}
+              </button>
+            </div>
           </div>
         ))}
         {error && <p style={{ fontSize: 12, color: 'var(--bearish)' }}>{error}</p>}
         <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Only you can see these. Subscribers don’t have access.</p>
       </div>
+      {reading && <PdfReader title={reading.title} data={reading.data} onClose={() => setReading(null)} />}
     </Card>
   )
 }
