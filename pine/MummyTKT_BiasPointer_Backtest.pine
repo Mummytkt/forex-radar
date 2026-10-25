@@ -193,6 +193,10 @@ bool   sw_all      = input.bool(true, "Show every H4 sweep (like LuxAlgo)", grou
      tooltip="Display only. Marks every H4 sweep on the chart: a dotted line from the swing to the sweep candle and a zone over the wick that swept it. Off: only the breakout labels say whether a sweep came first.")
 color  sw_bull_col = input.color(color.new(#089981, 70), "Bullish sweep zone", group=GBT, inline="swz")
 color  sw_bear_col = input.color(color.new(#F23645, 70), "Bearish sweep zone", group=GBT, inline="swz")
+bool   sw_ext      = input.bool(true, "Extend sweep zones", group=GBT, inline="swe",
+     tooltip="On: each zone stretches right until a candle closes through it (or the max bars). Off: the zone stays on the sweep candle.")
+int    sw_maxb     = input.int(300, "max bars", minval=1, maxval=5000, group=GBT, inline="swe")
+bool   sw_ext_l    = input.bool(false, "Extend sweep lines to the right", group=GBT)
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
 //         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells, 10 H4 FVG after breakout
 var bt_cnt  = array.new_int(11, 0)
@@ -220,6 +224,8 @@ var array<int>   sws_piv = array.new<int>()
 var array<line>  sw_lines = array.new<line>()
 var array<line>  sw_all_l = array.new<line>()    // every sweep ("Show every H4 sweep")
 var array<box>   sw_all_b = array.new<box>()
+var array<bool>  sw_all_d = array.new<bool>()    // zone direction: true = bullish sweep
+var array<bool>  sw_all_x = array.new<bool>()    // zone closed through (stops extending)
 var string bt_swtxt = ""                         // sweep line for the breakout label being drawn
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout", "Buys", "Sells", "H4 FVG after breakout")
 
@@ -1543,12 +1549,16 @@ f_h4_leg_prune(array<float> lv, array<int> lb, int from_bar, bool bull) =>
 f_sw_mark(bool bull, float lv, int pb) =>
     if sw_all and timeframe.period == "240"
         color zc = bull ? sw_bull_col : sw_bear_col
-        array.push(sw_all_l, line.new(pb, lv, bar_index, lv, color=color.new(zc, 0), style=line.style_dotted))
-        array.push(sw_all_b, box.new(bar_index, bull ? lv : high, bar_index + 3, bull ? low : lv, border_color=color.new(zc, 100), bgcolor=zc))
+        array.push(sw_all_l, line.new(pb, lv, bar_index, lv, color=color.new(zc, 0), style=line.style_dotted, extend=sw_ext_l ? extend.right : extend.none))
+        array.push(sw_all_b, box.new(bar_index - 1, bull ? lv : high, bar_index + 1, bull ? low : lv, border_color=color.new(zc, 100), bgcolor=zc))
+        array.push(sw_all_d, bull)
+        array.push(sw_all_x, false)
         if array.size(sw_all_l) > 200
             line.delete(array.shift(sw_all_l))
         if array.size(sw_all_b) > 200
             box.delete(array.shift(sw_all_b))
+            array.shift(sw_all_d)
+            array.shift(sw_all_x)
 
 float sw_pl = ta.pivotlow(low, sw_len, sw_len)
 float sw_ph = ta.pivothigh(high, sw_len, sw_len)
@@ -1589,6 +1599,17 @@ if barstate.isconfirmed
             array.remove(sw_ph_p, sk)
             array.remove(sw_ph_b, sk)
         sk -= 1
+    // Extend each live zone to this candle until a close goes through it (like LuxAlgo)
+    if sw_ext and array.size(sw_all_b) > 0
+        for i = 0 to array.size(sw_all_b) - 1
+            if not array.get(sw_all_x, i)
+                box zb = array.get(sw_all_b, i)
+                if bar_index - box.get_left(zb) - 1 <= sw_maxb
+                    box.set_right(zb, bar_index)
+                    if array.get(sw_all_d, i) ? close < box.get_bottom(zb) : close > box.get_top(zb)
+                        array.set(sw_all_x, i, true)
+                else
+                    array.set(sw_all_x, i, true)
     while array.size(swb_bar) > 200
         array.shift(swb_bar)
         array.shift(swb_lvl)
