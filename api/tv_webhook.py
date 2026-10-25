@@ -159,7 +159,8 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
 
     if chats:
         results = await asyncio.gather(*(_one(c) for c in chats))
-        logger.info("%s alert delivered to %d/%d chats", instrument, sum(1 for r in results if r), len(chats))
+        logger.info("%s alert delivered to %d/%d chats (%d in Short style)", instrument,
+                    sum(1 for r in results if r), len(chats), len(short_chats & set(chats)))
 
     # Fallback only when nobody has linked Telegram at all. Recipients filtered
     # out by their own choices must stay filtered, never rerouted.

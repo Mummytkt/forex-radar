@@ -552,15 +552,15 @@ check("BREAKOUT with level_type accepted", [tuple(x) for x in active_bo("GBPCHF"
 tv(type="CONFIRMED", instrument="GBPCHF", direction="bullish", source="inside_range", h4_class="internal", level_type="inner_internal",
    breakout_level=1.10, source_level=1.10, h4_level=1.095, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='GBPCHF' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("Origin alert names the inner internal break", "Daily breakout level: Inner internal" in t)
+check("Origin alert has no Daily breakout level line (always External now)", "Daily breakout level" not in t)
 tv(type="H4_CONTINUATION", instrument="GBPCHF", direction="bullish", cont_type="breakout_cont", level_type="external",
    breakout_level=1.10, h4_level=1.12, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='GBPCHF' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("continuation alert names the external break", "Daily breakout level: External" in t)
+check("continuation alert has no Daily breakout level line", "Daily breakout level" not in t)
 tv(type="H4_CONTINUATION", instrument="GBPCHF", direction="bullish", cont_type="oc_cont", level_type="sub_internal",
    breakout_level=1.10, h4_level=1.11, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='GBPCHF' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("continuation alert names a sub-internal break", "Daily breakout level: Sub-internal" in t)
+check("no Daily breakout level line on any continuation", "Daily breakout level" not in t)
 tv(type="BREAKOUT", instrument="GBPCHF", direction="bearish", level=1.08, level_type="internal", range_level=1.12, timeframe="240")
 check("a break the other way replaces the setup", [tuple(x) for x in active_bo("GBPCHF")] == [("bearish", 1.08)])
 
@@ -634,7 +634,7 @@ check("Origin describes the close above the External high", "A Daily candle clos
 check("Origin headline: BUY CHFJPY (Forex)", t.startswith("BUY CHFJPY (Forex)\n"))
 check("Origin alert ends with whose chart and prices it used (above the signature)",
       "📊 All charts and prices are from" in t and t.index("📊") < t.index("— MummyTKT"))
-check("an Origin without level_type says the Daily breakout level is External", "Daily breakout level: External" in t)
+check("an Origin without level_type has no Daily breakout level line", "Daily breakout level" not in t)
 tv(type="PRICE_UPDATE", instrument="XAGUSD", price=48.235, timeframe="240", snapshot=dict(snap, stage="breakout"))
 b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
 check("XAGUSD is a platform instrument and lands on the board", (b.get("XAGUSD") or {}).get("stage") == "breakout")
@@ -902,6 +902,13 @@ check("Short-style subscribers get the short message; others the full one",
       _sh and len(_sh) < len(_full_txt) and "Weekly-confirmed" in _sh and "Reason:" in _sh
       and "aligns with the most recent Daily breakout" not in _sh
       and _got.get(_owner_chat) == _full_txt)
+c.patch("/api/preferences", headers=H(owner), json={"alertStyle": "short"})
+_got.clear(); tvw.send_alert = _capt
+asyncio.run(tvw._deliver_alert(conn, cfg, "AUDCAD", _full_txt, pref="origin"))
+tvw.send_alert = _old_t
+check("the owner who switches to Short gets the short message too",
+      _got.get(_owner_chat) and _got[_owner_chat] == tvw.short_text(_full_txt) and len(_got[_owner_chat]) < len(_full_txt))
+c.patch("/api/preferences", headers=H(owner), json={"alertStyle": "full"})
 c.patch("/api/preferences", headers=H(ts_), json={"alertStyle": "full"})
 
 # ── Testers (2026-10-21) ───────────────────────────────────────────────────

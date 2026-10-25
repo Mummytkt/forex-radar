@@ -85,12 +85,25 @@ def format_alert(alert: AlertRecord) -> str:
     if alert.classification == AlertClassification.H4_FVG:
         # Liquidity marker: just the pair and the message, no buy / sell
         return f"{alert.instrument}\nH4 FVG candle after breakout has formed"
-    return _with_weekly(alert, _format_body(alert))
+    return _drop_level_line(_with_weekly(alert, _format_body(alert)))
+
+
+def _drop_level_line(text: str) -> str:
+    """The Daily breakout is always the most recent External high/low (since
+    19 Oct 2026), so 'Daily breakout level: External' told people nothing."""
+    out: list[str] = []
+    for ln in text.split("\n"):
+        if ln.startswith("Daily breakout level:"):
+            continue
+        if ln == "" and out and out[-1] == "":
+            continue
+        out.append(ln)
+    return "\n".join(out)
 
 
 # Lines kept in the Short message style: the headline of each part, no explanations
 _SHORT_KEEP = ("Daily breakout:", "Weekly", "Daily reaction source:", "H4 confirmation:", "Reason:",
-               "Daily breakout level:", "⚠️", "📊")
+               "⚠️", "📊")
 
 
 def _h4_break_line(alert: AlertRecord, level_str: str) -> str:
