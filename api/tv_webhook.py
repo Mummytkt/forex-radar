@@ -31,7 +31,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from alerts.formatter import format_alert, format_entry_alert, short_text
+from alerts.formatter import format_alert, format_entry_alert, short_text, with_data_source
 from config import SYMBOL_ALIASES, is_synthetic, fmt_price, normalize_symbol, tagged
 from state.instruments import register_synthetic
 from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
@@ -664,7 +664,8 @@ async def _handle_confirmed(conn, config, instrument: str, payload: TVWebhookPay
         weekly=_weekly_ctx(payload),
     )
 
-    alert_text = format_alert(alert_record)
+    # Origin alerts say whose chart and prices they were read from (testers, 2026-10-25)
+    alert_text = with_data_source(format_alert(alert_record), payload.exchange)
     alert_id = insert_alert(conn, alert_record, breakout.db_id, source.db_id, h4_formation_id, alert_text)
     _save_chart_levels(conn, instrument, alert_id, direction, breakout.broken_level,
                        source=(source.level, _SOURCE_NAMES.get(source.source_type, "Daily level")),

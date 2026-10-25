@@ -77,13 +77,13 @@ class TestFormatAlert:
     def test_sell_bias_header_present(self):
         alert = _make_alert(Direction.BEARISH)
         text = format_alert(alert)
-        assert text.startswith("SELL CONFIRMED — Look for entry and sell")
+        assert text.startswith("SELL ") and "CONTINUATION" not in text.split("\n")[0]
         assert INST in text
 
     def test_buy_bias_header_present(self):
         alert = _make_alert(Direction.BULLISH, source_type=ReactionSourceType.DAILY_BREAKER)
         text = format_alert(alert)
-        assert text.startswith("BUY CONFIRMED — Look for entry and buy")
+        assert text.startswith("BUY ") and "CONTINUATION" not in text.split("\n")[0]
 
     def test_daily_h4_aligned_line(self):
         alert = _make_alert()

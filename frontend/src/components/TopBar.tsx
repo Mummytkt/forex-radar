@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Radio, LayoutGrid, ChevronDown, UserCircle2, Sun, Moon, LogOut, Activity } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Radio, LayoutGrid, ChevronDown, UserCircle2, Sun, Moon, LogOut, Activity, ArrowLeft } from 'lucide-react'
 import { isForexOpen } from '@/lib/utils'
 import { useTimezone, getAbbrStr } from '@/lib/timezone'
 import useSWR from 'swr'
@@ -44,6 +44,21 @@ export default function TopBar({ title, subtitle }: Props) {
   const { user, authEnabled, logout } = useAuth()
   const { theme, toggle } = useTheme()
   const path = usePathname()
+  const router = useRouter()
+  // Back to the previous screen (or the hub when this page was opened directly)
+  const goBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
+    else router.push(HUB_HREF)
+  }
+  const showBack = path !== HUB_HREF
+  // Inside Telegram, also show Telegram's own back button in its header
+  useEffect(() => {
+    const bb = typeof window !== 'undefined' ? window.Telegram?.WebApp?.BackButton : undefined
+    if (!bb) return
+    if (showBack) { bb.show(); bb.onClick(goBack) } else bb.hide()
+    return () => { bb.offClick(goBack) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBack, path])
   const isOwner = user?.role === 'OWNER'
   const { data: unreadData } = useSWR<{ unread: number } | null>(
     user && !isOwner ? UNREAD_KEY : null, quietFetch, { refreshInterval: 60000 })
@@ -78,6 +93,14 @@ export default function TopBar({ title, subtitle }: Props) {
       transition: 'background 0.25s, border-color 0.25s',
     }}>
       {menu && <div onClick={() => setMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />}
+
+      {showBack && (
+        <button onClick={goBack} title="Back" aria-label="Back"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+            border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', marginRight: -6 }}>
+          <ArrowLeft size={16} />
+        </button>
+      )}
 
       {/* Brand — always takes you back to the hub */}
       <Link href={HUB_HREF} title="Home" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', flexShrink: 0 }}>

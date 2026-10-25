@@ -7,7 +7,8 @@ const KEY = 'mbp_tg_init'
 
 declare global {
   interface Window {
-    Telegram?: { WebApp?: { initData?: string; ready: () => void; expand: () => void; setHeaderColor?: (c: string) => void } }
+    Telegram?: { WebApp?: { initData?: string; ready: () => void; expand: () => void; setHeaderColor?: (c: string) => void
+      BackButton?: { show: () => void; hide: () => void; onClick: (f: () => void) => void; offClick: (f: () => void) => void } } }
   }
 }
 

@@ -90,7 +90,7 @@ def format_alert(alert: AlertRecord) -> str:
 
 # Lines kept in the Short message style: the headline of each part, no explanations
 _SHORT_KEEP = ("Daily breakout:", "Weekly", "Daily reaction source:", "H4 confirmation:", "Reason:",
-               "Daily breakout level:", "⚠️")
+               "Daily breakout level:", "⚠️", "📊")
 
 
 def _h4_break_line(alert: AlertRecord, level_str: str) -> str:
@@ -99,14 +99,34 @@ def _h4_break_line(alert: AlertRecord, level_str: str) -> str:
 
 
 def _headline(direction: Direction, instrument: str, continuation: bool) -> str:
-    """First line of a bias alert.
-    Origin:        'BUY CONFIRMED — Look for entry and buy AUDCAD (Forex)'
-    Continuation:  'CONTINUATION CONFIRMED, BUY IS STILL ON — Look for entry and keep buying AUDCAD (Forex)'"""
-    bull = direction == Direction.BULLISH
+    """First line of a bias alert (testers' wording, 2026-10-25).
+    Origin:        'BUY BTCUSD (Crypto)'
+    Continuation:  'BUY CONTINUATION — BUY AUDCAD (Forex)'"""
+    side = "BUY" if direction == Direction.BULLISH else "SELL"
     if continuation:
-        return (f"CONTINUATION CONFIRMED, {'BUY' if bull else 'SELL'} IS STILL ON — "
-                f"Look for entry and keep {'buying' if bull else 'selling'} {tagged(instrument)}")
-    return f"{'BUY' if bull else 'SELL'} CONFIRMED — Look for entry and {'buy' if bull else 'sell'} {tagged(instrument)}"
+        return f"{side} CONTINUATION — {side} {tagged(instrument)}"
+    return f"{side} {tagged(instrument)}"
+
+
+# Where the chart and prices come from (TradingView exchange prefix → name)
+_FEEDS = {"FOREXCOM": "FOREX.com", "FX": "FXCM", "FX_IDC": "FXCM", "OANDA": "OANDA", "COINBASE": "Coinbase",
+          "BINANCE": "Binance", "BITSTAMP": "Bitstamp", "KRAKEN": "Kraken", "BYBIT": "Bybit", "DERIV": "Deriv",
+          "CAPITALCOM": "Capital.com", "PEPPERSTONE": "Pepperstone", "ICMARKETS": "IC Markets", "TVC": "TradingView (TVC)",
+          "CRYPTO": "TradingView crypto index", "FXOPEN": "FXOpen", "EIGHTCAP": "Eightcap", "BLACKBULL": "BlackBull"}
+
+
+def with_data_source(text: str, exchange: str | None) -> str:
+    """Put the data-source line at the end of an Origin alert, above the signature."""
+    lines = text.split("\n")
+    at = max((i for i, ln in enumerate(lines) if ln.startswith("— ")), default=len(lines))
+    return "\n".join(lines[:at] + [data_source_line(exchange), ""] + lines[at:])
+
+
+def data_source_line(exchange: str | None) -> str:
+    """Under each Origin alert: whose chart and prices the alert was read from."""
+    feed = _FEEDS.get((exchange or "").upper(), (exchange or "").strip() or "the TradingView chart")
+    return (f"📊 All charts and prices are from {feed} on TradingView. Your broker's prices can differ slightly, "
+            "so check the levels on your own chart.")
 
 
 def _signature() -> str:

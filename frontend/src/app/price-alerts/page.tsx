@@ -289,13 +289,13 @@ function EntryAlertsPanel({ instruments, prices }: {
     e.preventDefault()
     setFormError('')
     const priceVal = parseFloat(price)
-    const tolVal = parseFloat(tolerance)
+    const tolVal = tolerance.trim() === '' ? 20 : parseFloat(tolerance)   // optional: blank = the default 20 pips
     if (!instrument || isNaN(priceVal) || priceVal <= 0) {
       setFormError('Select an instrument and enter a valid price.')
       return
     }
     if (isNaN(tolVal) || tolVal <= 0) {
-      setFormError('Tolerance must be greater than 0.')
+      setFormError('Tolerance has to be at least 1 pip (0 would only fire on the exact price). Leave it empty to use 20 pips.')
       return
     }
     let expiresAt: string | null = null
@@ -434,12 +434,12 @@ function EntryAlertsPanel({ instruments, prices }: {
 
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-              Tolerance (pips)
+              Tolerance (pips) <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>· optional</span>
             </label>
             <input
               type="number"
               step="1"
-              min="1"
+              placeholder="20 (leave empty for the default)"
               value={tolerance}
               onChange={e => setTolerance(e.target.value)}
               style={{

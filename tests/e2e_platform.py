@@ -631,7 +631,9 @@ tv(type="CONFIRMED", instrument="CHFJPY", direction="bullish", source="daily_bre
    breakout_level=180.0, source_level=180.0, h4_level=181.0, timeframe="240")
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='CHFJPY' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("Origin describes the close above the External high", "A Daily candle closed above the most recent External high @ 180.000" in t)
-check("Origin headline: BUY CONFIRMED — Look for entry and buy CHFJPY (Forex)", t.startswith("BUY CONFIRMED — Look for entry and buy CHFJPY (Forex)"))
+check("Origin headline: BUY CHFJPY (Forex)", t.startswith("BUY CHFJPY (Forex)\n"))
+check("Origin alert ends with whose chart and prices it used (above the signature)",
+      "📊 All charts and prices are from" in t and t.index("📊") < t.index("— MummyTKT"))
 check("an Origin without level_type says the Daily breakout level is External", "Daily breakout level: External" in t)
 tv(type="PRICE_UPDATE", instrument="XAGUSD", price=48.235, timeframe="240", snapshot=dict(snap, stage="breakout"))
 b = {p["instrument"]: p["snapshot"] for p in c.get("/api/chart-board", headers=H(owner)).json()["pairs"]}
@@ -839,7 +841,7 @@ check("a Weekly-confirmed Origin states the Weekly storyline",
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="oc_cont", level_type="external",
    breakout_level=0.9100, h4_level=0.9120, timeframe="240", wk_rel="against", wk_dir="bearish", wk_level=0.9300)
 t = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("continuation headline: CONTINUATION CONFIRMED — keep buying", t.startswith("CONTINUATION CONFIRMED, BUY IS STILL ON — Look for entry and keep buying AUDCAD (Forex)"))
+check("continuation headline: BUY CONTINUATION — BUY AUDCAD (Forex)", t.startswith("BUY CONTINUATION — BUY AUDCAD (Forex)"))
 check("a setup against the Weekly is marked", "AGAINST the Weekly direction" in t and "Weekly: Bearish breakout @ 0.93000" in t)
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="engulfing", level_type="external",
    breakout_level=0.9100, h4_level=0.9135, timeframe="240")
@@ -1053,7 +1055,7 @@ _m = cmd("/start")
 check("plain /start greets a linked person with Open Bias Pointer", _m and _m[0][2].inline_keyboard[0][0].web_app.url.endswith("/hub"))
 _m = cmd("/board", chat=5550999)
 check("an unlinked chat is told how to link", _m and "isn't linked" in _m[0][1])
-check("/help explains the alert words", "CONTINUATION CONFIRMED" in cmd("/help")[0][1])
+check("/help explains the alert words", "BUY / SELL CONTINUATION" in cmd("/help")[0][1])
 check("menu commands are ignored in groups", cmd("/board", ctype="group") == [])
 _m = cmd("/news")
 check("/news shows the current setting with a switch", _m and "ON" in _m[0][1] and _m[0][2].inline_keyboard[0][0].callback_data == "nw:0")
