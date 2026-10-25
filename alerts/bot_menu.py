@@ -54,7 +54,7 @@ Daily breakout: a Daily candle closed beyond the last Daily high or low. This se
 
 Reaction: price came back to a Daily level (Breaker, OC, V/A-shape, FVG, or a level inside the range) and held.
 
-Daily FVG: a gap left by three Daily candles. 4H entering the gap is a reaction; only a Daily close through the gap ends it.
+Daily FVG: a gap left by three Daily candles. 4H dipping into the gap (from above for buys, below for sells) is a reaction; only a Daily close through the gap ends it. If price goes on into a deeper FVG, that one takes over.
 
 External / Internal: whether the 4H structure that broke formed before (External) or after (Internal) price reached the Daily level.
 

@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v8 — live alerts + on-chart labels (2026-10-23)
+// MummyTKT's Bias Pointer v9 — live alerts + on-chart labels (2026-10-25)
 //
 // The logic proven in the backtest edition is now the live logic. Every bias
 // alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
@@ -36,6 +36,18 @@
 //     back in line, in line): the NEXT H4 candle is checked once; if it completes
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
+//
+// Since v9 (which Daily FVG counts):
+//   • A bullish FVG only reacts when price DIPS INTO it from above (a bearish one
+//     from below). Once price has traded past its far edge it can't start a new
+//     reaction; a reaction already running there lives until a Daily close.
+//   • While reacting at an FVG, price entering a DEEPER FVG moves the reaction
+//     there, with that FVG's own External level.
+//   • Each FVG keeps its own External level (from the candle that first entered
+//     it, moved by each deeper Daily candle while it is the reaction); a return
+//     to it uses that level, not the H4 A/V formed at the return.
+//   • An H4 breakout from an FVG uses up the FVGs above it (below, for sells)
+//     that price went through.
 //
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
@@ -767,6 +779,20 @@ var array<float> d_bf_hi = array.new<float>()
 var array<float> d_bf_lo = array.new<float>()
 var array<float> d_sf_hi = array.new<float>()
 var array<float> d_sf_lo = array.new<float>()
+// Each FVG's own External H4 level (A for bullish gaps, V for bearish) and the bar
+// it was set on: from the candle that first entered it, moved by each deeper
+// Daily candle while it is the reaction. Kept so a return to the same FVG (or a
+// deeper FVG taking over) uses that FVG's own level.
+var array<float> d_bf_x  = array.new<float>()
+var array<int>   d_bf_xb = array.new<int>()
+var array<float> d_sf_x  = array.new<float>()
+var array<int>   d_sf_xb = array.new<int>()
+// Pierced: price has traded beyond the gap's far edge (below a bullish gap, above
+// a bearish one). A bullish FVG only reacts when price dips INTO it from above,
+// so once pierced it can't start a new reaction (coming back up into it from
+// below doesn't count). A reaction already running there is not ended by this.
+var array<bool>  d_bf_p  = array.new<bool>()
+var array<bool>  d_sf_p  = array.new<bool>()
 // H4 FVG after an H4 breakout in line with the Daily: checked on the next candle
 var int    h4f_bar  = na
 var bool   h4f_bull = false
@@ -1123,35 +1149,50 @@ if new_daily and not na(d_close2)
 
 // Daily FVGs. A gap is only an FVG once its third Daily candle has closed. A Daily
 // close through the gap kills it (bullish: below the bottom; bearish: above the top).
-f_fvg_kill(array<float> his, array<float> los, float c, bool bull) =>
+f_fvg_drop(array<float> his, array<float> los, array<float> xs, array<int> xbs, array<bool> ps, int k) =>
+    array.remove(his, k)
+    array.remove(los, k)
+    array.remove(xs, k)
+    array.remove(xbs, k)
+    array.remove(ps, k)
+f_fvg_kill(array<float> his, array<float> los, array<float> xs, array<int> xbs, array<bool> ps, float c, bool bull) =>
     int k = array.size(his) - 1
     while k >= 0
         if bull ? c < array.get(los, k) : c > array.get(his, k)
-            array.remove(his, k)
-            array.remove(los, k)
+            f_fvg_drop(his, los, xs, xbs, ps, k)
         k -= 1
-f_fvg_keep(array<float> his, array<float> los, float h, float l) =>
+f_fvg_keep(array<float> his, array<float> los, array<float> xs, array<int> xbs, array<bool> ps, float h, float l) =>
     array.push(his, h)
     array.push(los, l)
+    array.push(xs, na)
+    array.push(xbs, na)
+    array.push(ps, false)
     if array.size(his) > 60
-        array.shift(his)
-        array.shift(los)
+        f_fvg_drop(his, los, xs, xbs, ps, 0)
+// Index of the FVG with this top / bottom, or -1
+f_fvg_idx(array<float> his, array<float> los, float h, float l) =>
+    int found = -1
+    if array.size(his) > 0 and not na(h) and not na(l)
+        for i = 0 to array.size(his) - 1
+            if math.abs(array.get(his, i) - h) <= pip * 0.1 and math.abs(array.get(los, i) - l) <= pip * 0.1
+                found := i
+    found
 
 if new_daily and not na(d_close)
-    f_fvg_kill(d_bf_hi, d_bf_lo, d_close, true)
-    f_fvg_kill(d_sf_hi, d_sf_lo, d_close, false)
+    f_fvg_kill(d_bf_hi, d_bf_lo, d_bf_x, d_bf_xb, d_bf_p, d_close, true)
+    f_fvg_kill(d_sf_hi, d_sf_lo, d_sf_x, d_sf_xb, d_sf_p, d_close, false)
 if new_daily and not na(dg_h3) and not na(dg_l1)
     // The middle candle can be anything (even the Daily breakout candle): the gap
     // only exists once the third candle closes without reaching the first one.
     if dg_l1 > dg_h3
-        f_fvg_keep(d_bf_hi, d_bf_lo, dg_l1, dg_h3)
+        f_fvg_keep(d_bf_hi, d_bf_lo, d_bf_x, d_bf_xb, d_bf_p, dg_l1, dg_h3)
     if dg_h1 < dg_l3
-        f_fvg_keep(d_sf_hi, d_sf_lo, dg_l3, dg_h1)
+        f_fvg_keep(d_sf_hi, d_sf_lo, d_sf_x, d_sf_xb, d_sf_p, dg_l3, dg_h1)
 
 // Deepest Daily FVG this H4 candle's wick enters. inside: the whole gap sits inside
 // the range that was just broken; otherwise the gap reaches beyond the Daily Breaker
 // (after the breakout, incl. the breakout candle's own gap). Returns its index, or -1.
-f_fvg_pick(array<float> his, array<float> los, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
+f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
     int   best = -1
     float bv   = na
     if array.size(his) > 0
@@ -1161,7 +1202,7 @@ f_fvg_pick(array<float> his, array<float> los, bool bull, bool inside, float opp
             bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? H > b_hi : L < b_lo)
             bool touched = low <= H and high >= L
             float edge   = bull ? L : H
-            if in_pos and touched and (na(bv) or (bull ? edge < bv : edge > bv))
+            if in_pos and touched and not array.get(ps, i) and (na(bv) or (bull ? edge < bv : edge > bv))
                 bv   := edge
                 best := i
     best
@@ -1348,8 +1389,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     bool  fz_bull = bo_dir == "bullish"
     array<float> fz_his = fz_bull ? d_bf_hi : d_sf_hi
     array<float> fz_los = fz_bull ? d_bf_lo : d_sf_lo
-    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_bull, false, bo_opp, band_lo, band_hi) : -1
-    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
+    array<float> fz_x   = fz_bull ? d_bf_x  : d_sf_x
+    array<int>   fz_xb  = fz_bull ? d_bf_xb : d_sf_xb
+    array<bool>  fz_p   = fz_bull ? d_bf_p  : d_sf_p
+    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, false, bo_opp, band_lo, band_hi) : -1
+    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
 
     // ── Backtest: first H4 touch of each Daily level since it formed ──────
     bool bt_bull = bo_dir == "bullish"
@@ -1377,6 +1421,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if low <= fH and high >= fL and not f_bt_seen(fK)
                 array.push(bt_seen, fK)
                 bt_first := true
+                array.set(fz_x, i, bt_bull ? h4_a_lvl : h4_v_lvl)
+                array.set(fz_xb, i, bar_index)
     if array.size(bt_seen) > 300
         array.shift(bt_seen)
     if bt_first
@@ -1449,11 +1495,14 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_src := "post_breakout_fvg"
             retest_lvl := fz_bull ? array.get(fz_his, pf_i) : array.get(fz_los, pf_i)
             retest_lvl2 := fz_bull ? array.get(fz_los, pf_i) : array.get(fz_his, pf_i)
-            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
+            fz_day_bar  := na   // today's entry into this FVG is looked for afresh
+            fz_day_done := false
+            if na(anchor_lvl)   // this FVG's own External level (set when a candle first entered it)
+                float fx = array.get(fz_x, pf_i)
                 anchor_lvl := retest_lvl
-                anchor_bar := bar_index
-                bt_ext_a   := h4_a_lvl
-                bt_ext_v   := h4_v_lvl
+                anchor_bar := na(fx) ? bar_index : array.get(fz_xb, pf_i)
+                bt_ext_a   := na(fx) or not fz_bull ? h4_a_lvl : fx
+                bt_ext_v   := na(fx) or fz_bull ? h4_v_lvl : fx
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_fvg"'
@@ -1501,11 +1550,14 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             retest_src := "inside_fvg"
             retest_lvl := fz_bull ? array.get(fz_his, if_i) : array.get(fz_los, if_i)
             retest_lvl2 := fz_bull ? array.get(fz_los, if_i) : array.get(fz_his, if_i)
-            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
+            fz_day_bar  := na   // today's entry into this FVG is looked for afresh
+            fz_day_done := false
+            if na(anchor_lvl)   // this FVG's own External level (set when a candle first entered it)
+                float fx = array.get(fz_x, if_i)
                 anchor_lvl := retest_lvl
-                anchor_bar := bar_index
-                bt_ext_a   := h4_a_lvl
-                bt_ext_v   := h4_v_lvl
+                anchor_bar := na(fx) ? bar_index : array.get(fz_xb, if_i)
+                bt_ext_a   := na(fx) or not fz_bull ? h4_a_lvl : fx
+                bt_ext_v   := na(fx) or fz_bull ? h4_v_lvl : fx
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"inside_fvg"'
@@ -1523,6 +1575,37 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         fz_day_bar  := na
         fz_day_done := false
     bool fz_on = retest_on and (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg")
+    // While reacting at an FVG, price entering a DEEPER FVG (wholly below it for
+    // buys, above for sells) moves the reaction there, with that FVG's own
+    // External level (from the candle that first entered it).
+    if fz_on
+        float cur_hi = math.max(retest_lvl, retest_lvl2)
+        float cur_lo = math.min(retest_lvl, retest_lvl2)
+        int   dk = -1
+        if array.size(fz_his) > 0
+            for i = 0 to array.size(fz_his) - 1
+                float gH = array.get(fz_his, i)
+                float gL = array.get(fz_los, i)
+                bool deeper = fz_bull ? gH < cur_lo : gL > cur_hi
+                bool ok_pos = fz_bull ? (gH > band_hi or (not na(bo_opp) and gL > bo_opp and gH < band_lo)) : (gL < band_lo or (not na(bo_opp) and gH < bo_opp and gL > band_hi))
+                if deeper and ok_pos and not array.get(fz_p, i) and low <= gH and high >= gL and (dk < 0 or (fz_bull ? gL < array.get(fz_los, dk) : gH > array.get(fz_his, dk)))
+                    dk := i
+        if dk >= 0
+            float dH = array.get(fz_his, dk)
+            float dL = array.get(fz_los, dk)
+            retest_src  := (fz_bull ? dH > band_hi : dL < band_lo) ? "post_breakout_fvg" : "inside_fvg"
+            retest_lvl  := fz_bull ? dH : dL
+            retest_lvl2 := fz_bull ? dL : dH
+            retest_bar  := bar_index
+            float fx2 = array.get(fz_x, dk)
+            anchor_lvl  := retest_lvl
+            anchor_bar  := na(fx2) ? bar_index : array.get(fz_xb, dk)
+            if fz_bull
+                bt_ext_a := na(fx2) ? h4_a_lvl : fx2
+            else
+                bt_ext_v := na(fx2) ? h4_v_lvl : fx2
+            fz_day_bar  := na
+            fz_day_done := false
     if fz_on and na(fz_day_bar) and low <= math.max(retest_lvl, retest_lvl2) and high >= math.min(retest_lvl, retest_lvl2)
         fz_day_bar := bar_index
         fz_day_a   := h4_a_lvl
@@ -1532,6 +1615,20 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
         anchor_bar  := fz_day_bar
         bt_ext_a    := fz_day_a
         bt_ext_v    := fz_day_v
+        int ak = f_fvg_idx(fz_his, fz_los, math.max(retest_lvl, retest_lvl2), math.min(retest_lvl, retest_lvl2))
+        if ak >= 0
+            array.set(fz_x, ak, fz_bull ? fz_day_a : fz_day_v)
+            array.set(fz_xb, ak, fz_day_bar)
+
+    // ── Pierced Daily FVGs (after this candle's reaction checks) ──────────
+    if array.size(d_bf_lo) > 0
+        for i = 0 to array.size(d_bf_lo) - 1
+            if low < array.get(d_bf_lo, i)
+                array.set(d_bf_p, i, true)
+    if array.size(d_sf_hi) > 0
+        for i = 0 to array.size(d_sf_hi) - 1
+            if high > array.get(d_sf_hi, i)
+                array.set(d_sf_p, i, true)
 
     // ── H4 CONFIRMED ──────────────────────────────────────────────────────
     bool confirmed_this_bar = false
@@ -1584,6 +1681,16 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brk) + '}',
                           alert.freq_once_per_bar)
+            if (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg") and array.size(fz_his) > 0
+                float uh = math.max(retest_lvl, retest_lvl2)
+                float ul = math.min(retest_lvl, retest_lvl2)
+                int uk = array.size(fz_his) - 1
+                while uk >= 0
+                    float UH = array.get(fz_his, uk)
+                    float UL = array.get(fz_los, uk)
+                    if (fz_bull ? UL > uh : UH < ul) and f_bt_seen(fz_bull ? UH : UL)
+                        f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, fz_p, uk)
+                    uk -= 1
             retest_on  := false
             retest_src := na
             retest_lvl := na
@@ -1634,6 +1741,16 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brkv) + '}',
                           alert.freq_once_per_bar)
+            if (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg") and array.size(fz_his) > 0
+                float uh = math.max(retest_lvl, retest_lvl2)
+                float ul = math.min(retest_lvl, retest_lvl2)
+                int uk = array.size(fz_his) - 1
+                while uk >= 0
+                    float UH = array.get(fz_his, uk)
+                    float UL = array.get(fz_los, uk)
+                    if (fz_bull ? UL > uh : UH < ul) and f_bt_seen(fz_bull ? UH : UL)
+                        f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, fz_p, uk)
+                    uk -= 1
             retest_on  := false
             retest_src := na
             retest_lvl := na
@@ -2048,6 +2165,8 @@ if barstate.islast
                 for i = 0 to array.size(fhs) - 1
                     float H = array.get(fhs, i)
                     float L = array.get(fls, i)
+                    if array.get(bb ? d_bf_p : d_sf_p, i)
+                        continue
                     if bb ? H > bo_level + tol : L < bo_level - tol
                         f_bt_fvg(H, L, "Daily FVG after the breakout")
                     else if not na(bo_opp) and (bb ? (L > bo_opp and H < bo_level - tol) : (H < bo_opp and L > bo_level + tol))

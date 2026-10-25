@@ -353,6 +353,8 @@ def chapters():
             "There are five kinds of safe spots. Candle Town checks them in this order:",
             "<b>1.</b> The <b>deepest stepping stone</b> the twin touched. <b>2.</b> A <b>new Giant valley floor</b> built during the climb, above the trampoline. <b>3.</b> A <b>Giant gap</b> left during the climb. <b>4.</b> The <b>Trampoline</b>. <b>5.</b> A <b>valley floor, hand-off step or Giant gap inside the house that just broke</b>, a Giant one that sits between the trampoline and the other side of that house.",
             "<b>A Giant gap</b> appears when three Giants stand in a row and the third one's feet don't reach the first one's head. The space between them is a big soft cushion. A twin just has to <b>step into the cushion</b> to make a visit, and only a Giant <b>closing through</b> the whole cushion pops it. If a later Giant sinks deeper into the cushion than the Giant before, the twins start looking for a new Outside roof from there.",
+            "Twins may only <b>drop into</b> a cushion from above. If they fall right through it and land on a deeper cushion, the deeper one becomes their safe spot. "
+            "Climbing back up into the cushion they fell through doesn't count, and once a bell rings from the deeper cushion, the cushions above it are used up.",
             "A safe spot only appears once the Giants who built it have finished. The Giants who built it can't visit it themselves.",
             "It doesn't matter which spot the twins reach first. Any of them can be the safe spot.",
             "<b>Cracked spots don't count.</b> A Giant valley floor or hand-off step that a Giant twin has already <b>closed below</b> is cracked (closed above, when the twins are sliding down). Cracked spots are never safe again.",

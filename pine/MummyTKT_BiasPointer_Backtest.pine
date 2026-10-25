@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v8 — live alerts + on-chart labels (2026-10-23)
+// MummyTKT's Bias Pointer v9 — live alerts + on-chart labels (2026-10-25)
 //
 // The logic proven in the backtest edition is now the live logic. Every bias
 // alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
@@ -36,6 +36,18 @@
 //     back in line, in line): the NEXT H4 candle is checked once; if it completes
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
+//
+// Since v9 (which Daily FVG counts):
+//   • A bullish FVG only reacts when price DIPS INTO it from above (a bearish one
+//     from below). Once price has traded past its far edge it can't start a new
+//     reaction; a reaction already running there lives until a Daily close.
+//   • While reacting at an FVG, price entering a DEEPER FVG moves the reaction
+//     there, with that FVG's own External level.
+//   • Each FVG keeps its own External level (from the candle that first entered
+//     it, moved by each deeper Daily candle while it is the reaction); a return
+//     to it uses that level, not the H4 A/V formed at the return.
+//   • An H4 breakout from an FVG uses up the FVGs above it (below, for sells)
+//     that price went through.
 //
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
