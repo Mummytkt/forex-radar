@@ -196,7 +196,8 @@ color  sw_bear_col = input.color(color.new(#F23645, 70), "Bearish sweep zone", g
 bool   sw_ext      = input.bool(true, "Extend sweep zones", group=GBT, inline="swe",
      tooltip="On: each zone stretches right until a candle closes through it (or the max bars). Off: the zone stays on the sweep candle.")
 int    sw_maxb     = input.int(300, "max bars", minval=1, maxval=5000, group=GBT, inline="swe")
-bool   sw_ext_l    = input.bool(false, "Extend sweep lines to the right", group=GBT)
+string sw_lmode    = input.string("Swing to sweep", "Sweep lines (dotted)", options=["Swing to sweep", "Extend right", "Hide"], group=GBT,
+     tooltip="The dotted line from the swing high / low to the candle that swept it. Extend right: runs on to the right edge. Hide: zones only.")
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
 //         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells, 10 H4 FVG after breakout
 var bt_cnt  = array.new_int(11, 0)
@@ -1549,7 +1550,8 @@ f_h4_leg_prune(array<float> lv, array<int> lb, int from_bar, bool bull) =>
 f_sw_mark(bool bull, float lv, int pb) =>
     if sw_all and timeframe.period == "240"
         color zc = bull ? sw_bull_col : sw_bear_col
-        array.push(sw_all_l, line.new(pb, lv, bar_index, lv, color=color.new(zc, 0), style=line.style_dotted, extend=sw_ext_l ? extend.right : extend.none))
+        if sw_lmode != "Hide"
+            array.push(sw_all_l, line.new(pb, lv, bar_index, lv, color=color.new(zc, 0), style=line.style_dotted, extend=sw_lmode == "Extend right" ? extend.right : extend.none))
         array.push(sw_all_b, box.new(bar_index - 1, bull ? lv : high, bar_index + 1, bull ? low : lv, border_color=color.new(zc, 100), bgcolor=zc))
         array.push(sw_all_d, bull)
         array.push(sw_all_x, false)
