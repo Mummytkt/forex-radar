@@ -37,6 +37,10 @@
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
 //
+// v10 display: each H4 breakout after a Daily reaction says on its chart label
+//   whether an H4 candle swept an H4 swing low (high, sells) during the break
+//   ("Sweep check on H4 breakout labels"; display only, no alert).
+//
 // Since v10: the Weekly follows the Daily rules one level up (first Daily touch
 //   decides External / Internal, Weekly V/A after the breakout, Weekly FVGs with
 //   every Daily FVG rule, the breakout Week's close counts as moving away, a
@@ -180,6 +184,10 @@ color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", gro
 color  bt_tbl_txt  = input.color(color.white, "Table text", group=GBT, inline="btt")
 color  bt_state_txt = input.color(color.white, "Status label text", group=GBT, inline="bts")
 color  bt_ext_txt   = input.color(#E0E0E0, "External high / low text", group=GBT, inline="bts")
+bool   bt_sweep    = input.bool(true, "Sweep check on H4 breakout labels", group=GBT,
+     tooltip="Display only. On each H4 breakout after a Daily reaction, the label says whether an H4 candle swept an H4 swing low (high, for sells) during that break: a wick beyond it with the close back. Swings and sweeps are found like LuxAlgo's Liquidity Sweeps (wicks only).")
+int    sw_len      = input.int(5, "Sweep: swing length (candles each side)", minval=1, maxval=20, group=GBT)
+color  sw_col      = input.color(color.new(#7048e8, 20), "Sweep line", group=GBT)
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
 //         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells, 10 H4 FVG after breakout
 var bt_cnt  = array.new_int(11, 0)
@@ -193,6 +201,19 @@ var bt_last = array.new<label>(1, na)   // the alert label currently on the char
 var float bt_ext_a = na
 var float bt_ext_v = na
 var bt_seen = array.new<float>()   // Daily levels already touched since they formed
+// H4 liquidity sweeps (display only): live swing lows / highs and the sweeps seen
+var array<float> sw_pl_p = array.new<float>()   // swing lows not yet closed through
+var array<int>   sw_pl_b = array.new<int>()
+var array<float> sw_ph_p = array.new<float>()   // swing highs not yet closed through
+var array<int>   sw_ph_b = array.new<int>()
+var array<int>   swb_bar = array.new<int>()     // bullish sweeps (wick below a swing low, close back above)
+var array<float> swb_lvl = array.new<float>()
+var array<int>   swb_piv = array.new<int>()
+var array<int>   sws_bar = array.new<int>()     // bearish sweeps (wick above a swing high, close back below)
+var array<float> sws_lvl = array.new<float>()
+var array<int>   sws_piv = array.new<int>()
+var array<line>  sw_lines = array.new<line>()
+var string bt_swtxt = ""                         // sweep line for the breakout label being drawn
 var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout", "Buys", "Sells", "H4 FVG after breakout")
 
 // ── Inputs ────────────────────────────────────────────────────────────────────
@@ -1231,13 +1252,13 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "Not counted: " + why + "\n" + head + tag,
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "Not counted: " + why + "\n" + head + tag + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : ""),
              style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
              textcolor=bt_txt_col, size=size.small))
     if tf_ok and on and cls_ok and time >= bt_from
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, (kind == 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : ""),
+        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, (kind == 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : ""),
              style=bull ? label.style_label_up : label.style_label_down, color=kind == 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col,
              textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small,
              tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
@@ -1506,6 +1527,99 @@ f_h4_leg_prune(array<float> lv, array<int> lb, int from_bar, bool bull) =>
             array.remove(lv, k)
             array.remove(lb, k)
         k -= 1
+
+// ── H4 liquidity sweeps (display only, like LuxAlgo "Liquidity Sweeps", wicks) ─
+// A swing low = a low lower than the sw_len candles on each side (known sw_len
+// candles later). A candle whose wick goes below a live swing low and closes back
+// above it SWEEPS it (once); a close below the swing low ends it. Mirror for highs.
+float sw_pl = ta.pivotlow(low, sw_len, sw_len)
+float sw_ph = ta.pivothigh(high, sw_len, sw_len)
+if barstate.isconfirmed
+    if not na(sw_pl)
+        array.push(sw_pl_p, sw_pl)
+        array.push(sw_pl_b, bar_index - sw_len)
+    if not na(sw_ph)
+        array.push(sw_ph_p, sw_ph)
+        array.push(sw_ph_b, bar_index - sw_len)
+    int sk = array.size(sw_pl_p) - 1
+    while sk >= 0
+        float sp = array.get(sw_pl_p, sk)
+        bool  old = bar_index - array.get(sw_pl_b, sk) > 2000
+        if close < sp or old
+            array.remove(sw_pl_p, sk)
+            array.remove(sw_pl_b, sk)
+        else if low < sp and close > sp and array.get(sw_pl_b, sk) < bar_index
+            array.push(swb_bar, bar_index)
+            array.push(swb_lvl, sp)
+            array.push(swb_piv, array.get(sw_pl_b, sk))
+            array.remove(sw_pl_p, sk)
+            array.remove(sw_pl_b, sk)
+        sk -= 1
+    sk := array.size(sw_ph_p) - 1
+    while sk >= 0
+        float sp = array.get(sw_ph_p, sk)
+        bool  old = bar_index - array.get(sw_ph_b, sk) > 2000
+        if close > sp or old
+            array.remove(sw_ph_p, sk)
+            array.remove(sw_ph_b, sk)
+        else if high > sp and close < sp and array.get(sw_ph_b, sk) < bar_index
+            array.push(sws_bar, bar_index)
+            array.push(sws_lvl, sp)
+            array.push(sws_piv, array.get(sw_ph_b, sk))
+            array.remove(sw_ph_p, sk)
+            array.remove(sw_ph_b, sk)
+        sk -= 1
+    while array.size(swb_bar) > 200
+        array.shift(swb_bar)
+        array.shift(swb_lvl)
+        array.shift(swb_piv)
+    while array.size(sws_bar) > 200
+        array.shift(sws_bar)
+        array.shift(sws_lvl)
+        array.shift(sws_piv)
+
+// The bar the broken H4 level formed on: buys an A-shape (bull then bear candle,
+// level = the bull candle's body top), sells a V-shape. na if not found.
+f_lvl_bar(bool bull, float lvl) =>
+    int found = na
+    int lim = math.min(bar_index - 2, 400)
+    for i = 1 to lim
+        bool shape = bull ? (close[i] < open[i] and close[i + 1] >= open[i + 1]) : (close[i] >= open[i] and close[i + 1] < open[i + 1])
+        float v = bull ? math.max(open[i + 1], close[i + 1]) : math.min(open[i + 1], close[i + 1])
+        if shape and math.abs(v - lvl) <= syminfo.mintick
+            found := bar_index - i
+            break
+    found
+
+// The label line for an H4 breakout after a Daily reaction: did an H4 candle sweep
+// a swing low (high, sells) during this break, i.e. from when the broken level
+// formed up to this breakout candle? Draws a line at the swept level.
+f_sw_note(bool bull, float brk) =>
+    string out = ""
+    if bt_sweep and timeframe.period == "240"
+        int fromb = f_lvl_bar(bull, brk)
+        fromb := na(fromb) ? bar_index - 60 : fromb
+        array<int>   bars = bull ? swb_bar : sws_bar
+        array<float> lvls = bull ? swb_lvl : sws_lvl
+        array<int>   pivs = bull ? swb_piv : sws_piv
+        int hit = -1
+        if array.size(bars) > 0
+            for k = array.size(bars) - 1 to 0
+                int b = array.get(bars, k)
+                if b < fromb
+                    break
+                if b <= bar_index
+                    hit := k
+                    break
+        if hit >= 0
+            float lv = array.get(lvls, hit)
+            out := "✓ swept H4 " + (bull ? "low " : "high ") + str.tostring(lv, format.mintick) + " before the break"
+            array.push(sw_lines, line.new(array.get(pivs, hit), lv, array.get(bars, hit), lv, color=sw_col, style=line.style_dotted, width=2))
+            if array.size(sw_lines) > 25
+                line.delete(array.shift(sw_lines))
+        else
+            out := "✗ no sweep before the break"
+    out
 
 // D.A / D.V (wick levels): only the one in line with the last breakout is
 // monitored — D.V in a bullish bias, D.A in a bearish bias.
@@ -1877,6 +1991,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
+                bt_swtxt := f_sw_note(true, bt_brk)
                 f_btlbl(true, 0, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
@@ -1896,6 +2011,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_brk_lvl            := h4_a_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
                 confirmed_this_bar    := true
+                bt_swtxt := f_sw_note(true, bt_brk)
                 f_btlbl(true, bt_was_aligned ? 7 : 1, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
@@ -1937,6 +2053,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
+                bt_swtxt := f_sw_note(false, bt_brkv)
                 f_btlbl(false, 0, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("CONFIRMED")
@@ -1956,6 +2073,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 h4_brk_lvl            := h4_v_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
                 confirmed_this_bar    := true
+                bt_swtxt := f_sw_note(false, bt_brkv)
                 f_btlbl(false, bt_was_aligned ? 7 : 1, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
                 if barstate.isrealtime
                     alert(f_hdrw("H4_CONTINUATION")
