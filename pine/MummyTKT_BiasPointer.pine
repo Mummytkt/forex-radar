@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v9 — live alerts + on-chart labels (2026-10-25)
+// MummyTKT's Bias Pointer v10 — live alerts + on-chart labels (2026-10-25)
 //
 // The logic proven in the backtest edition is now the live logic. Every bias
 // alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
@@ -36,6 +36,12 @@
 //     back in line, in line): the NEXT H4 candle is checked once; if it completes
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
+//
+// Since v10: the Weekly follows the Daily rules one level up (first Daily touch
+//   decides External / Internal, Weekly V/A after the breakout, Weekly FVGs with
+//   every Daily FVG rule, the breakout Week's close counts as moving away, a
+//   Weekly-confirmed Daily breakout uses up the Weekly reaction). The Weekly
+//   still never fires an alert; it labels the Daily setup.
 //
 // Since v9 (which Daily FVG counts):
 //   • A bullish FVG only reacts when price DIPS INTO it from above (a bearish one
@@ -701,6 +707,9 @@ f_structure(bool bd) =>
 // Last two completed Weekly candles (levels per the Body/Wick setting)
 [wk_o1, wk_c1, wk_h1, wk_l1, wk_o2, wk_c2, wk_h2, wk_l2] = request.security(syminfo.tickerid, "W",
      [open[1], close[1], f_bh(1, w_body), f_bl(1, w_body), open[2], close[2], f_bh(2, w_body), f_bl(2, w_body)], lookahead=barmerge.lookahead_on)
+// Weekly wicks: the 1st and 3rd of the last three completed Weekly candles (Weekly FVGs)
+[wg_h1, wg_l1, wg_h3, wg_l3] = request.security(syminfo.tickerid, "W",
+     [high[1], low[1], high[3], low[3]], lookahead=barmerge.lookahead_on)
 
 // ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
 // lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
@@ -844,16 +853,28 @@ if new_daily
     just_broke := false
 
 // ── Weekly storyline: Weekly breakout → Weekly reaction → Daily breakout ─────
-// The same technique one level up. A Weekly close beyond the Weekly External
-// high/low is a Weekly breakout. Price must move away (a Daily close more than
-// the allowance beyond the Weekly Breaker), then react at a Weekly level, checked
-// on DAILY candles: an exact Daily wick touch that holds (no Daily close through
-// it beyond the allowance) at a post-breakout Weekly OC, the Weekly Breaker, or a
-// Weekly V-shape (A-shape for sells) / Weekly OC inside the broken Weekly range.
-// While it holds, a Daily breakout in the Weekly direction is Weekly-confirmed:
-// External if the Daily level it broke formed before the reaction started,
-// Internal if after. A Daily close through the reacting level ends it; a new
-// Weekly breakout starts again. Without a Weekly setup the Daily logic is as before.
+// The Daily rules one level up (v10): Weekly candles set the Weekly direction,
+// DAILY candles react at Weekly levels, and a Daily breakout in the Weekly
+// direction plays the part the H4 breakout plays for the Daily.
+//   • A Weekly close beyond the Weekly External high/low is a Weekly breakout;
+//     its own close beyond the Breaker (± allowance) counts as moving away.
+//   • Weekly reaction levels: post-breakout Weekly OCs, Weekly V-shapes (A for
+//     sells) formed after the breakout, Weekly FVGs after the breakout, the
+//     Weekly Breaker, Weekly V/A-shapes and OCs inside the broken Weekly range,
+//     Weekly FVGs inside that range. Exact Daily wick touch that holds.
+//   • External / Internal: the FIRST Daily touch of a Weekly level after it
+//     formed is the start; the Daily level that breaks is External if it formed
+//     before that, Internal if after. With Internal off, an Internal break
+//     doesn't use up the Weekly reaction (the Daily setup is then "in line").
+//   • Weekly FVGs: react only when a Daily candle dips into the gap from above
+//     (rises into it from below, sells); only a Weekly close through the gap
+//     kills it; each Weekly candle that dips below the previous Weekly low inside
+//     it restarts the check; a deeper FVG takes over; each FVG keeps its own
+//     start; a Weekly-confirmed Daily breakout from one uses up those above it.
+//   • A Weekly-confirmed Daily breakout uses up that Weekly reaction; a Weekly
+//     breakout the same way keeps going, the other way resets.
+// The Weekly never fires an alert itself: it labels the Daily setup
+// (Weekly-confirmed External / Internal, in line, or AGAINST).
 var string wk_dir      = na
 var float  wk_level    = na
 var float  wk_opp      = na
@@ -863,14 +884,27 @@ var bool   wk_react    = false
 var string wk_src      = na
 var string wk_kind     = na
 var float  wk_src_lvl  = na
+var float  wk_src_lvl2 = na   // Weekly FVG reactions: the far edge of the gap
 var float  wk_anchor_lvl = na
-var int    wk_anchor_t = na
+var int    wk_anchor_t = na   // when the reacting Weekly level was first touched (its External start)
 var bool   wk_just_broke = false
 var array<float> w_vs   = array.new<float>()
 var array<float> w_as   = array.new<float>()
 var array<float> w_boc  = array.new<float>()
 var array<float> w_soc  = array.new<float>()
 var array<float> w_pbocs = array.new<float>()
+var array<float> w_seen = array.new<float>()   // Weekly levels already touched by a Daily candle
+// Weekly FVGs: gap top / bottom, own External start (time), pierced
+var array<float> w_bf_hi = array.new<float>()
+var array<float> w_bf_lo = array.new<float>()
+var array<int>   w_bf_x  = array.new<int>()
+var array<bool>  w_bf_p  = array.new<bool>()
+var array<float> w_sf_hi = array.new<float>()
+var array<float> w_sf_lo = array.new<float>()
+var array<int>   w_sf_x  = array.new<int>()
+var array<bool>  w_sf_p  = array.new<bool>()
+var int    wfz_t    = na      // this week's first Daily entry into the reacting Weekly FVG
+var bool   wfz_done = false
 var int    wpb_consec  = 0
 var float  wpb_close1  = na
 var float  wpb_oc_lvl  = na
@@ -884,11 +918,13 @@ if not na(w_bcnt) and w_bcnt > 0 and w_bcnt != last_wcnt
     wk_dir      := w_bdir
     wk_level    := w_blvl
     wk_opp      := w_bopp
-    wk_est      := false
+    // the breakout Week's own close beyond the Breaker counts as moving away
+    wk_est      := not na(wk_c1) and (w_bdir == "bullish" ? wk_c1 > w_blvl + tol : wk_c1 < w_blvl - tol)
     wk_react    := false
     wk_src      := na
     wk_kind     := na
     wk_src_lvl  := na
+    wk_src_lvl2 := na
     wk_anchor_lvl := na
     wk_anchor_t := na
     wpb_consec  := 0
@@ -910,13 +946,234 @@ f_wkill(array<float> a, float c, bool buy_lvl) =>
             array.remove(a, k)
         k -= 1
 
-// Weekly V/A-shapes and OCs (a Weekly close through one kills it), and the
-// post-breakout Weekly OCs
+f_wfdrop(array<float> his, array<float> los, array<int> xs, array<bool> ps, int k) =>
+    array.remove(his, k)
+    array.remove(los, k)
+    array.remove(xs, k)
+    array.remove(ps, k)
+f_wfkeep(array<float> his, array<float> los, array<int> xs, array<bool> ps, float h, float l) =>
+    array.push(his, h)
+    array.push(los, l)
+    array.push(xs, na)
+    array.push(ps, false)
+    if array.size(his) > 40
+        f_wfdrop(his, los, xs, ps, 0)
+f_wfkill(array<float> his, array<float> los, array<int> xs, array<bool> ps, float c, bool bull) =>
+    int k = array.size(his) - 1
+    while k >= 0
+        if bull ? c < array.get(los, k) : c > array.get(his, k)
+            f_wfdrop(his, los, xs, ps, k)
+        k -= 1
+f_wseen(float L) =>
+    bool found = false
+    for x in w_seen
+        if math.abs(x - L) <= pip * 0.1
+            found := true
+    found
+
+// Deepest level in lv that the Daily candle (lo_, hi_, cl_) touches exactly and holds
+f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float lo_, float hi_, float cl_) =>
+    float best = na
+    if array.size(lv) > 0
+        for i = 0 to array.size(lv) - 1
+            float L = array.get(lv, i)
+            bool inside = L > lo_lim and L < hi_lim
+            bool touched = lo_ <= L and hi_ >= L
+            bool held = bull ? cl_ >= L - t : cl_ <= L + t
+            if inside and touched and held and (na(best) or (bull ? L < best : L > best))
+                best := L
+    best
+
+// Deepest Weekly FVG the Daily candle (lo_, hi_) enters, not pierced. inside: the
+// whole gap inside the broken Weekly range; otherwise reaching beyond the Breaker.
+f_wfpick(array<float> his, array<float> los, array<bool> ps, bool bull, bool inside, float opp, float b_lo, float b_hi, float lo_, float hi_) =>
+    int   best = -1
+    float bv   = na
+    if array.size(his) > 0
+        for i = 0 to array.size(his) - 1
+            float H = array.get(his, i)
+            float L = array.get(los, i)
+            bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? H > b_hi : L < b_lo)
+            float edge   = bull ? L : H
+            if in_pos and lo_ <= H and hi_ >= L and not array.get(ps, i) and (na(bv) or (bull ? edge < bv : edge > bv))
+                bv   := edge
+                best := i
+    best
+
+// Weekly reaction, checked on each completed Daily candle (before this week's
+// new levels are added, so the candles that formed a level can't react to it)
+if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not na(dr_h)
+    bool wb = wk_dir == "bullish"
+    bool w_was_est = wk_est
+    if wb ? d_close > wk_level + tol : d_close < wk_level - tol
+        wk_est := true
+    array<float> wfh = wb ? w_bf_hi : w_sf_hi
+    array<float> wfl = wb ? w_bf_lo : w_sf_lo
+    array<int>   wfx = wb ? w_bf_x  : w_sf_x
+    array<bool>  wfp = wb ? w_bf_p  : w_sf_p
+    float wb_lo = wk_level - tol
+    float wb_hi = wk_level + tol
+
+    // First Daily touch of each Weekly level since it formed: the External start
+    bool w_first = false
+    array<float> wcand = array.new<float>()
+    array.push(wcand, wk_level)
+    for L in w_pbocs
+        array.push(wcand, L)
+    array<float> wshp = wb ? w_vs : w_as
+    array<float> wocl = wb ? w_boc : w_soc
+    for L in wshp
+        array.push(wcand, L)
+    for L in wocl
+        array.push(wcand, L)
+    for L in wcand
+        bool w_held = wb ? d_close >= L - tol : d_close <= L + tol
+        if dr_l <= L and dr_h >= L and w_held and not f_wseen(L)
+            array.push(w_seen, L)
+            w_first := true
+    if array.size(wfh) > 0
+        for i = 0 to array.size(wfh) - 1
+            float gH = array.get(wfh, i)
+            float gL = array.get(wfl, i)
+            float gK = wb ? gH : gL
+            if dr_l <= gH and dr_h >= gL and not array.get(wfp, i) and not f_wseen(gK)
+                array.push(w_seen, gK)
+                array.set(wfx, i, dr_t)
+                w_first := true
+    if array.size(w_seen) > 300
+        array.shift(w_seen)
+    if w_first
+        wk_anchor_t := dr_t
+
+    // A reaction fails on a Daily close back through its level (a Weekly FVG only
+    // on a Weekly close through the gap, checked when the week closes)
+    bool w_fvg = wk_src == "post_breakout_fvg" or wk_src == "inside_fvg"
+    if wk_react and not w_fvg
+        if wb ? d_close < wk_src_lvl - tol : d_close > wk_src_lvl + tol
+            wk_react   := false
+            wk_src     := na
+            wk_kind    := na
+            wk_src_lvl := na
+            wk_src_lvl2 := na
+
+    if not wk_react and w_was_est
+        // post-breakout OCs, V/A after the breakout, FVGs after the breakout, the
+        // Breaker, then inside the range (V/A, OC, FVG)
+        float pbw = f_wpick(w_pbocs, wb, wb ? wb_hi : -1e18, wb ? 1e18 : wb_lo, tol, dr_l, dr_h, d_close)
+        float pvw = f_wpick(wb ? w_vs : w_as, wb, wb ? wb_hi : -1e18, wb ? 1e18 : wb_lo, tol, dr_l, dr_h, d_close)
+        int   pfw = f_wfpick(wfh, wfl, wfp, wb, false, wk_opp, wb_lo, wb_hi, dr_l, dr_h)
+        bool  bkw = dr_l <= wk_level and dr_h >= wk_level and (wb ? d_close >= wb_lo : d_close <= wb_hi)
+        float ir_lo = wb ? wk_opp : wb_hi
+        float ir_hi = wb ? wb_lo : wk_opp
+        float shw = na(wk_opp) ? na : f_wpick(wb ? w_vs : w_as, wb, ir_lo, ir_hi, tol, dr_l, dr_h, d_close)
+        float ocw = na(wk_opp) ? na : f_wpick(wb ? w_boc : w_soc, wb, ir_lo, ir_hi, tol, dr_l, dr_h, d_close)
+        int   ifw = f_wfpick(wfh, wfl, wfp, wb, true, wk_opp, wb_lo, wb_hi, dr_l, dr_h)
+        float hit = na
+        float hit2 = na
+        string hsrc = na
+        string hkind = na
+        int   hfi = -1
+        if not na(pbw)
+            hit := pbw, hsrc := "post_breakout_oc"
+        else if not na(pvw)
+            hit := pvw, hsrc := "post_breakout_v"
+        else if pfw >= 0
+            hfi := pfw, hsrc := "post_breakout_fvg"
+        else if bkw
+            hit := wk_level, hsrc := "breaker"
+        else
+            if not na(shw)
+                hit := shw, hsrc := "inside_range", hkind := wb ? "v_shape" : "a_shape"
+            if not na(ocw) and (na(hit) or (wb ? ocw < hit : ocw > hit))
+                hit := ocw, hsrc := "inside_range", hkind := "oc"
+            if na(hit) and ifw >= 0
+                hfi := ifw, hsrc := "inside_fvg"
+        if hfi >= 0
+            hit  := wb ? array.get(wfh, hfi) : array.get(wfl, hfi)
+            hit2 := wb ? array.get(wfl, hfi) : array.get(wfh, hfi)
+        if not na(hit)
+            wk_react    := true
+            wk_src      := hsrc
+            wk_kind     := hkind
+            wk_src_lvl  := hit
+            wk_src_lvl2 := hit2
+            wfz_t       := na
+            wfz_done    := false
+            wk_anchor_lvl := hit
+            if hfi >= 0 and not na(array.get(wfx, hfi))
+                wk_anchor_t := array.get(wfx, hfi)   // the FVG's own start
+            else if na(wk_anchor_t)
+                wk_anchor_t := dr_t
+
+    // Weekly FVG reactions: a deeper FVG takes over, and each Weekly candle that
+    // dips below the previous Weekly low inside the gap restarts the check
+    if wk_react and (wk_src == "post_breakout_fvg" or wk_src == "inside_fvg")
+        float cur_hi = math.max(wk_src_lvl, wk_src_lvl2)
+        float cur_lo = math.min(wk_src_lvl, wk_src_lvl2)
+        int dk = -1
+        if array.size(wfh) > 0
+            for i = 0 to array.size(wfh) - 1
+                float gH = array.get(wfh, i)
+                float gL = array.get(wfl, i)
+                bool deeper = wb ? gH < cur_lo : gL > cur_hi
+                bool ok_pos = wb ? (gH > wb_hi or (not na(wk_opp) and gL > wk_opp and gH < wb_lo)) : (gL < wb_lo or (not na(wk_opp) and gH < wk_opp and gL > wb_hi))
+                if deeper and ok_pos and not array.get(wfp, i) and dr_l <= gH and dr_h >= gL and (dk < 0 or (wb ? gL < array.get(wfl, dk) : gH > array.get(wfh, dk)))
+                    dk := i
+        if dk >= 0
+            float dH = array.get(wfh, dk)
+            float dL = array.get(wfl, dk)
+            wk_src      := (wb ? dH > wb_hi : dL < wb_lo) ? "post_breakout_fvg" : "inside_fvg"
+            wk_src_lvl  := wb ? dH : dL
+            wk_src_lvl2 := wb ? dL : dH
+            wk_anchor_lvl := wk_src_lvl
+            wk_anchor_t := na(array.get(wfx, dk)) ? dr_t : array.get(wfx, dk)
+            wfz_t       := na
+            wfz_done    := false
+        float ah = math.max(wk_src_lvl, wk_src_lvl2)
+        float al = math.min(wk_src_lvl, wk_src_lvl2)
+        if na(wfz_t) and dr_l <= ah and dr_h >= al
+            wfz_t := dr_t
+        if not wfz_done and not na(wfz_t) and not na(wg_l1) and (wb ? dr_l < wg_l1 : dr_h > wg_h1)
+            wfz_done    := true
+            wk_anchor_t := wfz_t
+            if array.size(wfh) > 0
+                for i = 0 to array.size(wfh) - 1
+                    if math.abs(array.get(wfh, i) - ah) <= pip * 0.1 and math.abs(array.get(wfl, i) - al) <= pip * 0.1
+                        array.set(wfx, i, wfz_t)
+
+    // Pierced Weekly FVGs (after this Daily candle's checks): traded past the far edge
+    if array.size(w_bf_lo) > 0
+        for i = 0 to array.size(w_bf_lo) - 1
+            if dr_l < array.get(w_bf_lo, i)
+                array.set(w_bf_p, i, true)
+    if array.size(w_sf_hi) > 0
+        for i = 0 to array.size(w_sf_hi) - 1
+            if dr_h > array.get(w_sf_hi, i)
+                array.set(w_sf_p, i, true)
+
+// Weekly V/A-shapes and OCs (a Weekly close through one kills it), the
+// post-breakout Weekly OCs, and Weekly FVGs (only a Weekly close through the gap
+// kills one, and ends a reaction at it)
 if new_week and not na(wk_c1)
     f_wkill(w_vs,  wk_c1, true)
     f_wkill(w_boc, wk_c1, true)
     f_wkill(w_as,  wk_c1, false)
     f_wkill(w_soc, wk_c1, false)
+    f_wfkill(w_bf_hi, w_bf_lo, w_bf_x, w_bf_p, wk_c1, true)
+    f_wfkill(w_sf_hi, w_sf_lo, w_sf_x, w_sf_p, wk_c1, false)
+    if wk_react and (wk_src == "post_breakout_fvg" or wk_src == "inside_fvg") and (wk_dir == "bullish" ? wk_c1 < wk_src_lvl2 : wk_c1 > wk_src_lvl2)
+        wk_react    := false
+        wk_src      := na
+        wk_kind     := na
+        wk_src_lvl  := na
+        wk_src_lvl2 := na
+    wfz_t    := na
+    wfz_done := false
+    if not na(wg_h3) and not na(wg_l1)
+        if wg_l1 > wg_h3
+            f_wfkeep(w_bf_hi, w_bf_lo, w_bf_x, w_bf_p, wg_l1, wg_h3)
+        if wg_h1 < wg_l3
+            f_wfkeep(w_sf_hi, w_sf_lo, w_sf_x, w_sf_p, wg_l3, wg_h1)
     if not na(wk_dir)
         f_wkill(w_pbocs, wk_c1, wk_dir == "bullish")
         wpb_oc_lvl := array.size(w_pbocs) > 0 ? array.last(w_pbocs) : na
@@ -948,62 +1205,8 @@ if new_week and not na(wk_c1)
         else
             wpb_consec := 0
 
-// Deepest level in lv that the Daily candle (lo_, hi_, cl_) touches exactly and holds
-f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float lo_, float hi_, float cl_) =>
-    float best = na
-    if array.size(lv) > 0
-        for i = 0 to array.size(lv) - 1
-            float L = array.get(lv, i)
-            bool inside = L > lo_lim and L < hi_lim
-            bool touched = lo_ <= L and hi_ >= L
-            bool held = bull ? cl_ >= L - t : cl_ <= L + t
-            if inside and touched and held and (na(best) or (bull ? L < best : L > best))
-                best := L
-    best
-
-// Weekly reaction, checked on each completed Daily candle
-if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not na(dr_h)
-    bool wb = wk_dir == "bullish"
-    bool w_was_est = wk_est
-    if wb ? d_close > wk_level + tol : d_close < wk_level - tol
-        wk_est := true
-    if wk_react
-        if wb ? d_close < wk_src_lvl - tol : d_close > wk_src_lvl + tol
-            wk_react   := false
-            wk_src     := na
-            wk_kind    := na
-            wk_src_lvl := na
-    if not wk_react and w_was_est
-        // post-breakout Weekly OCs (beyond the Breaker), then the Breaker, then inside the range
-        float pbw = f_wpick(w_pbocs, wb, wb ? wk_level + tol : -1e18, wb ? 1e18 : wk_level - tol, tol, dr_l, dr_h, d_close)
-        bool  bkw = dr_l <= wk_level and dr_h >= wk_level and (wb ? d_close >= wk_level - tol : d_close <= wk_level + tol)
-        float ir_lo = wb ? wk_opp : wk_level + tol
-        float ir_hi = wb ? wk_level - tol : wk_opp
-        float shw = na(wk_opp) ? na : f_wpick(wb ? w_vs : w_as, wb, ir_lo, ir_hi, tol, dr_l, dr_h, d_close)
-        float ocw = na(wk_opp) ? na : f_wpick(wb ? w_boc : w_soc, wb, ir_lo, ir_hi, tol, dr_l, dr_h, d_close)
-        float hit = na
-        string hsrc = na
-        string hkind = na
-        if not na(pbw)
-            hit := pbw, hsrc := "post_breakout_oc"
-        else if bkw
-            hit := wk_level, hsrc := "breaker"
-        else
-            if not na(shw)
-                hit := shw, hsrc := "inside_range", hkind := wb ? "v_shape" : "a_shape"
-            if not na(ocw) and (na(hit) or (wb ? ocw < hit : ocw > hit))
-                hit := ocw, hsrc := "inside_range", hkind := "oc"
-        if not na(hit)
-            wk_react   := true
-            wk_src     := hsrc
-            wk_kind    := hkind
-            wk_src_lvl := hit
-            if na(wk_anchor_lvl) or math.abs(wk_anchor_lvl - hit) > pip * 0.1
-                wk_anchor_lvl := hit
-                wk_anchor_t   := dr_t
-
 f_wsrc_name(string src, string kind) =>
-    src == "breaker" ? "Weekly Breaker" : src == "post_breakout_oc" ? "post-breakout Weekly OC" : kind == "oc" ? "Weekly OC inside the range" : kind == "a_shape" ? "Weekly A-shape inside the range" : "Weekly V-shape inside the range"
+    src == "breaker" ? "Weekly Breaker" : src == "post_breakout_oc" ? "post-breakout Weekly OC" : src == "post_breakout_v" ? "Weekly V/A-shape after the breakout" : src == "post_breakout_fvg" ? "Weekly FVG after the breakout" : src == "inside_fvg" ? "Weekly FVG inside the range" : kind == "oc" ? "Weekly OC inside the range" : kind == "a_shape" ? "Weekly A-shape inside the range" : "Weekly V-shape inside the range"
 
 // The reacting level as text: a Daily FVG shows its gap (bottom – top)
 f_bt_lvtxt(float v) =>
@@ -1092,11 +1295,33 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
         bo_wk_dir := wk_dir
         bo_wk_lvl := wk_level
         if s_bdir == wk_dir
-            if wk_react
+            string w_cls = (not na(s_bt) and not na(wk_anchor_t) and s_bt < wk_anchor_t) ? "external" : "internal"
+            if wk_react and (w_cls == "external" or bt_int)
                 bo_wk_rel     := "confirmed"
                 bo_wk_src     := f_wsrc_name(wk_src, wk_kind)
                 bo_wk_src_lvl := wk_src_lvl
-                bo_wk_cls     := (not na(s_bt) and not na(wk_anchor_t) and s_bt < wk_anchor_t) ? "external" : "internal"
+                bo_wk_cls     := w_cls
+                if (wk_src == "post_breakout_fvg" or wk_src == "inside_fvg") and not na(wk_src_lvl2)
+                    bool  ubull = wk_dir == "bullish"
+                    float uh = math.max(wk_src_lvl, wk_src_lvl2)
+                    float ul = math.min(wk_src_lvl, wk_src_lvl2)
+                    array<float> uhs = ubull ? w_bf_hi : w_sf_hi
+                    array<float> uls = ubull ? w_bf_lo : w_sf_lo
+                    array<int>   uxs = ubull ? w_bf_x  : w_sf_x
+                    array<bool>  ups = ubull ? w_bf_p  : w_sf_p
+                    int uk = array.size(uhs) - 1
+                    while uk >= 0
+                        float UH = array.get(uhs, uk)
+                        float UL = array.get(uls, uk)
+                        if (ubull ? UL > uh : UH < ul) and f_wseen(ubull ? UH : UL)
+                            f_wfdrop(uhs, uls, uxs, ups, uk)
+                        uk -= 1
+                wk_react    := false
+                wk_src      := na
+                wk_kind     := na
+                wk_src_lvl  := na
+                wk_src_lvl2 := na
+                wk_anchor_t := na
             else
                 bo_wk_rel := "inline"
         else

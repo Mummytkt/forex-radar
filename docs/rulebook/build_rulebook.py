@@ -31,7 +31,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
 HERE = Path(__file__).resolve().parent
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "25 October 2026 (script v9, FVGs) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "25 October 2026 (script v10, Weekly = Daily rules) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -321,11 +321,13 @@ def make_rules(im):
          "This stops a breakout that is still sitting on its level from counting as a retest straight away. The chart label says "
          "“price hasn't moved away from the breakout yet” while this is what's holding a reaction back.", im["zone"]),
         ("C. Daily bias", "The Weekly storyline above the Daily",
-         "The same technique one level up. The <b>Weekly External high/low</b> is built by the Daily rules on Weekly candles (with its own <b>Weekly levels from: Body / Wick</b> setting); a <b>Weekly close</b> "
-         "beyond it is a Weekly breakout. After price moves away, it must react at a <b>Weekly level</b> — the Weekly Breaker, a Weekly V/A-shape or OC "
-         "inside the broken Weekly range, or a post-breakout Weekly OC — with an exact Daily wick touch that holds. While it holds, a <b>Daily breakout in "
-         "the Weekly direction is Weekly-confirmed</b>: External if the Daily level it broke formed before the reaction started, Internal if after. "
-         "Then the Daily reaction and H4 Origin follow as usual, and every alert states the Weekly storyline.",
+         "<b>The Daily rules one level up.</b> The <b>Weekly External high/low</b> is built on Weekly candles (with its own <b>Weekly levels from: Body / Wick</b> setting); a <b>Weekly close</b> "
+         "beyond it is a Weekly breakout, and its own close beyond the Breaker counts as moving away. <b>Daily candles</b> then react at Weekly levels — post-breakout Weekly OCs, "
+         "Weekly V/A-shapes formed after the breakout, <b>Weekly FVGs</b>, the Weekly Breaker, and Weekly V/A-shapes, OCs and FVGs inside the broken Weekly range — with an exact "
+         "Daily wick touch that holds. The <b>first Daily touch</b> of a Weekly level decides External / Internal: a <b>Daily breakout in the Weekly direction is Weekly-confirmed</b>, "
+         "External if the Daily level it broke formed before that touch, Internal if after. Weekly FVGs follow every Daily FVG rule (dip in from above, only a Weekly close kills one, "
+         "each deeper Weekly candle restarts the check, a deeper FVG takes over, the ones price went through are used up). A Weekly-confirmed Daily breakout uses up that Weekly reaction. "
+         "The Weekly never fires an alert: it labels the setup.",
          "Weekly breakout up, Daily touches a Weekly level and holds, then a Daily breakout up",
          "Weekly breakout down, Daily touches a Weekly level and holds, then a Daily breakout down",
          "A Daily close through the reacting Weekly level ends the Weekly link; a new Weekly breakout starts again. A Daily setup against the Weekly "
