@@ -351,6 +351,9 @@ var int    e4_t1   = na
 var float  e4_top  = na
 var float  e4_bot  = na
 var string e4_tip  = ""
+// External / Internal of the setup's latest H4 confirmation, kept apart from the
+// label code (bt_scls) so request.security can read e4_* (no drawings allowed there)
+var string e4_cls  = ""
 // Info table: the latest alert's text and when it fired (circle mode keeps the candles clear)
 var bt_info = array.from("", "", "", "")   // text, time: confirmations (0, 1), H4 FVG (2, 3)
 // The External H4 level of the current Daily reaction: the latest H4 A (buys) /
@@ -1464,6 +1467,7 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
         array.clear(h4_ocb)
         h4_brk_lvl            := na
         array.set(bt_scls, 0, "")
+        e4_cls := ""
     bo_wk_rel := ""
     if not na(wk_dir)
         bo_wk_dir := wk_dir
@@ -2219,6 +2223,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
         bool bt_lb = not na(h4_a_lvl) and not new_a and close > h4_a_lvl       // latest A broken
         if bo_dir == "bullish" and (bt_xb or (bt_lb and (h4a_origin < anchor_bar or bt_int)))
             string h4_cls = (bt_xb or h4a_origin < anchor_bar) ? "external" : "internal"
+            e4_cls := h4_cls
             float  bt_brk = bt_xb ? bt_ext_a : h4_a_lvl
             if not h4_bo_fired
                 h4_bo_fired           := true
@@ -2290,6 +2295,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
         bool bt_ls = not na(h4_v_lvl) and not new_v and close < h4_v_lvl
         if bo_dir == "bearish" and (bt_xs or (bt_ls and (h4v_origin < anchor_bar or bt_int)))
             string h4_cls = (bt_xs or h4v_origin < anchor_bar) ? "external" : "internal"
+            e4_cls := h4_cls
             float  bt_brkv = bt_xs ? bt_ext_v : h4_v_lvl
             if not h4_bo_fired
                 h4_bo_fired           := true
@@ -2470,12 +2476,15 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                        : (close[1] > open[1] and close < open and open >= close[1] and close < open[1])
         bool eng_wick = ocb ? close > high[1] : close < low[1]
         if eng and (bt_eng_mode == "Both" or (bt_eng_mode == "Wick") == eng_wick)
+            bool  hwb    = f_eng_wickbox(bt_eng_mode, eng_wick)
+            float hb_top = hwb ? math.max(high, high[1]) : math.max(open, close, open[1], close[1])
+            float hb_bot = hwb ? math.min(low, low[1]) : math.min(open, close, open[1], close[1])
+            string htip = (ocb ? "BUY" : "SELL") + " · H4 engulfing\n" + (eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
             if f_btlbl(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
-                bool  hwb    = f_eng_wickbox(bt_eng_mode, eng_wick)
-                float hb_top = hwb ? math.max(high, high[1]) : math.max(open, close, open[1], close[1])
-                float hb_bot = hwb ? math.min(low, low[1]) : math.min(open, close, open[1], close[1])
-                string htip = (ocb ? "BUY" : "SELL") + " · H4 engulfing\n" + (eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
                 f_eng_draw(false, time[1], time, hb_top, hb_bot, htip)
+            // The same test as the chart label, without the label code: this boxed
+            // engulfing is what the charts below 4H draw
+            if bt_show and bt_engulf and time >= bt_from and (e4_cls == "" or (e4_cls == "external" ? bt_ext : bt_int))
                 e4_n   += 1
                 e4_t1  := time[1]
                 e4_top := hb_top
