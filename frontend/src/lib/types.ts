@@ -31,6 +31,7 @@ export interface AlertItem {
   alert_classification: string
   alert_text: string
   fired_at: string
+  alert_type?: string
 }
 
 export interface AlertsPage {

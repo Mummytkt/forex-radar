@@ -303,6 +303,24 @@ def get_formation_by_id(conn: sqlite3.Connection, formation_id: int) -> Optional
 
 # ── Alerts ────────────────────────────────────────────────────────────────────
 
+# Alert type for the notification-list filter, from the stored classification
+# (and, for H4 breakouts, the title in the alert text). Used for old rows too.
+_CLASS_TO_TYPE = {"origin": "origin", "h4_breaker_origin": "breaker", "h4_breaker_cont": "breaker",
+                  "continuation_h4breaker": "breaker", "h4_oc_cont": "oc", "continuation_h4oc": "oc",
+                  "h4_engulfing_cont": "engulfing", "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing"}
+
+
+def alert_type_for(classification: Optional[str], alert_text: Optional[str]) -> str:
+    if classification in _CLASS_TO_TYPE:
+        return _CLASS_TO_TYPE[classification]
+    text = alert_text or ""
+    if "Daily reaction + H4 breakout" in text:
+        return "daily_react"
+    if "back in line" in text:
+        return "realign"
+    return "inline"
+
+
 def insert_alert(
     conn: sqlite3.Connection,
     alert: AlertRecord,
@@ -325,8 +343,8 @@ def insert_alert(
         """
         INSERT INTO alerts
             (instrument, direction, alert_classification, daily_breakout_id,
-             reaction_source_id, h4_formation_id, h4_classification, alert_text, fired_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             reaction_source_id, h4_formation_id, h4_classification, alert_text, fired_at, alert_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             alert.instrument,
@@ -338,6 +356,7 @@ def insert_alert(
             h4_cls,
             alert_text,
             _dt_str(alert.fired_at),
+            alert.alert_type or alert_type_for(alert.classification.value, alert_text),
         ),
     )
     conn.commit()

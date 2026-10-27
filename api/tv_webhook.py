@@ -711,6 +711,10 @@ _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
     "h4_fvg":         AlertClassification.H4_FVG,
     "d_engulfing":    AlertClassification.D_ENGULFING,
 }
+# The type shown / filtered in the notification lists (dashboard, Signal Log)
+_CONT_ALERT_TYPE = {"inline_break": "inline", "breakout_cont": "realign", "daily_react": "daily_react",
+                    "breaker_origin": "breaker", "breaker_cont": "breaker", "oc_cont": "oc",
+                    "engulfing": "engulfing", "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing"}
 # Which subscriber switch each continuation type answers to (Alert Filters)
 _CONT_PREF = {"inline_break": "cont_inline", "breakout_cont": "cont_realign", "daily_react": "cont_realign", "breaker_origin": "cont_breaker",
               "breaker_cont": "cont_breaker", "oc_cont": "cont_oc", "engulfing": "engulfing",
@@ -763,6 +767,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         weekly=_weekly_ctx(payload),
         h4_class=payload.h4_class if cont_type in ("breakout_cont", "daily_react") else None,
         daily_react=cont_type == "daily_react",
+        alert_type=_CONT_ALERT_TYPE.get(cont_type, "realign"),
         eng_wick=(payload.eng_wick is not False) if cont_type in ("engulfing", "d_engulfing") else None,
     )
 

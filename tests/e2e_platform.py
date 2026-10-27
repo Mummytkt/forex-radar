@@ -902,6 +902,20 @@ tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="
 _td = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("a Daily engulfing alert is only the pair and the message, no buy / sell",
       _td == "AUDCAD\nDaily engulfing candle has formed")
+# Notification-list filter (2026-10-27): each alert keeps its exact type
+_types = conn.execute("SELECT alert_type FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 2").fetchall()
+check("alerts are stored with their exact type", [t[0] for t in _types] == ["d_engulfing", "engulfing"])
+_lst = c.get("/api/alerts?limit=50&types=d_engulfing", headers=H(ts_)).json()["items"]
+check("the alert list shows only the types asked for",
+      len(_lst) > 0 and all(i["alert_type"] == "d_engulfing" for i in _lst))
+_all = c.get("/api/alerts?limit=50", headers=H(ts_)).json()["items"]
+check("with no type filter every type is listed", len({i["alert_type"] for i in _all}) > 1)
+from state.repository import alert_type_for
+check("old alerts are typed from their text",
+      alert_type_for("h4_breakout_cont", "X\nDaily reaction + H4 breakout\n") == "daily_react"
+      and alert_type_for("h4_breakout_cont", "X\nH4 back in line with the Daily\n") == "realign"
+      and alert_type_for("h4_breakout_cont", "X\nH4 breakout in line\n") == "inline"
+      and alert_type_for("h4_oc_cont", "") == "oc")
 _pd = c.get("/api/preferences", headers=H(ts_)).json()
 check("Daily engulfing is on by default with 'covers the wick'", _pd["dailyEngulfing"] is True and _pd["dEngulfMode"] == "wick")
 def _deng(wick):

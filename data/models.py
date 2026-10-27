@@ -153,5 +153,6 @@ class AlertRecord:
     daily_level_context: str = "internal"       # "external" or "internal" Daily level
     h4_class: Optional[str] = None              # external | internal, for back-in-line continuations
     daily_react: bool = False                   # a fresh Daily reaction + H4 breakout while H4 was aligned
+    alert_type: Optional[str] = None            # list filter: origin | inline | realign | daily_react | breaker | oc | engulfing | d_engulfing | h4_fvg
     eng_wick: Optional[bool] = None             # H4 engulfing: also closed beyond the previous candle's wick
     weekly: Optional[dict] = None               # Weekly storyline (wk_rel, wk_dir, wk_level, wk_src, wk_src_level, wk_cls)

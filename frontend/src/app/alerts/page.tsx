@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import AlertTypeFilter, { useAlertTypes, typesQuery } from '@/components/AlertTypeFilter'
 import useSWR from 'swr'
 import { TrendingUp, TrendingDown, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 import TopBar from '@/components/TopBar'
@@ -94,19 +95,22 @@ export default function HistoryPage() {
   const [page, setPage] = useState(0)
   const [dirFilter, setDirFilter] = useState('')
   const [pairFilter, setPairFilter] = useState('')
+  const [alertTypes, saveAlertTypes] = useAlertTypes()
+  const setAlertTypes = (t: string[]) => { saveAlertTypes(t); setPage(0) }
   const limit = 20
 
   const { data } = useSWR<AlertsPage>(
     `/api/alerts?limit=${limit}&offset=${page * limit}`
       + (dirFilter ? `&direction=${dirFilter}` : '')
-      + (pairFilter ? `&instrument=${encodeURIComponent(pairFilter)}` : ''),
+      + (pairFilter ? `&instrument=${encodeURIComponent(pairFilter)}` : '')
+      + typesQuery(alertTypes),
     fetcher, { refreshInterval: 60000 }
   )
   const { data: pairList } = useSWR<{ instruments: string[] }>('/api/alerts/instruments', fetcher, { refreshInterval: 300000 })
 
   const totalPages = data ? Math.ceil(data.total / limit) : 0
-  const filtering = !!(dirFilter || pairFilter)
-  const clearFilters = () => { setDirFilter(''); setPairFilter(''); setPage(0) }
+  const filtering = !!(dirFilter || pairFilter || alertTypes.length)
+  const clearFilters = () => { setDirFilter(''); setPairFilter(''); setAlertTypes([]) }
 
   return (
     <>
@@ -148,6 +152,8 @@ export default function HistoryPage() {
             ))}
           </div>
         </div>
+
+        <AlertTypeFilter types={alertTypes} onChange={setAlertTypes} />
 
         {/* Table */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>

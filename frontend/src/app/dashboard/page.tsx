@@ -13,6 +13,7 @@ import { PALETTE } from '@/lib/accent'
 import type { Stats, AlertsPage } from '@/lib/types'
 import OnboardingChecklist, { type Onboarding } from '@/components/OnboardingChecklist'
 import LiveChartBoard from '@/components/LiveChartBoard'
+import AlertTypeFilter, { useAlertTypes, typesQuery, typeLabel } from '@/components/AlertTypeFilter'
 
 interface Profile {
   telegram_configured: boolean
@@ -42,7 +43,8 @@ export default function OverviewPage() {
   const { fmtDate } = useTimezone()
   const { user } = useAuth()
   const { data: stats } = useSWR<Stats>('/api/stats', fetcher, { refreshInterval: 30000 })
-  const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=5', fetcher, { refreshInterval: 30000 })
+  const [alertTypes, setAlertTypes] = useAlertTypes()
+  const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=5' + typesQuery(alertTypes), fetcher, { refreshInterval: 30000 })
   const { data: profile } = useSWR<Profile>('/api/profile', fetcher, { refreshInterval: 60000 })
   const { data: onboarding } = useSWR<Onboarding>('/api/onboarding', fetcher, { refreshInterval: 60000 })
 
@@ -184,7 +186,14 @@ export default function OverviewPage() {
                 View all <ArrowRight size={12} />
               </Link>
             </div>
-            {!alerts || alerts.items.length === 0 ? (
+            <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)' }}>
+              <AlertTypeFilter types={alertTypes} onChange={setAlertTypes} compact />
+            </div>
+            {alerts && alerts.items.length === 0 && alertTypes.length > 0 ? (
+              <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+                No notifications of the types you picked yet.
+              </div>
+            ) : !alerts || alerts.items.length === 0 ? (
               <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
                 No alerts fired yet.<br />
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Alerts fire when all 4 conditions are confirmed.</span>
@@ -212,9 +221,9 @@ export default function OverviewPage() {
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                         {fmtDate(a.fired_at)}
-                        {a.alert_classification && a.alert_classification !== 'origin' && (
+                        {a.alert_type && a.alert_type !== 'origin' && (
                           <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--warning)', fontWeight: 600 }}>
-                            · continuation
+                            · {typeLabel(a.alert_type)}
                           </span>
                         )}
                       </div>

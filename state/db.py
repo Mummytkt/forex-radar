@@ -241,6 +241,16 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_alerts_inst ON alerts (instrument, fired_at);
         """)
 
+    # 2026-10-27: each alert's exact type (origin, inline, realign, daily_react, breaker,
+    # oc, engulfing, d_engulfing, h4_fvg) for the notification-list filter; old rows
+    # are typed once from their classification / text
+    alert_cols = {row[1] for row in conn.execute("PRAGMA table_info(alerts)").fetchall()}
+    if "alert_type" not in alert_cols:
+        from state.repository import alert_type_for
+        conn.execute("ALTER TABLE alerts ADD COLUMN alert_type TEXT")
+        for aid, cls, txt in conn.execute("SELECT id, alert_classification, alert_text FROM alerts").fetchall():
+            conn.execute("UPDATE alerts SET alert_type = ? WHERE id = ?", (alert_type_for(cls, txt), aid))
+
     # ── Data cleanup: prune excess POST_BREAKOUT_DAILY_OC sources ────────────
     # Earlier engine versions accumulated all OC sources without limit; some
     # instruments accumulated 50-112 sources, guaranteeing false retest hits.

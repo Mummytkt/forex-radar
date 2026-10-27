@@ -336,8 +336,14 @@ def get_alerts(
     offset: int = Query(0, ge=0),
     instrument: Optional[str] = None,
     direction: Optional[str] = None,
+    types: Optional[str] = None,   # comma-separated alert types to show (notification-list filter)
 ):
     where, params = [], []
+    if types:
+        wanted = [t for t in types.split(",") if t]
+        if wanted:
+            where.append("COALESCE(a.alert_type, 'origin') IN (" + ",".join("?" * len(wanted)) + ")")
+            params.extend(wanted)
     if instrument:
         where.append("a.instrument = ?")
         params.append(instrument)
@@ -351,7 +357,7 @@ def get_alerts(
         rows = conn.execute(
             f"""SELECT a.id, a.instrument, a.direction,
                        COALESCE(rs.source_type, 'UNKNOWN'), a.h4_classification,
-                       a.alert_classification, a.alert_text, a.fired_at
+                       a.alert_classification, a.alert_text, a.fired_at, a.alert_type
                 FROM alerts a
                 LEFT JOIN reaction_sources rs ON rs.id = a.reaction_source_id
                 {w}
@@ -365,7 +371,7 @@ def get_alerts(
             direction=r[2].upper() if r[2] else r[2],
             source_type=r[3], h4_classification=r[4],
             alert_classification=r[5] or "origin",
-            alert_text=r[6], fired_at=r[7],
+            alert_text=r[6], fired_at=r[7], alert_type=r[8] or "origin",
         ) for r in rows],
         total=total,
     )

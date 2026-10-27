@@ -33,6 +33,7 @@ class AlertItem(BaseModel):
     alert_classification: str = "origin"
     alert_text: str
     fired_at: str
+    alert_type: str = "origin"   # origin | inline | realign | daily_react | breaker | oc | engulfing | d_engulfing | h4_fvg
 
 
 class AlertsPage(BaseModel):
