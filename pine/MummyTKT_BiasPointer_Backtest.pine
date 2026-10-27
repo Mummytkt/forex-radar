@@ -166,7 +166,7 @@
 //             Origin, in line, in the Daily direction: cont_type "engulfing".
 // ─────────────────────────────────────────────────────────────────────────────
 
-indicator("MummyTKT Bias Pointer — Backtest", overlay=true, max_bars_back=2000, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+indicator("Backtest", overlay=true, max_bars_back=2000, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
 
 // ── Settings, in titled sections (the group titles are the headers in TradingView) ─
 const string G_SETUP = "1 · Setup and connection"
