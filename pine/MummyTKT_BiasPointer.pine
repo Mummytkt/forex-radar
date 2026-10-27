@@ -47,7 +47,8 @@
 //   the last H4 A (V for sells) formed BEFORE the candle that touched / entered
 //   the level; an A / V completed by that candle or later is Internal.
 //
-// v11 display: alerts are small arrows / dots on the triggering candle (hover for the
+// v11 display: confirmation alerts are small arrows (engulfing / H4 FVG: dots, with their
+//   own table row, so they never replace the latest confirmation arrow); alerts are small arrows / dots on the triggering candle (hover for the
 //   details); the alert text and the status sit in an info table at the side
 //   ("Alert marks on the chart" = Full labels brings the old labels back).
 //
@@ -329,9 +330,9 @@ var int bt_t0 = time
 // External / Internal of the setup's latest H4 confirmation (Origin, Daily reaction
 // + H4 breakout, or back in line); continuations follow it, like the server
 var bt_scls = array.from("")
-var bt_last = array.new<label>(1, na)   // the alert label currently on the chart
+var bt_last = array.new<label>(2, na)   // the alert labels on the chart: 0 = confirmations, 1 = engulfing / H4 FVG
 // Info table: the latest alert's text and when it fired (circle mode keeps the candles clear)
-var bt_info = array.from("", "")
+var bt_info = array.from("", "", "", "")   // text, time: confirmations (0, 1), engulfing / H4 FVG (2, 3)
 // The External H4 level of the current Daily reaction: the latest H4 A (buys) /
 // V (sells) when the reaction started, i.e. formed BEFORE it
 var float bt_ext_a = na
@@ -1319,8 +1320,8 @@ f_bt_lvtxt(float v) =>
 f_bt_src(string s) =>
     s == "daily_breaker" ? "Daily Breaker" : s == "post_breakout_oc" ? "Daily OC after the breakout" : s == "post_breakout_v" ? "Daily V/A-shape after the breakout" : s == "inside_range" ? "Daily level inside the broken range" : s == "post_breakout_fvg" ? "Daily FVG after the breakout" : s == "inside_fvg" ? "Daily FVG inside the range" : "-"
 
-// The small mark on the candle that triggered an alert (every alert, incl. the H4 FVG and
-// Daily engulfing notifications: their arrow points the Daily direction, in their own colour)
+// The small mark on the candle that triggered a confirmation alert (engulfing and H4 FVG
+// alerts get a dot instead, kept apart from the confirmations)
 f_mark(bool bull) =>
     bt_mark_shape == "Dot" ? "•" : bull ? "▲" : "▼"
 
@@ -1341,34 +1342,38 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
          + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
          + "\nEntry = next candle's open"
     bool circles = bt_marks == "Circle + info table"
+    // Engulfing (H4 / Daily) and H4 FVG are kept apart from the confirmation alerts:
+    // their own dot and table row, so they never replace the latest confirmation arrow
+    int  sl = kind == 6 or kind >= 10 ? 1 : 0
+    string mk = sl == 1 ? "•" : f_mark(bull)
     if tf_ok and bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         string gtxt = "Not counted: " + why + "\n" + head + tag + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
         if bt_latest
-            label.delete(array.get(bt_last, 0))
+            label.delete(array.get(bt_last, sl))
         label glb = na
         if circles
-            glb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=bt_grey_col, size=size.small, tooltip=gtxt + "\n" + detail)
+            glb := label.new(bar_index, bull ? low : high, mk, yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=bt_grey_col, size=size.small, tooltip=gtxt + "\n" + detail)
         else
             glb := label.new(bar_index, bull ? low : high, gtxt, style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
                  textcolor=bt_txt_col, size=size.small)
-        array.set(bt_last, 0, glb)
-        array.set(bt_info, 0, gtxt + "\n" + detail)
-        array.set(bt_info, 1, str.format_time(time, "dd MMM yyyy HH:mm"))
+        array.set(bt_last, sl, glb)
+        array.set(bt_info, sl * 2, gtxt + "\n" + detail)
+        array.set(bt_info, sl * 2 + 1, str.format_time(time, "dd MMM yyyy HH:mm"))
     if tf_ok and on and cls_ok and time >= bt_from
         string atxt = (kind >= 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
         color  acol = kind >= 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col   // markers: no buy / sell colour
         if bt_latest
-            label.delete(array.get(bt_last, 0))
+            label.delete(array.get(bt_last, sl))
         label alb = na
         if circles
-            alb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
+            alb := label.new(bar_index, bull ? low : high, mk, yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
         else
             alb := label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
                  textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail)
-        array.set(bt_last, 0, alb)
-        array.set(bt_info, 0, atxt + "\n" + detail)
-        array.set(bt_info, 1, str.format_time(time, "dd MMM yyyy HH:mm"))
+        array.set(bt_last, sl, alb)
+        array.set(bt_info, sl * 2, atxt + "\n" + detail)
+        array.set(bt_info, sl * 2 + 1, str.format_time(time, "dd MMM yyyy HH:mm"))
         array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
         array.set(bt_cnt, bull ? 8 : 9, array.get(bt_cnt, bull ? 8 : 9) + 1)
     tf_ok and on and cls_ok and time >= bt_from
@@ -2655,14 +2660,17 @@ f_info_pos(string p) =>
         "Middle left"  => position.middle_left
         "Bottom left"  => position.bottom_left
         => position.middle_right
-var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 4, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
+var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 6, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
 if barstate.islast and bt_marks == "Circle + info table"
     table.cell(bt_info_tbl, 0, 0, "Status", text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
     table.cell(bt_info_tbl, 0, 1, str.replace_all(str.replace_all(_state_txt + _wk_txt, " · ", "\n"), " | ", "\n"),
          text_color=bt_tbl_txt, bgcolor=color.new(_lbl_col, 65), text_size=size.small, text_halign=text.align_left)
     if _is_4h and array.get(bt_info, 0) != ""
-        table.cell(bt_info_tbl, 0, 2, "Latest alert · " + array.get(bt_info, 1), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
+        table.cell(bt_info_tbl, 0, 2, "Latest confirmation alert · " + array.get(bt_info, 1), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
         table.cell(bt_info_tbl, 0, 3, array.get(bt_info, 0), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
+    if _is_4h and array.get(bt_info, 2) != ""
+        table.cell(bt_info_tbl, 0, 4, "Latest engulfing / H4 FVG · " + array.get(bt_info, 3), text_color=color.new(bt_tbl_txt, 30), text_size=size.tiny, text_halign=text.align_left)
+        table.cell(bt_info_tbl, 0, 5, array.get(bt_info, 2), text_color=color.new(bt_tbl_txt, 30), text_size=size.tiny, text_halign=text.align_left)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
 // The count table sits top right, or bottom right when the info table is there
