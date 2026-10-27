@@ -37,7 +37,7 @@
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
 //
-// v11 display: alerts are small circles above the triggering candle (hover for the
+// v11 display: alerts are small arrows / dots on the triggering candle (hover for the
 //   details); the alert text and the status sit in an info table at the side
 //   ("Alert marks on the chart" = Full labels brings the old labels back).
 //
@@ -253,8 +253,10 @@ bool   bt_grey     = input.bool(true,  "Show alerts that are not counted (grey, 
      tooltip="Alerts before the start date, Internal ones while Internal is off, and types switched off above.")
 bool   bt_table    = input.bool(true,  "Show count table", group=G_BT)
 string bt_marks    = input.string("Circle + info table", "Alert marks on the chart", options=["Circle + info table", "Full labels"], group=G_BT,
-     tooltip="Circle + info table: each alert is a small circle above the candle that triggered it (hover it for the details); the alert text and the status go in a table at the side, so the candles stay clear. Full labels: the old text labels on the chart.")
-string bt_info_pos = input.string("Middle right", "Info table position", options=["Top right", "Middle right", "Bottom right", "Top left", "Middle left", "Bottom left"], group=G_BT)
+     tooltip="Circle + info table: each alert is a small arrow or dot on the candle that triggered it (hover it for the details); the alert text and the status go in a table at the side, so the candles stay clear. Full labels: the old text labels on the chart.")
+string bt_mark_shape = input.string("Small arrow", "Mark shape", options=["Small arrow", "Dot"], group=G_BT,
+     tooltip="Small arrow: ▲ under a buy candle, ▼ over a sell candle. Dot: a small dot. Only on the candle that triggered the alert; hover it for the details.")
+string bt_info_pos = input.string("Top right", "Info table position", options=["Top right", "Middle right", "Bottom right", "Top left", "Middle left", "Bottom left"], group=G_BT)
 color  bt_buy_col  = input.color(#00C853, "Buy label", group=G_BT, inline="btc")
 color  bt_sell_col = input.color(#FF1744, "Sell label", group=G_BT, inline="btc")
 color  bt_txt_col  = input.color(color.white, "Label text", group=G_BT, inline="btc")
@@ -1291,6 +1293,10 @@ f_bt_lvtxt(float v) =>
 f_bt_src(string s) =>
     s == "daily_breaker" ? "Daily Breaker" : s == "post_breakout_oc" ? "Daily OC after the breakout" : s == "post_breakout_v" ? "Daily V/A-shape after the breakout" : s == "inside_range" ? "Daily level inside the broken range" : s == "post_breakout_fvg" ? "Daily FVG after the breakout" : s == "inside_fvg" ? "Daily FVG inside the range" : "-"
 
+// The small mark on the candle that triggered an alert
+f_mark(bool bull) =>
+    bt_mark_shape == "Dot" ? "•" : bull ? "▲" : "▼"
+
 // Backtest: label where an alert is sent (returns true if labelled)
 f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool conf = kind <= 1 or kind == 7   // an H4 confirmation after a Daily reaction
@@ -1315,7 +1321,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
             label.delete(array.get(bt_last, 0))
         label glb = na
         if circles
-            glb := label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=bt_grey_col, size=size.tiny, tooltip=gtxt + "\n" + detail)
+            glb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=bt_grey_col, size=size.small, tooltip=gtxt + "\n" + detail)
         else
             glb := label.new(bar_index, bull ? low : high, gtxt, style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
                  textcolor=bt_txt_col, size=size.small)
@@ -1329,7 +1335,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
             label.delete(array.get(bt_last, 0))
         label alb = na
         if circles
-            alb := label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=acol, size=size.tiny, tooltip=atxt + "\n" + detail)
+            alb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
         else
             alb := label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
                  textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail)
@@ -2576,15 +2582,17 @@ f_info_pos(string p) =>
         => position.middle_right
 var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 4, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
 if barstate.islast and bt_marks == "Circle + info table"
-    table.cell(bt_info_tbl, 0, 0, "Status", text_color=color.gray, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(bt_info_tbl, 0, 0, "Status", text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
     table.cell(bt_info_tbl, 0, 1, str.replace_all(str.replace_all(_state_txt + _wk_txt, " · ", "\n"), " | ", "\n"),
          text_color=bt_state_txt, bgcolor=color.new(_lbl_col, 40), text_size=size.small, text_halign=text.align_left)
     if _is_4h and array.get(bt_info, 0) != ""
-        table.cell(bt_info_tbl, 0, 2, "Latest alert · " + array.get(bt_info, 1), text_color=color.gray, text_size=size.tiny, text_halign=text.align_left)
+        table.cell(bt_info_tbl, 0, 2, "Latest alert · " + array.get(bt_info, 1), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
         table.cell(bt_info_tbl, 0, 3, array.get(bt_info, 0), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
-var table bt_tbl = table.new(position.top_right, 2, 14, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
+// The count table sits top right, or bottom right when the info table is there
+var table bt_tbl = bt_table ? table.new(bt_marks == "Circle + info table" and bt_info_pos == "Top right" ? position.bottom_right : position.top_right, 2, 14,
+     bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70)) : na
 if bt_table and barstate.islast and timeframe.period != "240"
     table.cell(bt_tbl, 0, 0, "Backtest labels show on the 4H chart only", text_color=bt_tbl_txt, text_size=size.small)
 if bt_table and barstate.islast and timeframe.period == "240"
