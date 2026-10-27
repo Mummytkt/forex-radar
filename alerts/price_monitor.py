@@ -61,7 +61,8 @@ def _to_yf_ticker(instrument: str) -> Optional[str]:
 def _fetch_prices(instruments: list[str]) -> dict[str, dict]:
     """
     Fetch current OHLC for a list of instruments via Yahoo Finance.
-    Returns {instrument: {price, high, low}}. Missing instruments are omitted.
+    Returns {instrument: {price, high, low, bars}}; bars = the 5-minute candles
+    [(open_time, o, h, l, c), ...] oldest first. Missing instruments are omitted.
     """
     try:
         import yfinance as yf
@@ -86,7 +87,7 @@ def _fetch_prices(instruments: list[str]) -> dict[str, dict]:
         tickers_arg = unique_syms if len(unique_syms) > 1 else unique_syms[0]
         raw = yf.download(
             tickers_arg,
-            period="1d",
+            period="2d",
             interval="5m",
             progress=False,
             auto_adjust=True,
@@ -114,7 +115,18 @@ def _fetch_prices(instruments: list[str]) -> dict[str, dict]:
                 low_col  = _col("Low")
                 high_val = float(high_col.iloc[-1]) if not high_col.empty else val
                 low_val  = float(low_col.iloc[-1])  if not low_col.empty  else val
-                prices[inst] = {"price": val, "high": high_val, "low": low_val}
+                open_col = _col("Open")
+                bars = []
+                for ts in close_col.index:
+                    try:
+                        t = ts.to_pydatetime()
+                        t = t.astimezone(timezone.utc) if t.tzinfo else t.replace(tzinfo=timezone.utc)
+                        c_ = float(close_col[ts])
+                        bars.append((t, float(open_col.get(ts, c_)), float(high_col.get(ts, c_)),
+                                     float(low_col.get(ts, c_)), c_))
+                    except Exception:
+                        continue
+                prices[inst] = {"price": val, "high": high_val, "low": low_val, "bars": bars}
             except Exception as exc:
                 logger.debug("Could not extract price for %s (%s): %s", inst, sym, exc)
 
@@ -128,6 +140,25 @@ _TF_MINUTES: dict[str, int] = {
     "5m": 5, "15m": 15, "30m": 30, "45m": 45,
     "1h": 60, "2h": 120, "3h": 180, "4h": 240,
 }
+
+
+def tf_candle(bars: list, timeframe: str, now: datetime) -> Optional[tuple]:
+    """The candle of this timeframe that has just closed, built from its 5-minute
+    candles: (o, h, l, c, prev_close). prev_close = the close of the candle before
+    it (for "closes above / below"). None if its 5-minute candles aren't in yet.
+    Candles are aligned to 00:00 UTC (4h: 00, 04, 08, ... like the H4 chart)."""
+    from datetime import timedelta
+    tf_min = _TF_MINUTES.get(timeframe, 5)
+    day0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    mins = (now - day0).total_seconds() // 60
+    end = day0 + timedelta(minutes=(mins // tf_min) * tf_min)
+    start = end - timedelta(minutes=tf_min)
+    inside = [b for b in bars if start <= b[0] < end]
+    if not inside:
+        return None
+    before = [b for b in bars if b[0] < start]
+    prev_close = before[-1][4] if before else None
+    return (inside[0][1], max(b[2] for b in inside), min(b[3] for b in inside), inside[-1][4], prev_close)
 
 
 def _is_candle_close_window(timeframe: str, now: datetime) -> bool:
@@ -374,8 +405,24 @@ async def run_price_check(db_path: str, config) -> None:
 
                 triggered = False
                 direction_str = ""
+                shown_close = price   # the close quoted in the message
 
-                if condition == "crossing_up":
+                # On candle close: the whole candle of that timeframe (built from its
+                # 5-minute candles), not just the last 5 minutes of it
+                if trigger_type == "on_candle_close" and timeframe != "5m":
+                    cndl = tf_candle(candle_data.get("bars") or [], timeframe, now_dt)
+                    if cndl is None:
+                        continue
+                    _o, c_high, c_low, c_close, c_prev = cndl
+                    how = htf_triggered(condition, alert_price, c_prev, c_high, c_low, c_close)
+                    if not how:
+                        continue
+                    triggered, direction_str = True, how
+                    shown_close = c_close
+
+                if triggered:
+                    pass
+                elif condition == "crossing_up":
                     if prev_price < alert_price <= price:
                         triggered, direction_str = True, "above"
                 elif condition == "crossing_down":
@@ -418,13 +465,13 @@ async def run_price_check(db_path: str, config) -> None:
                     text = (
                         f"⚡ Price Alert: {tagged(instrument)}\n\n"
                         f"Price rejected at {fmt.format(alert_price)} ({direction_str})\n"
-                        f"Close: {fmt.format(price)}"
+                        f"Close: {fmt.format(shown_close)}"
                     )
                 else:
                     text = (
                         f"⚡ Price Alert: {tagged(instrument)}\n\n"
                         f"Price crossed {direction_str} {fmt.format(alert_price)}\n"
-                        f"Current: {fmt.format(price)}"
+                        f"{'Close' if trigger_type == 'on_candle_close' else 'Current'}: {fmt.format(shown_close)}"
                     )
                 if message:
                     text += f"\n\n{message}"
