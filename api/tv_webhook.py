@@ -365,12 +365,14 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 _CONT_LEVEL_NAMES = {"inline_break": "H4 breakout (new H4 Breaker)", "breakout_cont": "H4 breakout", "daily_react": "H4 breakout",
                      "breaker_origin": "H4 Breaker", "breaker_cont": "H4 Breaker", "oc_cont": "H4 OC",
                      "h4_fvg": "High of the candle before the breakout (FVG edge)",
-                     "d_engulfing": "Previous Daily candle (covered level)"}
+                     "d_engulfing": "Previous Daily candle (covered level)",
+                     "d_oc_formed": "Daily OC", "h4_oc_formed": "H4 OC"}
 _CONT_TITLES = {"inline_break": "H4 breakout in line with the Daily", "breakout_cont": "H4 back in line with the Daily",
                 "daily_react": "Daily reaction + H4 breakout",
                 "breaker_origin": "H4 Breaker Origin", "breaker_cont": "H4 Breaker Continuation",
                 "oc_cont": "H4 OC Continuation", "h4_fvg": "H4 FVG candle after breakout",
-                "d_engulfing": "Daily engulfing in the Daily direction"}
+                "d_engulfing": "Daily engulfing in the Daily direction",
+                "d_oc_formed": "Daily OC formed", "h4_oc_formed": "H4 OC formed"}
 
 
 def _save_chart_levels(conn, instrument: str, alert_id: int, direction: Direction, breaker: Optional[float],
@@ -710,15 +712,23 @@ _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
     "engulfing":      AlertClassification.H4_ENGULFING_CONT,
     "h4_fvg":         AlertClassification.H4_FVG,
     "d_engulfing":    AlertClassification.D_ENGULFING,
+    "d_oc_formed":    AlertClassification.D_OC_FORMED,
+    "h4_oc_formed":   AlertClassification.H4_OC_FORMED,
 }
 # The type shown / filtered in the notification lists (dashboard, Signal Log)
 _CONT_ALERT_TYPE = {"inline_break": "inline", "breakout_cont": "realign", "daily_react": "daily_react",
                     "breaker_origin": "breaker", "breaker_cont": "breaker", "oc_cont": "oc",
-                    "engulfing": "engulfing", "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing"}
+                    "engulfing": "engulfing", "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing",
+                    "d_oc_formed": "d_oc_formed", "h4_oc_formed": "h4_oc_formed"}
 # Which subscriber switch each continuation type answers to (Alert Filters)
 _CONT_PREF = {"inline_break": "cont_inline", "breakout_cont": "cont_realign", "daily_react": "cont_realign", "breaker_origin": "cont_breaker",
               "breaker_cont": "cont_breaker", "oc_cont": "cont_oc", "engulfing": "engulfing",
-              "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing"}
+              "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing",
+              "d_oc_formed": "d_oc_formed", "h4_oc_formed": "h4_oc_formed"}
+
+
+# Notifications only: they don't change the H4 Breaker or the setup's stage
+_MARKERS = ("h4_fvg", "d_engulfing", "d_oc_formed", "h4_oc_formed")
 
 
 def _weekly_ctx(payload: "TVWebhookPayload") -> Optional[dict]:
@@ -779,7 +789,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
                        subtitle=_CONT_TITLES.get(cont_type, "H4 continuation"))
 
     state = get_instrument_state(conn, instrument)
-    if cont_type not in ("h4_fvg", "d_engulfing"):   # markers that don't change the H4 Breaker or the setup's stage
+    if cont_type not in _MARKERS:   # markers that don't change the H4 Breaker or the setup's stage
         upsert_instrument_state(conn, InstrumentStateRow(
             instrument=instrument,
             last_daily_candle_ts=state.last_daily_candle_ts if state else None,
@@ -803,7 +813,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     if cont_type in ("breakout_cont", "daily_react") and payload.h4_class:
         setup_kind = confirmation_kind(payload.h4_class)
         _set_setup_class(conn, instrument, setup_kind)
-    elif cont_type == "d_engulfing":
+    elif cont_type in ("d_engulfing", "d_oc_formed"):
         setup_kind = None   # a Daily candle: no H4 External / Internal to follow
     else:
         setup_kind = _setup_class(conn, instrument, breakout.db_id)   # None (unknown) = no External/Internal filter

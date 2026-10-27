@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "27 October 2026 (script v11, Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "27 October 2026 (script v12, OC formed notifications; v11 Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -236,6 +236,10 @@ def make_images():
         levels=[(17.75, "previous Daily candle's HIGH (top of its wick)", MUTED)],
         notes=[(2, 18.05, "Daily candle opens at/below its close,\ncloses above its high → Daily engulfing", GREEN, (1.2, 18.8))],
         labels=["Daily", "bearish Daily", "engulfing Daily"], ylim=(16.0, 19.2))
+    im["ocformed"] = chart("ocformed", [(17.2, 17.4, 16.7, 16.8), (16.8, 17.6, 16.7, 17.5), (17.5, 18.3, 17.4, 18.2)],
+        levels=[(17.5, "OC level: where the first candle closed", MUTED)],
+        notes=[(2, 18.3, "second candle in a row closes in the\nDaily direction → “OC has formed”", GREEN, (0.9, 18.95))],
+        labels=["", "1st bullish", "2nd bullish"], ylim=(16.3, 19.3))
     im["weekly"] = chart("weekly", [(15.0, 15.7, 14.9, 15.6), (15.6, 17.3, 15.5, 17.1), (17.1, 17.2, 16.0, 16.3), (16.3, 17.9, 16.1, 17.7)],
         levels=[(16.0, "Weekly Breaker (broken Weekly External high)", RED)],
         notes=[(1, 17.1, "Weekly close above\n→ Weekly breakout", GREEN, (0.4, 18.4)),
@@ -466,6 +470,14 @@ def make_rules(im):
          "Bearish Daily direction: after a bullish Daily candle, opens at/above its close, closes below its open (body) or below its LOW (wick)",
          "It doesn't change the H4 stage or the H4 Breaker, and it isn't filtered by External / Internal (there is no H4 break in it). "
          "It has its own Alert Filters switch “Daily engulfing”.", im["dengulf"]),
+        ("F. Continuations (after the Origin)", "OC formed (H4 and Daily)",
+         "A notification only, no buy or sell. <b>H4:</b> after the Origin, while H4 is in line, when the last two H4 candles both close in the "
+         "Daily direction: only the pair and <b>“H4 OC has formed”</b>. <b>Daily:</b> whenever a Daily direction is set, when the last two Daily "
+         "candles both close in that direction: <b>“Daily OC has formed”</b>, at the Daily close. The OC level is where the first candle closed.",
+         "Bullish Daily direction: two bullish candles in a row",
+         "Bearish Daily direction: two bearish candles in a row",
+         "It doesn't change the H4 stage or the H4 Breaker. H4 and Daily each have their own Alert Filters switch (off for subscribers until they "
+         "switch it on). On the chart an ✕ marks the most recent of each; it is not in the info table.", im["ocformed"]),
         ("F. Continuations (after the Origin)", "H4 FVG after breakout",
          "After an <b>Origin</b>, a <b>Daily reaction + H4 breakout</b>, <b>H4 back in line</b> or an <b>H4 breakout in line</b>, the <b>next H4 candle</b> is "
          "checked once. If it completes an FVG, one alert is sent with only the pair and <b>“H4 FVG candle after breakout has formed”</b>. "

@@ -20,14 +20,15 @@ _KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal",
          "origin": "pref_alert_origin", "cont_inline": "pref_alert_cont_inline",
          "cont_breaker": "pref_alert_cont_breaker", "cont_oc": "pref_alert_cont_oc",
          "cont_realign": "pref_alert_cont_realign", "engulfing": "pref_alert_engulfing",
-         "h4_fvg": "pref_alert_h4_fvg", "d_engulfing": "pref_alert_d_engulfing"}
+         "h4_fvg": "pref_alert_h4_fvg", "d_engulfing": "pref_alert_d_engulfing",
+         "d_oc_formed": "pref_alert_d_oc_formed", "h4_oc_formed": "pref_alert_h4_oc_formed"}
 
 
 # Everything is on until switched off, except Internal H4 breakouts: External
-# only by default; each person can switch Internal on. The H4 FVG alert is off
-# for subscribers (they opt in) and on for the owner.
+# only by default; each person can switch Internal on. The H4 FVG and OC formed
+# notifications are off for subscribers (they opt in) and on for the owner.
 _DEFAULTS = {"internal": False}
-_OWNER_ONLY_DEFAULT = {"h4_fvg"}
+_OWNER_ONLY_DEFAULT = {"h4_fvg", "d_oc_formed", "h4_oc_formed"}
 
 
 def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, bool]:

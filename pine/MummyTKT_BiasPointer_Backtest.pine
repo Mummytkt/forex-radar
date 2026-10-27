@@ -60,6 +60,13 @@
 //   has formed", no buy / sell. The Weekly follows every Daily rule (used
 //   levels too). Settings are grouped under numbered, titled sections.
 //
+// v12 (2026-10-27): OC formed notifications (no buy / sell). Daily: at the Daily
+//   close, the last two Daily candles both in the current Daily direction
+//   (cont_type "d_oc_formed", level = the first one's close). H4: after the
+//   Origin while H4 is in line, the last two H4 candles both in the Daily
+//   direction (cont_type "h4_oc_formed"). On the chart an "✕" marks the newest
+//   of each (Daily on D and lower, H4 on 4H); not in the info table.
+//
 // v10 display: each H4 breakout after a Daily reaction says on its chart label
 //   whether an H4 candle swept an H4 swing low (high, sells) during the break
 //   ("Sweep check on H4 breakout labels"; display only, no alert), and every
@@ -101,7 +108,7 @@
 //   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
 //   INVALIDATED      — no longer sent: a break the other way is a new BREAKOUT
 //   H4_CONTINUATION  — H4 continuation event after Origin has fired
-//                      cont_type: breakout_cont | daily_react | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing | h4_fvg | d_engulfing
+//                      cont_type: breakout_cont | daily_react | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing | h4_fvg | d_engulfing | d_oc_formed | h4_oc_formed
 //   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
 //
 // v5 change: added PRICE_UPDATE event — fires at every realtime H4 close.
@@ -171,7 +178,7 @@ indicator("Backtest", overlay=true, max_bars_back=2000, max_lines_count=500, max
 // ── Settings, in titled sections (the group titles are the headers in TradingView) ─
 const string G_SETUP = "1 · Setup and connection"
 const string G_ALERT = "2 · Alerts and chart labels (same switches as Alert Filters)"
-const string G_ENG   = "3 · Engulfing (H4 and Daily)"
+const string G_ENG   = "3 · Engulfing and OC formed (H4 and Daily)"
 const string G_DLVL  = "4 · Daily levels and FVGs"
 const string GS1     = "5 · Daily External high / low"
 const string G_WK    = "6 · Weekly"
@@ -214,6 +221,10 @@ int    eng_n_h     = input.int(1, "keep the last", minval=1, maxval=20, group=G_
 color  bt_engd_col = input.color(color.new(#FFD54F, 0), "Daily engulfing box", group=G_ENG, inline="ebd")
 int    eng_n_d     = input.int(1, "keep the last", minval=1, maxval=20, group=G_ENG, inline="ebd",
      tooltip="Daily engulfings are boxed on the Daily chart and every lower timeframe (4H, 1H, ...), with a 'D' pointer under the box. The 'covers' choice decides the box, as for H4. Keep the last = how many of the most recent stay on the chart.")
+bool   bt_docf     = input.bool(true, "Daily OC formed ✕", group=G_ENG, inline="ocf")
+bool   bt_hocf     = input.bool(true, "H4 OC formed ✕", group=G_ENG, inline="ocf",
+     tooltip="An ✕ on the newest OC formed (two candles in a row in the Daily direction; level = where the first one closed). Daily: any time a Daily direction is set, on the Daily chart and lower. H4: after the Origin while H4 is in line, on the 4H chart. Only the most recent of each is shown. The notification is always sent; each person switches it on or off in Alert Filters. Not in the info table.")
+color  bt_ocf_col  = input.color(color.new(#E040FB, 0), "OC formed ✕", group=G_ENG)
 
 // 4 · Daily levels and FVGs
 bool   d_body = input.string("Body", "Daily levels from", options = ["Body", "Wick"], group = G_DLVL,
@@ -340,6 +351,9 @@ var int bt_t0 = time
 // + H4 breakout, or back in line); continuations follow it, like the server
 var bt_scls = array.from("")
 var bt_last = array.new<label>(2, na)   // the alert labels on the chart: 0 = confirmations, 1 = H4 FVG
+// The newest OC formed marks (✕): Daily, H4
+var label ocf_d = na
+var label ocf_h = na
 // Engulfing boxes and pointers on the chart, oldest first (Daily / H4)
 var eng_bd = array.new<box>()
 var eng_ld = array.new<label>()
@@ -1589,6 +1603,26 @@ if new_daily and not na(bo_dir) and not na(d_close2) and not na(dw_h2)
                   + ',"h4_level":' + str.tostring(d_eng_lvl) + '}',
                   alert.freq_once_per_bar)
 
+// ── Daily OC formed (notification) ────────────────────────────────────────────
+// On each completed Daily candle while a Daily direction is set: it and the Daily
+// candle before it are both bullish (buys; bearish for sells). Level = where the
+// first one closed. Only the pair and "Daily OC has formed" (cont_type "d_oc_formed").
+if new_daily and not na(bo_dir) and not na(d_close2)
+    bool docb = bo_dir == "bullish"
+    if docb ? (d_close2 > d_open2 and d_close > d_open) : (d_close2 < d_open2 and d_close < d_open)
+        if bt_docf and time >= bt_from and timeframe.in_seconds() <= 86400
+            label.delete(ocf_d)
+            ocf_d := label.new(time[1], docb ? dr_l : dr_h, "✕", xloc=xloc.bar_time,
+                 style=docb ? label.style_label_up : label.style_label_down, color=color.new(color.black, 100),
+                 textcolor=bt_ocf_col, size=size.small,
+                 tooltip=syminfo.ticker + "\nDaily OC has formed\nOC level " + str.tostring(d_close2, format.mintick))
+        if barstate.isrealtime
+            alert(f_hdrw("H4_CONTINUATION")
+                  + '","direction":"' + bo_dir + '","cont_type":"d_oc_formed"'
+                  + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                  + ',"h4_level":' + str.tostring(d_close2) + '}',
+                  alert.freq_once_per_bar)
+
 // Daily FVGs. A gap is only an FVG once its third Daily candle has closed. A Daily
 // close through the gap kills it (bullish: below the bottom; bearish: above the top).
 f_fvg_drop(array<float> his, array<float> los, array<float> xs, array<int> xbs, array<bool> ps, int k) =>
@@ -2502,6 +2536,19 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
         if array.size(h4_ocs) > 40
             array.shift(h4_ocs)
             array.shift(h4_ocb)
+        // OC formed notification (no buy / sell): after the Origin, while in line
+        if h4_bo_fired and h4_aligned
+            if bt_hocf and time >= bt_from
+                label.delete(ocf_h)
+                ocf_h := label.new(bar_index, ocb ? low : high, "✕", yloc=ocb ? yloc.belowbar : yloc.abovebar,
+                     style=label.style_none, textcolor=bt_ocf_col, size=size.small,
+                     tooltip=syminfo.ticker + "\nH4 OC has formed\nOC level " + str.tostring(close[1], format.mintick))
+            if barstate.isrealtime
+                alert(f_hdrw("H4_CONTINUATION")
+                      + '","direction":"' + bo_dir + '","cont_type":"h4_oc_formed"'
+                      + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                      + ',"h4_level":' + str.tostring(close[1]) + '}',
+                      alert.freq_once_per_bar)
 
 // ── H4 engulfing boxes below the 4H chart: the same ones as on the 4H chart ──
 // The H4 steps run on 4H candles here too; [1] + lookahead_on = state after the

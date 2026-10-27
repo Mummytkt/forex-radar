@@ -43,6 +43,8 @@ class AlertClassification(str, Enum):
     H4_ENGULFING_CONT = "h4_engulfing_cont"
     H4_FVG = "h4_fvg"   # the candle after an H4 breakout in line completed an FVG (liquidity marker)
     D_ENGULFING = "d_engulfing"   # a Daily candle engulfed the previous one, in the Daily direction
+    D_OC_FORMED = "d_oc_formed"   # two Daily candles in a row in the Daily direction (notification)
+    H4_OC_FORMED = "h4_oc_formed"  # two H4 candles in a row in the Daily direction, H4 in line (notification)
 
 
 class ReactionSourceType(str, Enum):
@@ -153,6 +155,6 @@ class AlertRecord:
     daily_level_context: str = "internal"       # "external" or "internal" Daily level
     h4_class: Optional[str] = None              # external | internal, for back-in-line continuations
     daily_react: bool = False                   # a fresh Daily reaction + H4 breakout while H4 was aligned
-    alert_type: Optional[str] = None            # list filter: origin | inline | realign | daily_react | breaker | oc | engulfing | d_engulfing | h4_fvg
+    alert_type: Optional[str] = None            # list filter: origin | inline | realign | daily_react | breaker | oc | engulfing | d_engulfing | h4_fvg | d_oc_formed | h4_oc_formed
     eng_wick: Optional[bool] = None             # H4 engulfing: also closed beyond the previous candle's wick
     weekly: Optional[dict] = None               # Weekly storyline (wk_rel, wk_dir, wk_level, wk_src, wk_src_level, wk_cls)

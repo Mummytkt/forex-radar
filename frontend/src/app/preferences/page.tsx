@@ -24,7 +24,7 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled?: 
   )
 }
 
-type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts' | 'alertOrigin' | 'contInline' | 'contBreaker' | 'contOc' | 'contRealign' | 'contEngulfing' | 'dailyEngulfing' | 'h4Fvg'
+type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts' | 'alertOrigin' | 'contInline' | 'contBreaker' | 'contOc' | 'contRealign' | 'contEngulfing' | 'dailyEngulfing' | 'h4Fvg' | 'h4OcFormed' | 'dailyOcFormed'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
 const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
@@ -38,13 +38,15 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, in the Daily direction. Choose which kind below.' },
   { key: 'dailyEngulfing', label: 'Daily engulfing', desc: 'Only the pair and "Daily engulfing candle has formed": a Daily candle covered the previous opposite Daily candle, in the current Daily direction. A notification, not a buy or sell signal. Sent at the Daily close. Choose which kind below.' },
   { key: 'h4Fvg', group: 'Liquidity', label: 'H4 FVG after breakout', desc: 'Only the pair and "H4 FVG candle after breakout has formed": the H4 candle right after an H4 breakout in line with the Daily left a fair value gap. A liquidity marker, not a buy or sell signal. Off unless you switch it on.' },
+  { key: 'h4OcFormed', group: 'OC formed', label: 'H4 OC formed', desc: 'Only the pair and "H4 OC has formed": the last two H4 candles both closed in the Daily direction, after the Origin while H4 is in line. A notification, not a buy or sell signal. Off unless you switch it on.' },
+  { key: 'dailyOcFormed', label: 'Daily OC formed', desc: 'Only the pair and "Daily OC has formed": the last two Daily candles both closed in the current Daily direction. A notification, not a buy or sell signal. Sent at the Daily close. Off unless you switch it on.' },
   { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
 ]
 
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
-  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle', alertOrigin: 'idle', contInline: 'idle', contBreaker: 'idle', contOc: 'idle', contRealign: 'idle', contEngulfing: 'idle', dailyEngulfing: 'idle', h4Fvg: 'idle' })
+  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle', alertOrigin: 'idle', contInline: 'idle', contBreaker: 'idle', contOc: 'idle', contRealign: 'idle', contEngulfing: 'idle', dailyEngulfing: 'idle', h4Fvg: 'idle', h4OcFormed: 'idle', dailyOcFormed: 'idle' })
 
   const { user } = useAuth()
   useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
@@ -54,7 +56,8 @@ export default function PreferencesPage() {
       .then(r => (r.ok ? r.json() : Promise.reject()))
       .then(d => setPrefs({ alertExternal: !!d.alertExternal, alertInternal: !!d.alertInternal, newsAlerts: d.newsAlerts !== false,
         alertOrigin: d.alertOrigin !== false, contInline: d.contInline !== false, contBreaker: d.contBreaker !== false,
-        contOc: d.contOc !== false, contRealign: d.contRealign !== false, contEngulfing: d.contEngulfing !== false, dailyEngulfing: d.dailyEngulfing !== false, h4Fvg: d.h4Fvg === true }))
+        contOc: d.contOc !== false, contRealign: d.contRealign !== false, contEngulfing: d.contEngulfing !== false, dailyEngulfing: d.dailyEngulfing !== false, h4Fvg: d.h4Fvg === true,
+        h4OcFormed: d.h4OcFormed === true, dailyOcFormed: d.dailyOcFormed === true }))
       .catch(() => setLoadError(true))
   }, [])
 

@@ -926,6 +926,22 @@ check("the Daily engulfing choice is separate from the H4 one", _deng(False) and
 c.patch("/api/preferences", headers=H(ts_), json={"dailyEngulfing": False})
 check("switching Daily engulfing off stops it", not _deng(False))
 c.patch("/api/preferences", headers=H(ts_), json={"dailyEngulfing": True, "dEngulfMode": "wick"})
+# OC formed notifications (2026-10-27): pair + message, own type, own switch (members opt in)
+for _ct, _msg in (("h4_oc_formed", "H4 OC has formed"), ("d_oc_formed", "Daily OC has formed")):
+    tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type=_ct, level_type="external",
+       breakout_level=0.9100, h4_level=0.9140, timeframe="240")
+    _to = conn.execute(f"SELECT {alert_text_col}, alert_type FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()
+    check(f"{_ct}: only the pair and '{_msg}', stored as its own type", _to[0] == f"AUDCAD\n{_msg}" and _to[1] == _ct)
+_pd = c.get("/api/preferences", headers=H(ts_)).json()
+check("OC formed notifications are off for members until switched on", _pd["h4OcFormed"] is False and _pd["dailyOcFormed"] is False)
+def _ocf(pref):
+    sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", pref=pref)); return "chatS" in sent
+check("an OC formed notification doesn't reach a member who hasn't switched it on", not _ocf("h4_oc_formed") and not _ocf("d_oc_formed"))
+c.patch("/api/preferences", headers=H(ts_), json={"h4OcFormed": True, "dailyOcFormed": True})
+check("switching OC formed on sends it", _ocf("h4_oc_formed") and _ocf("d_oc_formed"))
+c.patch("/api/preferences", headers=H(ts_), json={"h4OcFormed": False})
+check("H4 and Daily OC formed have separate switches", not _ocf("h4_oc_formed") and _ocf("d_oc_formed"))
+c.patch("/api/preferences", headers=H(ts_), json={"dailyOcFormed": False})
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="internal", pref="cont_realign"))
 check("an Internal 'back in line' alert skips people with Internal off", "chatS" not in sent)
 check("subscribers get the Short style by default; the owner Full",

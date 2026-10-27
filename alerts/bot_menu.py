@@ -69,6 +69,8 @@ H4 back in line: 4H had gone against the Daily, then broke back in the Daily dir
 H4 engulfing: a 4H candle covered the previous opposite candle, in the Daily direction.
 Daily engulfing: a notification only (no buy / sell) that a Daily candle covered the previous opposite Daily candle, in the Daily direction.
 
+H4 OC has formed / Daily OC has formed: a notification only (no buy / sell) that the last two 4H (Daily) candles both closed in the Daily direction; for 4H, only after the Origin while 4H is in line (off unless you switch it on in Alert Filters).
+
 H4 FVG candle after breakout has formed: the 4H candle right after an in-line 4H breakout left a gap. A liquidity marker, not a buy or sell signal (off unless you switch it on in Alert Filters).
 
 Weekly — in line / AGAINST: whether the Daily direction agrees with the Weekly reaction.

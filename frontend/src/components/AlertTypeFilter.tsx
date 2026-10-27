@@ -14,6 +14,8 @@ export const ALERT_TYPES: { key: string; label: string }[] = [
   { key: 'engulfing', label: 'H4 engulfing' },
   { key: 'd_engulfing', label: 'Daily engulfing' },
   { key: 'h4_fvg', label: 'H4 FVG' },
+  { key: 'h4_oc_formed', label: 'H4 OC formed' },
+  { key: 'd_oc_formed', label: 'Daily OC formed' },
 ]
 export const typeLabel = (k?: string) => ALERT_TYPES.find(t => t.key === k)?.label ?? 'Origin'
 

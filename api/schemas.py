@@ -33,7 +33,7 @@ class AlertItem(BaseModel):
     alert_classification: str = "origin"
     alert_text: str
     fired_at: str
-    alert_type: str = "origin"   # origin | inline | realign | daily_react | breaker | oc | engulfing | d_engulfing | h4_fvg
+    alert_type: str = "origin"   # origin | inline | realign | daily_react | breaker | oc | engulfing | d_engulfing | h4_fvg | d_oc_formed | h4_oc_formed
 
 
 class AlertsPage(BaseModel):
@@ -53,6 +53,8 @@ class AlertPreferences(BaseModel):
     contEngulfing: bool = True
     h4Fvg: bool = False
     dailyEngulfing: bool = True
+    dailyOcFormed: bool = False
+    h4OcFormed: bool = False
     alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
     engulfMode: str = "wick"            # "wick" | "body" | "both"
     dEngulfMode: str = "wick"           # Daily engulfing: "wick" | "body" | "both"
@@ -70,6 +72,8 @@ class AlertPreferencesUpdate(BaseModel):
     contEngulfing: bool | None = None
     h4Fvg: bool | None = None
     dailyEngulfing: bool | None = None
+    dailyOcFormed: bool | None = None
+    h4OcFormed: bool | None = None
     alertStyle: str | None = None
     engulfMode: str | None = None
     dEngulfMode: str | None = None

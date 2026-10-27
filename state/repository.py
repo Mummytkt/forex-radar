@@ -307,7 +307,8 @@ def get_formation_by_id(conn: sqlite3.Connection, formation_id: int) -> Optional
 # (and, for H4 breakouts, the title in the alert text). Used for old rows too.
 _CLASS_TO_TYPE = {"origin": "origin", "h4_breaker_origin": "breaker", "h4_breaker_cont": "breaker",
                   "continuation_h4breaker": "breaker", "h4_oc_cont": "oc", "continuation_h4oc": "oc",
-                  "h4_engulfing_cont": "engulfing", "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing"}
+                  "h4_engulfing_cont": "engulfing", "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing",
+                  "d_oc_formed": "d_oc_formed", "h4_oc_formed": "h4_oc_formed"}
 
 
 def alert_type_for(classification: Optional[str], alert_text: Optional[str]) -> str:
