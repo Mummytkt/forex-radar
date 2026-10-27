@@ -709,14 +709,16 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
 // ── Page ──────────────────────────────────────────────────────────────────────
 // book "backtest" (Backtest page, every POI) or a live journal on the Trading Journal
 // page: "live_engulfing" / "live_h4_key", each its own trades, limited to that POI
-type Book = 'backtest' | 'live_engulfing' | 'live_h4_key'
+type Book = 'backtest' | 'bt_engulfing' | 'bt_h4_key' | 'live_engulfing' | 'live_h4_key'
 const JOURNAL: Record<Book, { title: string; poi: string }> = {
   backtest: { title: 'Entry Tester', poi: '' },
+  bt_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
+  bt_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
   live_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
   live_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
 }
 export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: Book }) {
-  const live = book !== 'backtest'
+  const live = book.startsWith('live')
   const jr = JOURNAL[book]
   const bq = `?book=${book}`
   const [trades, setTrades] = useState<Trade[]>([])
@@ -825,7 +827,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
             <FlaskConical size={20} color="var(--accent)" /> {jr.title}
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-            Only you see this. {live ? 'Your live trades, kept apart from the backtest. For each trade, tap how every confirmation model did on that same trade. ' : 'For each trade, tap how every entry pattern did on that same trade. '}Each tap saves.
+            Only you see this. {live ? 'Your live trades, kept apart from the backtest. ' : jr.poi ? 'Your backtested trades, kept apart from your live journals. ' : ''}{jr.poi ? 'For each trade, tap how every confirmation model did on that same trade. ' : 'For each trade, tap how every entry pattern did on that same trade. '}Each tap saves.
           </p>
         </div>
 
@@ -891,7 +893,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
               <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>How to log a trade</div>
               <div><b>1.</b> In the bar above, pick the <b>pair</b>, the <b>date</b>, <b>BUY</b> or <b>SELL</b>, and the <b>H4 alert</b> it came from.</div>
               <div><b>2.</b> Tap <b>Add trade</b>. The trade opens right here.</div>
-              <div><b>3.</b> Pick the POI tab (<b>H4 FVG</b>, <b>H4 Engulfing</b> or <b>H4 fresh key level</b>), then tap <b>Win</b>, <b>Loss</b>, <b>BE</b> or <b>No entry</b> on each entry model. On a win, tap the RR.</div>
+              <div><b>3.</b> {jr.poi ? <>Tap</> : <>Pick the POI tab (<b>H4 Engulfing</b> or <b>H4 fresh key level</b>), then tap</>} <b>Win</b>, <b>Loss</b>, <b>BE</b> or <b>No entry</b> on each {jr.poi ? 'confirmation model' : 'entry model'}. On a win, tap the RR.</div>
               <div><b>4.</b> Every tap saves. The results table fills in by itself.</div>
             </div>
           )

@@ -4,9 +4,11 @@ import TradeLogPage from '@/components/TradeLogPage'
 import EntryTester from '@/components/EntryTester'
 import { useAuth } from '@/lib/auth'
 
-type Tab = 'tester' | 'journal'
+type Tab = 'engulfing' | 'h4_key' | 'journal'
+const TABS: Tab[] = ['engulfing', 'h4_key', 'journal']
 
-// The owner also gets the Entry Tester; subscribers see only the Backtest Journal.
+// The owner also gets two backtest entry journals, one per POI (Engulfing / Fresh
+// Key Levels), like the Trading Journal page; subscribers see only the Backtest Journal.
 function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const b = (t: Tab, label: string) => (
     <button onClick={() => setTab(t)} style={{
@@ -15,8 +17,9 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     }}>{label}</button>
   )
   return (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, width: 'fit-content' }}>
-      {b('tester', 'Entry Tester')}
+    <div style={{ display: 'flex', gap: 4, marginBottom: 18, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
+      {b('engulfing', 'Engulfing Journal')}
+      {b('h4_key', 'Fresh Key Levels Journal')}
       {b('journal', 'Backtest Journal')}
     </div>
   )
@@ -25,19 +28,24 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 export default function BacktestPage() {
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
-  const [tab, setTabState] = useState<Tab>('tester')
+  const [tab, setTabState] = useState<Tab>('engulfing')
   useEffect(() => {
-    try { if (localStorage.getItem('mbp_bt_tab') === 'journal') setTabState('journal') } catch { /* private mode */ }
+    try {
+      const t = localStorage.getItem('mbp_bt_tab2') as Tab | null
+      if (t && TABS.includes(t)) setTabState(t)
+    } catch { /* private mode */ }
   }, [])
   const setTab = (t: Tab) => {
     setTabState(t)
-    try { localStorage.setItem('mbp_bt_tab', t) } catch { /* private mode */ }
+    try { localStorage.setItem('mbp_bt_tab2', t) } catch { /* private mode */ }
   }
 
-  if (isOwner && tab === 'tester') return <EntryTester tabs={<Tabs tab={tab} setTab={setTab} />} />
+  const tabs = <Tabs tab={tab} setTab={setTab} />
+  if (isOwner && tab === 'engulfing') return <EntryTester key="bt-eng" book="bt_engulfing" tabs={tabs} />
+  if (isOwner && tab === 'h4_key') return <EntryTester key="bt-key" book="bt_h4_key" tabs={tabs} />
   return (
     <TradeLogPage
-      tabs={isOwner ? <Tabs tab={tab} setTab={setTab} /> : undefined}
+      tabs={isOwner ? tabs : undefined}
       config={{
         tradeType: 'backtest',
         pageTitle: 'Backtest Journal',

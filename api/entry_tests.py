@@ -7,10 +7,11 @@ loss, breakeven or no entry (the pattern never formed), plus the RR it made.
 The page then compares the patterns across every trade. Subscribers' Backtest
 Journal is separate and unchanged.
 
-Books, kept apart: "backtest" (the Backtest page, every POI) and the live
-journals on the Trading Journal page, one per POI: "live_engulfing" (Engulfing
-Journal) and "live_h4_key" (Fresh Key Levels Journal). List, add and delete-all
-take ?book=.
+Books, kept apart, one per POI on each page: the Backtest page's "bt_engulfing"
+(Engulfing Journal) and "bt_h4_key" (Fresh Key Levels Journal), and the Trading
+Journal page's "live_engulfing" and "live_h4_key". ("backtest" = the old single
+backtest book; its trades are moved to the two bt_ books at start-up.) List, add
+and delete-all take ?book=.
 """
 
 from __future__ import annotations
@@ -59,7 +60,7 @@ _LEGACY |= {f"{m}_{p}" for m in ("direct", "h1_cisd", "m15_cisd", "m5_cisd", "h1
                                  "h1_smc", "m5_smc", "m15_smc", "h4_3cr", "h2_3cr") for p in ("fvg", "3cr")}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
-BOOKS = ("backtest", "live_engulfing", "live_h4_key")
+BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key")
 
 
 def _book(book: str) -> str:

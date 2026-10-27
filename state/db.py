@@ -10,6 +10,7 @@ AUTOINCREMENT → SERIAL PRIMARY KEY.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -572,6 +573,28 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             conn.execute("DROP TABLE entry_test_images")
             conn.execute("ALTER TABLE entry_test_images_new RENAME TO entry_test_images")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_test_images ON entry_test_images (test_id, slot)")
+    # 2026-10-27 the backtest Entry Tester became two journals, one per POI, like the live
+    # ones: each trade goes to the POI it was ticked on. A trade ticked on both is split:
+    # a copy goes to the Fresh Key Levels journal with its fresh-key-level ticks and pictures.
+    def _h4k(key: str) -> bool:
+        return key == "h4_key" or key.endswith("_h4_key")
+    for tid, rj in conn.execute("SELECT id, results_json FROM entry_tests WHERE book = 'backtest'").fetchall():
+        res = json.loads(rj or "{}")
+        key_res = {k: v for k, v in res.items() if _h4k(k)}
+        eng_res = {k: v for k, v in res.items() if not _h4k(k)}
+        if key_res and not eng_res:
+            conn.execute("UPDATE entry_tests SET book = 'bt_h4_key' WHERE id = ?", (tid,))
+            continue
+        conn.execute("UPDATE entry_tests SET book = 'bt_engulfing', results_json = ? WHERE id = ?", (json.dumps(eng_res), tid))
+        if key_res:
+            cur = conn.execute(
+                """INSERT INTO entry_tests (user_id, trade_date, instrument, direction, alert_type, notes, results_json,
+                                            created_at, updated_at, exit_date, book)
+                   SELECT user_id, trade_date, instrument, direction, alert_type, notes, ?, created_at, updated_at, exit_date, 'bt_h4_key'
+                   FROM entry_tests WHERE id = ?""", (json.dumps(key_res), tid))
+            for img_id, slot in conn.execute("SELECT id, slot FROM entry_test_images WHERE test_id = ?", (tid,)).fetchall():
+                if _h4k(slot):
+                    conn.execute("UPDATE entry_test_images SET test_id = ? WHERE id = ?", (cur.lastrowid, img_id))
     if "announcements" not in existing:
         conn.execute("""
             CREATE TABLE announcements (

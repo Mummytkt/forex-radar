@@ -110,6 +110,9 @@ _lv = c.post("/api/entry-tests?book=live_engulfing", headers=H(owner), json={
 check("live Entry Journal trades stay out of the backtest Entry Tester and back",
       [t["id"] for t in c.get("/api/entry-tests?book=live_engulfing", headers=H(owner)).json()] == [_lv["id"]]
       and [t["id"] for t in c.get("/api/entry-tests", headers=H(owner)).json()] == [_et["id"]])
+check("the backtest Engulfing / Fresh Key Levels journals are their own books",
+      c.get("/api/entry-tests?book=bt_engulfing", headers=H(owner)).status_code == 200
+      and c.get("/api/entry-tests?book=bt_h4_key", headers=H(owner)).json() == [])
 check("an unknown book is refused", c.get("/api/entry-tests?book=demo", headers=H(owner)).status_code == 400)
 check("delete-all clears only its own book",
       c.post("/api/entry-tests/delete-all?book=live_engulfing", headers=H(owner), json={"confirm": "DELETE"}).json()["deleted"] == 1
