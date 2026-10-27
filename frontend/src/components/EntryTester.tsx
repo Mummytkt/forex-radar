@@ -44,7 +44,7 @@ const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; po
 // The H4 alert each trade came from (same names as Alert Filters)
 const ALERT_TYPES = [
   'Origin', 'Daily reaction + H4 breakout', 'H4 back in line', 'H4 breakout in line',
-  'H4 Breaker', 'H4 OC reaction', 'H4 Engulfing', 'H4 FVG after breakout',
+  'H4 Breaker', 'H4 OC reaction', 'H4 Engulfing', 'Daily Engulfing', 'H4 FVG after breakout',
 ]
 const OUTCOMES: { key: Outcome; label: string; color: string; bg: string }[] = [
   { key: 'win', label: 'Win', color: 'var(--bullish)', bg: 'var(--bullish-bg)' },
