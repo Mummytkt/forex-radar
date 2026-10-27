@@ -105,14 +105,14 @@ check("an unknown entry type is refused", c.put(f"/api/entry-tests/{_et['id']}",
     "trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy", "results": {"bogus": {"outcome": "win"}}}).status_code == 400)
 check("the owner's entry tests list back", [t["id"] for t in c.get("/api/entry-tests", headers=H(owner)).json()] == [_et["id"]])
 # The live Entry Journal (Trading Journal page) is a separate book
-_lv = c.post("/api/entry-tests?book=live", headers=H(owner), json={
+_lv = c.post("/api/entry-tests?book=live_engulfing", headers=H(owner), json={
     "trade_date": "2026-10-20", "instrument": "EURUSD", "direction": "sell"}).json()
 check("live Entry Journal trades stay out of the backtest Entry Tester and back",
-      [t["id"] for t in c.get("/api/entry-tests?book=live", headers=H(owner)).json()] == [_lv["id"]]
+      [t["id"] for t in c.get("/api/entry-tests?book=live_engulfing", headers=H(owner)).json()] == [_lv["id"]]
       and [t["id"] for t in c.get("/api/entry-tests", headers=H(owner)).json()] == [_et["id"]])
 check("an unknown book is refused", c.get("/api/entry-tests?book=demo", headers=H(owner)).status_code == 400)
 check("delete-all clears only its own book",
-      c.post("/api/entry-tests/delete-all?book=live", headers=H(owner), json={"confirm": "DELETE"}).json()["deleted"] == 1
+      c.post("/api/entry-tests/delete-all?book=live_engulfing", headers=H(owner), json={"confirm": "DELETE"}).json()["deleted"] == 1
       and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 1)
 check("a subscriber can't touch the owner's entry test",
       c.delete(f"/api/entry-tests/{_et['id']}", headers=H(ta)).status_code == 403
@@ -893,6 +893,23 @@ tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="
    breakout_level=0.9100, h4_level=0.9125, timeframe="240")
 _te = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
 check("a body-only engulfing message says so", "engulfing (covers the body) @ 0.91250" in _te and "closed above its open @ 0.91250 (inside its wick)" in _te)
+# Daily engulfing (2026-10-27): its own switch and its own wick / body / both choice
+tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="d_engulfing", eng_wick=True, level_type="external",
+   breakout_level=0.9100, h4_level=0.9160, timeframe="240")
+_td = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
+check("a Daily engulfing alert reads right",
+      _td.startswith("BUY CONTINUATION — BUY AUDCAD (Forex)") and "Daily Engulfing in the Daily direction" in _td
+      and "Daily bullish engulfing (covers the wick) @ 0.91600" in _td)
+_pd = c.get("/api/preferences", headers=H(ts_)).json()
+check("Daily engulfing is on by default with 'covers the wick'", _pd["dailyEngulfing"] is True and _pd["dEngulfMode"] == "wick")
+def _deng(wick):
+    sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", pref="d_engulfing", engulf_wick=wick,
+                                                 engulf_key="pref_d_engulf_mode")); return "chatS" in sent
+c.patch("/api/preferences", headers=H(ts_), json={"dEngulfMode": "body", "engulfMode": "wick"})
+check("the Daily engulfing choice is separate from the H4 one", _deng(False) and not _deng(True) and _eng(True) and not _eng(False))
+c.patch("/api/preferences", headers=H(ts_), json={"dailyEngulfing": False})
+check("switching Daily engulfing off stops it", not _deng(False))
+c.patch("/api/preferences", headers=H(ts_), json={"dailyEngulfing": True, "dEngulfMode": "wick"})
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="internal", pref="cont_realign"))
 check("an Internal 'back in line' alert skips people with Internal off", "chatS" not in sent)
 check("subscribers get the Short style by default; the owner Full",

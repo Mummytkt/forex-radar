@@ -42,6 +42,7 @@ class AlertClassification(str, Enum):
     H4_OC_CONT = "h4_oc_cont"
     H4_ENGULFING_CONT = "h4_engulfing_cont"
     H4_FVG = "h4_fvg"   # the candle after an H4 breakout in line completed an FVG (liquidity marker)
+    D_ENGULFING = "d_engulfing"   # a Daily candle engulfed the previous one, in the Daily direction
 
 
 class ReactionSourceType(str, Enum):

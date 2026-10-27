@@ -528,6 +528,11 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     # Which journal a trade belongs to: the Backtest page's Entry Tester or the live Trading Journal's
     if "book" not in {row[1] for row in conn.execute("PRAGMA table_info(entry_tests)").fetchall()}:
         conn.execute("ALTER TABLE entry_tests ADD COLUMN book TEXT NOT NULL DEFAULT 'backtest'")
+    # 2026-10-27 the one live journal became two, one per POI: a trade ticked only on
+    # the H4 fresh key level goes to the Fresh Key Levels Journal, the rest to Engulfing
+    conn.execute(r"""UPDATE entry_tests SET book = 'live_h4_key' WHERE book = 'live'
+                    AND results_json LIKE '%\_h4\_key"%' ESCAPE '\' AND results_json NOT LIKE '%\_engulfing"%' ESCAPE '\'""")
+    conn.execute("UPDATE entry_tests SET book = 'live_engulfing' WHERE book = 'live'")
     # Entry Tester screenshots (files live in <db dir>/entry_images): one per POI per trade
     if "entry_test_images" not in existing:
         conn.execute("""

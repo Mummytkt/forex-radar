@@ -710,10 +710,12 @@ def get_preferences(request: Request):
         prefs = get_alert_prefs(conn, user["id"] if user else None, user["role"] if user else None)
         style = get_alert_style(conn, user["id"] if user else None)
         engulf = get_engulf_mode(conn, user["id"] if user else None)
+        d_engulf = get_engulf_mode(conn, user["id"] if user else None, "pref_d_engulf_mode")
     return AlertPreferences(alertExternal=prefs["external"], alertInternal=prefs["internal"], newsAlerts=prefs["news"],
                             alertOrigin=prefs["origin"], contInline=prefs["cont_inline"], contBreaker=prefs["cont_breaker"],
                             contOc=prefs["cont_oc"], contRealign=prefs["cont_realign"], contEngulfing=prefs["engulfing"],
-                            h4Fvg=prefs["h4_fvg"], alertStyle=style, engulfMode=engulf)
+                            h4Fvg=prefs["h4_fvg"], dailyEngulfing=prefs["d_engulfing"], alertStyle=style,
+                            engulfMode=engulf, dEngulfMode=d_engulf)
 
 
 @router.patch("/preferences")
@@ -730,7 +732,7 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
             set_alert_pref(conn, uid, "news", body.newsAlerts)
         for field, kind in (("alertOrigin", "origin"), ("contInline", "cont_inline"), ("contBreaker", "cont_breaker"),
                             ("contOc", "cont_oc"), ("contRealign", "cont_realign"), ("contEngulfing", "engulfing"),
-                            ("h4Fvg", "h4_fvg")):
+                            ("h4Fvg", "h4_fvg"), ("dailyEngulfing", "d_engulfing")):
             value = getattr(body, field)
             if value is not None:
                 set_alert_pref(conn, uid, kind, value)
@@ -738,6 +740,8 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
             set_alert_style(conn, uid, body.alertStyle)
         if body.engulfMode is not None:
             set_engulf_mode(conn, uid, body.engulfMode)
+        if body.dEngulfMode is not None:
+            set_engulf_mode(conn, uid, body.dEngulfMode, "pref_d_engulf_mode")
     return {"ok": True}
 
 
@@ -865,6 +869,7 @@ STRATEGY_CONTENT = {
         {"term": "Origin", "body": "The first confirmed bias alert for a setup. Requires the complete 4-step chain: Daily breakout → eligible reaction source → retest of that source → qualifying H4 A/V breakout. After an Origin fires, continuations follow until a Daily breakout the other way; a new Daily breakout in the same direction keeps H4 riding."},
         {"term": "Continuation — H4 breakout in line", "body": "While H4 is in line with the Daily, every new H4 close beyond the latest H4 A-shape (buys) or V-shape (sells) sends an “H4 breakout in line with the Daily” alert. No Daily reaction is needed. Its level becomes the new H4 Breaker and only its leg's H4 OCs (and later ones) are watched."},
         {"term": "Continuation — H4 engulfing", "body": "After the Origin and while H4 is in line, an H4 candle that covers the previous opposite candle's body (buys: opens at or below a bearish candle's close and closes above its open), in the Daily direction. Each person chooses: only those that also close beyond the wick (default), only body ones, or both."},
+        {"term": "Daily engulfing", "body": "A Daily candle that covers the previous opposite Daily candle's body, in the current Daily direction (buys: the previous Daily candle is bearish; this one opens at or below its close and closes above its open). Sent at the Daily close whenever a Daily direction is set, before or after the Origin. Each person chooses wick (default), body only, or both, separately from the H4 engulfing."},
         {"term": "Weekly storyline", "body": "The Daily rules one level up. A Weekly close beyond the Weekly External high/low is a Weekly breakout (its own close beyond the Breaker counts as moving away). Daily candles then react at Weekly levels: post-breakout Weekly OCs, Weekly V/A-shapes formed after the breakout, Weekly FVGs, the Weekly Breaker, and Weekly V/A-shapes, OCs and FVGs inside the broken Weekly range (exact Daily wick touch that holds). The first Daily touch of a Weekly level decides External / Internal: a Daily breakout in the Weekly direction is Weekly-confirmed External if the Daily level it broke formed before that touch, Internal if after (with Internal off, an Internal one counts as in line and the Weekly reaction is kept). Weekly FVGs follow every Daily FVG rule: dip in from above (sells: from below), only a Weekly close through kills one, each deeper Weekly candle restarts the check, a deeper FVG takes over, the ones price went through are used up. A Weekly-confirmed Daily breakout uses up that Weekly reaction. The Weekly never fires an alert: alerts state Weekly-confirmed, in line, or AGAINST."},
         {"term": "Continuation — H4 Breaker Retest", "body": "The H4 A/V broken at the Origin becomes the H4 Breaker; each newer in-line H4 breakout replaces it with the level it broke. When price comes back, the H4 candle must open on the bias side, wick exactly to the level and close beyond it. The first time is the H4 Breaker Origin; each later visit (after price moves away) is an H4 Breaker Continuation."},
         {"term": "Continuation — H4 OC", "body": "Two H4 candles in a row in the Daily direction form an H4 OC. After each H4 breakout in the Daily direction, every OC of that breakout's leg (from its swing low/high) and any formed after it is watched. A later candle that opens on the bias side, wicks exactly to an OC and closes beyond it sends one alert naming the furthest OC reached; those OCs are then used up. An OC closed through against the bias is dropped; all are dropped when H4 breaks the other way or a new Daily breakout forms."},

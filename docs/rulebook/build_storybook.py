@@ -393,6 +393,8 @@ def chapters():
             "And every time she went back to bounce on one of Papa's safe spots and jumped her outside fence again: <b>ENCORE!</b>",
             "Right after a big jump, if Pip's very next step left a <b>little gap</b> behind her, a tiny bell tinkled: "
             "<i>\"A little gap was left behind!\"</i>",
+            "And Papa gave hugs too! When one of Papa's big day-steps went his way and wrapped right around the step before it, "
+            "that was <b>Papa's big hug</b>, and a deep bell rang at the end of the day: <i>\"Papa hugged it all!\"</i>",
         ]),
         ("Papa Jumps the Castle Wall", "#8a5cf6", "castle", [
             "One day, Papa climbed so high that his coat stopped above the <b>great castle wall</b> at the very top of the old house.",
@@ -514,6 +516,7 @@ def build():
              ("Golden Bell", "Origin alert"),
              ("Encore bell", "continuation alert (in-line breakout, Breaker, OC, engulfing, Daily reaction + H4 breakout, back in line)"),
              ("Little gap bell", "H4 FVG after breakout (liquidity marker)"),
+             ("Papa's big hug", "Daily engulfing: a Daily candle covering the one before it, in Papa's direction"),
              ("Castle wall jumped, same way", "same-direction Daily breakout: H4 keeps riding, no new Origin"),
              ("Wobble", "H4 out of line"),
              ("Wind changes", "Daily breakout the other way: everything resets"),

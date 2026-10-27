@@ -48,7 +48,7 @@ HELP_TEXT = """📖 What the words in an alert mean
 
 BUY / SELL <pair> (Origin): the first 4H confirmation after a Daily breakout. Look for an entry in that direction with your entry model.
 
-BUY / SELL CONTINUATION: the Daily direction is still on and 4H confirmed again (in-line breakout, Breaker retest, OC reaction, back in line or engulfing).
+BUY / SELL CONTINUATION: the Daily direction is still on and 4H confirmed again (in-line breakout, Breaker retest, OC reaction, back in line, H4 or Daily engulfing).
 
 📊 The line under an Origin alert says whose chart and prices it was read from; your broker's prices can differ slightly.
 
@@ -67,6 +67,7 @@ OC: two candles in the same direction; the level is where the first closed and t
 H4 back in line: 4H had gone against the Daily, then broke back in the Daily direction after a fresh Daily reaction.
 
 H4 engulfing: a 4H candle covered the previous opposite candle, in the Daily direction.
+Daily engulfing: a Daily candle covered the previous opposite Daily candle, in the Daily direction.
 
 H4 FVG candle after breakout has formed: the 4H candle right after an in-line 4H breakout left a gap. A liquidity marker, not a buy or sell signal (off unless you switch it on in Alert Filters).
 

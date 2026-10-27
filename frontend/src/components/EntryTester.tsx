@@ -1,9 +1,13 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
 import { API_BASE } from '@/lib/api'
+
+// A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
+// = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
+const OnlyPoi = createContext('')
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Outcome = 'win' | 'loss' | 'be' | 'none'
@@ -231,10 +235,13 @@ const SOFT = {
 function Scoreboard({ trades, title, kind, note, children, openWith }: {
   trades: Trade[]; title?: string; kind?: 'month' | 'year'; note?: string; children?: React.ReactNode; openWith?: boolean
 }) {
-  const [poi, setPoi] = useState('')
+  const only = useContext(OnlyPoi)
+  const [poi, setPoi] = useState(only)
   const [showAll, setShowAll] = useState(false)
-  // Grouped by entry pattern (its POIs under it) by default, or by POI
-  const [by, setByState] = useState<'entry' | 'poi'>('entry')
+  // Grouped by entry pattern (its POIs under it) by default, or by POI. A one-POI
+  // journal is always one group: its confirmation models ranked best first.
+  const [byPick, setByState] = useState<'entry' | 'poi'>('entry')
+  const by = only ? 'poi' : byPick
   useEffect(() => { setByState(load('mbp_et_group', 'entry') === 'poi' ? 'poi' : 'entry') }, [])
   const setBy = (v: 'entry' | 'poi') => { setByState(v); save('mbp_et_group', v) }
   const chrono = useMemo(() => [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id), [trades])
@@ -250,7 +257,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
     for (const tr of trades)
       for (const t of ENTRY_TYPES) {
         const x = tr.results[t.key]
-        if (!x) continue
+        if (!x || (only && t.poi !== only)) continue
         if (x.outcome === 'win') w++
         else if (x.outcome === 'loss') l++
         else if (x.outcome === 'be') be++
@@ -258,7 +265,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         if (v != null) r += v
       }
     return { w, l, be, r, buys: trades.filter(t => t.direction === 'buy').length, sells: trades.filter(t => t.direction === 'sell').length }
-  }, [trades])
+  }, [trades, only])
   const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
     let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0
     // Each trade's result for this entry, oldest first: the run of wins and losses
@@ -295,7 +302,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
     for (const m of MODELS) {
       let r = 0, w = 0, n = 0
       for (const tr of trades)
-        for (const p of POIS) {
+        for (const p of POIS.filter(x => !only || x.key === only)) {
           const x = tr.results[`${m.key}_${p.key}`]
           if (!x || x.outcome === 'none') continue
           n++
@@ -306,7 +313,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       if (n && (!top || r > top.r)) top = { label: m.label, r, w, n }
     }
     return top
-  }, [trades])
+  }, [trades, only])
   const th: React.CSSProperties = { padding: '8px 10px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.3 }
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   return (
@@ -323,7 +330,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
           {' · '}<b style={{ color: tot.r > 0 ? SOFT.up : tot.r < 0 ? SOFT.dn : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
           {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
-        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins (all POIs)</span>}
+        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
       </div>
       {open && children && (
         <div onClick={() => setReport(!report)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 14px 8px', padding: '7px 10px',
@@ -333,12 +340,14 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       )}
       {open && (report || !children) && <>
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {only ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Confirmation models, best first</span> : <>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Group by</span>
         <Chip on={by === 'entry'} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setBy('entry')}>Entry pattern</Chip>
         <Chip on={by === 'poi'} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setBy('poi')}>POI</Chip>
         <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px' }} />
         <Chip on={!poi} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi('')}>All POIs</Chip>
         {POIS.map(p => <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>{p.label}</Chip>)}
+        </>}
         {tested.length > 0 && tested.length < all.length && (
           <button onClick={() => setShowAll(v => !v)} style={{ marginLeft: 'auto', border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}>
             {showAll ? 'Hide the untested ones' : `Show all ${all.length} (incl. untested)`}
@@ -518,8 +527,9 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   trade: Trade; open: boolean; onToggle: () => void
   onChange: (t: Trade) => void; onImages: (images: Record<string, number[]>) => void; onDelete: () => void
 }) {
+  const only = useContext(OnlyPoi)
   const [customFor, setCustomFor] = useState<string | null>(null)
-  const [poi, setPoi] = useState(POIS[0].key)
+  const [poi, setPoi] = useState(only || POIS[0].key)
   const [customVal, setCustomVal] = useState('')
   const [picsFor, setPicsFor] = useState<string | null>(null)   // entry row whose image strip is open
   const imgs = trade.images || {}
@@ -531,7 +541,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   }
   // Every picture under a POI: its own and its entries'
   const poiPics = (p: string) => Object.entries(imgs).filter(([k]) => k === p || k.endsWith(`_${p}`)).reduce((n, [, v]) => n + v.length, 0)
-  const shownRes = ENTRY_TYPES.map(t => trade.results[t.key]).filter((r): r is EntryResult => !!r)   // hidden old keys not counted
+  const shownRes = ENTRY_TYPES.filter(t => !only || t.poi === only).map(t => trade.results[t.key]).filter((r): r is EntryResult => !!r)   // hidden old keys not counted
   const done = shownRes.length
   const tradeR = shownRes.map(rOf).filter((v): v is number => v != null)
 
@@ -568,7 +578,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
       {open && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 12px' }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-            {POIS.map(p => {
+            {POIS.filter(p => !only).map(p => {
               const n = ENTRY_TYPES.filter(t => t.poi === p.key && trade.results[t.key]).length
               return (
                 <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>
@@ -697,9 +707,17 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-// book "backtest" (Backtest page) or "live" (Trading Journal): two separate sets of trades
-export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: 'backtest' | 'live' }) {
-  const live = book === 'live'
+// book "backtest" (Backtest page, every POI) or a live journal on the Trading Journal
+// page: "live_engulfing" / "live_h4_key", each its own trades, limited to that POI
+type Book = 'backtest' | 'live_engulfing' | 'live_h4_key'
+const JOURNAL: Record<Book, { title: string; poi: string }> = {
+  backtest: { title: 'Entry Tester', poi: '' },
+  live_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
+  live_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
+}
+export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: Book }) {
+  const live = book !== 'backtest'
+  const jr = JOURNAL[book]
   const bq = `?book=${book}`
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
@@ -773,7 +791,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   }, [flush])
 
   const removeAll = async () => {
-    const typed = prompt(`This deletes ALL ${trades.length} ${live ? 'live Entry Journal' : 'Entry Tester'} trades, with their ticks, notes and chart images. It can't be undone.\n\nType DELETE to confirm.`)
+    const typed = prompt(`This deletes ALL ${trades.length} ${jr.title} trades, with their ticks, notes and chart images. It can't be undone.\n\nType DELETE to confirm.`)
     if (typed !== 'DELETE') return
     const r = await fetch(`${API_BASE}/api/entry-tests/delete-all${bq}`, { method: 'POST', headers: hdrs(), body: JSON.stringify({ confirm: 'DELETE' }) })
     if (r.ok) { setTrades([]); setOpenId(null); setErr('') }
@@ -798,15 +816,16 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title={live ? 'Entry Journal' : 'Entry Tester'} />
+      <TopBar title={jr.title} />
+      <OnlyPoi.Provider value={jr.poi}>
       <main style={{ flex: 1, width: '100%', padding: '20px 24px', maxWidth: 1100 }}>
         {tabs}
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FlaskConical size={20} color="var(--accent)" /> {live ? 'Entry Journal (live)' : 'Entry Tester'}
+            <FlaskConical size={20} color="var(--accent)" /> {jr.title}
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-            Only you see this. {live ? 'Your live trades, kept apart from the backtest. ' : ''}For each trade, tap how every entry pattern did on that same trade. Each tap saves.
+            Only you see this. {live ? 'Your live trades, kept apart from the backtest. For each trade, tap how every confirmation model did on that same trade. ' : 'For each trade, tap how every entry pattern did on that same trade. '}Each tap saves.
           </p>
         </div>
 
@@ -912,6 +931,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
           </div>
         )}
       </main>
+      </OnlyPoi.Provider>
     </div>
   )
 }

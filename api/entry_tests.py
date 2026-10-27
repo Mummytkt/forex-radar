@@ -7,8 +7,10 @@ loss, breakeven or no entry (the pattern never formed), plus the RR it made.
 The page then compares the patterns across every trade. Subscribers' Backtest
 Journal is separate and unchanged.
 
-Two books, kept apart: "backtest" (the Backtest page) and "live" (the Trading
-Journal page, for trades actually taken). List, add and delete-all take ?book=.
+Books, kept apart: "backtest" (the Backtest page, every POI) and the live
+journals on the Trading Journal page, one per POI: "live_engulfing" (Engulfing
+Journal) and "live_h4_key" (Fresh Key Levels Journal). List, add and delete-all
+take ?book=.
 """
 
 from __future__ import annotations
@@ -57,12 +59,12 @@ _LEGACY |= {f"{m}_{p}" for m in ("direct", "h1_cisd", "m15_cisd", "m5_cisd", "h1
                                  "h1_smc", "m5_smc", "m15_smc", "h4_3cr", "h2_3cr") for p in ("fvg", "3cr")}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
-BOOKS = ("backtest", "live")
+BOOKS = ("backtest", "live_engulfing", "live_h4_key")
 
 
 def _book(book: str) -> str:
     if book not in BOOKS:
-        raise HTTPException(400, "book must be backtest or live")
+        raise HTTPException(400, "book must be one of " + ", ".join(BOOKS))
     return book
 
 

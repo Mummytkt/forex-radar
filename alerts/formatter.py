@@ -201,6 +201,8 @@ def _with_weekly(alert: AlertRecord, text: str) -> str:
 def _format_body(alert: AlertRecord) -> str:
     if alert.classification == AlertClassification.H4_ENGULFING_CONT:
         return _format_h4_engulfing(alert)
+    if alert.classification == AlertClassification.D_ENGULFING:
+        return _format_d_engulfing(alert)
     if alert.classification == AlertClassification.CONTINUATION_H4_OC:
         return _format_continuation_h4_oc(alert)
     if alert.classification == AlertClassification.CONTINUATION_ASHAPE:
@@ -696,6 +698,46 @@ def _format_h4_engulfing(alert: AlertRecord) -> str:
         "",
         f"Reason: A {direction_lower} H4 engulfing candle formed while H4 is in line with the active Daily "
         f"{direction_lower} bias.",
+        "",
+        _context_line(alert),
+        "",
+        "⚠️ Directional bias only — not an entry signal. Wait for the entry model.",
+        "",
+        _signature(),
+    ]
+    return "\n".join(lines)
+
+
+def _format_d_engulfing(alert: AlertRecord) -> str:
+    """A Daily candle engulfed the previous opposite Daily candle, in the current
+    Daily direction (any time a Daily direction is set, before or after the Origin)."""
+    direction = alert.direction
+    instrument = alert.instrument
+    level = alert.h4_breaker_level
+    direction_label = "Bullish" if direction == Direction.BULLISH else "Bearish"
+    direction_lower = direction_label.lower()
+    level_str = _fmt_level(instrument, level) if level is not None else "—"
+    wick = alert.eng_wick is not False
+    if direction == Direction.BULLISH:
+        desc = (f"A bullish Daily candle engulfed the previous bearish Daily candle, wick included: it opened at or below "
+                f"that candle's close and closed above its high @ {level_str}." if wick else
+                f"A bullish Daily candle engulfed the previous bearish Daily candle's body: it opened at or below that "
+                f"candle's close and closed above its open @ {level_str} (inside its wick).")
+    else:
+        desc = (f"A bearish Daily candle engulfed the previous bullish Daily candle, wick included: it opened at or above "
+                f"that candle's close and closed below its low @ {level_str}." if wick else
+                f"A bearish Daily candle engulfed the previous bullish Daily candle's body: it opened at or above that "
+                f"candle's close and closed below its open @ {level_str} (inside its wick).")
+    lines = [
+        _headline(direction, instrument, continuation=True),
+        "Daily Engulfing in the Daily direction",
+        "",
+        f"Daily breakout: {direction_label} (active)",
+        "",
+        f"Daily {direction_lower} engulfing ({'covers the wick' if wick else 'covers the body'}) @ {level_str}",
+        desc,
+        "",
+        f"Reason: A {direction_lower} Daily engulfing candle closed in line with the active Daily {direction_lower} bias.",
         "",
         _context_line(alert),
         "",

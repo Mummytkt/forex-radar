@@ -20,7 +20,7 @@ _KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal",
          "origin": "pref_alert_origin", "cont_inline": "pref_alert_cont_inline",
          "cont_breaker": "pref_alert_cont_breaker", "cont_oc": "pref_alert_cont_oc",
          "cont_realign": "pref_alert_cont_realign", "engulfing": "pref_alert_engulfing",
-         "h4_fvg": "pref_alert_h4_fvg"}
+         "h4_fvg": "pref_alert_h4_fvg", "d_engulfing": "pref_alert_d_engulfing"}
 
 
 # Everything is on until switched off, except Internal H4 breakouts: External
@@ -46,21 +46,22 @@ def get_alert_prefs(conn, uid: Optional[int], role: Optional[str]) -> dict[str, 
 ENGULF_MODES = ("wick", "body", "both")
 
 
-def get_engulf_mode(conn, uid: Optional[int]) -> str:
-    """Which H4 engulfings reach this person: 'wick' (closes beyond the previous
+# key: "pref_engulf_mode" (H4 engulfing) or "pref_d_engulf_mode" (Daily engulfing)
+def get_engulf_mode(conn, uid: Optional[int], key: str = "pref_engulf_mode") -> str:
+    """Which engulfings reach this person: 'wick' (closes beyond the previous
     candle's wick; default), 'body' (covers the body but not the wick) or 'both'."""
     if uid is None:
         return "wick"
-    row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"pref_engulf_mode:{uid}",)).fetchone()
+    row = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"{key}:{uid}",)).fetchone()
     return row[0] if row and row[0] in ENGULF_MODES else "wick"
 
 
-def set_engulf_mode(conn, uid: Optional[int], mode: str) -> None:
+def set_engulf_mode(conn, uid: Optional[int], mode: str, key: str = "pref_engulf_mode") -> None:
     if uid is None or mode not in ENGULF_MODES:
         return
     conn.execute(
         "INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
-        (f"pref_engulf_mode:{uid}", mode),
+        (f"{key}:{uid}", mode),
     )
 
 

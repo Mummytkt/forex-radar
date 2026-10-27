@@ -106,7 +106,8 @@ def _resolve_chat(config, user_id, chat_id, role, plan, plan_expires_at):
 
 async def _deliver_alert(conn, config, instrument: str, alert_text: str,
                          h4_class: Optional[str] = None, alert_id: Optional[int] = None,
-                         pref: Optional[str] = None, engulf_wick: Optional[bool] = None) -> None:
+                         pref: Optional[str] = None, engulf_wick: Optional[bool] = None,
+                         engulf_key: str = "pref_engulf_mode") -> None:
     """Send alert_text to every active user whose watched_instruments includes instrument.
 
     h4_class: External / Internal of the H4 confirmation this alert belongs to
@@ -137,7 +138,7 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
             continue  # user switched this confirmation type off
         if pref and not prefs.get(pref, True):
             continue  # user switched this alert type off (Origin / a continuation type / engulfing)
-        if engulf_wick is not None and not engulf_wanted(get_engulf_mode(conn, rec["id"]), engulf_wick):
+        if engulf_wick is not None and not engulf_wanted(get_engulf_mode(conn, rec["id"], engulf_key), engulf_wick):
             continue  # this kind of engulfing (wick / body only) isn't the one they chose
         chats.append(rec["telegram_chat_id"])
         if get_alert_style(conn, rec["id"]) == "short":
@@ -363,11 +364,13 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
 
 _CONT_LEVEL_NAMES = {"inline_break": "H4 breakout (new H4 Breaker)", "breakout_cont": "H4 breakout", "daily_react": "H4 breakout",
                      "breaker_origin": "H4 Breaker", "breaker_cont": "H4 Breaker", "oc_cont": "H4 OC",
-                     "h4_fvg": "High of the candle before the breakout (FVG edge)"}
+                     "h4_fvg": "High of the candle before the breakout (FVG edge)",
+                     "d_engulfing": "Previous Daily candle (covered level)"}
 _CONT_TITLES = {"inline_break": "H4 breakout in line with the Daily", "breakout_cont": "H4 back in line with the Daily",
                 "daily_react": "Daily reaction + H4 breakout",
                 "breaker_origin": "H4 Breaker Origin", "breaker_cont": "H4 Breaker Continuation",
-                "oc_cont": "H4 OC Continuation", "h4_fvg": "H4 FVG candle after breakout"}
+                "oc_cont": "H4 OC Continuation", "h4_fvg": "H4 FVG candle after breakout",
+                "d_engulfing": "Daily engulfing in the Daily direction"}
 
 
 def _save_chart_levels(conn, instrument: str, alert_id: int, direction: Direction, breaker: Optional[float],
@@ -706,11 +709,12 @@ _CONT_TYPE_TO_CLASSIFICATION: dict[str, AlertClassification] = {
     "oc_cont":        AlertClassification.H4_OC_CONT,
     "engulfing":      AlertClassification.H4_ENGULFING_CONT,
     "h4_fvg":         AlertClassification.H4_FVG,
+    "d_engulfing":    AlertClassification.D_ENGULFING,
 }
 # Which subscriber switch each continuation type answers to (Alert Filters)
 _CONT_PREF = {"inline_break": "cont_inline", "breakout_cont": "cont_realign", "daily_react": "cont_realign", "breaker_origin": "cont_breaker",
               "breaker_cont": "cont_breaker", "oc_cont": "cont_oc", "engulfing": "engulfing",
-              "h4_fvg": "h4_fvg"}
+              "h4_fvg": "h4_fvg", "d_engulfing": "d_engulfing"}
 
 
 def _weekly_ctx(payload: "TVWebhookPayload") -> Optional[dict]:
@@ -759,7 +763,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         weekly=_weekly_ctx(payload),
         h4_class=payload.h4_class if cont_type in ("breakout_cont", "daily_react") else None,
         daily_react=cont_type == "daily_react",
-        eng_wick=(payload.eng_wick is not False) if cont_type == "engulfing" else None,
+        eng_wick=(payload.eng_wick is not False) if cont_type in ("engulfing", "d_engulfing") else None,
     )
 
     alert_text = format_alert(alert_record)
@@ -770,7 +774,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
                        subtitle=_CONT_TITLES.get(cont_type, "H4 continuation"))
 
     state = get_instrument_state(conn, instrument)
-    if cont_type != "h4_fvg":   # the FVG marker doesn't change the H4 Breaker or the setup's stage
+    if cont_type not in ("h4_fvg", "d_engulfing"):   # markers that don't change the H4 Breaker or the setup's stage
         upsert_instrument_state(conn, InstrumentStateRow(
             instrument=instrument,
             last_daily_candle_ts=state.last_daily_candle_ts if state else None,
@@ -794,13 +798,16 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
     if cont_type in ("breakout_cont", "daily_react") and payload.h4_class:
         setup_kind = confirmation_kind(payload.h4_class)
         _set_setup_class(conn, instrument, setup_kind)
+    elif cont_type == "d_engulfing":
+        setup_kind = None   # a Daily candle: no H4 External / Internal to follow
     else:
         setup_kind = _setup_class(conn, instrument, breakout.db_id)   # None (unknown) = no External/Internal filter
 
     if config.telegram_enabled:
         _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id,
                                       h4_class=setup_kind, pref=_CONT_PREF.get(cont_type),
-                                      engulf_wick=alert_record.eng_wick))
+                                      engulf_wick=alert_record.eng_wick,
+                                      engulf_key="pref_d_engulf_mode" if cont_type == "d_engulfing" else "pref_engulf_mode"))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

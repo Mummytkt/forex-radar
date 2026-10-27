@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v10 — live alerts + on-chart labels (2026-10-25)
+// MummyTKT's Bias Pointer v11 — live alerts + on-chart labels (2026-10-27)
 //
 // The logic proven in the backtest edition is now the live logic. Every bias
 // alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
@@ -36,6 +36,10 @@
 //     back in line, in line): the NEXT H4 candle is checked once; if it completes
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
+//
+// v11 (2026-10-27): Daily engulfing in the current Daily direction alerts
+//   (cont_type "d_engulfing", eng_wick like the H4 engulfing; any time a Daily
+//   direction is set). Settings are grouped under numbered, titled sections.
 //
 // v10 display: each H4 breakout after a Daily reaction says on its chart label
 //   whether an H4 candle swept an H4 swing low (high, sells) during the break
@@ -78,7 +82,7 @@
 //   CONFIRMED        — H4 closed beyond an H4 A/V level during a daily retest (Origin)
 //   INVALIDATED      — no longer sent: a break the other way is a new BREAKOUT
 //   H4_CONTINUATION  — H4 continuation event after Origin has fired
-//                      cont_type: breakout_cont | daily_react | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing | h4_fvg
+//                      cont_type: breakout_cont | daily_react | inline_break | breaker_origin | breaker_cont | oc_cont | engulfing | h4_fvg | d_engulfing
 //   PRICE_UPDATE     — Current H4 close price, powers dashboard price-level alerts
 //
 // v5 change: added PRICE_UPDATE event — fires at every realtime H4 close.
@@ -145,62 +149,161 @@
 
 indicator("MummyTKT Bias Pointer — Backtest", overlay=true, max_bars_back=2000, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
 
-// ── Backtest labels (same switches as Alert Filters) ──────────────────────────
-GBT = "Chart labels"
-bool   bt_show     = input.bool(true,  "Show alert labels on the chart", group=GBT)
-bool   bt_weekly   = input.bool(false, "Weekly (lines, labels, Weekly AGAINST marks)", group=GBT,
-     tooltip="Off: Daily + H4 only. The Weekly never changes which alerts fire; it only adds context.")
-bool   bt_ext      = input.bool(true,  "External H4 breakouts", group=GBT)
-bool   bt_int      = input.bool(false, "Internal H4 breakouts", group=GBT,
+// ── Settings, in titled sections (the group titles are the headers in TradingView) ─
+const string G_SETUP = "1 · Setup and connection"
+const string G_ALERT = "2 · Alerts and chart labels (same switches as Alert Filters)"
+const string G_ENG   = "3 · Engulfing (H4 and Daily)"
+const string G_DLVL  = "4 · Daily levels and FVGs"
+const string GS1     = "5 · Daily External high / low"
+const string G_WK    = "6 · Weekly"
+const string G_SW    = "7 · H4 liquidity sweeps (display only)"
+const string G_BT    = "8 · Backtest: start date, label style, count table"
+const string G_LBL   = "9 · Right-edge level labels and lines"
+const string GLC     = "10 · Label colours (use the opacity slider to fade them)"
+
+// 1 · Setup and connection
+string wh_secret       = input.string("", "Webhook Secret", group=G_SETUP,
+     tooltip="Paste your TV_WEBHOOK_SECRET value here")
+int    tol_pips        = input.int(5, "Tolerance Pips", minval=1, maxval=20, group=G_SETUP,
+     tooltip="Half-width of the reaction zone band in pips")
+
+// 2 · Alerts and chart labels
+bool   bt_show     = input.bool(true,  "Show alert labels on the chart", group=G_ALERT)
+bool   bt_ext      = input.bool(true,  "External H4 breakouts", group=G_ALERT)
+bool   bt_int      = input.bool(false, "Internal H4 breakouts", group=G_ALERT,
      tooltip="Off: only an External H4 breakout confirms a Daily reaction, and only those are sent. On: Internal ones are sent too.")
-bool   bt_origin   = input.bool(true,  "Origin — BUY / SELL CONFIRMED", group=GBT)
-bool   bt_react    = input.bool(true,  "Daily reaction + H4 breakout (after the Origin)", group=GBT)
-bool   bt_realign  = input.bool(true,  "H4 back in line", group=GBT)
-bool   bt_inline   = input.bool(true,  "H4 breakout in line", group=GBT)
-bool   bt_breaker  = input.bool(true,  "H4 Breaker (Origin + retests)", group=GBT)
-bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=GBT)
-bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=GBT)
-bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=GBT,
+bool   bt_origin   = input.bool(true,  "Origin — BUY / SELL CONFIRMED", group=G_ALERT)
+bool   bt_react    = input.bool(true,  "Daily reaction + H4 breakout (after the Origin)", group=G_ALERT)
+bool   bt_realign  = input.bool(true,  "H4 back in line", group=G_ALERT)
+bool   bt_inline   = input.bool(true,  "H4 breakout in line", group=G_ALERT)
+bool   bt_breaker  = input.bool(true,  "H4 Breaker (Origin + retests)", group=G_ALERT)
+bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=G_ALERT)
+bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=G_ALERT,
      tooltip="After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line: if the NEXT H4 candle completes an FVG (buys: its low stays above the high of the candle before the breakout), one alert. Checked once per breakout.")
-bool   bt_dfvg     = input.bool(true,  "Daily FVGs as reaction levels", group=GBT,
+
+// 3 · Engulfing
+bool   bt_engulf   = input.bool(true,  "H4 engulfing", group=G_ENG, inline="h4e")
+string bt_eng_mode = input.string("Wick", "covers", options=["Wick", "Body only", "Both"], group=G_ENG, inline="h4e",
+     tooltip="After the Origin, while H4 is in line: an H4 candle covering the previous opposite candle, in the Daily direction. Wick: it also closes beyond that candle's wick. The alert is always sent; each person picks Wick / Body / Both in Alert Filters. This only picks the chart labels.")
+bool   bt_dengulf  = input.bool(true,  "Daily engulfing", group=G_ENG, inline="d1e")
+string bt_deng_mode = input.string("Wick", "covers", options=["Wick", "Body only", "Both"], group=G_ENG, inline="d1e",
+     tooltip="A Daily candle covering the previous opposite Daily candle, in the current Daily direction (buys: the previous Daily candle is bearish; this one opens at or below its close and closes above its open; Wick = also above its high). The alert is always sent; each person picks Wick / Body / Both in Alert Filters. This only picks the chart labels.")
+
+// 4 · Daily levels and FVGs
+bool   d_body = input.string("Body", "Daily levels from", options = ["Body", "Wick"], group = G_DLVL,
+     tooltip = "Body: Daily highs/lows, A-shapes and V-shapes use candle bodies, like H4. Wick: they use the wicks. A breakout is always a Daily close beyond the level. Each alert keeps the setting it was created with.") == "Body"
+bool   bt_dfvg     = input.bool(true,  "Daily FVGs as reaction levels", group=G_DLVL,
      tooltip="Bullish Daily FVGs (bearish for sells) inside the range that was just broken, or formed after the breakout beyond the Daily Breaker. An H4 wick entering the gap is a reaction. Each Daily candle that dips below the previous Daily low inside it (above the high for sells) restarts the External check from when that candle entered the gap. A Daily close through the gap kills it. The gap only exists once its third candle has closed; the middle candle can be the Daily breakout candle.")
-string bt_eng_mode = input.string("Wick", "Engulfing covers", options=["Wick", "Body only", "Both"], group=GBT)
-int    bt_from     = input.time(timestamp("2020-01-01T00:00:00"), "Backtest from", group=GBT,
-     tooltip="Labels and counts start at this date. Earlier candles still build the levels.")
-bool   bt_latest   = input.bool(true,  "Keep only the latest alert label (clean chart)", group=GBT,
-     tooltip="Each new alert label deletes the previous one. The count table still counts every alert. Switch off to see the whole history.")
-bool   bt_grey     = input.bool(true,  "Show alerts that are not counted (grey, with the reason)", group=GBT,
-     tooltip="Alerts before the start date, Internal ones while Internal is off, and types switched off above.")
-bool   bt_table    = input.bool(true,  "Show count table", group=GBT)
-bool   bt_lvls     = input.bool(true,  "Show the Daily reaction levels being watched (4H)", group=GBT,
+bool   bt_lvls     = input.bool(true,  "Show the Daily reaction levels being watched (4H)", group=G_DLVL,
      tooltip="Every Daily level the script would accept a reaction at right now. A level that is missing here can't trigger an alert.")
-color  bt_buy_col  = input.color(#00C853, "Buy label", group=GBT, inline="btc")
-color  bt_sell_col = input.color(#FF1744, "Sell label", group=GBT, inline="btc")
-color  bt_txt_col  = input.color(color.white, "Label text", group=GBT, inline="btc")
-color  bt_grey_col = input.color(color.new(color.gray, 35), "Not-counted label", group=GBT, inline="btg")
-color  bt_lv_col   = input.color(color.new(color.aqua, 25), "Daily levels watched", group=GBT, inline="btg")
-color  bt_fvg_col  = input.color(color.new(color.aqua, 85), "Daily FVGs watched", group=GBT, inline="btg")
-color  bt_h4fvg_col = input.color(color.new(#FF9800, 10), "H4 FVG label", group=GBT, inline="btg")
-color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", group=GBT, inline="btt")
-color  bt_tbl_txt  = input.color(color.white, "Table text", group=GBT, inline="btt")
-color  bt_state_txt = input.color(color.white, "Status label text", group=GBT, inline="bts")
-color  bt_ext_txt   = input.color(#E0E0E0, "External high / low text", group=GBT, inline="bts")
-bool   bt_sweep    = input.bool(true, "Sweep check on H4 breakout labels", group=GBT,
+color  bt_lv_col   = input.color(color.new(color.aqua, 25), "Daily levels watched", group=G_DLVL, inline="dlc")
+color  bt_fvg_col  = input.color(color.new(color.aqua, 85), "Daily FVGs watched", group=G_DLVL, inline="dlc")
+
+// 5 · Daily External high / low
+bool   show_ext = input.bool(true, "Show external high / low", group = GS1)
+color  c_eh  = input.color(#E0E0E0, "External high", group = GS1, inline = "eh")
+string s_eh  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "eh")
+color  c_el  = input.color(#E0E0E0, "External low ", group = GS1, inline = "el")
+string s_el  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "el")
+int    w_ext = input.int(2, "Line width", minval = 1, maxval = 4, group = GS1)
+color  bt_ext_txt   = input.color(#E0E0E0, "External high / low text", group = GS1)
+
+// 6 · Weekly
+bool   bt_weekly   = input.bool(false, "Weekly (lines, labels, Weekly AGAINST marks)", group=G_WK,
+     tooltip="Off: Daily + H4 only. The Weekly never changes which alerts fire; it only adds context.")
+bool   w_body = input.string("Body", "Weekly levels from", options = ["Body", "Wick"], group = G_WK,
+     tooltip = "Body: Weekly highs/lows, A-shapes and V-shapes use candle bodies. Wick: they use the wicks. Set separately from the Daily choice.") == "Body"
+bool   show_wk_lbls     = input.bool(true, "Show Weekly labels (W.BK / W.A / W.V / W.OC)",
+     tooltip="Right-edge labels for the Weekly Breaker, Weekly A/V-shape and post-breakout Weekly OC",
+     group=G_WK)
+bool   show_wk_ext      = input.bool(true, "Show Weekly External high / low lines", group=G_WK)
+color  wk_col           = input.color(#FFB74D, "Weekly lines & labels color", group=G_WK)
+string wk_style         = input.string("Dashed", "Weekly External line style", options=["Solid", "Dashed", "Dotted"], group=G_WK)
+int    wk_width         = input.int(2, "Weekly External line width", minval=1, maxval=4, group=G_WK)
+string wk_lbl_max_tf    = input.string("Daily", "Weekly labels & lines visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="Weekly level labels and lines appear on this timeframe and all lower timeframes.",
+     group=G_WK)
+
+// 7 · H4 liquidity sweeps
+bool   bt_sweep    = input.bool(true, "Sweep check on H4 breakout labels", group=G_SW,
      tooltip="Display only. On each H4 breakout after a Daily reaction, the label says whether an H4 candle swept an H4 swing low (high, for sells) during that break: a wick beyond it with the close back. Swings and sweeps are found like LuxAlgo's Liquidity Sweeps (wicks only).")
-int    sw_len      = input.int(5, "Sweep: swing length (candles each side)", minval=1, maxval=20, group=GBT)
-color  sw_col      = input.color(color.new(#7048e8, 20), "Sweep line", group=GBT)
-bool   sw_all      = input.bool(true, "Show every H4 sweep (like LuxAlgo)", group=GBT,
+int    sw_len      = input.int(5, "Sweep: swing length (candles each side)", minval=1, maxval=20, group=G_SW)
+color  sw_col      = input.color(color.new(#7048e8, 20), "Sweep line on breakout labels", group=G_SW)
+bool   sw_all      = input.bool(true, "Show every H4 sweep (like LuxAlgo)", group=G_SW,
      tooltip="Display only. Marks every H4 sweep on the chart: a dotted line from the swing to the sweep candle and a zone over the wick that swept it. Off: only the breakout labels say whether a sweep came first.")
-color  sw_bull_col = input.color(color.new(#089981, 70), "Bullish sweep zone", group=GBT, inline="swz")
-color  sw_bear_col = input.color(color.new(#F23645, 70), "Bearish sweep zone", group=GBT, inline="swz")
-bool   sw_ext      = input.bool(true, "Extend sweep zones", group=GBT, inline="swe",
+color  sw_bull_col = input.color(color.new(#089981, 70), "Bullish sweep zone", group=G_SW, inline="swz")
+color  sw_bear_col = input.color(color.new(#F23645, 70), "Bearish sweep zone", group=G_SW, inline="swz")
+bool   sw_ext      = input.bool(true, "Extend sweep zones", group=G_SW, inline="swe",
      tooltip="On: each zone stretches right until a candle closes through it (or the max bars). Off: the zone stays on the sweep candle.")
-int    sw_maxb     = input.int(300, "max bars", minval=1, maxval=5000, group=GBT, inline="swe")
-string sw_lmode    = input.string("Swing to sweep", "Sweep lines (dotted)", options=["Swing to sweep", "Extend right", "Hide"], group=GBT,
+int    sw_maxb     = input.int(300, "max bars", minval=1, maxval=5000, group=G_SW, inline="swe")
+string sw_lmode    = input.string("Swing to sweep", "Sweep lines (dotted)", options=["Swing to sweep", "Extend right", "Hide"], group=G_SW,
      tooltip="The dotted line from the swing high / low to the candle that swept it. Extend right: runs on to the right edge. Hide: zones only.")
+
+// 8 · Backtest: start date, label style, count table
+int    bt_from     = input.time(timestamp("2020-01-01T00:00:00"), "Backtest from", group=G_BT,
+     tooltip="Labels and counts start at this date. Earlier candles still build the levels.")
+bool   bt_latest   = input.bool(true,  "Keep only the latest alert label (clean chart)", group=G_BT,
+     tooltip="Each new alert label deletes the previous one. The count table still counts every alert. Switch off to see the whole history.")
+bool   bt_grey     = input.bool(true,  "Show alerts that are not counted (grey, with the reason)", group=G_BT,
+     tooltip="Alerts before the start date, Internal ones while Internal is off, and types switched off above.")
+bool   bt_table    = input.bool(true,  "Show count table", group=G_BT)
+color  bt_buy_col  = input.color(#00C853, "Buy label", group=G_BT, inline="btc")
+color  bt_sell_col = input.color(#FF1744, "Sell label", group=G_BT, inline="btc")
+color  bt_txt_col  = input.color(color.white, "Label text", group=G_BT, inline="btc")
+color  bt_grey_col = input.color(color.new(color.gray, 35), "Not-counted label", group=G_BT, inline="btg")
+color  bt_h4fvg_col = input.color(color.new(#FF9800, 10), "H4 FVG label", group=G_BT, inline="btg")
+color  bt_tbl_bg   = input.color(color.new(#0F1120, 10), "Table background", group=G_BT, inline="btt")
+color  bt_tbl_txt  = input.color(color.white, "Table text", group=G_BT, inline="btt")
+color  bt_state_txt = input.color(color.white, "Status label text", group=G_BT)
+
+// 9 · Right-edge level labels and lines
+bool   show_daily_lbls = input.bool(true,  "Show Daily labels (D.A / D.V / D.OC)",
+     tooltip="Toggle right-edge labels for Daily A-shape, V-shape and OC levels",
+     group=G_LBL)
+bool   show_h4_lbls    = input.bool(true,  "Show H4 labels (H4.A / H4.V / H4.OC / H4.BK)",
+     tooltip="Toggle right-edge labels for H4 formation and breaker levels",
+     group=G_LBL)
+bool   show_lvl_lines  = input.bool(false, "Show level lines (extend right)",
+     tooltip="Draw a horizontal line from each level's origin extending to the right",
+     group=G_LBL)
+color  daily_line_col  = input.color(color.new(color.gray, 20), "Daily line color",
+     tooltip="Color for D.A / D.V / D.OC lines",
+     group=G_LBL)
+color  h4_line_col     = input.color(color.new(color.gray, 40), "H4 line color",
+     tooltip="Color for H4.A / H4.V / H4.OC / H4.BK lines",
+     group=G_LBL)
+string daily_lbl_max_tf = input.string("Daily", "Daily labels & lines visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="Daily level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Weekly to also see them on the weekly chart.",
+     group=G_LBL)
+string h4_lbl_max_tf    = input.string("4H",    "H4 labels & lines visible on",
+     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
+     tooltip="H4 level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Daily to also see them on the daily chart.",
+     group=G_LBL)
+
+// 10 · Label colours
+color  bull_lbl_col     = input.color(color.new(color.green, 60), "Bullish state label color",
+     tooltip="Background color of the state label when direction is bullish (BREAKOUT / awaiting retest)",
+     group=GLC)
+color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state label color",
+     tooltip="Background color of the state label when direction is bearish (BREAKOUT / awaiting retest)",
+     group=GLC)
+color  retest_lbl_col   = input.color(color.orange, "State label: Retest", group = GLC)
+color  conf_lbl_col     = input.color(color.teal,   "State label: Confirmed · H4 aligned", group = GLC)
+color  realign_lbl_col  = input.color(color.blue,   "State label: OUT OF LINE (H4 against daily)", group = GLC)
+color  idle_lbl_col     = input.color(color.new(color.gray, 20), "State label: no breakout", group = GLC)
+color  da_lbl_col       = input.color(color.new(color.red,    55), "D.A", group = GLC, inline = "dl")
+color  dv_lbl_col       = input.color(color.new(color.lime,   45), "D.V", group = GLC, inline = "dl")
+color  doc_lbl_col      = input.color(color.new(color.purple, 45), "D.OC", group = GLC, inline = "dl")
+color  h4a_lbl_col      = input.color(color.new(color.red,    72), "H4.A", group = GLC, inline = "hl")
+color  h4v_lbl_col      = input.color(color.new(color.lime,   65), "H4.V", group = GLC, inline = "hl")
+color  h4bk_lbl_col     = input.color(color.new(color.orange, 25), "H4.BK", group = GLC, inline = "hl")
+color  h4oc_lbl_col     = input.color(color.new(color.teal,   45), "H4.OC", group = GLC, inline = "hl")
+
 // counts: 0 Origin, 1 Back in line, 2 In line, 3 Breaker Origin, 4 Breaker retest, 5 OC, 6 Engulfing,
-//         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells, 10 H4 FVG after breakout
-var bt_cnt  = array.new_int(11, 0)
+//         7 Daily reaction + H4 breakout, 8 Buys, 9 Sells, 10 H4 FVG after breakout, 11 Daily engulfing
+var bt_cnt  = array.new_int(12, 0)
 var int bt_t0 = time
 // External / Internal of the setup's latest H4 confirmation (Origin, Daily reaction
 // + H4 breakout, or back in line); continuations follow it, like the server
@@ -228,81 +331,7 @@ var array<box>   sw_all_b = array.new<box>()
 var array<bool>  sw_all_d = array.new<bool>()    // zone direction: true = bullish sweep
 var array<bool>  sw_all_x = array.new<bool>()    // zone closed through (stops extending)
 var string bt_swtxt = ""                         // sweep line for the breakout label being drawn
-var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout", "Buys", "Sells", "H4 FVG after breakout")
-
-// ── Inputs ────────────────────────────────────────────────────────────────────
-string wh_secret       = input.string("", "Webhook Secret",
-     tooltip="Paste your TV_WEBHOOK_SECRET value here")
-int    tol_pips        = input.int(5, "Tolerance Pips", minval=1, maxval=20,
-     tooltip="Half-width of the reaction zone band in pips")
-bool   show_daily_lbls = input.bool(true,  "Show Daily labels (D.A / D.V / D.OC)",
-     tooltip="Toggle right-edge labels for Daily A-shape, V-shape and OC levels",
-     group="Labels")
-bool   show_h4_lbls    = input.bool(true,  "Show H4 labels (H4.A / H4.V / H4.OC / H4.BK)",
-     tooltip="Toggle right-edge labels for H4 formation and breaker levels",
-     group="Labels")
-bool   show_lvl_lines  = input.bool(false, "Show level lines (extend right)",
-     tooltip="Draw a horizontal line from each level's origin extending to the right",
-     group="Labels")
-color  daily_line_col  = input.color(color.new(color.gray, 20), "Daily line color",
-     tooltip="Color for D.A / D.V / D.OC lines",
-     group="Labels")
-color  h4_line_col     = input.color(color.new(color.gray, 40), "H4 line color",
-     tooltip="Color for H4.A / H4.V / H4.OC / H4.BK lines",
-     group="Labels")
-string daily_lbl_max_tf = input.string("Daily", "Daily labels & lines visible on",
-     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
-     tooltip="Daily level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Weekly to also see them on the weekly chart.",
-     group="Labels")
-string h4_lbl_max_tf    = input.string("4H",    "H4 labels & lines visible on",
-     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
-     tooltip="H4 level labels and lines appear on this timeframe and all lower timeframes. E.g. choose Daily to also see them on the daily chart.",
-     group="Labels")
-bool   show_wk_lbls     = input.bool(true, "Show Weekly labels (W.BK / W.A / W.V / W.OC)",
-     tooltip="Right-edge labels for the Weekly Breaker, Weekly A/V-shape and post-breakout Weekly OC",
-     group="Labels")
-bool   show_wk_ext      = input.bool(true, "Show Weekly External high / low lines", group="Labels")
-color  wk_col           = input.color(#FFB74D, "Weekly lines & labels color", group="Labels")
-string wk_style         = input.string("Dashed", "Weekly External line style", options=["Solid", "Dashed", "Dotted"], group="Labels")
-int    wk_width         = input.int(2, "Weekly External line width", minval=1, maxval=4, group="Labels")
-string wk_lbl_max_tf    = input.string("Daily", "Weekly labels & lines visible on",
-     options=["Monthly", "Weekly", "Daily", "4H", "1H", "30m", "15m", "5m"],
-     tooltip="Weekly level labels and lines appear on this timeframe and all lower timeframes.",
-     group="Labels")
-color  bull_lbl_col     = input.color(color.new(color.green, 60), "Bullish state label color",
-     tooltip="Background color of the state label when direction is bullish (BREAKOUT / awaiting retest)",
-     group="Labels")
-color  bear_lbl_col     = input.color(color.new(color.red,   60), "Bearish state label color",
-     tooltip="Background color of the state label when direction is bearish (BREAKOUT / awaiting retest)",
-     group="Labels")
-// Label colours — each picker has an opacity slider
-const string GLC = "Label colors (use the opacity slider to fade them)"
-color  retest_lbl_col   = input.color(color.orange, "State label: Retest", group = GLC)
-color  conf_lbl_col     = input.color(color.teal,   "State label: Confirmed · H4 aligned", group = GLC)
-color  realign_lbl_col  = input.color(color.blue,   "State label: OUT OF LINE (H4 against daily)", group = GLC)
-color  idle_lbl_col     = input.color(color.new(color.gray, 20), "State label: no breakout", group = GLC)
-color  da_lbl_col       = input.color(color.new(color.red,    55), "D.A", group = GLC, inline = "dl")
-color  dv_lbl_col       = input.color(color.new(color.lime,   45), "D.V", group = GLC, inline = "dl")
-color  doc_lbl_col      = input.color(color.new(color.purple, 45), "D.OC", group = GLC, inline = "dl")
-color  h4a_lbl_col      = input.color(color.new(color.red,    72), "H4.A", group = GLC, inline = "hl")
-color  h4v_lbl_col      = input.color(color.new(color.lime,   65), "H4.V", group = GLC, inline = "hl")
-color  h4bk_lbl_col     = input.color(color.new(color.orange, 25), "H4.BK", group = GLC, inline = "hl")
-color  h4oc_lbl_col     = input.color(color.new(color.teal,   45), "H4.OC", group = GLC, inline = "hl")
-
-// ── Daily structure lines (most recent external high / low) ─────────────────
-const string GS1 = "External levels"
-bool   show_ext = input.bool(true, "Show external high / low", group = GS1)
-color  c_eh  = input.color(#E0E0E0, "External high", group = GS1, inline = "eh")
-string s_eh  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "eh")
-color  c_el  = input.color(#E0E0E0, "External low ", group = GS1, inline = "el")
-string s_el  = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = GS1, inline = "el")
-int    w_ext = input.int(2, "Line width", minval = 1, maxval = 4, group = GS1)
-// Daily levels from candle BODIES (like H4) or WICKS. Applies to the External
-// high/low structure (so the Daily breakout), D.A / D.V and inside-range V/A.
-bool   w_body = input.string("Body", "Weekly levels from", options = ["Body", "Wick"], group = GS1,
-     tooltip = "Body: Weekly highs/lows, A-shapes and V-shapes use candle bodies. Wick: they use the wicks. Set separately from the Daily choice.") == "Body"
-bool   d_body = input.string("Body", "Daily levels from", options = ["Body", "Wick"], group = GS1,
-     tooltip = "Body: Daily highs/lows, A-shapes and V-shapes use candle bodies, like H4. Wick: they use the wicks. A breakout is always a Daily close beyond the level. Each alert keeps the setting it was created with.") == "Body"
+var BT_NAMES = array.from("Origin", "Back in line", "H4 breakout in line", "Breaker Origin", "Breaker retest", "OC reaction", "Engulfing", "Daily reaction + H4 breakout", "Buys", "Sells", "H4 FVG after breakout", "Daily engulfing")
 
 f_style(string st) =>
     st == "Dashed" ? line.style_dashed : st == "Dotted" ? line.style_dotted : line.style_solid
@@ -777,6 +806,9 @@ float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barm
 float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
 [d_high, d_low, d_open2, d_close2, d_high2, d_low2] = request.security(syminfo.tickerid, "D",
      [f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body)], lookahead=barmerge.lookahead_on)
+
+// Wick high / low of the Daily candle before the last completed one (Daily engulfing)
+[dw_h2, dw_l2] = request.security(syminfo.tickerid, "D", [high[2], low[2]], lookahead=barmerge.lookahead_on)
 
 // Daily FVGs: the first and third of the last three completed Daily candles (wicks)
 [dg_h1, dg_l1, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
@@ -1254,14 +1286,14 @@ f_bt_src(string s) =>
 f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =>
     bool conf = kind <= 1 or kind == 7   // an H4 confirmation after a Daily reaction
     bool tf_ok = timeframe.period == "240" and bt_show   // the H4 steps only mean something on 4H candles
-    bool on = kind == 10 ? bt_h4fvg : kind == 7 ? bt_react : kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
+    bool on = kind == 11 ? bt_dengulf : kind == 10 ? bt_h4fvg : kind == 7 ? bt_react : kind == 0 ? bt_origin : kind == 1 ? bt_realign : kind == 2 ? bt_inline : kind <= 4 ? bt_breaker : kind == 5 ? bt_oc : bt_engulf
     if conf
         array.set(bt_scls, 0, cls)
     string c = array.get(bt_scls, 0)
-    bool cls_ok = c == "" or (c == "external" ? bt_ext : bt_int)
+    bool cls_ok = c == "" or kind >= 10 or (c == "external" ? bt_ext : bt_int)   // H4 FVG / Daily engulfing: no H4 class
     // H4 FVG: no buy / sell, just the pair and the message (for tracking liquidity)
     string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
-    string tag  = c == "" or kind == 10 ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
+    string tag  = c == "" or kind >= 10 ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
     if tf_ok and bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         if bt_latest
@@ -1406,6 +1438,28 @@ if new_daily and not na(d_close2)
         f_keep(d_boc, d_close2)
     if p_bear and y_bear
         f_keep(d_soc, d_close2)
+
+// ── Daily engulfing in the current Daily direction ────────────────────────────
+// On each completed Daily candle while a Daily direction is set: buys = the Daily
+// candle before it was bearish, this one opened at or below that close and closed
+// above that open (covers the body); eng_wick = it also closed above that HIGH.
+// Mirror for sells. One alert (cont_type "d_engulfing"); each person picks Wick /
+// Body / Both in Alert Filters, the chart labels follow "Daily engulfing covers".
+if new_daily and not na(bo_dir) and not na(d_close2) and not na(dw_h2)
+    bool deb = bo_dir == "bullish"
+    bool d_eng = deb ? (d_close2 < d_open2 and d_close > d_open and d_open <= d_close2 and d_close > d_open2)
+                     : (d_close2 > d_open2 and d_close < d_open and d_open >= d_close2 and d_close < d_open2)
+    if d_eng
+        bool  d_eng_wick = deb ? d_close > dw_h2 : d_close < dw_l2
+        float d_eng_lvl  = d_eng_wick ? (deb ? dw_h2 : dw_l2) : d_open2
+        if bt_deng_mode == "Both" or (bt_deng_mode == "Wick") == d_eng_wick
+            f_btlbl(deb, 11, "", d_eng_lvl, bo_level, d_eng_wick ? "Covers the previous Daily candle's wick" : "Covers the previous Daily candle's body only")
+        if barstate.isrealtime
+            alert(f_hdrw("H4_CONTINUATION")
+                  + '","direction":"' + bo_dir + '","cont_type":"d_engulfing","eng_wick":' + (d_eng_wick ? "true" : "false")
+                  + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
+                  + ',"h4_level":' + str.tostring(d_eng_lvl) + '}',
+                  alert.freq_once_per_bar)
 
 // Daily FVGs. A gap is only an FVG once its third Daily candle has closed. A Daily
 // close through the gap kills it (bullish: below the bottom; bearish: above the top).
@@ -2486,7 +2540,7 @@ string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " (" + f_layer_name(bo
 _state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=bt_state_txt, size=size.small, tooltip=_tip)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
-var table bt_tbl = table.new(position.top_right, 2, 13, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
+var table bt_tbl = table.new(position.top_right, 2, 14, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
 if bt_table and barstate.islast and timeframe.period != "240"
     table.cell(bt_tbl, 0, 0, "Backtest labels show on the 4H chart only", text_color=bt_tbl_txt, text_size=size.small)
 if bt_table and barstate.islast and timeframe.period == "240"
@@ -2498,6 +2552,8 @@ if bt_table and barstate.islast and timeframe.period == "240"
         table.cell(bt_tbl, 1, i + 1, str.tostring(array.get(bt_cnt, i)), text_color=bt_tbl_txt, text_size=size.tiny)
     table.cell(bt_tbl, 0, 12, array.get(BT_NAMES, 10), text_color=bt_tbl_txt, text_size=size.tiny)
     table.cell(bt_tbl, 1, 12, str.tostring(array.get(bt_cnt, 10)), text_color=bt_tbl_txt, text_size=size.tiny)
+    table.cell(bt_tbl, 0, 13, array.get(BT_NAMES, 11), text_color=bt_tbl_txt, text_size=size.tiny)
+    table.cell(bt_tbl, 1, 13, str.tostring(array.get(bt_cnt, 11)), text_color=bt_tbl_txt, text_size=size.tiny)
     table.cell(bt_tbl, 0, 9, "Buys", text_color=bt_buy_col, text_size=size.small)
     table.cell(bt_tbl, 1, 9, str.tostring(array.get(bt_cnt, 8)), text_color=bt_buy_col, text_size=size.small)
     table.cell(bt_tbl, 0, 10, "Sells", text_color=bt_sell_col, text_size=size.small)
