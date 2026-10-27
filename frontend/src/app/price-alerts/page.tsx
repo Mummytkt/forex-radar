@@ -58,7 +58,7 @@ function alertPreview(
   const priceVal = parseFloat(priceStr)
   if (!instrument || isNaN(priceVal) || priceVal <= 0) return ''
   const fmt = formatPrice(instrument, priceVal)
-  const candle = triggerType === 'on_candle_close' ? `${timeframe} candle` : null
+  const candle = triggerType === 'on_candle_close' ? `${timeframe === '1D' ? 'Daily' : timeframe === '1W' ? 'Weekly' : timeframe} candle` : null
 
   if (condition === 'crossing_up') {
     const base = candle
@@ -842,7 +842,7 @@ export default function PriceAlertsPage() {
                     Timeframe
                   </label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {['5m', '15m', '30m', '45m', '1h', '2h', '3h', '4h'].map(tf => (
+                    {['5m', '15m', '30m', '45m', '1h', '2h', '3h', '4h', '1D', '1W'].map(tf => (
                       <button
                         key={tf} type="button"
                         onClick={() => setTimeframe(tf)}

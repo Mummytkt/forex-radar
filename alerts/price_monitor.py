@@ -139,6 +139,141 @@ def _is_candle_close_window(timeframe: str, now: datetime) -> bool:
     return slot % tf_min == 0
 
 
+# ── Daily / Weekly candle closes (Level Watch 1D / 1W) ──────────────────────
+# Read from the Daily candles the Bias Pointer sends from TradingView (the same
+# candles the person sees there); a Weekly candle is built from them. Only
+# COMPLETED candles that closed after the alert was set are checked.
+
+_HTF = {"1D": "Daily", "1W": "Weekly"}
+
+
+def _price_fmt(instrument: str) -> str:
+    if instrument.endswith("JPY"):
+        return "{:.3f}"
+    if instrument in ("XAUUSD", "XAGUSD", "USOIL", "WTIUSD"):
+        return "{:.2f}"
+    if instrument in ("US30", "NAS100", "SPX500", "UK100", "GER40", "JPN225"):
+        return "{:.0f}"
+    return "{:.5f}"
+
+
+def _parse_ts(s: str) -> datetime:
+    d = datetime.fromisoformat(s.replace(" ", "T").replace("Z", "+00:00"))
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def _always_open(instrument: str) -> bool:
+    """Markets that trade at weekends (their week ends on Sunday)."""
+    return any(instrument.startswith(b) for b in _CRYPTO_BASES)
+
+
+def htf_candles(conn, instrument: str, tf: str) -> list[tuple]:
+    """Completed candles, oldest first: (open_time, close_time, o, h, l, c)."""
+    from datetime import timedelta
+    from state.candles import recent
+    days = [(_parse_ts(t), o, h, l, c) for t, o, h, l, c in recent(conn, instrument, "D", 60)]
+    if not days:
+        return []
+    if tf == "1D":
+        out = []
+        for i, (t, o, h, l, c) in enumerate(days):
+            end = days[i + 1][0] if i + 1 < len(days) else t + timedelta(days=1)
+            out.append((t, end, o, h, l, c))
+        return out
+    # Weekly: group the Daily candles by trading week (a Daily candle that opens on
+    # Sunday evening UTC belongs to Monday's week, hence the +12 h)
+    weeks: dict = {}
+    for t, o, h, l, c in days:
+        key = (t + timedelta(hours=12)).isocalendar()[:2]
+        w = weeks.get(key)
+        if w is None:
+            weeks[key] = [t, t, o, h, l, c]
+        else:
+            w[1] = t
+            w[3] = max(w[3], h)
+            w[4] = min(w[4], l)
+            w[5] = c
+    keys = sorted(weeks)
+    out = []
+    for i, k in enumerate(keys):
+        t0, tlast, o, h, l, c = weeks[k]
+        if i + 1 < len(keys):
+            end = weeks[keys[i + 1]][0]
+        else:
+            # the latest week is complete once its last trading day is in
+            last_day = (tlast + timedelta(hours=12)).weekday()
+            if last_day < (6 if _always_open(instrument) else 4):
+                continue
+            end = tlast + timedelta(days=1)
+        out.append((t0, end, o, h, l, c))
+    return out
+
+
+def htf_triggered(condition: str, level: float, prev_close: Optional[float], h: float, l: float, c: float) -> str:
+    """'' if not triggered, else how: 'above' / 'below' / 'from above' / 'from below'."""
+    if condition == "rejects":
+        if h >= level and c < level:
+            return "from above"
+        if l <= level and c > level:
+            return "from below"
+        return ""
+    if prev_close is None:
+        return ""
+    if condition in ("crossing_up", "crossing") and prev_close < level <= c:
+        return "above"
+    if condition in ("crossing_down", "crossing") and prev_close > level >= c:
+        return "below"
+    return ""
+
+
+async def _check_htf(conn, config, now_iso: str) -> None:
+    from alerts.telegram import send_alert
+    rows = conn.execute("""
+        SELECT pa.id, pa.instrument, pa.condition, pa.price, pa.message, pa.timeframe,
+               pa.created_at, u.telegram_chat_id
+        FROM price_alerts pa
+        LEFT JOIN users u ON pa.user_id = u.id
+        WHERE pa.is_active = 1 AND pa.trigger_type = 'on_candle_close'
+          AND pa.timeframe IN ('1D', '1W')
+          AND (pa.expires_at IS NULL OR pa.expires_at > ?)
+    """, (now_iso,)).fetchall()
+    cache: dict = {}
+    for aid, inst, cond, level, message, tf, created, chat in rows:
+        key = (inst, tf)
+        if key not in cache:
+            cache[key] = htf_candles(conn, inst, tf)
+        candles = cache[key]
+        if not candles:
+            continue
+        set_at = _parse_ts(created) if created else None
+        # the latest completed candle, if it closed after the alert was set
+        t0, end, o, h, l, c = candles[-1]
+        if set_at is not None and end <= set_at:
+            continue
+        prev_close = candles[-2][5] if len(candles) > 1 else None
+        how = htf_triggered(cond, level, prev_close, h, l, c)
+        if not how:
+            continue
+        conn.execute("UPDATE price_alerts SET is_active = 0, triggered_at = ? WHERE id = ?", (now_iso, aid))
+        conn.commit()
+        fmt = _price_fmt(inst)
+        name = _HTF[tf]
+        if cond == "rejects":
+            text = (f"⚡ Price Alert: {tagged(inst)}\n\n"
+                    f"{name} rejection at {fmt.format(level)} ({how})\n"
+                    f"{name} close: {fmt.format(c)}")
+        else:
+            text = (f"⚡ Price Alert: {tagged(inst)}\n\n"
+                    f"{name} candle closed {how} {fmt.format(level)}\n"
+                    f"{name} close: {fmt.format(c)}")
+        if message:
+            text += f"\n\n{message}"
+        logger.info("%s %s price alert triggered — %s @ %s (alert_id=%d)", inst, tf, cond, level, aid)
+        chat_id = chat or config.telegram_chat_id
+        if config.telegram_enabled and chat_id:
+            await send_alert(config.telegram_bot_token, chat_id, text)
+
+
 # ── Main check cycle ─────────────────────────────────────────────────────────
 
 async def run_price_check(db_path: str, config) -> None:
@@ -171,6 +306,12 @@ async def run_price_check(db_path: str, config) -> None:
 
         if not rows:
             return
+
+        # Daily / Weekly candle-close alerts: from the stored TradingView Daily candles
+        try:
+            await _check_htf(conn, config, now_iso)
+        except Exception as exc:
+            logger.warning("Daily / Weekly level check failed: %s", exc)
 
         instruments = [r[0] for r in rows]
         logger.debug("Price monitor checking %d instrument(s): %s", len(instruments), instruments)
@@ -225,6 +366,8 @@ async def run_price_check(db_path: str, config) -> None:
                 timeframe   = alert_row[5] or "5m"
                 chat_id     = alert_row[6] or config.telegram_chat_id
 
+                if trigger_type == "on_candle_close" and timeframe in _HTF:
+                    continue   # checked on the Daily / Weekly close (_check_htf)
                 # For on_candle_close, only fire at the correct timeframe boundary
                 if trigger_type == "on_candle_close" and not _is_candle_close_window(timeframe, now_dt):
                     continue
