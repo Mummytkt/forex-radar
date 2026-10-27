@@ -67,7 +67,7 @@ OC: two candles in the same direction; the level is where the first closed and t
 H4 back in line: 4H had gone against the Daily, then broke back in the Daily direction after a fresh Daily reaction.
 
 H4 engulfing: a 4H candle covered the previous opposite candle, in the Daily direction.
-Daily engulfing: a Daily candle covered the previous opposite Daily candle, in the Daily direction.
+Daily engulfing: a notification only (no buy / sell) that a Daily candle covered the previous opposite Daily candle, in the Daily direction.
 
 H4 FVG candle after breakout has formed: the 4H candle right after an in-line 4H breakout left a gap. A liquidity marker, not a buy or sell signal (off unless you switch it on in Alert Filters).
 

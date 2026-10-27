@@ -36,7 +36,7 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
   { key: 'contRealign', label: 'Daily reaction + H4 breakout', desc: 'Every fresh reaction at a Daily level followed by an H4 breakout: while H4 is aligned, and when it brings H4 back in line.' },
   { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, in the Daily direction. Choose which kind below.' },
-  { key: 'dailyEngulfing', label: 'Daily engulfing', desc: 'A Daily candle that covers the previous opposite Daily candle, in the current Daily direction. Sent at the Daily close, before or after the Origin. Choose which kind below.' },
+  { key: 'dailyEngulfing', label: 'Daily engulfing', desc: 'Only the pair and "Daily engulfing candle has formed": a Daily candle covered the previous opposite Daily candle, in the current Daily direction. A notification, not a buy or sell signal. Sent at the Daily close. Choose which kind below.' },
   { key: 'h4Fvg', group: 'Liquidity', label: 'H4 FVG after breakout', desc: 'Only the pair and "H4 FVG candle after breakout has formed": the H4 candle right after an H4 breakout in line with the Daily left a fair value gap. A liquidity marker, not a buy or sell signal. Off unless you switch it on.' },
   { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
 ]

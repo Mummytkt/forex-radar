@@ -897,9 +897,8 @@ check("a body-only engulfing message says so", "engulfing (covers the body) @ 0.
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="d_engulfing", eng_wick=True, level_type="external",
    breakout_level=0.9100, h4_level=0.9160, timeframe="240")
 _td = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("a Daily engulfing alert reads right",
-      _td.startswith("BUY CONTINUATION — BUY AUDCAD (Forex)") and "Daily Engulfing in the Daily direction" in _td
-      and "Daily bullish engulfing (covers the wick) @ 0.91600" in _td)
+check("a Daily engulfing alert is only the pair and the message, no buy / sell",
+      _td == "AUDCAD\nDaily engulfing candle has formed")
 _pd = c.get("/api/preferences", headers=H(ts_)).json()
 check("Daily engulfing is on by default with 'covers the wick'", _pd["dailyEngulfing"] is True and _pd["dEngulfMode"] == "wick")
 def _deng(wick):

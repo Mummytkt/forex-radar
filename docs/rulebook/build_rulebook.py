@@ -424,7 +424,7 @@ def make_rules(im):
          "<b>“Daily reaction + H4 breakout”</b> alert, also while H4 is still in line. While H4 is in line, every new H4 close beyond the <b>latest</b> "
          "H4 A-shape (buy) or V-shape (sell) also sends an <b>“H4 breakout in line with the Daily”</b> alert; no Daily reaction is needed for it.",
          "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
-         "<b>A used level is used:</b> only the first touch of a level counts. A Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 "
+         "<b>A used level is used:</b> only the first touch of a level counts (the Weekly follows the same rule with Weekly levels). A Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 "
          "confirmation, or whose reaction failed (an H4 close back through it), never starts another reaction; price going past it must react at a level beyond it. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
          "setup are not sent.", im["noneworigin"]),
         ("F. Continuations (after the Origin)", "H4 Breaker retest",
@@ -459,7 +459,7 @@ def make_rules(im):
          "One alert per candle: if a Breaker, OC or in-line breakout alert fires on the same candle, the engulfing alert is not sent.", im["h4engulf"]),
         ("F. Continuations (after the Origin)", "Daily engulfing",
          "Whenever a Daily direction is set (before or after the Origin), a <b>Daily</b> candle that <b>covers the previous opposite Daily "
-         "candle's body</b>, in the current Daily direction, sends a Daily engulfing alert at the Daily close, marked <b>covers the wick</b> "
+         "candle's body</b>, in the current Daily direction, sends a notification at the Daily close: only the pair and <b>“Daily engulfing candle has formed”</b>, no buy or sell. It counts as <b>covers the wick</b> "
          "when it also closes beyond that candle's high (low for sells). Each member chooses which reach them, separately from the H4 "
          "engulfing: covers the wick (default), covers the body only, or both.",
          "Bullish Daily direction: after a bearish Daily candle, opens at/below its close, closes above its open (body) or above its HIGH (wick)",

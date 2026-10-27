@@ -53,7 +53,9 @@
 //
 // v11 (2026-10-27): Daily engulfing in the current Daily direction alerts
 //   (cont_type "d_engulfing", eng_wick like the H4 engulfing; any time a Daily
-//   direction is set). Settings are grouped under numbered, titled sections.
+//   direction is set). A notification only: "<PAIR> / Daily engulfing candle
+//   has formed", no buy / sell. The Weekly follows every Daily rule (used
+//   levels too). Settings are grouped under numbered, titled sections.
 //
 // v10 display: each H4 breakout after a Daily reaction says on its chart label
 //   whether an H4 candle swept an H4 swing low (high, sells) during the break
@@ -985,6 +987,9 @@ var array<float> w_boc  = array.new<float>()
 var array<float> w_soc  = array.new<float>()
 var array<float> w_pbocs = array.new<float>()
 var array<float> w_seen = array.new<float>()   // Weekly levels already touched by a Daily candle
+// Used Weekly levels: one that gave a Weekly-confirmed Daily breakout, or whose
+// reaction failed, never starts another Weekly reaction (a used Weekly FVG is removed)
+var array<float> w_used = array.new<float>()
 // Weekly FVGs: gap top / bottom, own External start (time), pierced
 var array<float> w_bf_hi = array.new<float>()
 var array<float> w_bf_lo = array.new<float>()
@@ -1062,6 +1067,13 @@ f_wseen(float L) =>
             found := true
     found
 
+f_wused(float L) =>
+    bool found = false
+    for x in w_used
+        if math.abs(x - L) <= pip * 0.1
+            found := true
+    found
+
 // Deepest level in lv that the Daily candle (lo_, hi_, cl_) touches exactly and holds
 f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float lo_, float hi_, float cl_) =>
     float best = na
@@ -1071,7 +1083,7 @@ f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float l
             bool inside = L > lo_lim and L < hi_lim
             bool touched = lo_ <= L and hi_ >= L
             bool held = bull ? cl_ >= L - t : cl_ <= L + t
-            if inside and touched and held and (na(best) or (bull ? L < best : L > best))
+            if inside and touched and held and not f_wused(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
@@ -1141,6 +1153,7 @@ if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not
     bool w_fvg = wk_src == "post_breakout_fvg" or wk_src == "inside_fvg"
     if wk_react and not w_fvg
         if wb ? d_close < wk_src_lvl - tol : d_close > wk_src_lvl + tol
+            array.push(w_used, wk_src_lvl)   // a failed reaction uses the level too
             wk_react   := false
             wk_src     := na
             wk_kind    := na
@@ -1153,7 +1166,7 @@ if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not
         float pbw = f_wpick(w_pbocs, wb, wb ? wb_hi : -1e18, wb ? 1e18 : wb_lo, tol, dr_l, dr_h, d_close)
         float pvw = f_wpick(wb ? w_vs : w_as, wb, wb ? wb_hi : -1e18, wb ? 1e18 : wb_lo, tol, dr_l, dr_h, d_close)
         int   pfw = f_wfpick(wfh, wfl, wfp, wb, false, wk_opp, wb_lo, wb_hi, dr_l, dr_h)
-        bool  bkw = dr_l <= wk_level and dr_h >= wk_level and (wb ? d_close >= wb_lo : d_close <= wb_hi)
+        bool  bkw = dr_l <= wk_level and dr_h >= wk_level and (wb ? d_close >= wb_lo : d_close <= wb_hi) and not f_wused(wk_level)
         float ir_lo = wb ? wk_opp : wb_hi
         float ir_hi = wb ? wb_lo : wk_opp
         float shw = na(wk_opp) ? na : f_wpick(wb ? w_vs : w_as, wb, ir_lo, ir_hi, tol, dr_l, dr_h, d_close)
@@ -1320,7 +1333,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     string c = array.get(bt_scls, 0)
     bool cls_ok = c == "" or kind >= 10 or (c == "external" ? bt_ext : bt_int)   // H4 FVG / Daily engulfing: no H4 class
     // H4 FVG: no buy / sell, just the pair and the message (for tracking liquidity)
-    string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
+    string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 11 ? syminfo.ticker + "\nDaily engulfing candle has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
     string tag  = c == "" or kind >= 10 ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
     string detail = array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
          + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
@@ -1334,7 +1347,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
             label.delete(array.get(bt_last, 0))
         label glb = na
         if circles
-            glb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=bt_grey_col, size=size.small, tooltip=gtxt + "\n" + detail)
+            glb := label.new(bar_index, bull ? low : high, kind >= 10 ? "•" : f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=bt_grey_col, size=size.small, tooltip=gtxt + "\n" + detail)
         else
             glb := label.new(bar_index, bull ? low : high, gtxt, style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
                  textcolor=bt_txt_col, size=size.small)
@@ -1342,13 +1355,13 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
         array.set(bt_info, 0, gtxt + "\n" + detail)
         array.set(bt_info, 1, str.format_time(time, "dd MMM yyyy HH:mm"))
     if tf_ok and on and cls_ok and time >= bt_from
-        string atxt = (kind == 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
-        color  acol = kind == 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col
+        string atxt = (kind >= 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
+        color  acol = kind >= 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col   // markers: no buy / sell colour
         if bt_latest
             label.delete(array.get(bt_last, 0))
         label alb = na
         if circles
-            alb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
+            alb := label.new(bar_index, bull ? low : high, kind >= 10 ? "•" : f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
         else
             alb := label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
                  textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail)
@@ -1412,6 +1425,19 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
                 bo_wk_src     := f_wsrc_name(wk_src, wk_kind)
                 bo_wk_src_lvl := wk_src_lvl
                 bo_wk_cls     := w_cls
+                if wk_src == "post_breakout_fvg" or wk_src == "inside_fvg"
+                    bool  vb  = wk_dir == "bullish"
+                    array<float> vhs = vb ? w_bf_hi : w_sf_hi
+                    array<float> vls = vb ? w_bf_lo : w_sf_lo
+                    int vk = array.size(vhs) - 1
+                    while vk >= 0
+                        if math.abs(array.get(vhs, vk) - math.max(wk_src_lvl, wk_src_lvl2)) <= pip * 0.1 and math.abs(array.get(vls, vk) - math.min(wk_src_lvl, wk_src_lvl2)) <= pip * 0.1
+                            f_wfdrop(vhs, vls, vb ? w_bf_x : w_sf_x, vb ? w_bf_p : w_sf_p, vk)
+                        vk -= 1
+                else if not na(wk_src_lvl)
+                    array.push(w_used, wk_src_lvl)
+                if array.size(w_used) > 300
+                    array.shift(w_used)
                 if (wk_src == "post_breakout_fvg" or wk_src == "inside_fvg") and not na(wk_src_lvl2)
                     bool  ubull = wk_dir == "bullish"
                     float uh = math.max(wk_src_lvl, wk_src_lvl2)
