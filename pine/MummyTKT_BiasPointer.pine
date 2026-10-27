@@ -248,6 +248,9 @@ bool   bt_latest   = input.bool(true,  "Keep only the latest alert label (clean 
 bool   bt_grey     = input.bool(true,  "Show alerts that are not counted (grey, with the reason)", group=G_BT,
      tooltip="Alerts before the start date, Internal ones while Internal is off, and types switched off above.")
 bool   bt_table    = input.bool(true,  "Show count table", group=G_BT)
+string bt_marks    = input.string("Circle + info table", "Alert marks on the chart", options=["Circle + info table", "Full labels"], group=G_BT,
+     tooltip="Circle + info table: each alert is a small circle above the candle that triggered it (hover it for the details); the alert text and the status go in a table at the side, so the candles stay clear. Full labels: the old text labels on the chart.")
+string bt_info_pos = input.string("Middle right", "Info table position", options=["Top right", "Middle right", "Bottom right", "Top left", "Middle left", "Bottom left"], group=G_BT)
 color  bt_buy_col  = input.color(#00C853, "Buy label", group=G_BT, inline="btc")
 color  bt_sell_col = input.color(#FF1744, "Sell label", group=G_BT, inline="btc")
 color  bt_txt_col  = input.color(color.white, "Label text", group=G_BT, inline="btc")
@@ -309,6 +312,8 @@ var int bt_t0 = time
 // + H4 breakout, or back in line); continuations follow it, like the server
 var bt_scls = array.from("")
 var bt_last = array.new<label>(1, na)   // the alert label currently on the chart
+// Info table: the latest alert's text and when it fired (circle mode keeps the candles clear)
+var bt_info = array.from("", "")
 // The External H4 level of the current Daily reaction: the latest H4 A (buys) /
 // V (sells) when the reaction started, i.e. formed BEFORE it
 var float bt_ext_a = na
@@ -1294,23 +1299,33 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     // H4 FVG: no buy / sell, just the pair and the message (for tracking liquidity)
     string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
     string tag  = c == "" or kind >= 10 ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
+    string detail = array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
+         + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
+         + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
+         + "\nEntry = next candle's open"
+    bool circles = bt_marks == "Circle + info table"
     if tf_ok and bt_grey and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
+        string gtxt = "Not counted: " + why + "\n" + head + tag + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, "Not counted: " + why + "\n" + head + tag + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : ""),
-             style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
-             textcolor=bt_txt_col, size=size.small))
+        array.set(bt_last, 0, circles
+             ? label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=bt_grey_col, size=size.tiny, tooltip=gtxt + "\n" + detail)
+             : label.new(bar_index, bull ? low : high, gtxt, style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
+                 textcolor=bt_txt_col, size=size.small))
+        array.set(bt_info, 0, gtxt + "\n" + detail)
+        array.set(bt_info, 1, str.format_time(time, "dd MMM yyyy HH:mm"))
     if tf_ok and on and cls_ok and time >= bt_from
+        string atxt = (kind == 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
+        color  acol = kind == 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, label.new(bar_index, bull ? low : high, (kind == 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : ""),
-             style=bull ? label.style_label_up : label.style_label_down, color=kind == 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col,
-             textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small,
-             tooltip=array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
-             + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
-             + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
-             + "\nEntry = next candle's open"))
+        array.set(bt_last, 0, circles
+             ? label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=acol, size=size.tiny, tooltip=atxt + "\n" + detail)
+             : label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
+                 textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail))
+        array.set(bt_info, 0, atxt + "\n" + detail)
+        array.set(bt_info, 1, str.format_time(time, "dd MMM yyyy HH:mm"))
         array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
         array.set(bt_cnt, bull ? 8 : 9, array.get(bt_cnt, bull ? 8 : 9) + 1)
     tf_ok and on and cls_ok and time >= bt_from
@@ -2537,7 +2552,26 @@ if not _is_4h
 var label _state_lbl = na
 label.delete(_state_lbl)
 string _tip = "bo=" + str.tostring(bo_level, "#.#####") + " (" + f_layer_name(bo_layer) + ") range=" + str.tostring(bo_opp, "#.#####") + " D.A=" + str.tostring(a_lvl, "#.#####") + " D.V=" + str.tostring(v_lvl, "#.#####") + " D.OC=" + str.tostring(pb_oc_lvl, "#.#####") + " H4.A=" + str.tostring(h4_a_lvl, "#.#####") + " H4.V=" + str.tostring(h4_v_lvl, "#.#####") + " H4.BK=" + str.tostring(h4_breaker_lvl, "#.#####") + " H4.OC=" + str.tostring(h4c_oc_lvl, "#.#####")
-_state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=bt_state_txt, size=size.small, tooltip=_tip)
+if bt_marks == "Full labels"
+    _state_lbl := label.new(bar_index, high, _state_txt + _wk_txt, style=label.style_label_down, color=_lbl_col, textcolor=bt_state_txt, size=size.small, tooltip=_tip)
+
+// ── Info table: status + the latest alert, at the side so the candles stay clear ─
+f_info_pos(string p) =>
+    switch p
+        "Top right"    => position.top_right
+        "Bottom right" => position.bottom_right
+        "Top left"     => position.top_left
+        "Middle left"  => position.middle_left
+        "Bottom left"  => position.bottom_left
+        => position.middle_right
+var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 4, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
+if barstate.islast and bt_marks == "Circle + info table"
+    table.cell(bt_info_tbl, 0, 0, "Status", text_color=color.gray, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(bt_info_tbl, 0, 1, str.replace_all(str.replace_all(_state_txt + _wk_txt, " · ", "\n"), " | ", "\n"),
+         text_color=bt_state_txt, bgcolor=color.new(_lbl_col, 40), text_size=size.small, text_halign=text.align_left)
+    if _is_4h and array.get(bt_info, 0) != ""
+        table.cell(bt_info_tbl, 0, 2, "Latest alert · " + array.get(bt_info, 1), text_color=color.gray, text_size=size.tiny, text_halign=text.align_left)
+        table.cell(bt_info_tbl, 0, 3, array.get(bt_info, 0), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
 var table bt_tbl = table.new(position.top_right, 2, 14, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
