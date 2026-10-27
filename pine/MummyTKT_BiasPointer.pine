@@ -66,7 +66,8 @@
 //     it, moved by each deeper Daily candle while it is the reaction); a return
 //     to it uses that level, not the H4 A/V formed at the return.
 //   • An H4 breakout from an FVG uses up the FVGs above it (below, for sells)
-//     that price went through.
+//     that price went through. The FVG itself can't start a new reaction until
+//     price has left the gap, and a return then takes a fresh External level.
 //
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
@@ -880,6 +881,11 @@ var array<int>   d_sf_xb = array.new<int>()
 // below doesn't count). A reaction already running there is not ended by this.
 var array<bool>  d_bf_p  = array.new<bool>()
 var array<bool>  d_sf_p  = array.new<bool>()
+// The Daily FVG an H4 breakout just confirmed from: it can't start a new reaction
+// until price has left the gap (a candle entirely outside it). Its External level
+// is cleared, so a later return takes a fresh one from that return.
+var float  fz_used_hi = na
+var float  fz_used_lo = na
 // H4 FVG after an H4 breakout in line with the Daily: checked on the next candle
 var int    h4f_bar  = na
 var bool   h4f_bull = false
@@ -1377,6 +1383,8 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     array.clear(pb_ocs)
     retest_lvl := na
     retest_lvl2 := na
+    fz_used_hi := na
+    fz_used_lo := na
     just_broke:= true
     if not bt_same
         h4_bo_fired           := false
@@ -1537,7 +1545,7 @@ if new_daily and not na(dg_h3) and not na(dg_l1)
 // Deepest Daily FVG this H4 candle's wick enters. inside: the whole gap sits inside
 // the range that was just broken; otherwise the gap reaches beyond the Daily Breaker
 // (after the breakout, incl. the breakout candle's own gap). Returns its index, or -1.
-f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
+f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool inside, float opp, float b_lo, float b_hi, float uh, float ul) =>
     int   best = -1
     float bv   = na
     if array.size(his) > 0
@@ -1547,7 +1555,8 @@ f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool i
             bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? H > b_hi : L < b_lo)
             bool touched = low <= H and high >= L
             float edge   = bull ? L : H
-            if in_pos and touched and not array.get(ps, i) and (na(bv) or (bull ? edge < bv : edge > bv))
+            bool used    = not na(uh) and math.abs(H - uh) <= pip * 0.1 and math.abs(L - ul) <= pip * 0.1
+            if in_pos and touched and not used and not array.get(ps, i) and (na(bv) or (bull ? edge < bv : edge > bv))
                 bv   := edge
                 best := i
     best
@@ -1859,8 +1868,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     array<float> fz_x   = fz_bull ? d_bf_x  : d_sf_x
     array<int>   fz_xb  = fz_bull ? d_bf_xb : d_sf_xb
     array<bool>  fz_p   = fz_bull ? d_bf_p  : d_sf_p
-    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, false, bo_opp, band_lo, band_hi) : -1
-    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
+    if not na(fz_used_hi) and (high < fz_used_lo or low > fz_used_hi)
+        fz_used_hi := na
+        fz_used_lo := na
+    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, false, bo_opp, band_lo, band_hi, fz_used_hi, fz_used_lo) : -1
+    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, true,  bo_opp, band_lo, band_hi, fz_used_hi, fz_used_lo) : -1
 
     // ── Backtest: first H4 touch of each Daily level since it formed ──────
     bool bt_bull = bo_dir == "bullish"
@@ -2150,6 +2162,13 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brk) + '}',
                           alert.freq_once_per_bar)
+            if retest_src == "post_breakout_fvg" or retest_src == "inside_fvg"
+                fz_used_hi := math.max(retest_lvl, retest_lvl2)
+                fz_used_lo := math.min(retest_lvl, retest_lvl2)
+                int uk0 = f_fvg_idx(fz_his, fz_los, fz_used_hi, fz_used_lo)
+                if uk0 >= 0
+                    array.set(fz_x, uk0, na)
+                    array.set(fz_xb, uk0, na)
             if (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg") and array.size(fz_his) > 0
                 float uh = math.max(retest_lvl, retest_lvl2)
                 float ul = math.min(retest_lvl, retest_lvl2)
@@ -2212,6 +2231,13 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brkv) + '}',
                           alert.freq_once_per_bar)
+            if retest_src == "post_breakout_fvg" or retest_src == "inside_fvg"
+                fz_used_hi := math.max(retest_lvl, retest_lvl2)
+                fz_used_lo := math.min(retest_lvl, retest_lvl2)
+                int uk0 = f_fvg_idx(fz_his, fz_los, fz_used_hi, fz_used_lo)
+                if uk0 >= 0
+                    array.set(fz_x, uk0, na)
+                    array.set(fz_xb, uk0, na)
             if (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg") and array.size(fz_his) > 0
                 float uh = math.max(retest_lvl, retest_lvl2)
                 float ul = math.min(retest_lvl, retest_lvl2)
@@ -2584,7 +2610,7 @@ var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 4, bgcolor=bt_tbl_
 if barstate.islast and bt_marks == "Circle + info table"
     table.cell(bt_info_tbl, 0, 0, "Status", text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
     table.cell(bt_info_tbl, 0, 1, str.replace_all(str.replace_all(_state_txt + _wk_txt, " · ", "\n"), " | ", "\n"),
-         text_color=bt_state_txt, bgcolor=color.new(_lbl_col, 40), text_size=size.small, text_halign=text.align_left)
+         text_color=bt_tbl_txt, bgcolor=color.new(_lbl_col, 65), text_size=size.small, text_halign=text.align_left)
     if _is_4h and array.get(bt_info, 0) != ""
         table.cell(bt_info_tbl, 0, 2, "Latest alert · " + array.get(bt_info, 1), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
         table.cell(bt_info_tbl, 0, 3, array.get(bt_info, 0), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
