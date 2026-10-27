@@ -697,7 +697,10 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
+// book "backtest" (Backtest page) or "live" (Trading Journal): two separate sets of trades
+export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: 'backtest' | 'live' }) {
+  const live = book === 'live'
+  const bq = `?book=${book}`
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -716,12 +719,12 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
   useEffect(() => {
     setPair(cleanPair(load('mbp_et_pair', 'XAUUSD')) || 'XAUUSD')
     setAlertType(load('mbp_et_alert', 'Origin'))
-    fetch(`${API_BASE}/api/entry-tests`, { headers: hdrs() })
+    fetch(`${API_BASE}/api/entry-tests${bq}`, { headers: hdrs() })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then((d: Trade[]) => setTrades(d))   // every trade starts folded; tap one to open it
       .catch(() => setErr('Could not load your entry tests.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [bq])
 
   function body(t: Omit<Trade, 'id'>) { return JSON.stringify({
     trade_date: t.trade_date, instrument: t.instrument, direction: t.direction,
@@ -733,7 +736,7 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
     if (!p) return
     save('mbp_et_pair', p)
     save('mbp_et_alert', alertType)
-    const r = await fetch(`${API_BASE}/api/entry-tests`, {
+    const r = await fetch(`${API_BASE}/api/entry-tests${bq}`, {
       method: 'POST', headers: hdrs(),
       body: body({ trade_date: date, instrument: p, direction: dir, alert_type: alertType, notes: '', results: {}, images: {} }),
     })
@@ -770,9 +773,9 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
   }, [flush])
 
   const removeAll = async () => {
-    const typed = prompt(`This deletes ALL ${trades.length} Entry Tester trades, with their ticks, notes and chart images. It can't be undone.\n\nType DELETE to confirm.`)
+    const typed = prompt(`This deletes ALL ${trades.length} ${live ? 'live Entry Journal' : 'Entry Tester'} trades, with their ticks, notes and chart images. It can't be undone.\n\nType DELETE to confirm.`)
     if (typed !== 'DELETE') return
-    const r = await fetch(`${API_BASE}/api/entry-tests/delete-all`, { method: 'POST', headers: hdrs(), body: JSON.stringify({ confirm: 'DELETE' }) })
+    const r = await fetch(`${API_BASE}/api/entry-tests/delete-all${bq}`, { method: 'POST', headers: hdrs(), body: JSON.stringify({ confirm: 'DELETE' }) })
     if (r.ok) { setTrades([]); setOpenId(null); setErr('') }
     else setErr('Could not delete the trades. Try again.')
   }
@@ -795,15 +798,15 @@ export default function EntryTester({ tabs }: { tabs?: React.ReactNode }) {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      <TopBar title="Entry Tester" />
+      <TopBar title={live ? 'Entry Journal' : 'Entry Tester'} />
       <main style={{ flex: 1, width: '100%', padding: '20px 24px', maxWidth: 1100 }}>
         {tabs}
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FlaskConical size={20} color="var(--accent)" /> Entry Tester
+            <FlaskConical size={20} color="var(--accent)" /> {live ? 'Entry Journal (live)' : 'Entry Tester'}
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-            Only you see this. For each trade, tap how every entry pattern did on that same trade. Each tap saves.
+            Only you see this. {live ? 'Your live trades, kept apart from the backtest. ' : ''}For each trade, tap how every entry pattern did on that same trade. Each tap saves.
           </p>
         </div>
 

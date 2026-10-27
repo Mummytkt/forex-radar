@@ -525,6 +525,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tests_user ON entry_tests (user_id, trade_date DESC)")
     elif "exit_date" not in {row[1] for row in conn.execute("PRAGMA table_info(entry_tests)").fetchall()}:
         conn.execute("ALTER TABLE entry_tests ADD COLUMN exit_date TEXT")
+    # Which journal a trade belongs to: the Backtest page's Entry Tester or the live Trading Journal's
+    if "book" not in {row[1] for row in conn.execute("PRAGMA table_info(entry_tests)").fetchall()}:
+        conn.execute("ALTER TABLE entry_tests ADD COLUMN book TEXT NOT NULL DEFAULT 'backtest'")
     # Entry Tester screenshots (files live in <db dir>/entry_images): one per POI per trade
     if "entry_test_images" not in existing:
         conn.execute("""

@@ -6,6 +6,9 @@ from). On that same trade the owner ticks how each entry pattern did: win,
 loss, breakeven or no entry (the pattern never formed), plus the RR it made.
 The page then compares the patterns across every trade. Subscribers' Backtest
 Journal is separate and unchanged.
+
+Two books, kept apart: "backtest" (the Backtest page) and "live" (the Trading
+Journal page, for trades actually taken). List, add and delete-all take ?book=.
 """
 
 from __future__ import annotations
@@ -54,6 +57,13 @@ _LEGACY |= {f"{m}_{p}" for m in ("direct", "h1_cisd", "m15_cisd", "m5_cisd", "h1
                                  "h1_smc", "m5_smc", "m15_smc", "h4_3cr", "h2_3cr") for p in ("fvg", "3cr")}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
+BOOKS = ("backtest", "live")
+
+
+def _book(book: str) -> str:
+    if book not in BOOKS:
+        raise HTTPException(400, "book must be backtest or live")
+    return book
 
 
 @contextmanager
@@ -158,23 +168,24 @@ def entry_types(request: Request):
 
 
 @router.get("/entry-tests")
-def list_trades(request: Request):
+def list_trades(request: Request, book: str = "backtest"):
     u = require_owner(request)
     with _db(request) as conn:
         rows = conn.execute(
-            "SELECT * FROM entry_tests WHERE user_id = ? ORDER BY trade_date DESC, id DESC", (u["id"],)).fetchall()
+            "SELECT * FROM entry_tests WHERE user_id = ? AND book = ? ORDER BY trade_date DESC, id DESC",
+            (u["id"], _book(book))).fetchall()
         imgs = _images_by_trade(conn, u["id"])
     return [_row(r, imgs.get(r["id"])) for r in rows]
 
 
 @router.post("/entry-tests")
-def create_trade(request: Request, body: TradeBody):
+def create_trade(request: Request, body: TradeBody, book: str = "backtest"):
     u = require_owner(request)
     vals = _clean(body)
     with _db(request) as conn:
         cur = conn.execute(
-            """INSERT INTO entry_tests (trade_date, instrument, direction, alert_type, notes, results_json, exit_date, user_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", vals + (u["id"],))
+            """INSERT INTO entry_tests (trade_date, instrument, direction, alert_type, notes, results_json, exit_date, user_id, book)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", vals + (u["id"], _book(book)))
         row = conn.execute("SELECT * FROM entry_tests WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row(row)
 
@@ -200,16 +211,19 @@ class DeleteAllBody(BaseModel):
 
 
 @router.post("/entry-tests/delete-all")
-def delete_all_trades(request: Request, body: DeleteAllBody):
-    """Start afresh: delete every Entry Tester trade of the owner, with its images.
-    The page asks the owner to type DELETE; the server checks it too."""
+def delete_all_trades(request: Request, body: DeleteAllBody, book: str = "backtest"):
+    """Start afresh: delete every Entry Tester trade of the owner in one book, with
+    its images. The page asks the owner to type DELETE; the server checks it too."""
     u = require_owner(request)
     if body.confirm != "DELETE":
         raise HTTPException(400, "Type DELETE to confirm")
+    bk = _book(book)
     with _db(request) as conn:
-        for img in conn.execute("SELECT id, file_name FROM entry_test_images WHERE user_id = ?", (u["id"],)).fetchall():
+        for img in conn.execute(
+                """SELECT i.id, i.file_name FROM entry_test_images i JOIN entry_tests t ON t.id = i.test_id
+                   WHERE i.user_id = ? AND t.book = ?""", (u["id"], bk)).fetchall():
             _drop_image(request, conn, img)
-        n = conn.execute("DELETE FROM entry_tests WHERE user_id = ?", (u["id"],)).rowcount
+        n = conn.execute("DELETE FROM entry_tests WHERE user_id = ? AND book = ?", (u["id"], bk)).rowcount
     return {"ok": True, "deleted": n}
 
 

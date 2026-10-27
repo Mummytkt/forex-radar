@@ -104,6 +104,16 @@ check("ticked entry results are saved (a loss keeps no RR)",
 check("an unknown entry type is refused", c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={
     "trade_date": "2020-01-08", "instrument": "XAUUSD", "direction": "buy", "results": {"bogus": {"outcome": "win"}}}).status_code == 400)
 check("the owner's entry tests list back", [t["id"] for t in c.get("/api/entry-tests", headers=H(owner)).json()] == [_et["id"]])
+# The live Entry Journal (Trading Journal page) is a separate book
+_lv = c.post("/api/entry-tests?book=live", headers=H(owner), json={
+    "trade_date": "2026-10-20", "instrument": "EURUSD", "direction": "sell"}).json()
+check("live Entry Journal trades stay out of the backtest Entry Tester and back",
+      [t["id"] for t in c.get("/api/entry-tests?book=live", headers=H(owner)).json()] == [_lv["id"]]
+      and [t["id"] for t in c.get("/api/entry-tests", headers=H(owner)).json()] == [_et["id"]])
+check("an unknown book is refused", c.get("/api/entry-tests?book=demo", headers=H(owner)).status_code == 400)
+check("delete-all clears only its own book",
+      c.post("/api/entry-tests/delete-all?book=live", headers=H(owner), json={"confirm": "DELETE"}).json()["deleted"] == 1
+      and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 1)
 check("a subscriber can't touch the owner's entry test",
       c.delete(f"/api/entry-tests/{_et['id']}", headers=H(ta)).status_code == 403
       and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 1)
