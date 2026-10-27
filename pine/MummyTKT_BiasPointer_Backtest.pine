@@ -210,7 +210,7 @@ string bt_deng_mode = input.string("Wick", "covers", options=["Wick", "Body only
 
 color  bt_engh_col = input.color(color.new(#4FC3F7, 0), "H4 engulfing box", group=G_ENG, inline="ebh")
 int    eng_n_h     = input.int(1, "keep the last", minval=1, maxval=20, group=G_ENG, inline="ebh",
-     tooltip="H4 engulfings are boxed on the 4H chart and every lower timeframe (1H, 15m, ...), with an 'H4' pointer under the box. Below 4H the same boxes as on the 4H chart are shown (the alerted ones: after the Origin, H4 in line). The 'covers' choice decides the box: Wick = the two candles' wicks, Body only = their bodies, Both = wicks when that engulfing covered the wick, bodies when it covered the body only. Keep the last = how many of the most recent stay on the chart.")
+     tooltip="H4 engulfings are boxed on the 4H chart and every lower timeframe (1H, 15m, ...), with an 'H4' pointer under the box. Below 4H the same boxes as on the 4H chart are shown (the alerted ones: after the Origin, H4 in line). The box marks the covered candle (the bearish one in a bullish engulfing): Wick = its wick, for engulfings that close beyond that wick; Body only = its body, for every engulfing (one that covers the wick covers the body too); Both = every engulfing, the wick when it was covered, else the body. Keep the last = how many of the most recent stay on the chart.")
 color  bt_engd_col = input.color(color.new(#FFD54F, 0), "Daily engulfing box", group=G_ENG, inline="ebd")
 int    eng_n_d     = input.int(1, "keep the last", minval=1, maxval=20, group=G_ENG, inline="ebd",
      tooltip="Daily engulfings are boxed on the Daily chart and every lower timeframe (4H, 1H, ...), with a 'D' pointer under the box. The 'covers' choice decides the box, as for H4. Keep the last = how many of the most recent stay on the chart.")
@@ -1420,8 +1420,8 @@ f_eng_draw(bool daily, int t1, int t2, float top, float bot, string tip) =>
     while array.size(ls) > keep
         label.delete(array.shift(ls))
 
-// The box per the "covers" setting: Wick = wicks, Body only = bodies, Both = wicks
-// when this engulfing covered the wick, bodies when it covered the body only
+// The box marks the covered candle per the "covers" setting: Wick = its wick, Body
+// only = its body, Both = its wick when this engulfing covered it, else its body
 f_eng_wickbox(string mode, bool covered_wick) =>
     mode == "Wick" ? true : mode == "Body only" ? false : covered_wick
 
@@ -1576,13 +1576,13 @@ if new_daily and not na(bo_dir) and not na(d_close2) and not na(dw_h2)
     if d_eng
         bool  d_eng_wick = deb ? d_close > dw_h2 : d_close < dw_l2
         float d_eng_lvl  = d_eng_wick ? (deb ? dw_h2 : dw_l2) : d_open2
-        if bt_deng_mode == "Both" or (bt_deng_mode == "Wick") == d_eng_wick
+        if bt_deng_mode != "Wick" or d_eng_wick
             f_btlbl(deb, 11, "", d_eng_lvl, bo_level, d_eng_wick ? "Covers the previous Daily candle's wick" : "Covers the previous Daily candle's body only")
             // the box shows on the Daily chart and every lower timeframe
             if bt_show and bt_dengulf and time >= bt_from and not na(dw_t2) and timeframe.in_seconds() <= 86400
                 bool  ewb    = f_eng_wickbox(bt_deng_mode, d_eng_wick)
-                float eb_top = ewb ? math.max(dr_h, dw_h2) : math.max(d_open, d_close, d_open2, d_close2)
-                float eb_bot = ewb ? math.min(dr_l, dw_l2) : math.min(d_open, d_close, d_open2, d_close2)
+                float eb_top = ewb ? dw_h2 : math.max(d_open2, d_close2)   // the covered Daily candle
+                float eb_bot = ewb ? dw_l2 : math.min(d_open2, d_close2)
                 f_eng_draw(true, dw_t2, time[1], eb_top, eb_bot, syminfo.ticker + "\nDaily engulfing candle has formed\n" + (d_eng_wick ? "Covers the previous Daily candle's wick" : "Covers the previous Daily candle's body only"))
         if barstate.isrealtime
             alert(f_hdrw("H4_CONTINUATION")
@@ -2475,10 +2475,10 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
         bool eng = ocb ? (close[1] < open[1] and close > open and open <= close[1] and close > open[1])
                        : (close[1] > open[1] and close < open and open >= close[1] and close < open[1])
         bool eng_wick = ocb ? close > high[1] : close < low[1]
-        if eng and (bt_eng_mode == "Both" or (bt_eng_mode == "Wick") == eng_wick)
+        if eng and (bt_eng_mode != "Wick" or eng_wick)
             bool  hwb    = f_eng_wickbox(bt_eng_mode, eng_wick)
-            float hb_top = hwb ? math.max(high, high[1]) : math.max(open, close, open[1], close[1])
-            float hb_bot = hwb ? math.min(low, low[1]) : math.min(open, close, open[1], close[1])
+            float hb_top = hwb ? high[1] : math.max(open[1], close[1])   // the covered H4 candle
+            float hb_bot = hwb ? low[1] : math.min(open[1], close[1])
             string htip = (ocb ? "BUY" : "SELL") + " · H4 engulfing\n" + (eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
             if f_btlbl(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
                 f_eng_draw(false, time[1], time, hb_top, hb_bot, htip)
