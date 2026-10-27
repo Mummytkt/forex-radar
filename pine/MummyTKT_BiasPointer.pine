@@ -2739,7 +2739,7 @@ f_info_pos(string p) =>
         "Middle left"  => position.middle_left
         "Bottom left"  => position.bottom_left
         => position.middle_right
-var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 6, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
+var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 4, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
 if barstate.islast and bt_marks == "Circle + info table"
     table.cell(bt_info_tbl, 0, 0, "Status", text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
     table.cell(bt_info_tbl, 0, 1, str.replace_all(str.replace_all(_state_txt + _wk_txt, " · ", "\n"), " | ", "\n"),
@@ -2747,9 +2747,6 @@ if barstate.islast and bt_marks == "Circle + info table"
     if _is_4h and array.get(bt_info, 0) != ""
         table.cell(bt_info_tbl, 0, 2, "Latest confirmation alert · " + array.get(bt_info, 1), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
         table.cell(bt_info_tbl, 0, 3, array.get(bt_info, 0), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
-    if _is_4h and array.get(bt_info, 2) != ""
-        table.cell(bt_info_tbl, 0, 4, "Latest H4 FVG · " + array.get(bt_info, 3), text_color=color.new(bt_tbl_txt, 30), text_size=size.tiny, text_halign=text.align_left)
-        table.cell(bt_info_tbl, 0, 5, array.get(bt_info, 2), text_color=color.new(bt_tbl_txt, 30), text_size=size.tiny, text_halign=text.align_left)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
 // The count table sits top right, or bottom right when the info table is there
