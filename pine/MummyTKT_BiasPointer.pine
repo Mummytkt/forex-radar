@@ -1319,7 +1319,8 @@ f_bt_lvtxt(float v) =>
 f_bt_src(string s) =>
     s == "daily_breaker" ? "Daily Breaker" : s == "post_breakout_oc" ? "Daily OC after the breakout" : s == "post_breakout_v" ? "Daily V/A-shape after the breakout" : s == "inside_range" ? "Daily level inside the broken range" : s == "post_breakout_fvg" ? "Daily FVG after the breakout" : s == "inside_fvg" ? "Daily FVG inside the range" : "-"
 
-// The small mark on the candle that triggered an alert
+// The small mark on the candle that triggered an alert (every alert, incl. the H4 FVG and
+// Daily engulfing notifications: their arrow points the Daily direction, in their own colour)
 f_mark(bool bull) =>
     bt_mark_shape == "Dot" ? "•" : bull ? "▲" : "▼"
 
@@ -1347,7 +1348,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
             label.delete(array.get(bt_last, 0))
         label glb = na
         if circles
-            glb := label.new(bar_index, bull ? low : high, kind >= 10 ? "•" : f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=bt_grey_col, size=size.small, tooltip=gtxt + "\n" + detail)
+            glb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=bt_grey_col, size=size.small, tooltip=gtxt + "\n" + detail)
         else
             glb := label.new(bar_index, bull ? low : high, gtxt, style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
                  textcolor=bt_txt_col, size=size.small)
@@ -1361,7 +1362,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
             label.delete(array.get(bt_last, 0))
         label alb = na
         if circles
-            alb := label.new(bar_index, bull ? low : high, kind >= 10 ? "•" : f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
+            alb := label.new(bar_index, bull ? low : high, f_mark(bull), yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
         else
             alb := label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
                  textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail)
