@@ -32,7 +32,7 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'alertExternal', label: 'External breakouts', desc: 'Bias confirmed by an H4 close beyond the last structure formed before price reached the daily level. The standard alert.' },
   { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level. Off by default. While it is off you also get no continuations of an Internal setup.' },
   { key: 'contInline', group: 'Continuations', label: 'H4 breakout in line', desc: 'A new H4 breakout in the Daily direction while H4 is in line with the Daily.' },
-  { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'Price comes back to the H4 Breaker, touches it exactly and closes beyond it.' },
+  { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'The first time price comes back to the H4 Breaker, touches it exactly and closes beyond it. Only the first touch counts; after that the Breaker is used.' },
   { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
   { key: 'contRealign', label: 'Daily reaction + H4 breakout', desc: 'Every fresh reaction at a Daily level followed by an H4 breakout: while H4 is aligned, and when it brings H4 back in line.' },
   { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, in the Daily direction. Choose which kind below.' },

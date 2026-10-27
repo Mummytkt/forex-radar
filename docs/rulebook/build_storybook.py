@@ -516,6 +516,7 @@ def build():
              ("Golden Bell", "Origin alert"),
              ("Encore bell", "continuation alert (in-line breakout, Breaker, OC, engulfing, Daily reaction + H4 breakout, back in line)"),
              ("Little gap bell", "H4 FVG after breakout (liquidity marker)"),
+             ("A used spot", "a level that already rang its bell: only the first touch counts, Pip never bounces there for a bell again"),
              ("Papa's big hug", "Daily engulfing: a Daily candle covering the one before it, in Papa's direction"),
              ("Castle wall jumped, same way", "same-direction Daily breakout: H4 keeps riding, no new Origin"),
              ("Wobble", "H4 out of line"),

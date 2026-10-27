@@ -37,6 +37,13 @@
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
 //
+// v11 rule (2026-10-27): a used level is used. Only the first touch of a level
+//   counts: a Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4
+//   confirmation never starts another reaction; the H4 Breaker and H4 OCs are
+//   used by their first touch (alert only if that touch is a rejection). The
+//   one exception: while price reacts inside a Daily FVG, a deeper Daily candle
+//   moves the External start to that candle (before the alert).
+//
 // v11 display: alerts are small arrows / dots on the triggering candle (hover for the
 //   details); the alert text and the status sit in an info table at the side
 //   ("Alert marks on the chart" = Full labels brings the old labels back).
@@ -66,8 +73,7 @@
 //     it, moved by each deeper Daily candle while it is the reaction); a return
 //     to it uses that level, not the H4 A/V formed at the return.
 //   • An H4 breakout from an FVG uses up the FVGs above it (below, for sells)
-//     that price went through. The FVG itself can't start a new reaction until
-//     price has left the gap, and a return then takes a fresh External level.
+//     that price went through, and the FVG itself.
 //
 // The label sits on the candle that CLOSED to confirm: entry = next candle's open.
 // Daily data is read from completed candles only, so history doesn't repaint.
@@ -181,7 +187,7 @@ bool   bt_origin   = input.bool(true,  "Origin — BUY / SELL CONFIRMED", group=
 bool   bt_react    = input.bool(true,  "Daily reaction + H4 breakout (after the Origin)", group=G_ALERT)
 bool   bt_realign  = input.bool(true,  "H4 back in line", group=G_ALERT)
 bool   bt_inline   = input.bool(true,  "H4 breakout in line", group=G_ALERT)
-bool   bt_breaker  = input.bool(true,  "H4 Breaker (Origin + retests)", group=G_ALERT)
+bool   bt_breaker  = input.bool(true,  "H4 Breaker (first touch)", group=G_ALERT)
 bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=G_ALERT)
 bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=G_ALERT,
      tooltip="After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line: if the NEXT H4 candle completes an FVG (buys: its low stays above the high of the candle before the breakout), one alert. Checked once per breakout.")
@@ -881,11 +887,9 @@ var array<int>   d_sf_xb = array.new<int>()
 // below doesn't count). A reaction already running there is not ended by this.
 var array<bool>  d_bf_p  = array.new<bool>()
 var array<bool>  d_sf_p  = array.new<bool>()
-// The Daily FVG an H4 breakout just confirmed from: it can't start a new reaction
-// until price has left the gap (a candle entirely outside it). Its External level
-// is cleared, so a later return takes a fresh one from that return.
-var float  fz_used_hi = na
-var float  fz_used_lo = na
+// Used Daily levels: a Daily level (Breaker, OC, V/A-shape) that has given its
+// H4 confirmation never starts a reaction again; a used Daily FVG is removed.
+var array<float> d_used = array.new<float>()
 // H4 FVG after an H4 breakout in line with the Daily: checked on the next candle
 var int    h4f_bar  = na
 var bool   h4f_bull = false
@@ -1383,8 +1387,6 @@ if not na(s_bcnt) and s_bcnt > 0 and s_bcnt != last_bcnt
     array.clear(pb_ocs)
     retest_lvl := na
     retest_lvl2 := na
-    fz_used_hi := na
-    fz_used_lo := na
     just_broke:= true
     if not bt_same
         h4_bo_fired           := false
@@ -1542,10 +1544,17 @@ if new_daily and not na(dg_h3) and not na(dg_l1)
     if dg_h1 < dg_l3
         f_fvg_keep(d_sf_hi, d_sf_lo, d_sf_x, d_sf_xb, d_sf_p, dg_l3, dg_h1)
 
+f_used(float L) =>
+    bool found = false
+    for x in d_used
+        if math.abs(x - L) <= pip * 0.1
+            found := true
+    found
+
 // Deepest Daily FVG this H4 candle's wick enters. inside: the whole gap sits inside
 // the range that was just broken; otherwise the gap reaches beyond the Daily Breaker
 // (after the breakout, incl. the breakout candle's own gap). Returns its index, or -1.
-f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool inside, float opp, float b_lo, float b_hi, float uh, float ul) =>
+f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool inside, float opp, float b_lo, float b_hi) =>
     int   best = -1
     float bv   = na
     if array.size(his) > 0
@@ -1555,8 +1564,7 @@ f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool i
             bool in_pos  = inside ? (not na(opp) and (bull ? (L > opp and H < b_lo) : (H < opp and L > b_hi))) : (bull ? H > b_hi : L < b_lo)
             bool touched = low <= H and high >= L
             float edge   = bull ? L : H
-            bool used    = not na(uh) and math.abs(H - uh) <= pip * 0.1 and math.abs(L - ul) <= pip * 0.1
-            if in_pos and touched and not used and not array.get(ps, i) and (na(bv) or (bull ? edge < bv : edge > bv))
+            if in_pos and touched and not array.get(ps, i) and (na(bv) or (bull ? edge < bv : edge > bv))
                 bv   := edge
                 best := i
     best
@@ -1571,7 +1579,7 @@ f_ir_pick(array<float> lv, bool bull, float opp, float b_lo, float b_hi, float t
             bool inside  = bull ? (L > opp and L < b_lo) : (L < opp and L > b_hi)
             bool touched = low <= L and high >= L
             bool held    = bull ? close >= L - t : close <= L + t
-            if inside and touched and held and (na(best) or (bull ? L < best : L > best))
+            if inside and touched and held and not f_used(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
@@ -1585,7 +1593,7 @@ f_pv_pick(array<float> lv, bool bull, float b_lo, float b_hi, float t) =>
             bool beyond  = bull ? L > b_hi : L < b_lo
             bool touched = low <= L and high >= L
             bool held    = bull ? close >= L - t : close <= L + t
-            if beyond and touched and held and (na(best) or (bull ? L < best : L > best))
+            if beyond and touched and held and not f_used(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
@@ -1825,13 +1833,13 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             bool beyond  = (bo_dir == "bullish" and oc > band_hi) or (bo_dir == "bearish" and oc < band_lo)
             bool touched = low <= oc and high >= oc
             bool held    = bo_dir == "bullish" ? close >= oc - tol : close <= oc + tol
-            if beyond and touched and held
+            if beyond and touched and held and not f_used(oc)
                 if na(pb_hit) or (bo_dir == "bullish" ? oc < pb_hit : oc > pb_hit)
                     pb_hit := oc
     bool pb_oc_zone = not na(pb_hit)
 
     // ── Zone 2: Daily Breaker ─────────────────────────────────────────────
-    bool db_zone = low <= bo_level and high >= bo_level and (bo_dir == "bullish" ? close >= band_lo : close <= band_hi)
+    bool db_zone = low <= bo_level and high >= bo_level and (bo_dir == "bullish" ? close >= band_lo : close <= band_hi) and not f_used(bo_level)
 
     // ── Zone 3: Inside Range ──────────────────────────────────────────────
     // Inside the range that was just broken, only a reaction from a Daily
@@ -1868,11 +1876,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     array<float> fz_x   = fz_bull ? d_bf_x  : d_sf_x
     array<int>   fz_xb  = fz_bull ? d_bf_xb : d_sf_xb
     array<bool>  fz_p   = fz_bull ? d_bf_p  : d_sf_p
-    if not na(fz_used_hi) and (high < fz_used_lo or low > fz_used_hi)
-        fz_used_hi := na
-        fz_used_lo := na
-    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, false, bo_opp, band_lo, band_hi, fz_used_hi, fz_used_lo) : -1
-    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, true,  bo_opp, band_lo, band_hi, fz_used_hi, fz_used_lo) : -1
+    int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, false, bo_opp, band_lo, band_hi) : -1
+    int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
 
     // ── Backtest: first H4 touch of each Daily level since it formed ──────
     bool bt_bull = bo_dir == "bullish"
@@ -2162,13 +2167,15 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brk) + '}',
                           alert.freq_once_per_bar)
+            // The level has given its alert: it is used (first touch is the one that counts)
             if retest_src == "post_breakout_fvg" or retest_src == "inside_fvg"
-                fz_used_hi := math.max(retest_lvl, retest_lvl2)
-                fz_used_lo := math.min(retest_lvl, retest_lvl2)
-                int uk0 = f_fvg_idx(fz_his, fz_los, fz_used_hi, fz_used_lo)
+                int uk0 = f_fvg_idx(fz_his, fz_los, math.max(retest_lvl, retest_lvl2), math.min(retest_lvl, retest_lvl2))
                 if uk0 >= 0
-                    array.set(fz_x, uk0, na)
-                    array.set(fz_xb, uk0, na)
+                    f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, fz_p, uk0)
+            else if not na(retest_lvl)
+                array.push(d_used, retest_lvl)
+                if array.size(d_used) > 300
+                    array.shift(d_used)
             if (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg") and array.size(fz_his) > 0
                 float uh = math.max(retest_lvl, retest_lvl2)
                 float ul = math.min(retest_lvl, retest_lvl2)
@@ -2231,13 +2238,15 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                           + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                           + ',"h4_level":' + str.tostring(bt_brkv) + '}',
                           alert.freq_once_per_bar)
+            // The level has given its alert: it is used (first touch is the one that counts)
             if retest_src == "post_breakout_fvg" or retest_src == "inside_fvg"
-                fz_used_hi := math.max(retest_lvl, retest_lvl2)
-                fz_used_lo := math.min(retest_lvl, retest_lvl2)
-                int uk0 = f_fvg_idx(fz_his, fz_los, fz_used_hi, fz_used_lo)
+                int uk0 = f_fvg_idx(fz_his, fz_los, math.max(retest_lvl, retest_lvl2), math.min(retest_lvl, retest_lvl2))
                 if uk0 >= 0
-                    array.set(fz_x, uk0, na)
-                    array.set(fz_xb, uk0, na)
+                    f_fvg_drop(fz_his, fz_los, fz_x, fz_xb, fz_p, uk0)
+            else if not na(retest_lvl)
+                array.push(d_used, retest_lvl)
+                if array.size(d_used) > 300
+                    array.shift(d_used)
             if (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg") and array.size(fz_his) > 0
                 float uh = math.max(retest_lvl, retest_lvl2)
                 float ul = math.min(retest_lvl, retest_lvl2)
@@ -2304,13 +2313,14 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                     bk_armed     := true
                     bk_armed_lvl := h4_breaker_lvl
                 bool bk_touched = low <= h4_breaker_lvl and high >= h4_breaker_lvl
-                // Re-arm when price is clear of the zone (so each fresh visit fires once)
-                if not bk_touched
-                    bk_armed := true
+                // Only the first touch of an H4 Breaker counts: it alerts if it is a
+                // rejection, and either way the Breaker is used (no later retests)
                 // A rejection comes INTO the level from the bias side: for a buy the
                 // candle opens at/above it, dips in and closes above (mirror for sells).
                 // A candle climbing up through it from below is not a rejection.
                 bool bk_react = bk_armed and bk_touched and ((bo_dir == "bullish" and open >= h4_breaker_lvl and close > h4_breaker_lvl) or (bo_dir == "bearish" and open <= h4_breaker_lvl and close < h4_breaker_lvl))
+                if bk_touched
+                    bk_armed := false
                 if bk_react
                     string bk_type = h4_breaker_orig_fired ? "breaker_cont" : "breaker_origin"
                     if not h4_breaker_orig_fired
@@ -2343,7 +2353,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 oc_hit := na(oc_hit) ? L : ocb ? math.min(oc_hit, L) : math.max(oc_hit, L)
                 array.remove(h4_ocs, k)
                 array.remove(h4_ocb, k)
-            else if dead
+            else if dead or (low <= L and high >= L)   // touched without a rejection: used
                 array.remove(h4_ocs, k)
                 array.remove(h4_ocb, k)
         k -= 1

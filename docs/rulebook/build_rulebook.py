@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "27 October 2026 (script v11, Daily engulfing) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "27 October 2026 (script v11, Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -424,12 +424,15 @@ def make_rules(im):
          "<b>“Daily reaction + H4 breakout”</b> alert, also while H4 is still in line. While H4 is in line, every new H4 close beyond the <b>latest</b> "
          "H4 A-shape (buy) or V-shape (sell) also sends an <b>“H4 breakout in line with the Daily”</b> alert; no Daily reaction is needed for it.",
          "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
-         "Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal setup are not sent.", im["noneworigin"]),
+         "<b>A used level is used:</b> a Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 confirmation never starts another reaction; "
+         "only the first touch of a level counts. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
+         "setup are not sent.", im["noneworigin"]),
         ("F. Continuations (after the Origin)", "H4 Breaker retest",
          f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. Each newer in-line H4 breakout (and a return in line) replaces it with "
          "the level it broke. When a later H4 candle <b>wicks exactly onto it and closes beyond it</b> in the bias direction, a continuation fires.",
          "Candle opens at/above the H4 breaker, wicks into it, closes above it", "Candle opens at/below the H4 breaker, wicks into it, closes below it",
-         "The first one at each H4 Breaker is labelled “Breaker origin”, later ones “Breaker continuation”. Each visit alerts once; price must leave the zone before the next.",
+         "Only the <b>first touch</b> of each H4 Breaker counts: it alerts if it is a rejection, and either way the Breaker is then used. A later return to it sends nothing. "
+         "H4 OCs follow the same rule: the first touch uses them.",
          im["breaker"]),
         ("F. Continuations (after the Origin)", "H4 OC continuation",
          f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. After each H4 breakout in the bias direction, <b>every OC of that breakout's leg</b> "

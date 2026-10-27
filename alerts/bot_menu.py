@@ -48,7 +48,7 @@ HELP_TEXT = """📖 What the words in an alert mean
 
 BUY / SELL <pair> (Origin): the first 4H confirmation after a Daily breakout. Look for an entry in that direction with your entry model.
 
-BUY / SELL CONTINUATION: the Daily direction is still on and 4H confirmed again (in-line breakout, Breaker retest, OC reaction, back in line, H4 or Daily engulfing).
+BUY / SELL CONTINUATION: the Daily direction is still on and 4H confirmed again (in-line breakout, first Breaker retest, OC reaction, back in line, H4 or Daily engulfing). A used level is used: only its first touch counts.
 
 📊 The line under an Origin alert says whose chart and prices it was read from; your broker's prices can differ slightly.
 
