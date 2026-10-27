@@ -413,7 +413,7 @@ def make_rules(im):
          "The candle that forms an A/V-shape can't also break it. The alert names the reaction source and the H4 level broken.", im["origin"]),
         ("E. H4 confirmation", "External and internal breaks",
          "What counts is the <b>first H4 touch</b> of a Daily level after that level formed. The <b>External</b> level is the closest H4 A-shape (buy) "
-         "or V-shape (sell) that formed <b>before</b> that first touch. Every A/V-shape that forms <b>after</b> the touch is <b>Internal</b>, however deep "
+         "or V-shape (sell) that formed <b>before</b> that first touch (before the candle that touched; an A/V completed by that candle itself is Internal). Every A/V-shape that forms <b>after</b> the touch is <b>Internal</b>, however deep "
          "price goes. The first touch of a <b>new</b> Daily level starts its own check, even while price is reacting at another level.",
          "External: the closest A-shape before the first touch · Internal: any A-shape formed after it",
          "External: the closest V-shape before the first touch · Internal: any V-shape formed after it",
@@ -424,8 +424,8 @@ def make_rules(im):
          "<b>“Daily reaction + H4 breakout”</b> alert, also while H4 is still in line. While H4 is in line, every new H4 close beyond the <b>latest</b> "
          "H4 A-shape (buy) or V-shape (sell) also sends an <b>“H4 breakout in line with the Daily”</b> alert; no Daily reaction is needed for it.",
          "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
-         "<b>A used level is used:</b> a Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 confirmation never starts another reaction; "
-         "only the first touch of a level counts. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
+         "<b>A used level is used:</b> only the first touch of a level counts. A Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 "
+         "confirmation, or whose reaction failed (an H4 close back through it), never starts another reaction; price going past it must react at a level beyond it. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
          "setup are not sent.", im["noneworigin"]),
         ("F. Continuations (after the Origin)", "H4 Breaker retest",
          f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. Each newer in-line H4 breakout (and a return in line) replaces it with "

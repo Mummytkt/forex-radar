@@ -42,7 +42,10 @@
 //   confirmation never starts another reaction; the H4 Breaker and H4 OCs are
 //   used by their first touch (alert only if that touch is a rejection). The
 //   one exception: while price reacts inside a Daily FVG, a deeper Daily candle
-//   moves the External start to that candle (before the alert).
+//   moves the External start to that candle (before the alert). A reaction that
+//   fails (an H4 close back through the level) uses the level too. External =
+//   the last H4 A (V for sells) formed BEFORE the candle that touched / entered
+//   the level; an A / V completed by that candle or later is Internal.
 //
 // v11 display: alerts are small arrows / dots on the triggering candle (hover for the
 //   details); the alert text and the status sit in an info table at the side
@@ -1777,6 +1780,12 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
     float band_lo = bo_level - tol
     bool  bk_sent = false   // an H4 Breaker alert went out on this candle
 
+    // The H4 A / V that stood BEFORE this candle. A reaction's External level is
+    // the last level formed before the candle that touched the Daily level; an
+    // A / V completed by that candle itself (or later) is Internal.
+    float pre_a = h4_a_lvl
+    float pre_v = h4_v_lvl
+
     // ── H4 formation detection ────────────────────────────────────────────
     bool h4_bull1 = close[1] >= open[1]
     bool h4_bear1 = close[1] <  open[1]
@@ -1905,14 +1914,14 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if low <= fH and high >= fL and not f_bt_seen(fK)
                 array.push(bt_seen, fK)
                 bt_first := true
-                array.set(fz_x, i, bt_bull ? h4_a_lvl : h4_v_lvl)
+                array.set(fz_x, i, bt_bull ? pre_a : pre_v)
                 array.set(fz_xb, i, bar_index)
     if array.size(bt_seen) > 300
         array.shift(bt_seen)
     if bt_first
         anchor_bar := bar_index
-        bt_ext_a   := h4_a_lvl
-        bt_ext_v   := h4_v_lvl
+        bt_ext_a   := pre_a
+        bt_ext_v   := pre_v
 
     // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
     // A reaction stays valid on later candles: any later H4 close beyond the
@@ -1933,6 +1942,9 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             failed := new_daily and not na(d_close) and (bo_dir == "bullish" ? d_close < retest_lvl2 : d_close > retest_lvl2)
 
         if failed
+            // A failed reaction uses the level too: only its first touch counts
+            if not (retest_src == "post_breakout_fvg" or retest_src == "inside_fvg") and not na(retest_lvl)
+                array.push(d_used, retest_lvl)
             retest_on  := false
             retest_src := na
             retest_lvl := na
@@ -1954,8 +1966,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := pb_hit
                 anchor_bar := bar_index
-                bt_ext_a   := h4_a_lvl
-                bt_ext_v   := h4_v_lvl
+                bt_ext_a   := pre_a
+                bt_ext_v   := pre_v
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
@@ -1971,8 +1983,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := pv_hit
                 anchor_bar := bar_index
-                bt_ext_a   := h4_a_lvl
-                bt_ext_v   := h4_v_lvl
+                bt_ext_a   := pre_a
+                bt_ext_v   := pre_v
         else if pf_i >= 0 and was_est
             retest_on  := true
             retest_bar := bar_index
@@ -1985,8 +1997,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 float fx = array.get(fz_x, pf_i)
                 anchor_lvl := retest_lvl
                 anchor_bar := na(fx) ? bar_index : array.get(fz_xb, pf_i)
-                bt_ext_a   := na(fx) or not fz_bull ? h4_a_lvl : fx
-                bt_ext_v   := na(fx) or fz_bull ? h4_v_lvl : fx
+                bt_ext_a   := na(fx) or not fz_bull ? pre_a : fx
+                bt_ext_v   := na(fx) or fz_bull ? pre_v : fx
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_fvg"'
@@ -2002,8 +2014,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := bo_level
                 anchor_bar := bar_index
-                bt_ext_a   := h4_a_lvl
-                bt_ext_v   := h4_v_lvl
+                bt_ext_a   := pre_a
+                bt_ext_v   := pre_v
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"daily_breaker"'
@@ -2019,8 +2031,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
                 anchor_lvl := ir_hit
                 anchor_bar := bar_index
-                bt_ext_a   := h4_a_lvl
-                bt_ext_v   := h4_v_lvl
+                bt_ext_a   := pre_a
+                bt_ext_v   := pre_v
             retest_kind := ir_kind
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
@@ -2040,8 +2052,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                 float fx = array.get(fz_x, if_i)
                 anchor_lvl := retest_lvl
                 anchor_bar := na(fx) ? bar_index : array.get(fz_xb, if_i)
-                bt_ext_a   := na(fx) or not fz_bull ? h4_a_lvl : fx
-                bt_ext_v   := na(fx) or fz_bull ? h4_v_lvl : fx
+                bt_ext_a   := na(fx) or not fz_bull ? pre_a : fx
+                bt_ext_v   := na(fx) or fz_bull ? pre_v : fx
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"inside_fvg"'
@@ -2085,15 +2097,15 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
             anchor_lvl  := retest_lvl
             anchor_bar  := na(fx2) ? bar_index : array.get(fz_xb, dk)
             if fz_bull
-                bt_ext_a := na(fx2) ? h4_a_lvl : fx2
+                bt_ext_a := na(fx2) ? pre_a : fx2
             else
-                bt_ext_v := na(fx2) ? h4_v_lvl : fx2
+                bt_ext_v := na(fx2) ? pre_v : fx2
             fz_day_bar  := na
             fz_day_done := false
     if fz_on and na(fz_day_bar) and low <= math.max(retest_lvl, retest_lvl2) and high >= math.min(retest_lvl, retest_lvl2)
         fz_day_bar := bar_index
-        fz_day_a   := h4_a_lvl
-        fz_day_v   := h4_v_lvl
+        fz_day_a   := pre_a
+        fz_day_v   := pre_v
     if fz_on and not fz_day_done and not na(fz_day_bar) and not na(dr_l) and (bo_dir == "bullish" ? low < dr_l : high > dr_h)
         fz_day_done := true
         anchor_bar  := fz_day_bar
@@ -2123,8 +2135,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
 
         bool bt_xb = not na(bt_ext_a) and close > bt_ext_a                      // External level broken
         bool bt_lb = not na(h4_a_lvl) and not new_a and close > h4_a_lvl       // latest A broken
-        if bo_dir == "bullish" and (bt_xb or (bt_lb and (h4a_origin <= anchor_bar or bt_int)))
-            string h4_cls = (bt_xb or h4a_origin <= anchor_bar) ? "external" : "internal"
+        if bo_dir == "bullish" and (bt_xb or (bt_lb and (h4a_origin < anchor_bar or bt_int)))
+            string h4_cls = (bt_xb or h4a_origin < anchor_bar) ? "external" : "internal"
             float  bt_brk = bt_xb ? bt_ext_a : h4_a_lvl
             if not h4_bo_fired
                 h4_bo_fired           := true
@@ -2194,8 +2206,8 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
 
         bool bt_xs = not na(bt_ext_v) and close < bt_ext_v
         bool bt_ls = not na(h4_v_lvl) and not new_v and close < h4_v_lvl
-        if bo_dir == "bearish" and (bt_xs or (bt_ls and (h4v_origin <= anchor_bar or bt_int)))
-            string h4_cls = (bt_xs or h4v_origin <= anchor_bar) ? "external" : "internal"
+        if bo_dir == "bearish" and (bt_xs or (bt_ls and (h4v_origin < anchor_bar or bt_int)))
+            string h4_cls = (bt_xs or h4v_origin < anchor_bar) ? "external" : "internal"
             float  bt_brkv = bt_xs ? bt_ext_v : h4_v_lvl
             if not h4_bo_fired
                 h4_bo_fired           := true
