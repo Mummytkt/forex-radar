@@ -47,8 +47,9 @@
 //   the last H4 A (V for sells) formed BEFORE the candle that touched / entered
 //   the level; an A / V completed by that candle or later is Internal.
 //
-// v11 display: confirmation alerts are small arrows (engulfing / H4 FVG: dots, with their
-//   own table row, so they never replace the latest confirmation arrow); alerts are small arrows / dots on the triggering candle (hover for the
+// v11 display: confirmation alerts are small arrows; an engulfing is a box over its two
+//   candles with a "D" / "H4" pointer (latest of each only); the H4 FVG is a dot with
+//   its own table row, so nothing replaces the latest confirmation arrow; alerts are small arrows / dots on the triggering candle (hover for the
 //   details); the alert text and the status sit in an info table at the side
 //   ("Alert marks on the chart" = Full labels brings the old labels back).
 //
@@ -206,6 +207,9 @@ bool   bt_dengulf  = input.bool(true,  "Daily engulfing", group=G_ENG, inline="d
 string bt_deng_mode = input.string("Wick", "covers", options=["Wick", "Body only", "Both"], group=G_ENG, inline="d1e",
      tooltip="A Daily candle covering the previous opposite Daily candle, in the current Daily direction (buys: the previous Daily candle is bearish; this one opens at or below its close and closes above its open; Wick = also above its high). The alert is always sent; each person picks Wick / Body / Both in Alert Filters. This only picks the chart labels.")
 
+color  bt_eng_col  = input.color(color.new(#FFD54F, 0), "Engulfing box and pointer", group=G_ENG,
+     tooltip="Each engulfing is boxed on the chart (the two candles: wicks when it covers the wick, bodies when it covers the body only, per the 'covers' choice above) with a pointer under it: D = Daily engulfing, H4 = H4 engulfing. Only the latest of each stays on the chart.")
+
 // 4 · Daily levels and FVGs
 bool   d_body = input.string("Body", "Daily levels from", options = ["Body", "Wick"], group = G_DLVL,
      tooltip = "Body: Daily highs/lows, A-shapes and V-shapes use candle bodies, like H4. Wick: they use the wicks. A breakout is always a Daily close beyond the level. Each alert keeps the setting it was created with.") == "Body"
@@ -330,9 +334,12 @@ var int bt_t0 = time
 // External / Internal of the setup's latest H4 confirmation (Origin, Daily reaction
 // + H4 breakout, or back in line); continuations follow it, like the server
 var bt_scls = array.from("")
-var bt_last = array.new<label>(2, na)   // the alert labels on the chart: 0 = confirmations, 1 = engulfing / H4 FVG
+var bt_last = array.new<label>(2, na)   // the alert labels on the chart: 0 = confirmations, 1 = H4 FVG
+// Engulfing: the latest box and pointer of each (0 = Daily, 1 = H4)
+var eng_bx = array.new<box>(2, na)
+var eng_lb = array.new<label>(2, na)
 // Info table: the latest alert's text and when it fired (circle mode keeps the candles clear)
-var bt_info = array.from("", "", "", "")   // text, time: confirmations (0, 1), engulfing / H4 FVG (2, 3)
+var bt_info = array.from("", "", "", "")   // text, time: confirmations (0, 1), H4 FVG (2, 3)
 // The External H4 level of the current Daily reaction: the latest H4 A (buys) /
 // V (sells) when the reaction started, i.e. formed BEFORE it
 var float bt_ext_a = na
@@ -832,7 +839,7 @@ float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barm
      [f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body)], lookahead=barmerge.lookahead_on)
 
 // Wick high / low of the Daily candle before the last completed one (Daily engulfing)
-[dw_h2, dw_l2] = request.security(syminfo.tickerid, "D", [high[2], low[2]], lookahead=barmerge.lookahead_on)
+[dw_h2, dw_l2, dw_t2] = request.security(syminfo.tickerid, "D", [high[2], low[2], time[2]], lookahead=barmerge.lookahead_on)
 
 // Daily FVGs: the first and third of the last three completed Daily candles (wicks)
 [dg_h1, dg_l1, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
@@ -1342,11 +1349,13 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
          + "\nConfirmed at this candle's close: " + str.tostring(close, format.mintick)
          + "\nEntry = next candle's open"
     bool circles = bt_marks == "Circle + info table"
-    // Engulfing (H4 / Daily) and H4 FVG are kept apart from the confirmation alerts:
-    // their own dot and table row, so they never replace the latest confirmation arrow
-    int  sl = kind == 6 or kind >= 10 ? 1 : 0
+    // Kept apart from the confirmation alerts so they never replace the latest
+    // confirmation arrow: the H4 FVG gets its own dot and table row; an engulfing
+    // (H4 / Daily) is drawn as a box with a D / H4 pointer by the caller (f_eng_draw)
+    bool eng = kind == 6 or kind == 11
+    int  sl = kind == 10 ? 1 : 0
     string mk = sl == 1 ? "•" : f_mark(bull)
-    if tf_ok and bt_grey and not (on and cls_ok and time >= bt_from)
+    if tf_ok and bt_grey and not eng and not (on and cls_ok and time >= bt_from)
         string why = time < bt_from ? "before the backtest start" : not cls_ok ? "Internal is switched off" : "this type is switched off"
         string gtxt = "Not counted: " + why + "\n" + head + tag + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
         if bt_latest
@@ -1361,22 +1370,33 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
         array.set(bt_info, sl * 2, gtxt + "\n" + detail)
         array.set(bt_info, sl * 2 + 1, str.format_time(time, "dd MMM yyyy HH:mm"))
     if tf_ok and on and cls_ok and time >= bt_from
-        string atxt = (kind >= 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
-        color  acol = kind >= 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col   // markers: no buy / sell colour
-        if bt_latest
-            label.delete(array.get(bt_last, sl))
-        label alb = na
-        if circles
-            alb := label.new(bar_index, bull ? low : high, mk, yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
-        else
-            alb := label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
-                 textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail)
-        array.set(bt_last, sl, alb)
-        array.set(bt_info, sl * 2, atxt + "\n" + detail)
-        array.set(bt_info, sl * 2 + 1, str.format_time(time, "dd MMM yyyy HH:mm"))
+        if not eng
+            string atxt = (kind >= 10 ? "" : "H4 aligned - Alert\n") + head + tag + (bt_weekly and bo_wk_rel == "against" ? "\nWeekly AGAINST" : "") + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
+            color  acol = kind >= 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col   // markers: no buy / sell colour
+            if bt_latest
+                label.delete(array.get(bt_last, sl))
+            label alb = na
+            if circles
+                alb := label.new(bar_index, bull ? low : high, mk, yloc=bull ? yloc.belowbar : yloc.abovebar, style=label.style_none, textcolor=acol, size=size.small, tooltip=atxt + "\n" + detail)
+            else
+                alb := label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
+                     textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail)
+            array.set(bt_last, sl, alb)
+            array.set(bt_info, sl * 2, atxt + "\n" + detail)
+            array.set(bt_info, sl * 2 + 1, str.format_time(time, "dd MMM yyyy HH:mm"))
         array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
         array.set(bt_cnt, bull ? 8 : 9, array.get(bt_cnt, bull ? 8 : 9) + 1)
     tf_ok and on and cls_ok and time >= bt_from
+
+// Engulfing on the chart: a box over the two candles (wicks or bodies, per the
+// "covers" setting) and a pointer under it, "D" (Daily) or "H4". Only the latest
+// of each is kept (slot 0 = Daily, 1 = H4). Times are bar open times.
+f_eng_draw(int slot, int t1, int t2, float top, float bot, string tip) =>
+    box.delete(array.get(eng_bx, slot))
+    label.delete(array.get(eng_lb, slot))
+    array.set(eng_bx, slot, box.new(t1, top, t2, bot, xloc=xloc.bar_time, border_color=bt_eng_col, border_width=1, bgcolor=color.new(bt_eng_col, 85)))
+    array.set(eng_lb, slot, label.new(t2, bot, slot == 0 ? "D" : "H4", xloc=xloc.bar_time, style=label.style_label_up, color=bt_eng_col,
+         textcolor=color.black, size=size.small, tooltip=tip))
 
 // Weekly context sent with every bias alert (empty when there is no Weekly setup)
 f_wk() =>
@@ -1530,6 +1550,11 @@ if new_daily and not na(bo_dir) and not na(d_close2) and not na(dw_h2)
         float d_eng_lvl  = d_eng_wick ? (deb ? dw_h2 : dw_l2) : d_open2
         if bt_deng_mode == "Both" or (bt_deng_mode == "Wick") == d_eng_wick
             f_btlbl(deb, 11, "", d_eng_lvl, bo_level, d_eng_wick ? "Covers the previous Daily candle's wick" : "Covers the previous Daily candle's body only")
+            // the box shows on the 4H and the Daily chart
+            if bt_show and bt_dengulf and time >= bt_from and not na(dw_t2) and (timeframe.period == "240" or timeframe.period == "D")
+                float eb_top = d_eng_wick ? math.max(dr_h, dw_h2) : math.max(d_open, d_close, d_open2, d_close2)
+                float eb_bot = d_eng_wick ? math.min(dr_l, dw_l2) : math.min(d_open, d_close, d_open2, d_close2)
+                f_eng_draw(0, dw_t2, time[1], eb_top, eb_bot, syminfo.ticker + "\nDaily engulfing candle has formed\n" + (d_eng_wick ? "Covers the previous Daily candle's wick" : "Covers the previous Daily candle's body only"))
         if barstate.isrealtime
             alert(f_hdrw("H4_CONTINUATION")
                   + '","direction":"' + bo_dir + '","cont_type":"d_engulfing","eng_wick":' + (d_eng_wick ? "true" : "false")
@@ -2420,7 +2445,10 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level)
                        : (close[1] > open[1] and close < open and open >= close[1] and close < open[1])
         bool eng_wick = ocb ? close > high[1] : close < low[1]
         if eng and (bt_eng_mode == "Both" or (bt_eng_mode == "Wick") == eng_wick)
-            f_btlbl(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
+            if f_btlbl(ocb, 6, "", eng_wick ? (ocb ? high[1] : low[1]) : open[1], bo_level, eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only")
+                float hb_top = eng_wick ? math.max(high, high[1]) : math.max(open, close, open[1], close[1])
+                float hb_bot = eng_wick ? math.min(low, low[1]) : math.min(open, close, open[1], close[1])
+                f_eng_draw(1, time[1], time, hb_top, hb_bot, (ocb ? "BUY" : "SELL") + " · H4 engulfing\n" + (eng_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only"))
         if eng and barstate.isrealtime
             alert(f_hdrw("H4_CONTINUATION")
                   + '","direction":"' + bo_dir + '","cont_type":"engulfing","eng_wick":' + (eng_wick ? "true" : "false")
@@ -2669,7 +2697,7 @@ if barstate.islast and bt_marks == "Circle + info table"
         table.cell(bt_info_tbl, 0, 2, "Latest confirmation alert · " + array.get(bt_info, 1), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
         table.cell(bt_info_tbl, 0, 3, array.get(bt_info, 0), text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
     if _is_4h and array.get(bt_info, 2) != ""
-        table.cell(bt_info_tbl, 0, 4, "Latest engulfing / H4 FVG · " + array.get(bt_info, 3), text_color=color.new(bt_tbl_txt, 30), text_size=size.tiny, text_halign=text.align_left)
+        table.cell(bt_info_tbl, 0, 4, "Latest H4 FVG · " + array.get(bt_info, 3), text_color=color.new(bt_tbl_txt, 30), text_size=size.tiny, text_halign=text.align_left)
         table.cell(bt_info_tbl, 0, 5, array.get(bt_info, 2), text_color=color.new(bt_tbl_txt, 30), text_size=size.tiny, text_halign=text.align_left)
 
 // ── Backtest count ────────────────────────────────────────────────────────────
