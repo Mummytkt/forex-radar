@@ -12,5 +12,9 @@ s = open(os.path.join(R, 'MummyTKT_BiasPointer.pine'), encoding='utf-8').read()
 a = 'indicator("MummyTKT Bias Pointer", overlay=true'
 assert s.count(a) == 1
 s = s.replace(a, 'indicator("MummyTKT Bias Pointer — Backtest", overlay=true')
+# The live chart only calculates the last 3000 candles (faster); the backtest keeps all
+b = ' calc_bars_count=3000,'
+assert s.count(b) == 1
+s = s.replace(b, '')
 open(os.path.join(R, 'MummyTKT_BiasPointer_Backtest.pine'), 'w', encoding='utf-8', newline='\n').write(s)
 print('ok')

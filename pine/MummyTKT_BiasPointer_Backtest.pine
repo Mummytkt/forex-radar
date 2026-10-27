@@ -815,19 +815,19 @@ f_structure(bool bd) =>
 [w_cdir, w_chi, w_clo, w_chif, w_clof, w_chit, w_clot,
  w_bcnt, w_bdir, w_blvl, w_bopp,
  w_da, w_da_t, w_dv, w_dv_t, w_bt] = request.security(syminfo.tickerid, "W", f_structure(w_body), lookahead=barmerge.lookahead_on)
-// Last two completed Weekly candles (levels per the Body/Wick setting)
-[wk_o1, wk_c1, wk_h1, wk_l1, wk_o2, wk_c2, wk_h2, wk_l2] = request.security(syminfo.tickerid, "W",
-     [open[1], close[1], f_bh(1, w_body), f_bl(1, w_body), open[2], close[2], f_bh(2, w_body), f_bl(2, w_body)], lookahead=barmerge.lookahead_on)
-// Weekly wicks: the 1st and 3rd of the last three completed Weekly candles (Weekly FVGs)
-[wg_h1, wg_l1, wg_h3, wg_l3] = request.security(syminfo.tickerid, "W",
-     [high[1], low[1], high[3], low[3]], lookahead=barmerge.lookahead_on)
+// Last two completed Weekly candles (levels per the Body/Wick setting), and the
+// wicks of the 1st and 3rd of the last three (Weekly FVGs): one request
+[wk_o1, wk_c1, wk_h1, wk_l1, wk_o2, wk_c2, wk_h2, wk_l2, wg_h1, wg_l1, wg_h3, wg_l3] = request.security(syminfo.tickerid, "W",
+     [open[1], close[1], f_bh(1, w_body), f_bl(1, w_body), open[2], close[2], f_bh(2, w_body), f_bl(2, w_body), high[1], low[1], high[3], low[3]], lookahead=barmerge.lookahead_on)
 
 // ── Daily OHLC (for post-breakout OCs) ────────────────────────────────────────
 // lookahead_on + [1] = the just-completed daily candle on every H4 bar of the
 // next day, on history and live (non-repainting).
 // Last completed Daily candle as drawn (wicks), for the server's chart pictures
-[dr_t, dr_o, dr_h, dr_l, dr_c] = request.security(syminfo.tickerid, "D",
-     [time[1], open[1], high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
+// One request for every Daily value below: the last completed candle (wicks, and
+// body/wick levels per "Daily levels from"), the one before it, and the 3rd back
+[dr_t, dr_o, dr_h, dr_l, dr_c, d_high, d_low, d_open2, d_close2, d_high2, d_low2, dw_h2, dw_l2, dw_t2, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
+     [time[1], open[1], high[1], low[1], close[1], f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body), high[2], low[2], time[2], high[3], low[3]], lookahead=barmerge.lookahead_on)
 const int HIST_N = 40
 var array<int>   dh_t = array.new<int>()
 var array<float> dh_o = array.new<float>()
@@ -849,17 +849,13 @@ if timeframe.change("D") and not na(dr_t)
 f_bar(int t, float o, float h, float l, float c) =>
     na(t) or na(c) ? "null" : '[' + str.tostring(t) + ',' + str.tostring(o, format.mintick) + ',' + str.tostring(h, format.mintick) + ',' + str.tostring(l, format.mintick) + ',' + str.tostring(c, format.mintick) + ']'
 
-float d_open  = request.security(syminfo.tickerid, "D", open[1],  lookahead=barmerge.lookahead_on)
-float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
-[d_high, d_low, d_open2, d_close2, d_high2, d_low2] = request.security(syminfo.tickerid, "D",
-     [f_bh(1, d_body), f_bl(1, d_body), open[2], close[2], f_bh(2, d_body), f_bl(2, d_body)], lookahead=barmerge.lookahead_on)
-
-// Wick high / low of the Daily candle before the last completed one (Daily engulfing)
-[dw_h2, dw_l2, dw_t2] = request.security(syminfo.tickerid, "D", [high[2], low[2], time[2]], lookahead=barmerge.lookahead_on)
-
-// Daily FVGs: the first and third of the last three completed Daily candles (wicks)
-[dg_h1, dg_l1, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
-     [high[1], low[1], high[3], low[3]], lookahead=barmerge.lookahead_on)
+// Last completed Daily candle's open / close; Daily FVGs use the wicks of the 1st
+// (dg_h1 / dg_l1) and 3rd (dg_h3 / dg_l3) of the last three completed candles;
+// dw_h2 / dw_l2 = the wicks of the candle before the last one (Daily engulfing)
+float d_open  = dr_o
+float d_close = dr_c
+float dg_h1   = dr_h
+float dg_l1   = dr_l
 
 f_layer_name(string l) =>
     l == "external" ? "External" : l == "internal" ? "Internal" : l == "inner_internal" ? "Inner internal" : l == "sub_internal" ? "Sub-internal" : ""
