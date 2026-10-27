@@ -37,6 +37,10 @@
 //     an FVG one alert is sent: cont_type "h4_fvg" ("<PAIR> / H4 FVG candle
 //     after breakout has formed", no buy / sell).
 //
+// v11 display: alerts are small circles above the triggering candle (hover for the
+//   details); the alert text and the status sit in an info table at the side
+//   ("Alert marks on the chart" = Full labels brings the old labels back).
+//
 // v11 (2026-10-27): Daily engulfing in the current Daily direction alerts
 //   (cont_type "d_engulfing", eng_wick like the H4 engulfing; any time a Daily
 //   direction is set). Settings are grouped under numbered, titled sections.
@@ -1309,10 +1313,13 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
         string gtxt = "Not counted: " + why + "\n" + head + tag + (conf and bt_swtxt != "" ? "\n" + bt_swtxt : "")
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, circles
-             ? label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=bt_grey_col, size=size.tiny, tooltip=gtxt + "\n" + detail)
-             : label.new(bar_index, bull ? low : high, gtxt, style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
-                 textcolor=bt_txt_col, size=size.small))
+        label glb = na
+        if circles
+            glb := label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=bt_grey_col, size=size.tiny, tooltip=gtxt + "\n" + detail)
+        else
+            glb := label.new(bar_index, bull ? low : high, gtxt, style=bull ? label.style_label_up : label.style_label_down, color=bt_grey_col,
+                 textcolor=bt_txt_col, size=size.small)
+        array.set(bt_last, 0, glb)
         array.set(bt_info, 0, gtxt + "\n" + detail)
         array.set(bt_info, 1, str.format_time(time, "dd MMM yyyy HH:mm"))
     if tf_ok and on and cls_ok and time >= bt_from
@@ -1320,10 +1327,13 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
         color  acol = kind == 10 ? bt_h4fvg_col : bull ? bt_buy_col : bt_sell_col
         if bt_latest
             label.delete(array.get(bt_last, 0))
-        array.set(bt_last, 0, circles
-             ? label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=acol, size=size.tiny, tooltip=atxt + "\n" + detail)
-             : label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
-                 textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail))
+        label alb = na
+        if circles
+            alb := label.new(bar_index, high, "", yloc=yloc.abovebar, style=label.style_circle, color=acol, size=size.tiny, tooltip=atxt + "\n" + detail)
+        else
+            alb := label.new(bar_index, bull ? low : high, atxt, style=bull ? label.style_label_up : label.style_label_down, color=acol,
+                 textcolor=bt_txt_col, size=kind == 0 ? size.normal : size.small, tooltip=detail)
+        array.set(bt_last, 0, alb)
         array.set(bt_info, 0, atxt + "\n" + detail)
         array.set(bt_info, 1, str.format_time(time, "dd MMM yyyy HH:mm"))
         array.set(bt_cnt, kind, array.get(bt_cnt, kind) + 1)
