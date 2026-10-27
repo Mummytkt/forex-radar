@@ -49,7 +49,7 @@
 //
 // v11 display: confirmation alerts are small arrows; an engulfing is a box over its two
 //   candles with a "D" / "H4" pointer, own colours, last N of each (Daily on D and
-//   lower, H4 on 4H); the H4 FVG is a dot with
+//   lower, H4 on 4H and lower); the H4 FVG is a dot with
 //   its own table row, so nothing replaces the latest confirmation arrow; alerts are small arrows / dots on the triggering candle (hover for the
 //   details); the alert text and the status sit in an info table at the side
 //   ("Alert marks on the chart" = Full labels brings the old labels back).
@@ -210,7 +210,7 @@ string bt_deng_mode = input.string("Wick", "covers", options=["Wick", "Body only
 
 color  bt_engh_col = input.color(color.new(#4FC3F7, 0), "H4 engulfing box", group=G_ENG, inline="ebh")
 int    eng_n_h     = input.int(1, "keep the last", minval=1, maxval=20, group=G_ENG, inline="ebh",
-     tooltip="H4 engulfings are boxed on the 4H chart, with an 'H4' pointer under the box. The 'covers' choice decides the box: Wick = the two candles' wicks, Body only = their bodies, Both = wicks when that engulfing covered the wick, bodies when it covered the body only. Keep the last = how many of the most recent stay on the chart.")
+     tooltip="H4 engulfings are boxed on the 4H chart and every lower timeframe (1H, 15m, ...), with an 'H4' pointer under the box. On the 4H chart only the ones that alert (after the Origin, H4 in line); below 4H every H4 engulfing in the Daily direction, since the H4 steps can only be followed on 4H candles. The 'covers' choice decides the box: Wick = the two candles' wicks, Body only = their bodies, Both = wicks when that engulfing covered the wick, bodies when it covered the body only. Keep the last = how many of the most recent stay on the chart.")
 color  bt_engd_col = input.color(color.new(#FFD54F, 0), "Daily engulfing box", group=G_ENG, inline="ebd")
 int    eng_n_d     = input.int(1, "keep the last", minval=1, maxval=20, group=G_ENG, inline="ebd",
      tooltip="Daily engulfings are boxed on the Daily chart and every lower timeframe (4H, 1H, ...), with a 'D' pointer under the box. The 'covers' choice decides the box, as for H4. Keep the last = how many of the most recent stay on the chart.")
@@ -847,6 +847,10 @@ float d_close = request.security(syminfo.tickerid, "D", close[1], lookahead=barm
 
 // Wick high / low of the Daily candle before the last completed one (Daily engulfing)
 [dw_h2, dw_l2, dw_t2] = request.security(syminfo.tickerid, "D", [high[2], low[2], time[2]], lookahead=barmerge.lookahead_on)
+
+// The last two completed H4 candles, for the H4 engulfing box below the 4H chart
+[q4_t1, q4_o1, q4_h1, q4_l1, q4_c1, q4_t2, q4_o2, q4_h2, q4_l2, q4_c2] = request.security(syminfo.tickerid, "240",
+     [time[1], open[1], high[1], low[1], close[1], time[2], open[2], high[2], low[2], close[2]], lookahead=barmerge.lookahead_on)
 
 // Daily FVGs: the first and third of the last three completed Daily candles (wicks)
 [dg_h1, dg_l1, dg_h3, dg_l3] = request.security(syminfo.tickerid, "D",
@@ -1580,6 +1584,21 @@ if new_daily and not na(bo_dir) and not na(d_close2) and not na(dw_h2)
                   + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                   + ',"h4_level":' + str.tostring(d_eng_lvl) + '}',
                   alert.freq_once_per_bar)
+
+// ── H4 engulfing box below the 4H chart ───────────────────────────────────────
+// On 1H, 15m, ... each completed H4 candle that engulfs the previous opposite H4
+// candle in the Daily direction is boxed like on the 4H chart (per "covers"). The
+// 4H chart itself boxes the alerted ones (H4 block below).
+if timeframe.in_seconds() < 14400 and timeframe.change("240") and bt_show and bt_engulf and not na(bo_dir) and not na(q4_c2) and time >= bt_from
+    bool qb = bo_dir == "bullish"
+    bool q_eng = qb ? (q4_c2 < q4_o2 and q4_c1 > q4_o1 and q4_o1 <= q4_c2 and q4_c1 > q4_o2)
+                    : (q4_c2 > q4_o2 and q4_c1 < q4_o1 and q4_o1 >= q4_c2 and q4_c1 < q4_o2)
+    bool q_wick = qb ? q4_c1 > q4_h2 : q4_c1 < q4_l2
+    if q_eng and (bt_eng_mode == "Both" or (bt_eng_mode == "Wick") == q_wick)
+        bool  qwb = f_eng_wickbox(bt_eng_mode, q_wick)
+        float qtop = qwb ? math.max(q4_h1, q4_h2) : math.max(q4_o1, q4_c1, q4_o2, q4_c2)
+        float qbot = qwb ? math.min(q4_l1, q4_l2) : math.min(q4_o1, q4_c1, q4_o2, q4_c2)
+        f_eng_draw(false, q4_t2, time[1], qtop, qbot, (qb ? "BUY" : "SELL") + " · H4 engulfing\n" + (q_wick ? "Covers the previous candle's wick" : "Covers the previous candle's body only"))
 
 // Daily FVGs. A gap is only an FVG once its third Daily candle has closed. A Daily
 // close through the gap kills it (bullish: below the bottom; bearish: above the top).
