@@ -289,6 +289,8 @@ string bt_marks    = input.string("Circle + info table", "Alert marks on the cha
      tooltip="Circle + info table: each alert is a small arrow or dot on the candle that triggered it (hover it for the details); the alert text and the status go in a table at the side, so the candles stay clear. Full labels: the old text labels on the chart.")
 string bt_mark_shape = input.string("Small arrow", "Mark shape", options=["Small arrow", "Dot"], group=G_BT,
      tooltip="Small arrow: ▲ under a buy candle, ▼ over a sell candle. Dot: a small dot. Only on the candle that triggered the alert; hover it for the details.")
+bool   bt_info_on  = input.bool(true, "Show info table (status + latest alert)", group=G_BT,
+     tooltip="Off hides the table at the side of the chart. Alerts, marks and boxes are not affected.")
 string bt_info_pos = input.string("Top right", "Info table position", options=["Top right", "Middle right", "Bottom right", "Top left", "Middle left", "Bottom left"], group=G_BT)
 color  bt_buy_col  = input.color(#00C853, "Buy label", group=G_BT, inline="btc")
 color  bt_sell_col = input.color(#FF1744, "Sell label", group=G_BT, inline="btc")
@@ -2783,7 +2785,7 @@ f_info_pos(string p) =>
         "Bottom left"  => position.bottom_left
         => position.middle_right
 var table bt_info_tbl = table.new(f_info_pos(bt_info_pos), 1, 4, bgcolor=bt_tbl_bg, border_width=1, border_color=color.new(color.gray, 70))
-if barstate.islast and bt_marks == "Circle + info table"
+if barstate.islast and bt_marks == "Circle + info table" and bt_info_on
     table.cell(bt_info_tbl, 0, 0, "Status", text_color=bt_tbl_txt, text_size=size.small, text_halign=text.align_left)
     table.cell(bt_info_tbl, 0, 1, str.replace_all(str.replace_all(_state_txt + _wk_txt, " · ", "\n"), " | ", "\n"),
          text_color=bt_tbl_txt, bgcolor=color.new(_lbl_col, 65), text_size=size.small, text_halign=text.align_left)
