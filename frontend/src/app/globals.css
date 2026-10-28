@@ -257,124 +257,134 @@ body {
 }
 
 /* ─── Fairy-tale diary: the Engulfing / Fresh Key Levels journals ─────────────
-   Scoped theme: the journal page's own colours, fonts and sparkles. Light = blush,
-   rose and lavender paper; dark = an enchanted plum night sky. */
+   Scoped theme. Each palette sets a few colours (accent, two pastel tints, ink);
+   everything else is mixed from them, for light paper and the dark night sky.
+   Palettes: .dp-purple (default) .dp-ice .dp-pink .dp-peach .dp-mint */
+.fairy-diary, .fairy-diary.dp-purple { --accent: #9B5DE5; --accent-hover: #7B3FC9; --accent2: #E07AC0; --tint: #D9C2FF; --tint2: #F7C9EA; --ink: #3E1F5C; }
+.fairy-diary.dp-ice   { --accent: #3E9BD6; --accent-hover: #2479B3; --accent2: #8F9CF2; --tint: #C4E6FB; --tint2: #DCD8FF; --ink: #1D3754; }
+.fairy-diary.dp-pink  { --accent: #E0679F; --accent-hover: #C44D86; --accent2: #B88BF2; --tint: #FFC4DE; --tint2: #D9C8FF; --ink: #5A2649; }
+.fairy-diary.dp-peach { --accent: #EE8456; --accent-hover: #D0663A; --accent2: #F07AB2; --tint: #FFD7C4; --tint2: #FFC9DF; --ink: #5A2E26; }
+.fairy-diary.dp-mint  { --accent: #35B193; --accent-hover: #1F9176; --accent2: #4BA3D9; --tint: #C2EFE0; --tint2: #D3E4FF; --ink: #1E4A40; }
+/* dark mode: a lighter accent so it glows on the night sky */
+[data-theme="dark"] .fairy-diary, [data-theme="dark"] .fairy-diary.dp-purple { --accent: #B98AF0; }
+[data-theme="dark"] .fairy-diary.dp-ice   { --accent: #7CC3EE; }
+[data-theme="dark"] .fairy-diary.dp-pink  { --accent: #F28AC0; }
+[data-theme="dark"] .fairy-diary.dp-peach { --accent: #F7A57F; }
+[data-theme="dark"] .fairy-diary.dp-mint  { --accent: #6ED6B7; }
 .fairy-diary {
   --font-diary-script: 'Dancing Script';
   --font-diary-body: 'Quicksand';
-  --bg: #FFF4F8;
-  --surface: #FFFBFD;
-  --card: rgba(255, 255, 255, 0.86);
-  --card-hover: #FFF0F6;
-  --border: #F5CFE0;
-  --border-bright: #EDB2CD;
-  --text-primary: #5A2649;
-  --text-secondary: #9A5A86;
-  --text-muted: #C095B0;
-  --accent: #E0679F;
-  --accent-bg: rgba(224, 103, 159, 0.13);
-  --accent-hover: #C44D86;
+  --bg: color-mix(in srgb, var(--tint) 22%, white);
+  --surface: color-mix(in srgb, var(--tint) 8%, white);
+  --card: rgba(255, 255, 255, 0.84);
+  --card-hover: color-mix(in srgb, var(--tint) 18%, white);
+  --border: color-mix(in srgb, var(--tint) 70%, white);
+  --border-bright: var(--tint);
+  --text-primary: var(--ink);
+  --text-secondary: color-mix(in srgb, var(--ink) 62%, var(--accent));
+  --text-muted: color-mix(in srgb, var(--ink) 38%, white);
+  --accent-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   --bullish: #2E9E77;
   --bullish-bg: rgba(46, 158, 119, 0.12);
   --bearish: #DD5470;
   --bearish-bg: rgba(221, 84, 112, 0.11);
   --warning: #D98E2B;
   --warning-bg: rgba(217, 142, 43, 0.12);
-  --lav: #B79CF0;
-  --shadow: 0 10px 30px -18px rgba(190, 80, 140, 0.45);
+  --shadow: 0 10px 28px -18px color-mix(in srgb, var(--accent) 60%, transparent);
+  --cover1: color-mix(in srgb, var(--tint) 80%, white);
+  --cover2: color-mix(in srgb, var(--tint2) 78%, white);
+  --cover3: color-mix(in srgb, var(--tint) 50%, white);
+  --glow1: color-mix(in srgb, var(--tint) 85%, transparent);
+  --glow2: color-mix(in srgb, var(--tint2) 75%, transparent);
+  --star: color-mix(in srgb, var(--accent) 45%, transparent);
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(1200px 520px at 8% -6%, rgba(255, 196, 222, 0.75), transparent 60%),
-    radial-gradient(900px 480px at 100% 4%, rgba(208, 190, 255, 0.55), transparent 62%),
-    radial-gradient(900px 600px at 50% 110%, rgba(255, 214, 196, 0.55), transparent 60%),
+    radial-gradient(1200px 520px at 8% -6%, var(--glow1), transparent 60%),
+    radial-gradient(900px 480px at 100% 4%, var(--glow2), transparent 62%),
     var(--bg);
   color: var(--text-primary);
 }
 [data-theme="dark"] .fairy-diary {
-  --bg: #1A0F25;
-  --surface: #251536;
-  --card: rgba(43, 24, 60, 0.82);
-  --card-hover: #331C47;
-  --border: #4B2C62;
-  --border-bright: #6A3F86;
-  --text-primary: #F8E7F4;
-  --text-secondary: #D3A9D9;
-  --text-muted: #9874AC;
-  --accent: #F28AC0;
-  --accent-bg: rgba(242, 138, 192, 0.16);
-  --accent-hover: #FFB0D8;
+  --bg: color-mix(in srgb, var(--accent-hover) 12%, #0C0714);
+  --surface: color-mix(in srgb, var(--accent-hover) 18%, #120B1D);
+  --card: color-mix(in srgb, var(--accent-hover) 18%, rgba(20, 12, 32, 0.86));
+  --card-hover: color-mix(in srgb, var(--accent-hover) 26%, #160D24);
+  --border: color-mix(in srgb, var(--accent-hover) 38%, #1A1026);
+  --border-bright: color-mix(in srgb, var(--accent-hover) 60%, #1A1026);
+  --text-primary: color-mix(in srgb, var(--tint) 25%, white);
+  --text-secondary: color-mix(in srgb, var(--tint) 85%, white);
+  --text-muted: color-mix(in srgb, var(--accent) 45%, #8A7A99);
+  --accent-bg: color-mix(in srgb, var(--accent) 18%, transparent);
   --bullish: #63D9AA;
   --bullish-bg: rgba(99, 217, 170, 0.14);
   --bearish: #FF7E98;
   --bearish-bg: rgba(255, 126, 152, 0.14);
-  --lav: #C3A8FF;
-  --shadow: 0 12px 34px -18px rgba(0, 0, 0, 0.7);
-  background:
-    radial-gradient(1100px 520px at 10% -8%, rgba(160, 70, 150, 0.45), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(90, 70, 190, 0.40), transparent 62%),
-    radial-gradient(900px 600px at 50% 115%, rgba(200, 90, 140, 0.28), transparent 60%),
-    var(--bg);
+  --shadow: 0 12px 34px -18px rgba(0, 0, 0, 0.75);
+  --cover1: color-mix(in srgb, var(--accent-hover) 45%, #1A0F25);
+  --cover2: color-mix(in srgb, var(--accent2) 35%, #170D26);
+  --cover3: color-mix(in srgb, var(--accent-hover) 30%, #1A0F25);
+  --glow1: color-mix(in srgb, var(--accent-hover) 40%, transparent);
+  --glow2: color-mix(in srgb, var(--accent2) 30%, transparent);
+  --star: rgba(255, 255, 255, 0.55);
 }
 /* a faint field of tiny stars / glitter over the whole page */
 .fairy-diary::before {
   content: "";
   position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-image:
-    radial-gradient(1.5px 1.5px at 20px 30px, rgba(224, 103, 159, 0.35), transparent 60%),
-    radial-gradient(1.2px 1.2px at 110px 80px, rgba(183, 156, 240, 0.45), transparent 60%),
-    radial-gradient(1px 1px at 70px 140px, rgba(224, 103, 159, 0.30), transparent 60%),
-    radial-gradient(1.4px 1.4px at 160px 20px, rgba(255, 190, 120, 0.40), transparent 60%);
+    radial-gradient(1.5px 1.5px at 20px 30px, var(--star), transparent 60%),
+    radial-gradient(1.2px 1.2px at 110px 80px, var(--star), transparent 60%),
+    radial-gradient(1px 1px at 70px 140px, var(--star), transparent 60%),
+    radial-gradient(1.4px 1.4px at 160px 20px, rgba(255, 200, 120, 0.45), transparent 60%);
   background-size: 190px 170px;
 }
-[data-theme="dark"] .fairy-diary::before {
-  background-image:
-    radial-gradient(1.5px 1.5px at 20px 30px, rgba(255, 255, 255, 0.55), transparent 60%),
-    radial-gradient(1.2px 1.2px at 110px 80px, rgba(255, 200, 240, 0.55), transparent 60%),
-    radial-gradient(1px 1px at 70px 140px, rgba(200, 180, 255, 0.5), transparent 60%),
-    radial-gradient(1.4px 1.4px at 160px 20px, rgba(255, 230, 160, 0.5), transparent 60%);
-}
 .fairy-diary main { font-family: var(--font-diary-body), -apple-system, 'Segoe UI', sans-serif; }
+/* Petite (default): everything a little smaller */
+.fairy-diary.ds-petite main { zoom: 0.88; }
 .fairy-diary .diary-script { font-family: var(--font-diary-script), cursive; font-weight: 700; letter-spacing: 0.2px; }
+/* the summary lines (year / month headers): italic, handwritten or plain */
+.fairy-diary.dt-italic .diary-sum { font-style: italic; }
+.fairy-diary.dt-script .diary-sum { font-family: var(--font-diary-script), cursive; font-size: 1.15em; }
 
 /* the diary cover at the top */
 .diary-cover {
   position: relative; overflow: hidden;
-  border-radius: 26px; padding: 26px 28px 22px; margin-bottom: 20px;
-  background:
-    linear-gradient(135deg, rgba(255, 214, 232, 0.95), rgba(236, 222, 255, 0.92) 55%, rgba(255, 228, 210, 0.92));
+  border-radius: 24px; padding: 20px 24px 16px; margin-bottom: 18px;
+  background: linear-gradient(135deg, var(--cover1), var(--cover2) 55%, var(--cover3));
   border: 1px solid var(--border-bright);
-  box-shadow: 0 22px 50px -30px rgba(200, 70, 140, 0.55), inset 0 0 0 6px rgba(255, 255, 255, 0.45);
+  box-shadow: 0 20px 46px -30px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 0 0 6px rgba(255, 255, 255, 0.4);
 }
-[data-theme="dark"] .diary-cover {
-  background: linear-gradient(135deg, rgba(92, 38, 98, 0.95), rgba(52, 36, 110, 0.92) 55%, rgba(110, 44, 84, 0.92));
-  box-shadow: 0 22px 50px -26px rgba(0, 0, 0, 0.8), inset 0 0 0 6px rgba(255, 255, 255, 0.05);
-}
+[data-theme="dark"] .diary-cover { box-shadow: 0 20px 46px -26px rgba(0, 0, 0, 0.8), inset 0 0 0 6px rgba(255, 255, 255, 0.05); }
 /* stitched inner border, like a fabric diary */
 .diary-cover::after {
-  content: ""; position: absolute; inset: 10px; border-radius: 19px; pointer-events: none;
+  content: ""; position: absolute; inset: 9px; border-radius: 17px; pointer-events: none;
   border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.diary-cover h1 { font-size: 40px; line-height: 1.05; color: var(--accent-hover); margin: 2px 0 6px; }
-[data-theme="dark"] .diary-cover h1 { color: #FFD1EA; text-shadow: 0 0 18px rgba(255, 150, 210, 0.45); }
-.diary-greet { font-size: 13px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-secondary); }
-.diary-sub { font-size: 14px; color: var(--text-secondary); max-width: 640px; line-height: 1.6; }
-.diary-quote { margin-top: 12px; font-size: 20px; color: color-mix(in srgb, var(--accent) 80%, var(--text-primary)); }
+.diary-cover h1 { font-size: 30px; line-height: 1.05; color: var(--accent-hover); margin: 2px 0 4px; }
+[data-theme="dark"] .diary-cover h1 { color: color-mix(in srgb, var(--accent) 45%, white); text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent); }
+.diary-greet { font-size: 11px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--text-secondary); }
+.diary-sub { font-size: 12.5px; color: var(--text-secondary); max-width: 620px; line-height: 1.55; }
+.diary-quote { margin-top: 8px; font-size: 17px; color: color-mix(in srgb, var(--accent) 80%, var(--text-primary)); }
 .diary-ribbon {
-  position: absolute; top: 0; right: 34px; width: 26px; height: 64px;
+  position: absolute; top: 0; right: 30px; width: 22px; height: 54px;
   background: linear-gradient(var(--accent), var(--accent-hover));
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
-  box-shadow: 0 6px 12px -6px rgba(0, 0, 0, 0.3);
 }
 .diary-spark { position: absolute; pointer-events: none; user-select: none; animation: diary-twinkle 3.4s ease-in-out infinite; }
 @keyframes diary-twinkle {
   0%, 100% { opacity: 0.35; transform: scale(0.85) rotate(0deg); }
   50% { opacity: 1; transform: scale(1.12) rotate(12deg); }
 }
-.diary-float { animation: diary-float 6s ease-in-out infinite; }
-@keyframes diary-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-@media (prefers-reduced-motion: reduce) { .diary-spark, .diary-float { animation: none; } }
-@media (max-width: 640px) { .diary-cover h1 { font-size: 31px; } .diary-cover { padding: 22px 18px 18px; } }
+@media (prefers-reduced-motion: reduce) { .diary-spark { animation: none; } }
+@media (max-width: 640px) { .diary-cover h1 { font-size: 25px; } .diary-cover { padding: 18px 16px 14px; } }
+/* the little style picker on the cover */
+.diary-style { position: relative; z-index: 1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 11px; color: var(--text-secondary); }
+.diary-style .sw { width: 18px; height: 18px; border-radius: 50%; border: 2px solid white; cursor: pointer; padding: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
+.diary-style .sw.on { outline: 2px solid var(--accent-hover); outline-offset: 1px; }
+.diary-style .chip { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--text-secondary); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; }
+.diary-style .chip.on { background: var(--accent); border-color: var(--accent); color: white; }
+.diary-style .sep { width: 1px; height: 14px; background: var(--border); margin: 0 2px; }
 
 /* softer, rounder controls inside the diary */
 .fairy-diary main select,
@@ -397,14 +407,14 @@ body {
 .fairy-diary main button:active { transform: translateY(0) scale(0.98); }
 /* the cards: soft paper with a glow */
 .fairy-diary main [data-diary-card] {
-  border-radius: 20px !important;
+  border-radius: 18px !important;
   box-shadow: var(--shadow);
   backdrop-filter: blur(6px);
 }
 .fairy-diary .diary-add {
-  background: linear-gradient(135deg, #F07AB2, #B88BF2) !important;
+  background: linear-gradient(135deg, var(--accent), var(--accent2)) !important;
   border-radius: 999px !important;
-  box-shadow: 0 10px 22px -10px rgba(224, 103, 159, 0.8);
+  box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--accent) 80%, transparent);
 }
 .fairy-diary .diary-add:hover { filter: brightness(1.06); }
 .fairy-diary main table th { color: var(--text-secondary) !important; }

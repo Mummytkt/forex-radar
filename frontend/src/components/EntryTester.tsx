@@ -344,15 +344,15 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: open ? '0 14px 10px' : '0 14px 6px', flexWrap: 'wrap', cursor: 'pointer' }}>
         {open ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
         <Trophy size={kind === 'month' ? 14 : 16} color="var(--accent)" />
-        <span style={{ fontSize: kind === 'month' ? 14 : 15, fontWeight: 800, color: 'var(--text-primary)' }}>{title || 'Which entry holds up best'}</span>
-        {note && <span style={{ fontSize: 11, fontWeight: 700, color: SOFT.be }}>{note}</span>}
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <span className="diary-sum" style={{ fontSize: kind === 'month' ? 14 : 15, fontWeight: 800, color: 'var(--text-primary)' }}>{title || 'Which entry holds up best'}</span>
+        {note && <span className="diary-sum" style={{ fontSize: 11, fontWeight: 700, color: SOFT.be }}>{note}</span>}
+        <span className="diary-sum" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           {trades.length} setup{trades.length === 1 ? '' : 's'} · <b style={{ color: SOFT.up }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: SOFT.dn }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
           {' · '}entries: <b style={{ color: SOFT.up }}>{tot.w} W</b> · <b style={{ color: SOFT.dn }}>{tot.l} L</b> · <b style={{ color: SOFT.be }}>{tot.be} BE</b>
           {' · '}<b style={{ color: tot.r > 0 ? SOFT.up : tot.r < 0 ? SOFT.dn : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
           {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
-        {best && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
+        {best && <span className="diary-sum" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
       </div>
       {open && children && (
         <div onClick={() => setReport(!report)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 14px 8px', padding: '7px 10px',
@@ -749,7 +749,26 @@ const SPARKS: { t: string; top: string; left?: string; right?: string; size: num
   { t: '✨', top: '40%', right: '4%', size: 12, delay: '1.6s' },
   { t: '🌙', top: '10%', right: '24%', size: 16, delay: '2.6s' },
 ]
-function DiaryCover({ title, sub, trades }: { title: string; sub: string; trades: Trade[] }) {
+// The diary's look, chosen on its cover and remembered in this browser
+const DIARY_PALETTES: { key: string; name: string; dot: string }[] = [
+  { key: 'purple', name: 'Purple', dot: 'linear-gradient(135deg, #9B5DE5, #E07AC0)' },
+  { key: 'ice', name: 'Ice', dot: 'linear-gradient(135deg, #3E9BD6, #C4E6FB)' },
+  { key: 'pink', name: 'Pink', dot: 'linear-gradient(135deg, #E0679F, #FFC4DE)' },
+  { key: 'peach', name: 'Peach', dot: 'linear-gradient(135deg, #EE8456, #FFD7C4)' },
+  { key: 'mint', name: 'Mint', dot: 'linear-gradient(135deg, #35B193, #C2EFE0)' },
+]
+interface DiaryLook { palette: string; text: 'italic' | 'script' | 'plain'; size: 'petite' | 'cosy' }
+const DIARY_DEFAULT: DiaryLook = { palette: 'purple', text: 'italic', size: 'petite' }
+function useDiaryLook(): [DiaryLook, (l: DiaryLook) => void] {
+  const [look, setLook] = useState<DiaryLook>(DIARY_DEFAULT)
+  useEffect(() => {
+    try { setLook({ ...DIARY_DEFAULT, ...JSON.parse(localStorage.getItem('mbp_diary_look') || '{}') }) } catch { /* private mode */ }
+  }, [])
+  const set = (l: DiaryLook) => { setLook(l); try { localStorage.setItem('mbp_diary_look', JSON.stringify(l)) } catch { /* private mode */ } }
+  return [look, set]
+}
+
+function DiaryCover({ title, sub, trades, look, setLook }: { title: string; sub: string; trades: Trade[]; look: DiaryLook; setLook: (l: DiaryLook) => void }) {
   const [greet, setGreet] = useState('Hello, lovely')
   const [quote, setQuote] = useState(DIARY_QUOTES[0])
   useEffect(() => {
@@ -776,6 +795,23 @@ function DiaryCover({ title, sub, trades }: { title: string; sub: string; trades
             background: 'color-mix(in srgb, var(--surface) 70%, transparent)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>{x}</span>
         ))}
       </div>
+      <div className="diary-style">
+        <span>🎀 Colour</span>
+        {DIARY_PALETTES.map(p => (
+          <button key={p.key} title={p.name} aria-label={p.name} className={`sw${look.palette === p.key ? ' on' : ''}`}
+            style={{ background: p.dot }} onClick={() => setLook({ ...look, palette: p.key })} />
+        ))}
+        <span className="sep" />
+        <span>Summary</span>
+        {([['italic', 'Italic'], ['script', 'Handwritten'], ['plain', 'Plain']] as const).map(([k, n]) => (
+          <button key={k} className={`chip${look.text === k ? ' on' : ''}`} onClick={() => setLook({ ...look, text: k })}>{n}</button>
+        ))}
+        <span className="sep" />
+        <span>Size</span>
+        {([['petite', 'Petite'], ['cosy', 'Cosy']] as const).map(([k, n]) => (
+          <button key={k} className={`chip${look.size === k ? ' on' : ''}`} onClick={() => setLook({ ...look, size: k })}>{n}</button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -800,6 +836,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   const live = book.startsWith('live')
   const jr = JOURNAL[book]
   const diary = !!jr.poi   // the Engulfing / Fresh Key Levels journals
+  const [look, setLook] = useDiaryLook()
   const bq = `?book=${book}`
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
@@ -897,14 +934,14 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   const removePair = () => { setPair('XAUUSD'); save('mbp_et_pair', 'XAUUSD') }
 
   return (
-    <div className={diary ? 'fairy-diary' : undefined}
+    <div className={diary ? `fairy-diary dp-${look.palette} dt-${look.text} ds-${look.size}` : undefined}
       style={{ minHeight: '100vh', background: diary ? undefined : 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <TopBar title={jr.title} />
       <OnlyPoi.Provider value={jr.poi}>
       <main style={{ flex: 1, width: '100%', padding: '20px 24px', maxWidth: 1100 }}>
         {tabs}
         {diary ? (
-          <DiaryCover title={DIARY_TITLE[book] || jr.title} trades={trades}
+          <DiaryCover title={DIARY_TITLE[book] || jr.title} trades={trades} look={look} setLook={setLook}
             sub={`Only you can read this diary. ${live ? 'Your live trades, kept apart from the backtest.' : 'Your backtested trades, kept apart from your live journals.'} For each trade, tap how every confirmation model did. Each tap is saved, like ink on the page.`} />
         ) : (
         <div style={{ marginBottom: 16 }}>
@@ -918,7 +955,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
         )}
 
         {/* New trade */}
-        {diary && <div className="diary-script" style={{ fontSize: 24, color: 'var(--accent-hover)', margin: '0 0 6px 6px' }}>Dear diary, today I took… ✍️</div>}
+        {diary && <div className="diary-script" style={{ fontSize: 20, color: 'var(--accent-hover)', margin: '0 0 6px 6px' }}>Dear diary, today I took… ✍️</div>}
         <div data-diary-card="" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 20 }}>
           {typing ? (
             <input autoFocus value={pair} onChange={e => setPair(cleanPair(e.target.value))} onBlur={() => pair.trim() && setTyping(false)}
