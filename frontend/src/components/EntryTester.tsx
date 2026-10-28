@@ -4,6 +4,13 @@ import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, 
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
 import { API_BASE } from '@/lib/api'
+import { Dancing_Script, Quicksand } from 'next/font/google'
+
+// The Engulfing / Fresh Key Levels journals are written like a fairy-tale diary
+// (theme in globals.css, .fairy-diary): a handwritten script for the titles and a
+// soft rounded font for the rest
+const diaryScript = Dancing_Script({ subsets: ['latin'], weight: ['600', '700'], variable: '--font-diary-script' })
+const diaryBody = Quicksand({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-diary-body' })
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -339,7 +346,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
   const th: React.CSSProperties = { padding: '8px 10px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.3 }
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
   return (
-    <div style={{ background: kind ? 'var(--surface)' : 'var(--card)', border: `1px solid ${kind === 'year' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 12,
+    <div data-diary-card="" style={{ background: kind ? 'var(--surface)' : 'var(--card)', border: `1px solid ${kind === 'year' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 12,
       padding: kind ? '10px 4px 4px' : '14px 4px 6px', marginBottom: kind ? 10 : 20, marginTop: kind === 'year' ? 6 : 0 }}>
       <div onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: open ? '0 14px 10px' : '0 14px 6px', flexWrap: 'wrap', cursor: 'pointer' }}>
         {open ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
@@ -583,7 +590,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   }
 
   return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+    <div data-diary-card="" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
       <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', flexWrap: 'wrap' }}>
         {open ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
         <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>{trade.instrument}</span>
@@ -731,6 +738,55 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   )
 }
 
+// ── The diary cover (journal pages) ───────────────────────────────────────────
+const DIARY_QUOTES = [
+  'Patience is my superpower ✨',
+  'I wait for my level, and I trust my plan 🌸',
+  'Every trade is a page; every page makes me wiser 📖',
+  'Calm mind, clear chart, kind heart 💖',
+  'Small steps, golden results 🌟',
+  'The market rewards the ones who wait 🦋',
+  'I protect my capital like a treasure 👑',
+]
+const SPARKS: { t: string; top: string; left?: string; right?: string; size: number; delay: string }[] = [
+  { t: '✨', top: '14%', left: '62%', size: 18, delay: '0s' },
+  { t: '🌸', top: '62%', left: '88%', size: 20, delay: '1.1s' },
+  { t: '⭐', top: '22%', right: '12%', size: 14, delay: '0.6s' },
+  { t: '🦋', top: '68%', left: '70%', size: 18, delay: '2s' },
+  { t: '✨', top: '40%', right: '4%', size: 12, delay: '1.6s' },
+  { t: '🌙', top: '10%', right: '24%', size: 16, delay: '2.6s' },
+]
+function DiaryCover({ title, sub, trades }: { title: string; sub: string; trades: Trade[] }) {
+  const [greet, setGreet] = useState('Hello, lovely')
+  const [quote, setQuote] = useState(DIARY_QUOTES[0])
+  useEffect(() => {
+    const h = new Date().getHours()
+    setGreet(h < 12 ? 'Good morning, lovely ☀️' : h < 17 ? 'Good afternoon, lovely 🌷' : 'Good evening, lovely 🌙')
+    setQuote(DIARY_QUOTES[Math.floor(Date.now() / 86400000) % DIARY_QUOTES.length])   // a new one each day
+  }, [])
+  let wins = 0
+  for (const t of trades) for (const r of Object.values(t.results || {})) if (r.outcome === 'win') wins++
+  return (
+    <div className="diary-cover">
+      <div className="diary-ribbon" />
+      {SPARKS.map((s, i) => (
+        <span key={i} className="diary-spark" aria-hidden
+          style={{ top: s.top, left: s.left, right: s.right, fontSize: s.size, animationDelay: s.delay }}>{s.t}</span>
+      ))}
+      <div className="diary-greet">{greet}</div>
+      <h1 className="diary-script">{title}</h1>
+      <p className="diary-sub">{sub}</p>
+      <div className="diary-quote diary-script">“{quote}”</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        {[`📖 ${trades.length} page${trades.length === 1 ? '' : 's'} written`, `💖 ${wins} win${wins === 1 ? '' : 's'} ticked`].map(x => (
+          <span key={x} style={{ fontSize: 12, fontWeight: 700, padding: '5px 12px', borderRadius: 999,
+            background: 'color-mix(in srgb, var(--surface) 70%, transparent)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>{x}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 // book "backtest" (Backtest page, every POI) or a live journal on the Trading Journal
 // page: "live_engulfing" / "live_h4_key", each its own trades, limited to that POI
@@ -742,9 +798,15 @@ const JOURNAL: Record<Book, { title: string; poi: string }> = {
   live_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
   live_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
 }
+// The diary cover's handwritten title for each journal
+const DIARY_TITLE: Partial<Record<Book, string>> = {
+  bt_engulfing: 'My Engulfing Backtest Diary', bt_h4_key: 'My Fresh Key Levels Backtest Diary',
+  live_engulfing: 'My Engulfing Diary', live_h4_key: 'My Fresh Key Levels Diary',
+}
 export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: Book }) {
   const live = book.startsWith('live')
   const jr = JOURNAL[book]
+  const diary = !!jr.poi   // the Engulfing / Fresh Key Levels journals
   const bq = `?book=${book}`
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
@@ -842,11 +904,16 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   const removePair = () => { setPair('XAUUSD'); save('mbp_et_pair', 'XAUUSD') }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+    <div className={diary ? `fairy-diary ${diaryScript.variable} ${diaryBody.variable}` : undefined}
+      style={{ minHeight: '100vh', background: diary ? undefined : 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <TopBar title={jr.title} />
       <OnlyPoi.Provider value={jr.poi}>
       <main style={{ flex: 1, width: '100%', padding: '20px 24px', maxWidth: 1100 }}>
         {tabs}
+        {diary ? (
+          <DiaryCover title={DIARY_TITLE[book] || jr.title} trades={trades}
+            sub={`Only you can read this diary. ${live ? 'Your live trades, kept apart from the backtest.' : 'Your backtested trades, kept apart from your live journals.'} For each trade, tap how every confirmation model did. Each tap is saved, like ink on the page.`} />
+        ) : (
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <FlaskConical size={20} color="var(--accent)" /> {jr.title}
@@ -855,9 +922,11 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
             Only you see this. {live ? 'Your live trades, kept apart from the backtest. ' : jr.poi ? 'Your backtested trades, kept apart from your live journals. ' : ''}{jr.poi ? 'For each trade, tap how every confirmation model did on that same trade. ' : 'For each trade, tap how every entry pattern did on that same trade. '}Each tap saves.
           </p>
         </div>
+        )}
 
         {/* New trade */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 20 }}>
+        {diary && <div className="diary-script" style={{ fontSize: 24, color: 'var(--accent-hover)', margin: '0 0 6px 6px' }}>Dear diary, today I took… ✍️</div>}
+        <div data-diary-card="" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 20 }}>
           {typing ? (
             <input autoFocus value={pair} onChange={e => setPair(cleanPair(e.target.value))} onBlur={() => pair.trim() && setTyping(false)}
               placeholder="Type the pair" style={{ ...selStyle, width: 140 }} />
@@ -885,8 +954,8 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
           <select value={alertType} onChange={e => setAlertType(e.target.value)} style={selStyle}>
             {ALERT_TYPES.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
-          <button onClick={addTrade} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 700, marginLeft: 'auto' }}>
-            <Plus size={14} /> Add trade
+          <button onClick={addTrade} className={diary ? 'diary-add' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 700, marginLeft: 'auto' }}>
+            <Plus size={14} /> {diary ? 'Add to my diary' : 'Add trade'}
           </button>
         </div>
 
@@ -914,8 +983,8 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
         {/* Your trades first (this is where you tick), the results summary under them */}
         {loading ? <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>
           : trades.length === 0 ? (
-            <div style={{ background: 'var(--card)', border: '1px dashed var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20, color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.7 }}>
-              <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>How to log a trade</div>
+            <div data-diary-card="" style={{ background: 'var(--card)', border: '1px dashed var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20, color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.7 }}>
+              <div className={diary ? 'diary-script' : undefined} style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6, fontSize: diary ? 24 : undefined }}>{diary ? 'Your first page is waiting 🌸' : 'How to log a trade'}</div>
               <div><b>1.</b> In the bar above, pick the <b>pair</b>, the <b>date</b>, <b>BUY</b> or <b>SELL</b>, and the <b>H4 alert</b> it came from.</div>
               <div><b>2.</b> Tap <b>Add trade</b>. The trade opens right here.</div>
               <div><b>3.</b> {jr.poi ? <>Tap</> : <>Pick the POI tab (<b>H4 Engulfing</b> or <b>H4 fresh key level</b>), then tap</>} <b>Win</b>, <b>Loss</b>, <b>BE</b> or <b>No entry</b> on each {jr.poi ? 'confirmation model' : 'entry model'}. On a win, tap the RR.</div>
