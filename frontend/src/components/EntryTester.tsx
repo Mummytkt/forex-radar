@@ -4,13 +4,6 @@ import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, 
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
 import { API_BASE } from '@/lib/api'
-import { Dancing_Script, Quicksand } from 'next/font/google'
-
-// The Engulfing / Fresh Key Levels journals are written like a fairy-tale diary
-// (theme in globals.css, .fairy-diary): a handwritten script for the titles and a
-// soft rounded font for the rest
-const diaryScript = Dancing_Script({ subsets: ['latin'], weight: ['600', '700'], variable: '--font-diary-script' })
-const diaryBody = Quicksand({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-diary-body' })
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -904,7 +897,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   const removePair = () => { setPair('XAUUSD'); save('mbp_et_pair', 'XAUUSD') }
 
   return (
-    <div className={diary ? `fairy-diary ${diaryScript.variable} ${diaryBody.variable}` : undefined}
+    <div className={diary ? 'fairy-diary' : undefined}
       style={{ minHeight: '100vh', background: diary ? undefined : 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <TopBar title={jr.title} />
       <OnlyPoi.Provider value={jr.poi}>

@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 /* ─── DARK THEME (default) ─── */
@@ -259,6 +260,8 @@ body {
    Scoped theme: the journal page's own colours, fonts and sparkles. Light = blush,
    rose and lavender paper; dark = an enchanted plum night sky. */
 .fairy-diary {
+  --font-diary-script: 'Dancing Script';
+  --font-diary-body: 'Quicksand';
   --bg: #FFF4F8;
   --surface: #FFFBFD;
   --card: rgba(255, 255, 255, 0.86);
