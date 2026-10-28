@@ -107,7 +107,7 @@ def _resolve_chat(config, user_id, chat_id, role, plan, plan_expires_at):
 async def _deliver_alert(conn, config, instrument: str, alert_text: str,
                          h4_class: Optional[str] = None, alert_id: Optional[int] = None,
                          pref: Optional[str] = None, engulf_wick: Optional[bool] = None,
-                         engulf_key: str = "pref_engulf_mode") -> None:
+                         engulf_key: str = "pref_engulf_mode", after_retest: Optional[bool] = None) -> None:
     """Send alert_text to every active user whose watched_instruments includes instrument.
 
     h4_class: External / Internal of the H4 confirmation this alert belongs to
@@ -138,6 +138,8 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
             continue  # user switched this confirmation type off
         if pref and not prefs.get(pref, True):
             continue  # user switched this alert type off (Origin / a continuation type / engulfing)
+        if after_retest is False and prefs.get("oc_after_retest"):
+            continue  # they only want H4 OCs after a retest of the breakout that held
         if engulf_wick is not None and not engulf_wanted(get_engulf_mode(conn, rec["id"], engulf_key), engulf_wick):
             continue  # this kind of engulfing (wick / body only) isn't the one they chose
         chats.append(rec["telegram_chat_id"])
@@ -221,6 +223,7 @@ class TVWebhookPayload(BaseModel):
     wk_src: Optional[str] = None
     wk_src_level: Optional[float] = None
     wk_cls: Optional[str] = None       # external | internal (Weekly-confirmed Daily breakout)
+    after_retest: Optional[bool] = None   # H4 OC rejection / OC formed: the breakout's Breaker or a leg V/A was retested and held first
     eng_wick: Optional[bool] = None    # H4 engulfing that also closed beyond the previous candle's wick
     bar: Optional[list] = None         # PRICE_UPDATE: the H4 candle that just closed [t_ms, o, h, l, c]
     dbar: Optional[list] = None        # PRICE_UPDATE: the last completed Daily candle
@@ -822,7 +825,8 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
         _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id,
                                       h4_class=setup_kind, pref=_CONT_PREF.get(cont_type),
                                       engulf_wick=alert_record.eng_wick,
-                                      engulf_key="pref_d_engulf_mode" if cont_type == "d_engulfing" else "pref_engulf_mode"))
+                                      engulf_key="pref_d_engulf_mode" if cont_type == "d_engulfing" else "pref_engulf_mode",
+                                      after_retest=payload.after_retest if cont_type in ("oc_cont", "h4_oc_formed") else None))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

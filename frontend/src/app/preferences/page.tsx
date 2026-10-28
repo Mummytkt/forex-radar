@@ -24,7 +24,7 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled?: 
   )
 }
 
-type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts' | 'alertOrigin' | 'contInline' | 'contBreaker' | 'contOc' | 'contRealign' | 'contEngulfing' | 'dailyEngulfing' | 'h4Fvg' | 'h4OcFormed' | 'dailyOcFormed'
+type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts' | 'alertOrigin' | 'contInline' | 'contBreaker' | 'contOc' | 'contRealign' | 'contEngulfing' | 'dailyEngulfing' | 'h4Fvg' | 'h4OcFormed' | 'dailyOcFormed' | 'ocAfterRetest'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
 const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
@@ -34,6 +34,7 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'contInline', group: 'Continuations', label: 'H4 breakout in line', desc: 'A new H4 breakout in the Daily direction while H4 is in line with the Daily.' },
   { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'The first time price comes back to the H4 Breaker, touches it exactly and closes beyond it. Only the first touch counts; after that the Breaker is used.' },
   { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
+  { key: 'ocAfterRetest', label: 'H4 OC only after a retest that held', desc: 'On: H4 OC rejections and "H4 OC has formed" only come once, after the latest H4 breakout in line, an H4 candle has touched the H4 Breaker or an H4 V-shape (A-shape for sells) of the breakout leg and closed back beyond it. Each new H4 breakout in line starts over. Off (default): every one, as before.' },
   { key: 'contRealign', label: 'Daily reaction + H4 breakout', desc: 'Every fresh reaction at a Daily level followed by an H4 breakout: while H4 is aligned, and when it brings H4 back in line.' },
   { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, in the Daily direction. Choose which kind below.' },
   { key: 'dailyEngulfing', label: 'Daily engulfing', desc: 'Only the pair and "Daily buy engulfing candle has formed" (or "Daily sell ..."): a Daily candle covered the previous opposite Daily candle, in the current Daily direction. A notification, not an entry signal. Sent at the Daily close. Choose which kind below.' },
@@ -46,7 +47,7 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
-  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle', alertOrigin: 'idle', contInline: 'idle', contBreaker: 'idle', contOc: 'idle', contRealign: 'idle', contEngulfing: 'idle', dailyEngulfing: 'idle', h4Fvg: 'idle', h4OcFormed: 'idle', dailyOcFormed: 'idle' })
+  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle', alertOrigin: 'idle', contInline: 'idle', contBreaker: 'idle', contOc: 'idle', contRealign: 'idle', contEngulfing: 'idle', dailyEngulfing: 'idle', h4Fvg: 'idle', h4OcFormed: 'idle', dailyOcFormed: 'idle', ocAfterRetest: 'idle' })
 
   const { user } = useAuth()
   useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
@@ -57,7 +58,7 @@ export default function PreferencesPage() {
       .then(d => setPrefs({ alertExternal: !!d.alertExternal, alertInternal: !!d.alertInternal, newsAlerts: d.newsAlerts !== false,
         alertOrigin: d.alertOrigin !== false, contInline: d.contInline !== false, contBreaker: d.contBreaker !== false,
         contOc: d.contOc !== false, contRealign: d.contRealign !== false, contEngulfing: d.contEngulfing !== false, dailyEngulfing: d.dailyEngulfing !== false, h4Fvg: d.h4Fvg === true,
-        h4OcFormed: d.h4OcFormed === true, dailyOcFormed: d.dailyOcFormed === true }))
+        h4OcFormed: d.h4OcFormed === true, dailyOcFormed: d.dailyOcFormed === true, ocAfterRetest: d.ocAfterRetest === true }))
       .catch(() => setLoadError(true))
   }, [])
 

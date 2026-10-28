@@ -67,6 +67,14 @@
 //   direction (cont_type "h4_oc_formed"). On the chart an "✕" marks the newest
 //   of each (Daily on D and lower, H4 on 4H); not in the info table.
 //
+// v12 option (2026-10-28) "H4 OC only after a retest that held": after each H4
+//   breakout in line (Origin, Daily reaction + H4 breakout, back in line, in line)
+//   the H4 OC rejection and H4 OC formed only count once an H4 candle has
+//   touched the H4 Breaker, or an H4 V-shape (A-shape for sells) of the breakout
+//   leg below it (above it for sells), and closed back beyond it. Each new H4
+//   breakout in line starts over. The alerts carry "after_retest"; each person
+//   picks it in Alert Filters, the chart setting only picks the chart marks.
+//
 // v10 display: each H4 breakout after a Daily reaction says on its chart label
 //   whether an H4 candle swept an H4 swing low (high, sells) during the break
 //   ("Sweep check on H4 breakout labels"; display only, no alert), and every
@@ -204,6 +212,8 @@ bool   bt_realign  = input.bool(true,  "H4 back in line", group=G_ALERT)
 bool   bt_inline   = input.bool(true,  "H4 breakout in line", group=G_ALERT)
 bool   bt_breaker  = input.bool(true,  "H4 Breaker (first touch)", group=G_ALERT)
 bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=G_ALERT)
+bool   bt_oc_rt    = input.bool(false, "H4 OC only after a retest that held", group=G_ALERT,
+     tooltip="On: after each H4 breakout in line, H4 OC rejections and H4 OC formed only show once an H4 candle has touched the H4 Breaker, or an H4 V-shape (A-shape for sells) of the breakout leg, and closed back beyond it. Each new H4 breakout in line starts over. Off = every H4 OC rejection / OC formed, as before. Chart only; Alert Filters has the same switch for your alerts.")
 bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=G_ALERT,
      tooltip="After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line: if the NEXT H4 candle completes an FVG (buys: its low stays above the high of the candle before the breakout), one alert. Checked once per breakout.")
 
@@ -353,6 +363,15 @@ var int bt_t0 = time
 // + H4 breakout, or back in line); continuations follow it, like the server
 var bt_scls = array.from("")
 var bt_last = array.new<label>(2, na)   // the alert labels on the chart: 0 = confirmations, 1 = H4 FVG
+// "H4 OC only after a retest that held": every H4 V / A formed (level, bar), the
+// levels of the latest H4 breakout in line that count as its retest (the Breaker
+// + the leg's V / A beyond it), and whether one was retested and held
+var vh_lv = array.new<float>()
+var vh_b  = array.new<int>()
+var ah_lv = array.new<float>()
+var ah_b  = array.new<int>()
+var rt_lvls = array.new<float>()
+var rt_held = array.from(false)
 // The newest OC formed marks (✕): Daily, H4
 var label ocf_d = na
 var label ocf_h = na
@@ -1767,6 +1786,30 @@ f_h4_leg_prune(array<float> lv, array<int> lb, int from_bar, bool bull) =>
             array.remove(lb, k)
         k -= 1
 
+// A new H4 breakout in line: its retest levels are the Breaker and the H4 V-shapes
+// (A-shapes for sells) formed from the leg's swing low (high) onward that sit below
+// (above) the Breaker. Nothing retested yet.
+f_rt_arm(bool bull, int from_bar, float brk) =>
+    int   ext_bar = bar_index
+    float ext     = bull ? low : high
+    int   n       = math.min(bar_index - nz(from_bar, bar_index), 400)
+    for i = 0 to n
+        if bull ? low[i] < ext : high[i] > ext
+            ext     := bull ? low[i] : high[i]
+            ext_bar := bar_index - i
+    array.clear(rt_lvls)
+    array.set(rt_held, 0, false)
+    if not na(brk)
+        array.push(rt_lvls, brk)
+    array<float> lv = bull ? vh_lv : ah_lv
+    array<int>   lb = bull ? vh_b  : ah_b
+    int sz = array.size(lv)
+    if sz > 0
+        for k = 0 to sz - 1
+            float rv = array.get(lv, k)
+            if array.get(lb, k) >= ext_bar and (na(brk) or (bull ? rv < brk : rv > brk))
+                array.push(rt_lvls, rv)
+
 // ── H4 liquidity sweeps (display only, like LuxAlgo "Liquidity Sweeps", wicks) ─
 // A swing low = a low lower than the sw_len candles on each side (known sw_len
 // candles later). A candle whose wick goes below a live swing low and closes back
@@ -1916,11 +1959,21 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
     if new_a
         h4_a_lvl   := math.max(open[1], close[1])
         h4a_origin := bar_index
+        array.push(ah_lv, h4_a_lvl)
+        array.push(ah_b, bar_index)
+        if array.size(ah_lv) > 60
+            array.shift(ah_lv)
+            array.shift(ah_b)
 
     bool new_v = h4_bear1 and h4_bull0
     if new_v
         h4_v_lvl   := math.min(open[1], close[1])
         h4v_origin := bar_index
+        array.push(vh_lv, h4_v_lvl)
+        array.push(vh_b, bar_index)
+        if array.size(vh_lv) > 60
+            array.shift(vh_lv)
+            array.shift(vh_b)
 
     // ── H4 FVG after an H4 breakout in line with the Daily ────────────────
     // Checked once, on the candle right after the breakout candle. Buys: its low
@@ -2267,6 +2320,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                 h4_invalid_lvl        := h4_v_lvl
                 h4_brk_lvl            := h4_a_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
+                f_rt_arm(true, h4a_origin, bt_brk)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
                 bt_swtxt := f_sw_note(true, bt_brk)
@@ -2288,6 +2342,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                 h4_invalid_lvl        := h4_v_lvl
                 h4_brk_lvl            := h4_a_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4a_origin, true)
+                f_rt_arm(true, h4a_origin, bt_brk)
                 confirmed_this_bar    := true
                 bt_swtxt := f_sw_note(true, bt_brk)
                 f_btlbl(true, bt_was_aligned ? 7 : 1, h4_cls, bt_brk, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
@@ -2339,6 +2394,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                 h4_invalid_lvl        := h4_a_lvl
                 h4_brk_lvl            := h4_v_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
+                f_rt_arm(false, h4v_origin, bt_brkv)
                 h4_breaker_orig_fired := false
                 confirmed_this_bar    := true
                 bt_swtxt := f_sw_note(false, bt_brkv)
@@ -2360,6 +2416,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                 h4_invalid_lvl        := h4_a_lvl
                 h4_brk_lvl            := h4_v_lvl
                 f_h4_leg_prune(h4_ocs, h4_ocb, h4v_origin, false)
+                f_rt_arm(false, h4v_origin, bt_brkv)
                 confirmed_this_bar    := true
                 bt_swtxt := f_sw_note(false, bt_brkv)
                 f_btlbl(false, bt_was_aligned ? 7 : 1, h4_cls, bt_brkv, bo_level, "Daily reaction: " + f_bt_src(retest_src) + " @ " + f_bt_lvtxt(src_lvl))
@@ -2426,6 +2483,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                 h4_invalid_lvl        := ilb ? h4_v_lvl : h4_a_lvl
                 h4_breaker_orig_fired := false
                 f_h4_leg_prune(h4_ocs, h4_ocb, ilb ? h4a_origin : h4v_origin, ilb)
+                f_rt_arm(ilb, ilb ? h4a_origin : h4v_origin, brk_lvl)
                 confirmed_this_bar    := true
                 f_btlbl(ilb, 2, "", brk_lvl, bo_level, "")
                 if barstate.isrealtime
@@ -2469,6 +2527,16 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                               + ',"h4_level":' + str.tostring(h4_breaker_lvl) + '}',
                               alert.freq_once_per_bar)
 
+    // ── Retest that held (for "H4 OC only after a retest that held") ──────
+    // An H4 candle after the breakout touches the Breaker or one of the leg's
+    // V-shapes (A-shapes for sells) and closes back beyond it.
+    if h4_bo_fired and h4_aligned and not confirmed_this_bar and not array.get(rt_held, 0) and array.size(rt_lvls) > 0
+        for rl in rt_lvls
+            if bo_dir == "bullish" ? (low <= rl and close > rl) : (high >= rl and close < rl)
+                array.set(rt_held, 0, true)
+                break
+    bool oc_rt = array.get(rt_held, 0)
+
     // ── H4 OCs (trend continuation) ───────────────────────────────────────
     bool ocb = bo_dir == "bullish"
     // a) New in-line H4 breakouts prune the list in the continuation block above.
@@ -2491,11 +2559,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
                 array.remove(h4_ocs, k)
                 array.remove(h4_ocb, k)
         k -= 1
-    if not na(oc_hit)
-        f_btlbl(ocb, 5, "", oc_hit, bo_level, "")
+    if not na(oc_hit) and (oc_rt or not bt_oc_rt)
+        f_btlbl(ocb, 5, "", oc_hit, bo_level, oc_rt ? "After a retest that held" : "")
     if not na(oc_hit) and barstate.isrealtime
         alert(f_hdrw("H4_CONTINUATION")
-              + '","direction":"' + bo_dir + '","cont_type":"oc_cont"'
+              + '","direction":"' + bo_dir + '","cont_type":"oc_cont","after_retest":' + (oc_rt ? "true" : "false")
               + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
               + ',"h4_level":' + str.tostring(oc_hit) + '}',
               alert.freq_once_per_bar)
@@ -2540,14 +2608,14 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             array.shift(h4_ocb)
         // OC formed notification (no buy / sell): after the Origin, while in line
         if h4_bo_fired and h4_aligned
-            if bt_hocf and time >= bt_from
+            if bt_hocf and time >= bt_from and (oc_rt or not bt_oc_rt)
                 label.delete(ocf_h)
                 ocf_h := label.new(bar_index, ocb ? low : high, "✕", yloc=ocb ? yloc.belowbar : yloc.abovebar,
                      style=label.style_none, textcolor=bt_ocf_col, size=size.small,
                      tooltip=syminfo.ticker + "\nH4 OC has formed\nOC level " + str.tostring(close[1], format.mintick))
             if barstate.isrealtime
                 alert(f_hdrw("H4_CONTINUATION")
-                      + '","direction":"' + bo_dir + '","cont_type":"h4_oc_formed"'
+                      + '","direction":"' + bo_dir + '","cont_type":"h4_oc_formed","after_retest":' + (oc_rt ? "true" : "false")
                       + ',"level_type":"' + bo_layer + '","breakout_level":' + str.tostring(bo_level)
                       + ',"h4_level":' + str.tostring(close[1]) + '}',
                       alert.freq_once_per_bar)

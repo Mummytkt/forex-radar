@@ -942,6 +942,15 @@ check("switching OC formed on sends it", _ocf("h4_oc_formed") and _ocf("d_oc_for
 c.patch("/api/preferences", headers=H(ts_), json={"h4OcFormed": False})
 check("H4 and Daily OC formed have separate switches", not _ocf("h4_oc_formed") and _ocf("d_oc_formed"))
 c.patch("/api/preferences", headers=H(ts_), json={"dailyOcFormed": False})
+# H4 OC only after a retest that held (2026-10-28): per-person option, off by default
+check("'H4 OC only after a retest that held' is off by default",
+      c.get("/api/preferences", headers=H(ts_)).json()["ocAfterRetest"] is False)
+def _ocr(after):
+    sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", pref="cont_oc", after_retest=after)); return "chatS" in sent
+check("with the option off every H4 OC rejection is sent", _ocr(False) and _ocr(True) and _ocr(None))
+c.patch("/api/preferences", headers=H(ts_), json={"ocAfterRetest": True})
+check("with it on only the ones after a retest that held are sent", not _ocr(False) and _ocr(True) and _ocr(None))
+c.patch("/api/preferences", headers=H(ts_), json={"ocAfterRetest": False})
 sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class="internal", pref="cont_realign"))
 check("an Internal 'back in line' alert skips people with Internal off", "chatS" not in sent)
 check("subscribers get the Short style by default; the owner Full",

@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "27 October 2026 (script v12, OC formed notifications; v11 Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "28 October 2026 (script v12, OC formed notifications, option: H4 OC only after a retest that held; v11 Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -240,6 +240,14 @@ def make_images():
         levels=[(17.5, "OC level: where the first candle closed", MUTED)],
         notes=[(2, 18.3, "second candle in a row closes in the\nDaily direction → “OC has formed”", GREEN, (0.9, 18.95))],
         labels=["", "1st bullish", "2nd bullish"], ylim=(16.3, 19.3))
+    im["ocretest"] = chart("ocretest", [(10.2, 11.1, 10.1, 11.0), (11.0, 11.05, 10.3, 10.4), (9.9, 10.6, 9.7, 10.5),
+                                       (10.5, 11.6, 10.4, 11.5), (11.5, 12.1, 11.4, 12.0), (12.0, 12.5, 11.9, 12.4),
+                                       (12.4, 12.45, 10.95, 11.3), (11.3, 12.7, 11.2, 12.6), (12.6, 13.1, 12.5, 13.0), (13.0, 13.2, 12.6, 13.1)],
+        levels=[(11.0, "H4 Breaker", ACCENT), (12.6, "H4 OC level", MUTED)],
+        notes=[(3, 11.6, "H4 breakout in line", GREEN, (2.2, 12.9)),
+               (6, 10.95, "touches the Breaker,\ncloses back above (held)", ACCENT, (5.4, 9.9)),
+               (9, 12.6, "OC rejection after\nthe retest → alert", GREEN, (8.6, 11.4))],
+        labels=["", "", "", "breakout", "", "", "retest", "", "", "OC rejection"], ylim=(9.4, 13.6))
     im["weekly"] = chart("weekly", [(15.0, 15.7, 14.9, 15.6), (15.6, 17.3, 15.5, 17.1), (17.1, 17.2, 16.0, 16.3), (16.3, 17.9, 16.1, 17.7)],
         levels=[(16.0, "Weekly Breaker (broken Weekly External high)", RED)],
         notes=[(1, 17.1, "Weekly close above\n→ Weekly breakout", GREEN, (0.4, 18.4)),
@@ -478,6 +486,14 @@ def make_rules(im):
          "Bearish Daily direction: two bearish candles in a row",
          "It doesn't change the H4 stage or the H4 Breaker. H4 and Daily each have their own Alert Filters switch (off for subscribers until they "
          "switch it on). On the chart an ✕ marks the most recent of each; it is not in the info table.", im["ocformed"]),
+        ("F. Continuations (after the Origin)", "Option: H4 OC only after a retest that held",
+         "Off by default (Alert Filters and the chart settings). <b>On:</b> after each H4 breakout in line (Origin, Daily reaction + H4 breakout, "
+         "back in line, in line), H4 OC rejections and <b>“H4 OC has formed”</b> only count once an H4 candle has <b>touched the H4 Breaker</b>, "
+         "or an <b>H4 V-shape (A-shape for sells) of the breakout leg</b>, and <b>closed back beyond it</b>. <b>Off:</b> every one, as before.",
+         "Buys: an H4 candle's low reaches the Breaker or a leg V-shape below it, and it closes above that level",
+         "Sells: an H4 candle's high reaches the Breaker or a leg A-shape above it, and it closes below that level",
+         "Each new H4 breakout in line starts over and needs a new retest. The OC rules themselves (first touch, used levels) don't change, "
+         "and neither do the Daily or Weekly rules.", im["ocretest"]),
         ("F. Continuations (after the Origin)", "H4 FVG after breakout",
          "After an <b>Origin</b>, a <b>Daily reaction + H4 breakout</b>, <b>H4 back in line</b> or an <b>H4 breakout in line</b>, the <b>next H4 candle</b> is "
          "checked once. If it completes an FVG, one alert is sent with only the pair and <b>“H4 FVG candle after breakout has formed”</b>. "

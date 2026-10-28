@@ -55,6 +55,7 @@ class AlertPreferences(BaseModel):
     dailyEngulfing: bool = True
     dailyOcFormed: bool = False
     h4OcFormed: bool = False
+    ocAfterRetest: bool = False
     alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
     engulfMode: str = "wick"            # "wick" | "body" | "both"
     dEngulfMode: str = "wick"           # Daily engulfing: "wick" | "body" | "both"
@@ -74,6 +75,7 @@ class AlertPreferencesUpdate(BaseModel):
     dailyEngulfing: bool | None = None
     dailyOcFormed: bool | None = None
     h4OcFormed: bool | None = None
+    ocAfterRetest: bool | None = None
     alertStyle: str | None = None
     engulfMode: str | None = None
     dEngulfMode: str | None = None

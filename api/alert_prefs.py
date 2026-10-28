@@ -21,13 +21,15 @@ _KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal",
          "cont_breaker": "pref_alert_cont_breaker", "cont_oc": "pref_alert_cont_oc",
          "cont_realign": "pref_alert_cont_realign", "engulfing": "pref_alert_engulfing",
          "h4_fvg": "pref_alert_h4_fvg", "d_engulfing": "pref_alert_d_engulfing",
-         "d_oc_formed": "pref_alert_d_oc_formed", "h4_oc_formed": "pref_alert_h4_oc_formed"}
+         "d_oc_formed": "pref_alert_d_oc_formed", "h4_oc_formed": "pref_alert_h4_oc_formed",
+         # H4 OC rejection / OC formed only after a retest of the breakout that held (off = every one)
+         "oc_after_retest": "pref_alert_oc_after_retest"}
 
 
 # Everything is on until switched off, except Internal H4 breakouts: External
 # only by default; each person can switch Internal on. The H4 FVG and OC formed
 # notifications are off for subscribers (they opt in) and on for the owner.
-_DEFAULTS = {"internal": False}
+_DEFAULTS = {"internal": False, "oc_after_retest": False}
 _OWNER_ONLY_DEFAULT = {"h4_fvg", "d_oc_formed", "h4_oc_formed"}
 
 
