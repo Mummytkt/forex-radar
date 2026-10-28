@@ -33,11 +33,9 @@ const POIS: { key: string; label: string }[] = [
 ]
 const MODELS: { key: string; label: string }[] = [
   { key: 'direct', label: 'Direct entry' },
-  { key: 'h1_cisd', label: '1H CISD' },
-  { key: 'm15_cisd', label: '15M CISD' },
-  { key: 'm5_cisd', label: '5M CISD' },
-  { key: 'h1_engulfing', label: '1H Engulfing' },
-  { key: 'h2_engulfing', label: '2H Engulfing' },
+  { key: 'h1_cisd', label: '1H SMC' },   // keys kept from when these were called CISD
+  { key: 'm5_cisd', label: '5M SMC' },
+  { key: 'm15_cisd', label: '15M SMC' },
 ]
 const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string }[] = POIS.flatMap(p =>
   MODELS.map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label })))
@@ -205,6 +203,30 @@ function rOf(r: EntryResult): number | null {
   return null
 }
 
+// Win / loss streaks over results oldest → newest. A BE or no entry is skipped
+// (it doesn't end a streak). now = the run still going at the newest result.
+function streaks(seq: { o: Outcome }[]) {
+  let run = 0, runO: Outcome | null = null, bestW = 0, worstL = 0
+  for (const x of seq) {
+    if (x.o !== 'win' && x.o !== 'loss') continue
+    if (x.o === runO) run++
+    else { runO = x.o; run = 1 }
+    if (x.o === 'win') bestW = Math.max(bestW, run)
+    else worstL = Math.max(worstL, run)
+  }
+  return { now: run, nowO: runO, bestW, worstL }
+}
+function Streak({ s }: { s: ReturnType<typeof streaks> }) {
+  if (!s.nowO) return <span style={{ color: 'var(--text-muted)' }}>–</span>
+  return (
+    <span title="Now = the run still going (newest results). Longest wins / losses in a row. BE and no entry don't break a run.">
+      <b style={{ color: s.nowO === 'win' ? SOFT.up : SOFT.dn }}>{s.now}{s.nowO === 'win' ? 'W' : 'L'} now</b>
+      <span style={{ color: 'var(--text-muted)' }}> · best </span><b style={{ color: SOFT.up }}>{s.bestW}W</b>
+      <span style={{ color: 'var(--text-muted)' }}> · worst </span><b style={{ color: SOFT.dn }}>{s.worstL}L</b>
+    </span>
+  )
+}
+
 // ── Small UI pieces ───────────────────────────────────────────────────────────
 function Chip({ on, color, bg, onClick, children }: { on: boolean; color: string; bg: string; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -288,7 +310,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       if (v != null) totalR += v
     }
     const taken = w + l + be
-    return { ...t, w, l, be, none, taken, trades: trades_, noRR, totalR, seq,
+    return { ...t, w, l, be, none, taken, trades: trades_, noRR, totalR, seq, streak: streaks(seq),
       winRate: taken ? (w / taken) * 100 : null,
       avgRR: rrN ? rrSum / rrN : null,
       expectancy: taken ? totalR / taken : null }
@@ -363,6 +385,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
               <th style={th} title="Trades placed, re-entries included">Trades</th><th style={th}>Win</th><th style={th}>Loss</th><th style={th}>BE</th>
               <th style={th}>No entry</th><th style={th}>Win %</th><th style={th}>Avg RR (wins)</th>
               <th style={th}>Total R</th><th style={th}>R / trade</th>
+              <th style={th} title="Wins / losses in a row: the run going now, the longest win run, the longest loss run. BE and no entry don't break a run.">Streak</th>
               <th style={{ ...th, textAlign: 'left' }} title="Each setup's result for this entry, oldest first. Hover a badge for the date and pair.">Results (oldest → newest)</th>
             </tr>
           </thead>
@@ -392,6 +415,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                   <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? SOFT.up : g.totalR < 0 ? SOFT.dn : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
                   <td style={td}>{gTaken ? fmtR(g.totalR / gTaken) : '–'}</td>
                   <td style={td}></td>
+                  <td style={td}></td>
                 </tr>,
                 ...grp.map(r => (
               <tr key={r.key} style={{ borderBottom: '1px solid var(--border)', opacity: r.taken || r.none ? 1 : 0.45 }}>
@@ -406,6 +430,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                 <td style={td}>{r.avgRR == null ? '–' : r.avgRR.toFixed(2)}{r.noRR ? <span title="Wins with no RR set" style={{ color: 'var(--text-muted)' }}> ({r.noRR}?)</span> : null}</td>
                 <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? SOFT.up : r.totalR < 0 ? SOFT.dn : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
                 <td style={td}>{r.expectancy == null ? '–' : fmtR(r.expectancy)}</td>
+                <td style={td}><Streak s={r.streak} /></td>
                 <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal' }}>
                   <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', maxWidth: 380 }}>
                     {r.seq.map((x, i) => (

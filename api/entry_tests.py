@@ -40,11 +40,9 @@ POIS: list[tuple[str, str]] = [
 ]
 MODELS: list[tuple[str, str]] = [
     ("direct", "Direct entry"),
-    ("h1_cisd", "1H CISD"),
-    ("m15_cisd", "15M CISD"),
-    ("m5_cisd", "5M CISD"),
-    ("h1_engulfing", "1H Engulfing"),
-    ("h2_engulfing", "2H Engulfing"),
+    ("h1_cisd", "1H SMC"),     # keys kept from when these were called CISD (renamed 2026-10-28)
+    ("m5_cisd", "5M SMC"),
+    ("m15_cisd", "15M SMC"),
 ]
 ENTRY_TYPES: list[tuple[str, str]] = [
     (f"{m}_{p}", f"{ml} on {pl}") for p, pl in POIS for m, ml in MODELS
@@ -58,6 +56,8 @@ _LEGACY = {"h1_smc", "h1_engulfing", "h2_engulfing", "m5_cisd", "m5_smc", "m15_s
 # H4 FVG and 4H / 2H 3CR POIs, taken off on 2026-10-24 (results already ticked stay stored)
 _LEGACY |= {f"{m}_{p}" for m in ("direct", "h1_cisd", "m15_cisd", "m5_cisd", "h1_engulfing", "h2_engulfing",
                                  "h1_smc", "m5_smc", "m15_smc", "h4_3cr", "h2_3cr") for p in ("fvg", "3cr")}
+# 1H / 2H Engulfing entry models, taken off on 2026-10-28 (results already ticked stay stored)
+_LEGACY |= {f"{m}_{p}" for m in ("h1_engulfing", "h2_engulfing") for p in ("engulfing", "h4_key")}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key")
