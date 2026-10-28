@@ -1368,7 +1368,7 @@ f_btlbl(bool bull, int kind, string cls, float h4lvl, float dlvl, string note) =
     string c = array.get(bt_scls, 0)
     bool cls_ok = c == "" or kind >= 10 or (c == "external" ? bt_ext : bt_int)   // H4 FVG / Daily engulfing: no H4 class
     // H4 FVG: no buy / sell, just the pair and the message (for tracking liquidity)
-    string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 11 ? syminfo.ticker + "\nDaily engulfing candle has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
+    string head = kind == 10 ? syminfo.ticker + "\nH4 FVG candle after breakout has formed" : kind == 11 ? syminfo.ticker + "\nDaily " + (bull ? "buy" : "sell") + " engulfing candle has formed" : kind == 0 ? (bull ? "BUY CONFIRMED" : "SELL CONFIRMED") : (bull ? "BUY" : "SELL") + " · " + array.get(BT_NAMES, kind)
     string tag  = c == "" or kind >= 10 ? "" : conf ? (c == "external" ? " (External)" : " (Internal)") : (c == "external" ? " (External setup)" : " (Internal setup)")
     string detail = array.get(BT_NAMES, kind) + " @ " + str.tostring(h4lvl, format.mintick)
          + (note == "" ? "" : "\n" + note) + "\nDaily breakout @ " + str.tostring(dlvl, format.mintick)
@@ -1595,7 +1595,7 @@ if new_daily and not na(bo_dir) and not na(d_close2) and not na(dw_h2)
                 bool  ewb    = f_eng_wickbox(bt_deng_mode, d_eng_wick)
                 float eb_top = ewb or not deb ? dw_h2 : math.max(d_open2, d_close2)   // the covered Daily candle
                 float eb_bot = ewb or deb ? dw_l2 : math.min(d_open2, d_close2)
-                f_eng_draw(true, dw_t2, time[1], eb_top, eb_bot, syminfo.ticker + "\nDaily engulfing candle has formed\n" + (d_eng_wick ? "Covers the previous Daily candle's wick" : "Covers the previous Daily candle's body only"))
+                f_eng_draw(true, dw_t2, time[1], eb_top, eb_bot, syminfo.ticker + "\nDaily " + (deb ? "buy" : "sell") + " engulfing candle has formed\n" + (d_eng_wick ? "Covers the previous Daily candle's wick" : "Covers the previous Daily candle's body only"))
         if barstate.isrealtime
             alert(f_hdrw("H4_CONTINUATION")
                   + '","direction":"' + bo_dir + '","cont_type":"d_engulfing","eng_wick":' + (d_eng_wick ? "true" : "false")

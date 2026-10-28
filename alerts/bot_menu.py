@@ -67,7 +67,7 @@ OC: two candles in the same direction; the level is where the first closed and t
 H4 back in line: 4H had gone against the Daily, then broke back in the Daily direction after a fresh Daily reaction.
 
 H4 engulfing: a 4H candle covered the previous opposite candle, in the Daily direction.
-Daily engulfing: a notification only (no buy / sell) that a Daily candle covered the previous opposite Daily candle, in the Daily direction.
+Daily buy / sell engulfing: a notification that a Daily candle covered the previous opposite Daily candle, in the Daily direction.
 
 H4 OC has formed / Daily OC has formed: a notification only (no buy / sell) that the last two 4H (Daily) candles both closed in the Daily direction; for 4H, only after the Origin while 4H is in line (off unless you switch it on in Alert Filters).
 

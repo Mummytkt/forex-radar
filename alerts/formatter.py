@@ -87,7 +87,8 @@ def format_alert(alert: AlertRecord) -> str:
         return f"{alert.instrument}\nH4 FVG candle after breakout has formed"
     if alert.classification == AlertClassification.D_ENGULFING:
         # A notification only: the pair and the message, no buy / sell
-        return f"{alert.instrument}\nDaily engulfing candle has formed"
+        side = "buy" if alert.direction == Direction.BULLISH else "sell"
+        return f"{alert.instrument}\nDaily {side} engulfing candle has formed"
     if alert.classification == AlertClassification.D_OC_FORMED:
         return f"{alert.instrument}\nDaily OC has formed"
     if alert.classification == AlertClassification.H4_OC_FORMED:

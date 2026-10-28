@@ -463,7 +463,7 @@ def make_rules(im):
          "One alert per candle: if a Breaker, OC or in-line breakout alert fires on the same candle, the engulfing alert is not sent.", im["h4engulf"]),
         ("F. Continuations (after the Origin)", "Daily engulfing",
          "Whenever a Daily direction is set (before or after the Origin), a <b>Daily</b> candle that <b>covers the previous opposite Daily "
-         "candle's body</b>, in the current Daily direction, sends a notification at the Daily close: only the pair and <b>“Daily engulfing candle has formed”</b>, no buy or sell. It counts as <b>covers the wick</b> "
+         "candle's body</b>, in the current Daily direction, sends a notification at the Daily close: only the pair and <b>“Daily buy engulfing candle has formed”</b> (<b>“Daily sell …”</b> in a bearish Daily direction). It counts as <b>covers the wick</b> "
          "when it also closes beyond that candle's high (low for sells). Each member chooses which reach them, separately from the H4 "
          "engulfing: covers the wick (default), covers the body only, or both.",
          "Bullish Daily direction: after a bearish Daily candle, opens at/below its close, closes above its open (body) or above its HIGH (wick)",

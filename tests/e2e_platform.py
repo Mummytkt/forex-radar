@@ -900,8 +900,8 @@ check("a body-only engulfing message says so", "engulfing (covers the body) @ 0.
 tv(type="H4_CONTINUATION", instrument="AUDCAD", direction="bullish", cont_type="d_engulfing", eng_wick=True, level_type="external",
    breakout_level=0.9100, h4_level=0.9160, timeframe="240")
 _td = conn.execute(f"SELECT {alert_text_col} FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("a Daily engulfing alert is only the pair and the message, no buy / sell",
-      _td == "AUDCAD\nDaily engulfing candle has formed")
+check("a Daily engulfing alert is the pair and 'Daily buy engulfing candle has formed'",
+      _td == "AUDCAD\nDaily buy engulfing candle has formed")
 # Notification-list filter (2026-10-27): each alert keeps its exact type
 _types = conn.execute("SELECT alert_type FROM alerts WHERE instrument='AUDCAD' ORDER BY id DESC LIMIT 2").fetchall()
 check("alerts are stored with their exact type", [t[0] for t in _types] == ["d_engulfing", "engulfing"])
