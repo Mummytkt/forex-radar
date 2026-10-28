@@ -488,11 +488,11 @@ def make_rules(im):
          "switch it on). On the chart an ✕ marks the most recent of each; it is not in the info table.", im["ocformed"]),
         ("F. Continuations (after the Origin)", "Option: H4 OC only after a retest that held",
          "Off by default (Alert Filters and the chart settings). <b>On:</b> after each H4 breakout in line (Origin, Daily reaction + H4 breakout, "
-         "back in line, in line), H4 OC rejections and <b>“H4 OC has formed”</b> only count once an H4 candle has <b>touched the H4 Breaker</b>, "
+         "back in line, in line), H4 OC rejections and <b>“H4 OC has formed”</b> only start counting after an H4 candle has <b>touched the H4 Breaker</b>, "
          "or an <b>H4 V-shape (A-shape for sells) of the breakout leg</b>, and <b>closed back beyond it</b>. <b>Off:</b> every one, as before.",
          "Buys: an H4 candle's low reaches the Breaker or a leg V-shape below it, and it closes above that level",
          "Sells: an H4 candle's high reaches the Breaker or a leg A-shape above it, and it closes below that level",
-         "Each new H4 breakout in line starts over and needs a new retest. The OC rules themselves (first touch, used levels) don't change, "
+         "From then on every one counts, until the next H4 breakout in line, which needs its own retest. The OC rules themselves (first touch, used levels) don't change, "
          "and neither do the Daily or Weekly rules.", im["ocretest"]),
         ("F. Continuations (after the Origin)", "H4 FVG after breakout",
          "After an <b>Origin</b>, a <b>Daily reaction + H4 breakout</b>, <b>H4 back in line</b> or an <b>H4 breakout in line</b>, the <b>next H4 candle</b> is "

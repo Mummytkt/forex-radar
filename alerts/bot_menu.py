@@ -69,7 +69,7 @@ H4 back in line: 4H had gone against the Daily, then broke back in the Daily dir
 H4 engulfing: a 4H candle covered the previous opposite candle, in the Daily direction.
 Daily buy / sell engulfing: a notification that a Daily candle covered the previous opposite Daily candle, in the Daily direction.
 
-H4 OC only after a retest that held (Alert Filters option, off by default): H4 OC rejections and "H4 OC has formed" only once the H4 Breaker or a 4H V-shape (A-shape for sells) of the breakout leg was touched and held.
+H4 OC only after a retest that held (Alert Filters option, off by default): H4 OC rejections and "H4 OC has formed" only start after the H4 Breaker or a 4H V-shape (A-shape for sells) of the breakout leg was touched and held.
 
 H4 OC has formed / Daily OC has formed: a notification only (no buy / sell) that the last two 4H (Daily) candles both closed in the Daily direction; for 4H, only after the Origin while 4H is in line (off unless you switch it on in Alert Filters).
 

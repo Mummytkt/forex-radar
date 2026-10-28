@@ -69,7 +69,7 @@
 //
 // v12 option (2026-10-28) "H4 OC only after a retest that held": after each H4
 //   breakout in line (Origin, Daily reaction + H4 breakout, back in line, in line)
-//   the H4 OC rejection and H4 OC formed only count once an H4 candle has
+//   the H4 OC rejection and H4 OC formed only start counting after an H4 candle has
 //   touched the H4 Breaker, or an H4 V-shape (A-shape for sells) of the breakout
 //   leg below it (above it for sells), and closed back beyond it. Each new H4
 //   breakout in line starts over. The alerts carry "after_retest"; each person
@@ -213,7 +213,7 @@ bool   bt_inline   = input.bool(true,  "H4 breakout in line", group=G_ALERT)
 bool   bt_breaker  = input.bool(true,  "H4 Breaker (first touch)", group=G_ALERT)
 bool   bt_oc       = input.bool(true,  "H4 OC reaction", group=G_ALERT)
 bool   bt_oc_rt    = input.bool(false, "H4 OC only after a retest that held", group=G_ALERT,
-     tooltip="On: after each H4 breakout in line, H4 OC rejections and H4 OC formed only show once an H4 candle has touched the H4 Breaker, or an H4 V-shape (A-shape for sells) of the breakout leg, and closed back beyond it. Each new H4 breakout in line starts over. Off = every H4 OC rejection / OC formed, as before. Chart only; Alert Filters has the same switch for your alerts.")
+     tooltip="On: after each H4 breakout in line, H4 OC rejections and H4 OC formed wait until an H4 candle has touched the H4 Breaker, or an H4 V-shape (A-shape for sells) of the breakout leg, and closed back beyond it. From then on every one shows, until the next H4 breakout in line, which waits for its own retest. Off = every H4 OC rejection / OC formed, as before. Chart only; Alert Filters has the same switch for your alerts.")
 bool   bt_h4fvg    = input.bool(true,  "H4 FVG after an H4 breakout", group=G_ALERT,
      tooltip="After an Origin, Daily reaction + H4 breakout, H4 back in line or H4 breakout in line: if the NEXT H4 candle completes an FVG (buys: its low stays above the high of the candle before the breakout), one alert. Checked once per breakout.")
 
