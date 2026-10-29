@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "28 October 2026 (script v12, OC formed notifications, option: H4 OC only after a retest that held; v11 Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "29 October 2026 (script v13, a touched Daily level is tested and External belongs to the reaction; v12 OC formed notifications, option: H4 OC only after a retest that held; v11 Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -426,7 +426,7 @@ def make_rules(im):
         ("E. H4 confirmation", "External and internal breaks",
          "What counts is the <b>first H4 touch</b> of a Daily level after that level formed. The <b>External</b> level is the closest H4 A-shape (buy) "
          "or V-shape (sell) that formed <b>before</b> that first touch (before the candle that touched; an A/V completed by that candle itself is Internal). Every A/V-shape that forms <b>after</b> the touch is <b>Internal</b>, however deep "
-         "price goes. The first touch of a <b>new</b> Daily level starts its own check, even while price is reacting at another level.",
+         "price goes. The External level belongs to the reaction: a first touch of some other Daily level while the reaction runs does not move it.",
          "External: the closest A-shape before the first touch · Internal: any A-shape formed after it",
          "External: the closest V-shape before the first touch · Internal: any V-shape formed after it",
          "With Internal off (the default), breaking only an Internal level does not use up the reaction: the script keeps waiting for the External one. "
@@ -437,7 +437,9 @@ def make_rules(im):
          "H4 A-shape (buy) or V-shape (sell) also sends an <b>“H4 breakout in line with the Daily”</b> alert; no Daily reaction is needed for it.",
          "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
          "<b>A used level is used:</b> only the first touch of a level counts (the Weekly follows the same rule with Weekly levels). A Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 "
-         "confirmation, or whose reaction failed (an H4 close back through it), never starts another reaction; price going past it must react at a level beyond it. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
+         "confirmation, or whose reaction failed (an H4 close back through it), never starts another reaction; price going past it must react at a level beyond it. "
+         "A Daily V/A-shape or OC that an H4 candle has <b>touched</b> since it formed (before or after the breakout, in either direction) has been tested: "
+         "it can't start a reaction later either. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
          "setup are not sent.", im["noneworigin"]),
         ("F. Continuations (after the Origin)", "H4 Breaker retest",
          f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. Each newer in-line H4 breakout (and a return in line) replaces it with "

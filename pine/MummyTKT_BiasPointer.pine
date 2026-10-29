@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Bias Pointer v11 — live alerts + on-chart labels (2026-10-27)
+// MummyTKT's Bias Pointer v13 — live alerts + on-chart labels (2026-10-29)
 //
 // The logic proven in the backtest edition is now the live logic. Every bias
 // alert also puts an "H4 aligned - Alert" label on that H4 candle (each display
@@ -74,6 +74,14 @@
 //   leg below it (above it for sells), and closed back beyond it. Each new H4
 //   breakout in line starts over. The alerts carry "after_retest"; each person
 //   picks it in Alert Filters, the chart setting only picks the chart marks.
+//
+// v13 fix (2026-10-29, BNBUSD 29 Oct): (1) a Daily V/A-shape or OC that an H4
+//   candle has touched since it formed (in either Daily direction, before or after
+//   the breakout, held or not) never starts a reaction later; the first touch was
+//   the test. (2) The External level belongs to the reaction: the last H4 A (V for
+//   sells) before the candle that started it. A first touch of some other Daily level
+//   while it runs no longer moves it (it used to, so a breakout of an A formed after
+//   the touch could read External). FVGs keep their own rules. Weekly: the same.
 //
 // v10 display: each H4 breakout after a Daily reaction says on its chart label
 //   whether an H4 candle swept an H4 swing low (high, sells) during the break
@@ -1138,7 +1146,7 @@ f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float l
             bool inside = L > lo_lim and L < hi_lim
             bool touched = lo_ <= L and hi_ >= L
             bool held = bull ? cl_ >= L - t : cl_ <= L + t
-            if inside and touched and held and not f_wused(L) and (na(best) or (bull ? L < best : L > best))
+            if inside and touched and held and not f_wused(L) and not f_wseen(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
@@ -1172,23 +1180,7 @@ if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not
     float wb_lo = wk_level - tol
     float wb_hi = wk_level + tol
 
-    // First Daily touch of each Weekly level since it formed: the External start
-    bool w_first = false
-    array<float> wcand = array.new<float>()
-    array.push(wcand, wk_level)
-    for L in w_pbocs
-        array.push(wcand, L)
-    array<float> wshp = wb ? w_vs : w_as
-    array<float> wocl = wb ? w_boc : w_soc
-    for L in wshp
-        array.push(wcand, L)
-    for L in wocl
-        array.push(wcand, L)
-    for L in wcand
-        bool w_held = wb ? d_close >= L - tol : d_close <= L + tol
-        if dr_l <= L and dr_h >= L and w_held and not f_wseen(L)
-            array.push(w_seen, L)
-            w_first := true
+    // A Weekly FVG keeps its own External start: the Daily candle that first entered it
     if array.size(wfh) > 0
         for i = 0 to array.size(wfh) - 1
             float gH = array.get(wfh, i)
@@ -1197,11 +1189,6 @@ if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not
             if dr_l <= gH and dr_h >= gL and not array.get(wfp, i) and not f_wseen(gK)
                 array.push(w_seen, gK)
                 array.set(wfx, i, dr_t)
-                w_first := true
-    if array.size(w_seen) > 300
-        array.shift(w_seen)
-    if w_first
-        wk_anchor_t := dr_t
 
     // A reaction fails on a Daily close back through its level (a Weekly FVG only
     // on a Weekly close through the gap, checked when the week closes)
@@ -1261,8 +1248,29 @@ if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not
             wk_anchor_lvl := hit
             if hfi >= 0 and not na(array.get(wfx, hfi))
                 wk_anchor_t := array.get(wfx, hfi)   // the FVG's own start
-            else if na(wk_anchor_t)
-                wk_anchor_t := dr_t
+            else
+                wk_anchor_t := dr_t                  // this Daily candle, the level's first touch
+
+    // Only the FIRST touch of a Weekly level counts: a Weekly V/A-shape or OC that a
+    // Daily candle has touched since it formed (either direction, held or not) never
+    // starts a reaction later (marked after this candle's pick above)
+    for L in w_pbocs
+        if dr_l <= L and dr_h >= L and not f_wseen(L)
+            array.push(w_seen, L)
+    for L in w_vs
+        if dr_l <= L and dr_h >= L and not f_wseen(L)
+            array.push(w_seen, L)
+    for L in w_as
+        if dr_l <= L and dr_h >= L and not f_wseen(L)
+            array.push(w_seen, L)
+    for L in w_boc
+        if dr_l <= L and dr_h >= L and not f_wseen(L)
+            array.push(w_seen, L)
+    for L in w_soc
+        if dr_l <= L and dr_h >= L and not f_wseen(L)
+            array.push(w_seen, L)
+    while array.size(w_seen) > 400
+        array.shift(w_seen)
 
     // Weekly FVG reactions: a deeper FVG takes over, and each Weekly candle that
     // dips below the previous Weekly low inside the gap restarts the check
@@ -1693,6 +1701,20 @@ f_used(float L) =>
             found := true
     found
 
+// A Daily level an H4 candle has already touched since it formed
+f_bt_seen(float L) =>
+    bool found = false
+    for x in bt_seen
+        if math.abs(x - L) <= pip * 0.1
+            found := true
+    found
+
+// Marks every level in lv that this H4 candle touches as touched (seen)
+f_seen_mark(array<float> lv) =>
+    for L in lv
+        if low <= L and high >= L and not f_bt_seen(L)
+            array.push(bt_seen, L)
+
 // Deepest Daily FVG this H4 candle's wick enters. inside: the whole gap sits inside
 // the range that was just broken; otherwise the gap reaches beyond the Daily Breaker
 // (after the breakout, incl. the breakout candle's own gap). Returns its index, or -1.
@@ -1721,7 +1743,7 @@ f_ir_pick(array<float> lv, bool bull, float opp, float b_lo, float b_hi, float t
             bool inside  = bull ? (L > opp and L < b_lo) : (L < opp and L > b_hi)
             bool touched = low <= L and high >= L
             bool held    = bull ? close >= L - t : close <= L + t
-            if inside and touched and held and not f_used(L) and (na(best) or (bull ? L < best : L > best))
+            if inside and touched and held and not f_used(L) and not f_bt_seen(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
@@ -1735,16 +1757,9 @@ f_pv_pick(array<float> lv, bool bull, float b_lo, float b_hi, float t) =>
             bool beyond  = bull ? L > b_hi : L < b_lo
             bool touched = low <= L and high >= L
             bool held    = bull ? close >= L - t : close <= L + t
-            if beyond and touched and held and not f_used(L) and (na(best) or (bull ? L < best : L > best))
+            if beyond and touched and held and not f_used(L) and not f_bt_seen(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
-
-f_bt_seen(float L) =>
-    bool found = false
-    for x in bt_seen
-        if math.abs(x - L) <= pip * 0.1
-            found := true
-    found
 
 // ── Post-breakout OC tracking ─────────────────────────────────────────────────
 if new_daily and not na(bo_dir) and not just_broke
@@ -2015,7 +2030,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             bool beyond  = (bo_dir == "bullish" and oc > band_hi) or (bo_dir == "bearish" and oc < band_lo)
             bool touched = low <= oc and high >= oc
             bool held    = bo_dir == "bullish" ? close >= oc - tol : close <= oc + tol
-            if beyond and touched and held and not f_used(oc)
+            if beyond and touched and held and not f_used(oc) and not f_bt_seen(oc)
                 if na(pb_hit) or (bo_dir == "bullish" ? oc < pb_hit : oc > pb_hit)
                     pb_hit := oc
     bool pb_oc_zone = not na(pb_hit)
@@ -2061,24 +2076,18 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
     int   pf_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, false, bo_opp, band_lo, band_hi) : -1
     int   if_i = bt_dfvg ? f_fvg_pick(fz_his, fz_los, fz_p, fz_bull, true,  bo_opp, band_lo, band_hi) : -1
 
-    // ── Backtest: first H4 touch of each Daily level since it formed ──────
+    // ── Touches of the Daily levels (after this candle's picks above) ─────
+    // Only the FIRST touch of a Daily level counts: a Daily V/A-shape or OC that an
+    // H4 candle has touched since it formed (in either Daily direction, before or
+    // after the breakout, held or not) never starts a reaction later. The Breaker
+    // is only used up by its reaction (the breakout itself crosses it).
     bool bt_bull = bo_dir == "bullish"
-    array<float> bt_cand = array.new<float>()
-    array.push(bt_cand, bo_level)
-    for L in pb_ocs
-        array.push(bt_cand, L)
-    array<float> bt_shp = bt_bull ? d_vs : d_as
-    array<float> bt_ocl = bt_bull ? d_boc : d_soc
-    for L in bt_shp
-        array.push(bt_cand, L)
-    for L in bt_ocl
-        array.push(bt_cand, L)
-    bool bt_first = false
-    for L in bt_cand
-        bool bt_held = bt_bull ? close >= L - tol : close <= L + tol
-        if low <= L and high >= L and bt_held and not f_bt_seen(L)
-            array.push(bt_seen, L)
-            bt_first := true
+    f_seen_mark(pb_ocs)
+    f_seen_mark(d_vs)
+    f_seen_mark(d_as)
+    f_seen_mark(d_boc)
+    f_seen_mark(d_soc)
+    // A Daily FVG keeps its own External level: the H4 A (V) from when a candle first entered it
     if bt_dfvg and array.size(fz_his) > 0
         for i = 0 to array.size(fz_his) - 1
             float fH = array.get(fz_his, i)
@@ -2086,15 +2095,10 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             float fK = bt_bull ? fH : fL
             if low <= fH and high >= fL and not f_bt_seen(fK)
                 array.push(bt_seen, fK)
-                bt_first := true
                 array.set(fz_x, i, bt_bull ? pre_a : pre_v)
                 array.set(fz_xb, i, bar_index)
-    if array.size(bt_seen) > 300
+    while array.size(bt_seen) > 400
         array.shift(bt_seen)
-    if bt_first
-        anchor_bar := bar_index
-        bt_ext_a   := pre_a
-        bt_ext_v   := pre_v
 
     // ── RETEST_CANCELLED — only when the reaction FAILS ───────────────────
     // A reaction stays valid on later candles: any later H4 close beyond the
@@ -2136,11 +2140,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             retest_src := "post_breakout_oc"
             retest_lvl2 := na
             retest_lvl := pb_hit
-            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
-                anchor_lvl := pb_hit
-                anchor_bar := bar_index
-                bt_ext_a   := pre_a
-                bt_ext_v   := pre_v
+            // External = the last H4 A (V) before this candle, the level's first touch
+            anchor_lvl := pb_hit
+            anchor_bar := bar_index
+            bt_ext_a   := pre_a
+            bt_ext_v   := pre_v
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"post_breakout_oc"'
@@ -2153,11 +2157,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             retest_src := "post_breakout_v"
             retest_lvl2 := na
             retest_lvl := pv_hit
-            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
-                anchor_lvl := pv_hit
-                anchor_bar := bar_index
-                bt_ext_a   := pre_a
-                bt_ext_v   := pre_v
+            // External = the last H4 A (V) before this candle, the level's first touch
+            anchor_lvl := pv_hit
+            anchor_bar := bar_index
+            bt_ext_a   := pre_a
+            bt_ext_v   := pre_v
         else if pf_i >= 0 and was_est
             retest_on  := true
             retest_bar := bar_index
@@ -2184,11 +2188,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             retest_src := "daily_breaker"
             retest_lvl2 := na
             retest_lvl := bo_level
-            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
-                anchor_lvl := bo_level
-                anchor_bar := bar_index
-                bt_ext_a   := pre_a
-                bt_ext_v   := pre_v
+            // External = the last H4 A (V) before this candle, the level's first touch
+            anchor_lvl := bo_level
+            anchor_bar := bar_index
+            bt_ext_a   := pre_a
+            bt_ext_v   := pre_v
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
                       + '","direction":"' + bo_dir + '","source":"daily_breaker"'
@@ -2201,11 +2205,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             retest_src := "inside_range"
             retest_lvl2 := na
             retest_lvl := ir_hit
-            if na(anchor_lvl)   // backtest: normally set by the first-touch scan below
-                anchor_lvl := ir_hit
-                anchor_bar := bar_index
-                bt_ext_a   := pre_a
-                bt_ext_v   := pre_v
+            // External = the last H4 A (V) before this candle, the level's first touch
+            anchor_lvl := ir_hit
+            anchor_bar := bar_index
+            bt_ext_a   := pre_a
+            bt_ext_v   := pre_v
             retest_kind := ir_kind
             if barstate.isrealtime
                 alert(f_hdr("RETEST")
@@ -2912,17 +2916,21 @@ if barstate.islast
     if bt_lvls and timeframe.period == "240" and not na(bo_dir) and not na(bo_level)
         bool bb = bo_dir == "bullish"
         f_bt_lv(bo_level, "Daily Breaker")
+        // a used or already-touched level can't start a reaction, so it isn't shown
         for L in pb_ocs
-            f_bt_lv(L, "Daily OC after the breakout")
+            if not f_used(L) and not f_bt_seen(L)
+                f_bt_lv(L, "Daily OC after the breakout")
         array<float> shp = bb ? d_vs : d_as
         for L in shp
+            if f_used(L) or f_bt_seen(L)
+                continue
             if bb ? L > bo_level + tol : L < bo_level - tol
                 f_bt_lv(L, bb ? "Daily V-shape after the breakout" : "Daily A-shape after the breakout")
             else if not na(bo_opp) and (bb ? (L > bo_opp and L < bo_level - tol) : (L < bo_opp and L > bo_level + tol))
                 f_bt_lv(L, bb ? "Daily V-shape inside the range" : "Daily A-shape inside the range")
         array<float> ocs = bb ? d_boc : d_soc
         for L in ocs
-            if not na(bo_opp) and (bb ? (L > bo_opp and L < bo_level - tol) : (L < bo_opp and L > bo_level + tol))
+            if not f_used(L) and not f_bt_seen(L) and not na(bo_opp) and (bb ? (L > bo_opp and L < bo_level - tol) : (L < bo_opp and L > bo_level + tol))
                 f_bt_lv(L, "Daily OC inside the range")
         if bt_dfvg
             array<float> fhs = bb ? d_bf_hi : d_sf_hi
