@@ -83,6 +83,13 @@
 //   while it runs no longer moves it (it used to, so a breakout of an A formed after
 //   the touch could read External). FVGs keep their own rules. Weekly: the same.
 //
+// v13 (2026-10-29, user rule): a reaction at a Daily OC or V/A-shape (inside the
+//   range, after the breakout, post-breakout OC) starts on the first H4 wick touch
+//   and fails ONLY on a Daily close through the level; an H4 close below it no
+//   longer ends it (the Daily Breaker still fails on an H4 close). Weekly mirror:
+//   Weekly OCs / V/A-shapes start on a Daily wick touch and fail only on a Weekly
+//   close. The status names the reacting level and the External H4 level to break.
+//
 // v10 display: each H4 breakout after a Daily reaction says on its chart label
 //   whether an H4 candle swept an H4 swing low (high, sells) during the break
 //   ("Sweep check on H4 breakout labels"; display only, no alert), and every
@@ -1137,7 +1144,8 @@ f_wused(float L) =>
             found := true
     found
 
-// Deepest level in lv that the Daily candle (lo_, hi_, cl_) touches exactly and holds
+// Deepest level in lv that the Daily candle (lo_, hi_) touches exactly (it only fails
+// on a Weekly close through it)
 f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float lo_, float hi_, float cl_) =>
     float best = na
     if array.size(lv) > 0
@@ -1145,8 +1153,7 @@ f_wpick(array<float> lv, bool bull, float lo_lim, float hi_lim, float t, float l
             float L = array.get(lv, i)
             bool inside = L > lo_lim and L < hi_lim
             bool touched = lo_ <= L and hi_ >= L
-            bool held = bull ? cl_ >= L - t : cl_ <= L + t
-            if inside and touched and held and not f_wused(L) and not f_wseen(L) and (na(best) or (bull ? L < best : L > best))
+            if inside and touched and not f_wused(L) and not f_wseen(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
@@ -1190,12 +1197,12 @@ if new_daily and not na(wk_dir) and not na(wk_level) and not na(d_close) and not
                 array.push(w_seen, gK)
                 array.set(wfx, i, dr_t)
 
-    // A reaction fails on a Daily close back through its level (a Weekly FVG only
-    // on a Weekly close through the gap, checked when the week closes)
-    bool w_fvg = wk_src == "post_breakout_fvg" or wk_src == "inside_fvg"
-    if wk_react and not w_fvg
-        if wb ? d_close < wk_src_lvl - tol : d_close > wk_src_lvl + tol
-            array.push(w_used, wk_src_lvl)   // a failed reaction uses the level too
+    // The Weekly Breaker reaction fails on a Daily close back through it (like the
+    // Daily Breaker on an H4 close); Weekly OCs, V/A-shapes and FVGs only on a
+    // Weekly close, checked when the week closes
+    if wk_react and wk_src == "breaker"
+        if wb ? d_close < wk_level - tol : d_close > wk_level + tol
+            array.push(w_used, wk_level)   // a failed reaction uses the level too
             wk_react   := false
             wk_src     := na
             wk_kind    := na
@@ -1328,7 +1335,15 @@ if new_week and not na(wk_c1)
     f_wkill(w_soc, wk_c1, false)
     f_wfkill(w_bf_hi, w_bf_lo, w_bf_x, w_bf_p, wk_c1, true)
     f_wfkill(w_sf_hi, w_sf_lo, w_sf_x, w_sf_p, wk_c1, false)
-    if wk_react and (wk_src == "post_breakout_fvg" or wk_src == "inside_fvg") and (wk_dir == "bullish" ? wk_c1 < wk_src_lvl2 : wk_c1 > wk_src_lvl2)
+    bool wfv = wk_src == "post_breakout_fvg" or wk_src == "inside_fvg"
+    if wk_react and not wfv and wk_src != "breaker" and not na(wk_src_lvl) and (wk_dir == "bullish" ? wk_c1 < wk_src_lvl : wk_c1 > wk_src_lvl)
+        array.push(w_used, wk_src_lvl)   // a failed reaction uses the level too
+        wk_react    := false
+        wk_src      := na
+        wk_kind     := na
+        wk_src_lvl  := na
+        wk_src_lvl2 := na
+    if wk_react and wfv and (wk_dir == "bullish" ? wk_c1 < wk_src_lvl2 : wk_c1 > wk_src_lvl2)
         wk_react    := false
         wk_src      := na
         wk_kind     := na
@@ -1734,7 +1749,8 @@ f_fvg_pick(array<float> his, array<float> los, array<bool> ps, bool bull, bool i
     best
 
 // Deepest Daily level in `lv` that sits inside the broken range and that this
-// H4 candle touches exactly and holds (buy: lowest; sell: highest).
+// H4 candle touches exactly (buy: lowest; sell: highest). It only fails on a Daily
+// close through it, not on an H4 close.
 f_ir_pick(array<float> lv, bool bull, float opp, float b_lo, float b_hi, float t) =>
     float best = na
     if array.size(lv) > 0
@@ -1742,13 +1758,12 @@ f_ir_pick(array<float> lv, bool bull, float opp, float b_lo, float b_hi, float t
             float L = array.get(lv, i)
             bool inside  = bull ? (L > opp and L < b_lo) : (L < opp and L > b_hi)
             bool touched = low <= L and high >= L
-            bool held    = bull ? close >= L - t : close <= L + t
-            if inside and touched and held and not f_used(L) and not f_bt_seen(L) and (na(best) or (bull ? L < best : L > best))
+            if inside and touched and not f_used(L) and not f_bt_seen(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
 // Daily V-shapes (A-shapes for sells) beyond the Daily Breaker: formed in the move
-// after the breakout. Deepest one this H4 candle touches exactly and holds.
+// after the breakout. Deepest one this H4 candle touches exactly.
 f_pv_pick(array<float> lv, bool bull, float b_lo, float b_hi, float t) =>
     float best = na
     if array.size(lv) > 0
@@ -1756,8 +1771,7 @@ f_pv_pick(array<float> lv, bool bull, float b_lo, float b_hi, float t) =>
             float L = array.get(lv, i)
             bool beyond  = bull ? L > b_hi : L < b_lo
             bool touched = low <= L and high >= L
-            bool held    = bull ? close >= L - t : close <= L + t
-            if beyond and touched and held and not f_used(L) and not f_bt_seen(L) and (na(best) or (bull ? L < best : L > best))
+            if beyond and touched and not f_used(L) and not f_bt_seen(L) and (na(best) or (bull ? L < best : L > best))
                 best := L
     best
 
@@ -2029,8 +2043,7 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
             float oc = array.get(pb_ocs, i)
             bool beyond  = (bo_dir == "bullish" and oc > band_hi) or (bo_dir == "bearish" and oc < band_lo)
             bool touched = low <= oc and high >= oc
-            bool held    = bo_dir == "bullish" ? close >= oc - tol : close <= oc + tol
-            if beyond and touched and held and not f_used(oc) and not f_bt_seen(oc)
+            if beyond and touched and not f_used(oc) and not f_bt_seen(oc)
                 if na(pb_hit) or (bo_dir == "bullish" ? oc < pb_hit : oc > pb_hit)
                     pb_hit := oc
     bool pb_oc_zone = not na(pb_hit)
@@ -2107,14 +2120,11 @@ if barstate.isconfirmed and not na(bo_dir) and not na(bo_level) and timeframe.pe
     // reaches (checked just below, on this same bar) takes over.
     if retest_on
         bool failed = false
-        if retest_src == "post_breakout_oc"
-            failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
+        // a Daily OC / V/A-shape: only a Daily close through it (an H4 close below it doesn't)
+        if retest_src == "post_breakout_oc" or retest_src == "inside_range" or retest_src == "post_breakout_v"
+            failed := new_daily and not na(d_close) and (bo_dir == "bullish" ? d_close < retest_lvl : d_close > retest_lvl)
         else if retest_src == "daily_breaker"
             failed := bo_dir == "bullish" ? close < band_lo : close > band_hi
-        else if retest_src == "inside_range"
-            failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
-        else if retest_src == "post_breakout_v"
-            failed := bo_dir == "bullish" ? close < retest_lvl - tol : close > retest_lvl + tol
         else if retest_src == "post_breakout_fvg" or retest_src == "inside_fvg"
             failed := new_daily and not na(d_close) and (bo_dir == "bullish" ? d_close < retest_lvl2 : d_close > retest_lvl2)
 
@@ -2753,11 +2763,11 @@ if barstate.islast
 
 // ── State label — shows script's current understanding at the latest bar ──────
 f_src_name(string src, string kind) =>
-    src == "daily_breaker" ? "Daily Breaker" : src == "post_breakout_oc" ? "post-breakout Daily OC" : src == "post_breakout_fvg" ? "Daily FVG after the breakout" : src == "inside_fvg" ? "Daily FVG inside the range" : kind == "oc" ? "Daily OC" : kind == "a_shape" ? "Daily A-shape" : "Daily V-shape"
+    src == "daily_breaker" ? "Daily Breaker" : src == "post_breakout_oc" ? "post-breakout Daily OC" : src == "post_breakout_fvg" ? "Daily FVG after the breakout" : src == "inside_fvg" ? "Daily FVG inside the range" : src == "post_breakout_v" ? "Daily V/A-shape after the breakout" : kind == "oc" ? "Daily OC inside the range" : kind == "a_shape" ? "Daily A-shape inside the range" : "Daily V-shape inside the range"
 
 string _state_txt = "IDLE - no breakout detected"
 if not na(bo_dir) and not h4_bo_fired and retest_on
-    _state_txt := (bo_dir == "bullish" ? "Bullish" : "Bearish") + " Retest | " + retest_src
+    _state_txt := (bo_dir == "bullish" ? "Bullish" : "Bearish") + " | reacting at " + f_src_name(retest_src, retest_kind) + " @ " + f_bt_lvtxt(retest_lvl) + " · waiting for H4 External breakout " + (bo_dir == "bullish" ? "above " + str.tostring(bt_ext_a, format.mintick) : "below " + str.tostring(bt_ext_v, format.mintick))
 else if not na(bo_dir) and not h4_bo_fired
     _state_txt := "BREAKOUT | " + bo_dir + " (" + f_layer_name(bo_layer) + ") | awaiting retest" + ((bo_dir == "bullish" ? est_above : est_below) ? "" : " · price hasn't moved away from the breakout yet")
 else if h4_bo_fired and h4_aligned
