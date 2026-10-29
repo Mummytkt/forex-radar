@@ -40,7 +40,7 @@ POIS: list[tuple[str, str]] = [
 ]
 MODELS: list[tuple[str, str]] = [
     ("direct", "Direct entry"),
-    ("h1_cisd", "1H SMC"),     # keys kept from when these were called CISD (renamed 2026-10-28)
+    ("h1_cisd", "1H PCL"),     # keys kept from when these were called CISD (1H SMC 2026-10-28, 1H PCL 2026-10-29)
     ("m5_cisd", "5M SMC"),
     ("m15_cisd", "15M SMC"),
 ]

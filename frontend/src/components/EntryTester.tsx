@@ -33,7 +33,7 @@ const POIS: { key: string; label: string }[] = [
 ]
 const MODELS: { key: string; label: string }[] = [
   { key: 'direct', label: 'Direct entry' },
-  { key: 'h1_cisd', label: '1H SMC' },   // keys kept from when these were called CISD
+  { key: 'h1_cisd', label: '1H PCL' },   // keys kept from when these were called CISD
   { key: 'm5_cisd', label: '5M SMC' },
   { key: 'm15_cisd', label: '15M SMC' },
 ]
