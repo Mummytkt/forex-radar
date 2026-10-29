@@ -397,9 +397,9 @@ def make_rules(im):
          im["zones3"]),
         ("D. Daily reaction levels", "A reaction stays alive until it fails",
          "Once price has reacted, the reaction stays valid on <b>later candles</b>. The first H4 wick onto a Daily OC or V/A-shape starts it, even if that H4 candle "
-         "closes below it (above it for sells): a reaction at a Daily OC, V/A-shape or FVG only <b>fails</b> when a <b>Daily candle closes</b> through it. "
-         "A Daily Breaker reaction fails on an H4 close back through the breaker zone. Then the next zone price reaches takes over.",
-         "Fails on a Daily close below the level (the Breaker: an H4 close below its zone)", "Fails on a Daily close above the level (the Breaker: an H4 close above its zone)",
+         "closes below it (above it for sells). A level only <b>fails</b> on a close on <b>its own timeframe</b>: every Daily level (Breaker, OC, V/A-shape, FVG) "
+         "on a <b>Daily close</b> through it, Weekly levels on a Weekly close, H4 levels on an H4 close. Then the next zone price reaches takes over.",
+         "Fails on a Daily close below the level", "Fails on a Daily close above the level",
          "A candle that simply doesn't touch the zone any more does NOT cancel the reaction. The Weekly does the same one level up: a Weekly OC or V/A-shape reaction fails only on a Weekly close.", im["persist"]),
         ("D. Daily reaction levels", "Daily FVG",
          "Three Daily candles where the <b>third closes without reaching the first</b> leave a gap: a <b>Daily FVG</b>. It only exists once that third "
@@ -438,7 +438,7 @@ def make_rules(im):
          "H4 A-shape (buy) or V-shape (sell) also sends an <b>“H4 breakout in line with the Daily”</b> alert; no Daily reaction is needed for it.",
          "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
          "<b>A used level is used:</b> only the first touch of a level counts (the Weekly follows the same rule with Weekly levels). A Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 "
-         "confirmation, or whose reaction failed (a Daily close through it; the Breaker: an H4 close), never starts another reaction; price going past it must react at a level beyond it. "
+         "confirmation, or whose reaction failed (a Daily close through it), never starts another reaction; price going past it must react at a level beyond it. "
          "A Daily V/A-shape or OC that an H4 candle has <b>touched</b> since it formed (before or after the breakout, in either direction) has been tested: "
          "it can't start a reaction later either. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
          "setup are not sent.", im["noneworigin"]),
