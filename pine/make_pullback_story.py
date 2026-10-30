@@ -92,8 +92,8 @@ int    sk_n     = input.int(3, "Notes in the story table (newest first)", minval
 color  sk_bg    = input.color(color.new(#0E3B43, 10), "Story table background", group = G_ST, inline = "sc")
 color  sk_tx    = input.color(color.white, "text", group = G_ST, inline = "sc")
 bool   sl_on    = input.bool(true, "Story lines (CHoCH / BOS from the level to the candle that broke it)", group = G_ST)
-bool   show_int = input.bool(false, "Show Internal breaks (marked only; they are not continuations)", group = G_ST,
-     tooltip = "Off (default): an Internal break of a story-timeframe level is not a continuation and isn't shown. The story only continues when an External level breaks (an External break, or the external low / high).")
+bool   show_int = input.bool(true, "Show Internal breaks (marked only; they are not continuations)", group = G_ST,
+     tooltip = "On (default): Internal breaks are marked, to show the phase and the levels that held. They are not continuations: they don't move the main high or the story, which only continues when an External level breaks (an External break, or the external low / high).")
 color  sl_col   = input.color(color.new(color.white, 20), "Story line colour", group = G_ST, inline = "sl")
 color  sl_tx    = input.color(color.white, "text", group = G_ST, inline = "sl")
 
