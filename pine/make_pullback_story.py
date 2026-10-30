@@ -106,6 +106,9 @@ bool   mn_on    = input.bool(true, "Main story-timeframe high / low (while the p
 color  mn_col   = input.color(#FFB74D, "", group = G_LV, inline = "mn")
 bool   ex_on    = input.bool(true, "Story-timeframe external low / high (watch it: it may reverse price)", group = G_LV, inline = "ex")
 color  ex_col   = input.color(#4FC3F7, "", group = G_LV, inline = "ex")
+bool   r2_on    = input.bool(true, "Story-timeframe range once its pullback is confirmed: high, low, 0.5", group = G_LV, inline = "r2")
+color  r2_eq    = input.color(#7CB342, "0.5", group = G_LV, inline = "r2")
+int    r2_op    = input.int(6, "shade opacity %", minval = 0, maxval = 100, group = G_LV, inline = "r2")
 color  lv_tx    = input.color(#E0E0E0, "Level label text", group = G_LV, inline = "lt")
 string lv_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_LV, inline = "lt")
 
@@ -512,6 +515,7 @@ if chart_ok
     string up = D1 > 0 ? "up" : "down"
     string dn = D1 > 0 ? "down" : "up"
     string HI = D1 > 0 ? "high" : "low"
+    string LO = D1 > 0 ? "low" : "high"
     // the story-timeframe candle that will be the next POI
     if t2_new
         if na(pc_lo) or b_l < pc_lo
@@ -572,7 +576,6 @@ if chart_ok
             rx_t   := na
             rx_key := na
             f_story(time, D1 > 0 ? high : low, D1 > 0, N1 + " external breakout " + up + " (" + (brk_wick ? "wick" : "body close") + " beyond " + str.tostring(a_blvl, format.mintick) + ").\nA pullback is expected. Watch the reaction levels " + (D1 > 0 ? "above" : "below") + ":\n" + (D1 > 0 ? "A-shapes / resistance, bearish OCs, bearish FVGs." : "V-shapes / support, bullish OCs, bullish FVGs."))
-    string LO = D1 > 0 ? "low" : "high"
     // price entering a reaction level / zone (any time in the story): its time decides
     // whether a later story-timeframe breakout is External (level formed before) or Internal
     if D1 != 0 and ph >= 1 and ph <= 4
@@ -750,10 +753,18 @@ if barstate.islast
                 if not na(zh) and not na(zl)
                     array.push(cx, box.new(bar_index - 20, zh, bar_index + 12, zl, border_color = fv_col, bgcolor = color.new(fv_col, 100 - fv_op),
                          text = N1 + (D1 > 0 ? " bearish FVG (reaction zone)" : " bullish FVG (reaction zone)"), text_size = f_sz(lv_sz), text_color = lv_tx))
+        if r2_on and not na(ex_lvl) and not na(mn_lvl) and (ph == 3 or ph == 4)
+            float rh  = math.max(mn_lvl, ex_lvl)
+            float rl  = math.min(mn_lvl, ex_lvl)
+            float req = (rh + rl) / 2
+            int   r0  = math.min(mn_t, ex_t)
+            array.push(cx, box.new(r0, rh, time, rl, xloc = xloc.bar_time, extend = extend.right,
+                 border_color = color.new(r2_eq, 100), bgcolor = color.new(r2_eq, 100 - r2_op)))
+            f_lvl(r0, req, N2 + " range 0.5 · premium above (sells), discount below (buys)", r2_eq, line.style_dashed, 1)
         if ex_on and not na(ex_lvl) and (ph == 3 or ph == 4)
-            f_lvl(ex_t, ex_lvl, N2 + " external " + (D1 > 0 ? "low" : "high") + " (watch it: it may reverse price)", ex_col, line.style_dashed, 2)
+            f_lvl(ex_t, ex_lvl, N2 + " range " + (D1 > 0 ? "low" : "high") + " = external " + (D1 > 0 ? "low" : "high") + " (watch it: it may reverse price)", ex_col, line.style_dashed, 2)
         if mn_on and not na(mn_lvl) and (ph == 3 or ph == 4)
-            f_lvl(mn_t, mn_lvl, "main " + N2 + (D1 > 0 ? " high" : " low") + " (" + N2 + " stays against the " + N1 + " until it is taken out)", mn_col, line.style_solid, 2)
+            f_lvl(mn_t, mn_lvl, (na(ex_lvl) ? "" : N2 + " range " + (D1 > 0 ? "high" : "low") + " = ") + "main " + N2 + (D1 > 0 ? " high" : " low") + " (" + N2 + " stays against the " + N1 + " until it is taken out)", mn_col, line.style_solid, 2)
     // the story table: the newest notes first, each with its time
     table.clear(sk, 0, 0, 1, 10)
     if sk_on and chart_ok
