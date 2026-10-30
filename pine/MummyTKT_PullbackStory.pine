@@ -472,7 +472,8 @@ f_structure(bool bd, bool bw) =>
 
 // ── Top timeframe: the reaction levels (where a pullback may start) ──────────
 // Sell side (resistance, for a pullback after a breakout UP): A-shapes and bearish OCs,
-// bearish FVGs. Buy side: V-shapes, bullish OCs, bullish FVGs. Each dies when broken.
+// bearish FVGs. Buy side: V-shapes, bullish OCs, bullish FVGs. Each dies only when a
+// top-timeframe candle CLOSES beyond it (a wick, or a lower-timeframe close, doesn't).
 // Returns the two nearest above and below the close, and the nearest FVG on each side.
 f_rlv(bool bd) =>
     var array<float> sl  = array.new<float>()
@@ -485,25 +486,25 @@ f_rlv(bool bd) =>
     var array<float> bfl = array.new<float>()
     int k = array.size(sl) - 1
     while k >= 0
-        if f_cu(brk_wick) > array.get(sl, k)
+        if close > array.get(sl, k)
             array.remove(sl, k)
             array.remove(sk, k)
         k -= 1
     k := array.size(bl) - 1
     while k >= 0
-        if f_cd(brk_wick) < array.get(bl, k)
+        if close < array.get(bl, k)
             array.remove(bl, k)
             array.remove(bk, k)
         k -= 1
     k := array.size(sfh) - 1
     while k >= 0
-        if f_cu(brk_wick) > array.get(sfh, k)
+        if close > array.get(sfh, k)
             array.remove(sfh, k)
             array.remove(sfl, k)
         k -= 1
     k := array.size(bfl) - 1
     while k >= 0
-        if f_cd(brk_wick) < array.get(bfl, k)
+        if close < array.get(bfl, k)
             array.remove(bfh, k)
             array.remove(bfl, k)
         k -= 1
@@ -573,14 +574,14 @@ f_rlv(bool bd) =>
     float fsl = na
     for i = 0 to array.size(sfh) - 1
         if array.size(sfh) > 0
-            if array.get(sfl, i) > close and (na(fsl) or array.get(sfl, i) < fsl)
+            if array.get(sfh, i) > close and (na(fsl) or array.get(sfl, i) < fsl)
                 fsh := array.get(sfh, i)
                 fsl := array.get(sfl, i)
     float fbh = na
     float fbl = na
     for i = 0 to array.size(bfh) - 1
         if array.size(bfh) > 0
-            if array.get(bfh, i) < close and (na(fbh) or array.get(bfh, i) > fbh)
+            if array.get(bfl, i) < close and (na(fbh) or array.get(bfh, i) > fbh)
                 fbh := array.get(bfh, i)
                 fbl := array.get(bfl, i)
     [s1[1], s1k[1], s2[1], s2k[1], b1[1], b1k[1], b2[1], b2k[1], fsh[1], fsl[1], fbh[1], fbl[1]]
@@ -798,6 +799,10 @@ var int   kc      = 0
 var float lb_lvl  = na      // the last story-timeframe breakout (level, direction): the same one again is skipped
 var int   lb_dir  = 0
 var int   lb_t    = na
+var float ag_hi   = na      // the extreme since the last breakout against the top timeframe
+var int   ag_hit  = na
+var float ag_lo   = na
+var int   ag_lot  = na
 var float pp_lo   = na      // the pullback's lowest story-timeframe candle (buys) ...
 var float pp_lot  = na
 var int   pp_lt   = na
@@ -829,6 +834,15 @@ if chart_ok
             pc_hi  := b_h
             pc_hib := math.min(b_o, b_c)
             pc_ht  := b_t
+    // the highest high / lowest low since the last story-timeframe breakout against the top
+    // timeframe (the main level after a continuation of the pullback)
+    if t2_new
+        if na(ag_hi) or b_h > ag_hi
+            ag_hi  := b_h
+            ag_hit := b_t
+        if na(ag_lo) or b_l < ag_lo
+            ag_lo  := b_l
+            ag_lot := b_t
     // the pullback's own extreme (the demand / supply POI once the main level is taken out)
     if t2_new and (sph == 3 or sph == 4)
         if na(pp_lo) or b_l < pp_lo
@@ -918,12 +932,16 @@ if chart_ok
                 // the pullback keeps going: a continuation (after a CHoCH: it failed)
                 bool failed = sph == 4
                 sph := 3
-                mn_lvl := D1 > 0 ? b_chi : b_clo
-                mn_t   := D1 > 0 ? b_chit : b_clot
+                // the high that caused this break: the highest point since the last break down
+                mn_lvl := D1 > 0 ? nz(ag_hi, b_chi) : nz(ag_lo, b_clo)
+                mn_t   := D1 > 0 ? (na(ag_hi) ? b_chit : ag_hit) : (na(ag_lo) ? b_clot : ag_lot)
                 f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
                 f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (failed ? "the CHoCH " + up + " failed, " : "") + "a continuation of the " + N1 + " pullback.\nStill waiting for an " + N2 + " CHoCH " + up + ".\nThe main " + N2 + " " + HI + " is now " + str.tostring(mn_lvl, format.mintick) + ".")
         pc_lo := na
         pc_hi := na
+        if D1 != 0 and D2 == -D1
+            ag_hi := na
+            ag_lo := na
     // 4. a story-timeframe CHoCH
     if not na(b_chn) and b_chn != kc
         kc := b_chn
@@ -1004,7 +1022,7 @@ if barstate.islast
             if rg_on
                 array.push(cx, box.new(math.min(a_chit, a_clot), a_chi, time, a_clo, xloc = xloc.bar_time, extend = extend.right,
                      border_color = color.new(rg_col, 100), bgcolor = color.new(rg_col, 100 - rg_op)))
-        if D1 != 0 and sph >= 1 and sph <= 3
+        if D1 != 0 and sph >= 1 and sph <= 4
             if rx_on
                 float s1 = D1 > 0 ? r_s1 : r_b1
                 float s2 = D1 > 0 ? r_s2 : r_b2
