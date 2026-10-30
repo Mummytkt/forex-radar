@@ -51,8 +51,10 @@ bool show_m   = input.bool(true, "MTF swing + internal levels", group = G_SH, in
 bool show_mb  = input.bool(true, "MTF BOS / i-BOS", group = G_SH, inline = "s2")
 bool show_abcd = input.bool(true, "MTF pullback marks: CHoCH lines + a / b / c / d", group = G_SH, inline = "s3")
 bool show_ph   = input.bool(true, "MTF phase changes (D / C / B / A)", group = G_SH, inline = "s3")
-bool show_st   = input.bool(true, "The story: what formed, the zones to watch, where the reaction may come from", group = G_SH)
-int  story_n   = input.int(8, "Story notes kept", minval = 1, maxval = 40, group = G_SH)
+string st_mode  = input.string("Latest note + dots (hover)", "Story on the chart", options = ["Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_SH,
+     tooltip = "The story: what formed, the zones to watch, where the reaction may come from. Latest note + dots: only the newest note is written out; older ones become small dots, hover a dot to read it. The newest note is also in the watchlist table.")
+int  story_n   = input.int(6, "N (notes or dots kept)", minval = 1, maxval = 40, group = G_SH)
+bool show_st   = st_mode != "Off"
 bool show_rng  = input.bool(true, "Pullback range (premium / discount of the current leg)", group = G_SH)
 bool show_lch = input.bool(false, "LTF CH lines", group = G_SH)
 bool show_poi = input.bool(true, "POIs (HTF swing, MTF swing + internal)", group = G_SH)
@@ -483,12 +485,26 @@ f_badge(int t, float y, string ch, int d, string tip) =>
 // reaction may come from. Points: the extreme of each fractal leg becomes an internal
 // high / low when the next CHoCH confirms it; a body close beyond it breaks it.
 var array<label> st_l = array.new<label>()
+var st_last = array.from("")   // the newest note, also shown in the watchlist (an array: functions can't := a global)
 f_story(int t, float y, bool above, string txt) =>
-    if show_st and not na(t) and not na(y)
-        array.push(st_l, label.new(t, y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
-             color = color.new(#0E3B43, 5), textcolor = color.white, size = size.small, textalign = text.align_left))
-        while array.size(st_l) > story_n
-            label.delete(array.shift(st_l))
+    if not na(t) and not na(y)
+        array.set(st_last, 0, txt)
+        if show_st
+            // the previous newest note: removed, shrunk to a dot (hover to read), or kept
+            if array.size(st_l) > 0
+                label prev = array.last(st_l)
+                if st_mode == "Latest note only"
+                    label.delete(array.pop(st_l))
+                else if st_mode == "Latest note + dots (hover)"
+                    label.set_tooltip(prev, label.get_text(prev))
+                    label.set_text(prev, "●")
+                    label.set_style(prev, label.style_none)
+                    label.set_textcolor(prev, color.new(#26C6DA, 0))
+                    label.set_size(prev, size.tiny)
+            array.push(st_l, label.new(t, y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
+                 color = color.new(#0E3B43, 5), textcolor = color.white, size = size.small, textalign = text.align_left))
+            while array.size(st_l) > (st_mode == "Latest note only" ? 1 : st_mode == "Latest note + dots (hover)" ? story_n + 1 : story_n)
+                label.delete(array.shift(st_l))
 var bool st_dem = false   // a POI on the swing's side was reached (demand in an uptrend)
 var bool st_sup = false   // a POI against the swing was reached (supply in an uptrend)
 var float pt_hi  = na
@@ -745,7 +761,7 @@ f_cur(string tf, string nm, int dir, float hi, int ht, bool hf, float lo, int lt
 
 f_tpos(string p) =>
     p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : position.bottom_left
-var table tb = table.new(f_tpos(tbl_pos), 2, 14, bgcolor = color.new(#0F1120, 8), border_width = 1, border_color = color.new(color.gray, 75))
+var table tb = table.new(f_tpos(tbl_pos), 2, 15, bgcolor = color.new(#0F1120, 8), border_width = 1, border_color = color.new(color.gray, 75))
 f_row(int r, bool ok, string txt) =>
     table.cell(tb, 0, r, ok ? "✓" : "·", text_color = ok ? c_bull : color.gray, text_size = size.small)
     table.cell(tb, 1, r, txt, text_color = color.white, text_size = size.small, text_halign = text.align_left)
@@ -795,7 +811,7 @@ if barstate.islast
 
     // ── Watchlist ──
     if tbl_on
-        table.clear(tb, 0, 0, 1, 13)
+        table.clear(tb, 0, 0, 1, 14)
         bool  bull = H_sdir > 0
         bool  bear = H_sdir < 0
         bool  lng  = not bear          // the plan's side: with the HTF (buys when no HTF direction yet)
@@ -843,4 +859,7 @@ if barstate.islast
             f_row(11, false, "Always ask: what is the HTF objective? What has been mitigated?")
             string pbs = M_sdir == 0 ? "—" : M_idir == M_sdir ? (pb_a ? "a · CHoCH against the swing: pullback may be starting" : "d · internal with the swing") : (pb_c ? "c · CHoCH back with the swing: pullback may be ending" : "b · i-BOS: pullback confirmed")
             f_row(12, flow == "A", M_tf + "phase now: " + f_flowtxt(flow) + "  ·  last mark " + pbs)
-            table.cell(tb, 1, 13, plan + (not L_ok ? " · LTF entries (▲ / ▼) need the chart on " + f_tfname(ltf) : L_eq ? "" : " · LTF " + f_tfname(ltf) + " read from a lower chart"), text_color = color.gray, text_size = size.tiny, text_halign = text.align_left)
+            if array.get(st_last, 0) != ""
+                table.cell(tb, 0, 13, "✎", text_color = color.new(#26C6DA, 0), text_size = size.small)
+                table.cell(tb, 1, 13, array.get(st_last, 0), text_color = color.new(#B2EBF2, 0), text_size = size.small, text_halign = text.align_left)
+            table.cell(tb, 1, 14, plan + (not L_ok ? " · LTF entries (▲ / ▼) need the chart on " + f_tfname(ltf) : L_eq ? "" : " · LTF " + f_tfname(ltf) + " read from a lower chart"), text_color = color.gray, text_size = size.tiny, text_halign = text.align_left)
