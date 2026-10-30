@@ -417,6 +417,11 @@ f_layers(bool bd) =>
 
 var array<line>  ln_all = array.new<line>()
 var array<label> lb_all = array.new<label>()
+// Labels waiting to be drawn: layers at the same price share one label
+var array<float>  pv_y  = array.new<float>()
+var array<string> pv_s  = array.new<string>()
+var array<color>  pv_c  = array.new<color>()
+var array<string> pv_tf = array.new<string>()
 
 f_col(int k) =>
     k == 0 ? c0 : k == 1 ? c1 : k == 2 ? c2 : k == 3 ? c3 : k == 4 ? c4 : c5
@@ -427,11 +432,13 @@ f_side(string tf, int k, float d0, float d, float y, int t, bool fixed, bool is_
         string dir = d > 0 ? "Bullish " : "Bearish "
         bool   frm = not fixed and (is_hi ? d > 0 : d < 0)
         string vs  = k > 0 and d != d0 ? " · against External" : ""
-        string txt = tf + " " + dir + array.get(NAMES, k) + (is_hi ? " high" : " low") + (frm ? " (still forming)" : "") + vs + "  " + str.tostring(y, format.mintick)
+        string txt = tf + " " + dir + array.get(NAMES, k) + (is_hi ? " high" : " low") + (frm ? " (still forming)" : "") + vs
         array.push(ln_all, line.new(t, y, time, y, xloc = xloc.bar_time, extend = extend.right, color = c, width = lw,
              style = tf == "H4" ? line.style_dashed : line.style_solid))
-        array.push(lb_all, label.new(bar_index + (tf == "H4" ? 3 : 18), y, txt, style = label.style_label_left,
-             color = color.new(color.black, 100), textcolor = c, size = size.small))
+        array.push(pv_y, y)
+        array.push(pv_s, txt)
+        array.push(pv_c, c)
+        array.push(pv_tf, tf)
 
 f_draw(string tf, int k, float d0, float d, float hi, float lo, int ht, int lt, float hf, float lf) =>
     bool on  = tf == "D" ? show_d and k < depth_d and timeframe.in_seconds() <= 86400 : show_h and k < depth_h and timeframe.in_seconds() <= 14400
@@ -446,6 +453,10 @@ if barstate.islast
         label.delete(b)
     array.clear(ln_all)
     array.clear(lb_all)
+    array.clear(pv_y)
+    array.clear(pv_s)
+    array.clear(pv_c)
+    array.clear(pv_tf)
     f_draw("D", 0, D_d0, D_d0, D_hi0, D_lo0, D_ht0, D_lt0, D_hf0, D_lf0)
     f_draw("D", 1, D_d0, D_d1, D_hi1, D_lo1, D_ht1, D_lt1, D_hf1, D_lf1)
     f_draw("D", 2, D_d0, D_d2, D_hi2, D_lo2, D_ht2, D_lt2, D_hf2, D_lf2)
@@ -458,3 +469,20 @@ if barstate.islast
     f_draw("H4", 3, H_d0, H_d3, H_hi3, H_lo3, H_ht3, H_lt3, H_hf3, H_lf3)
     f_draw("H4", 4, H_d0, H_d4, H_hi4, H_lo4, H_ht4, H_lt4, H_hf4, H_lf4)
     f_draw("H4", 5, H_d0, H_d5, H_hi5, H_lo5, H_ht5, H_lt5, H_hf5, H_lf5)
+    // One label per price: the layers sharing it are listed one per line
+    int pn = array.size(pv_y)
+    array<bool> pdone = array.new<bool>(pn, false)
+    int i = 0
+    while i < pn
+        if not array.get(pdone, i)
+            string ptxt = array.get(pv_s, i)
+            int j = i + 1
+            while j < pn
+                if not array.get(pdone, j) and array.get(pv_tf, j) == array.get(pv_tf, i) and math.abs(array.get(pv_y, j) - array.get(pv_y, i)) < syminfo.mintick / 2
+                    ptxt := ptxt + "\n" + array.get(pv_s, j)
+                    array.set(pdone, j, true)
+                j += 1
+            float py = array.get(pv_y, i)
+            array.push(lb_all, label.new(bar_index + (array.get(pv_tf, i) == "H4" ? 3 : 18), py, ptxt + "  " + str.tostring(py, format.mintick),
+                 style = label.style_label_left, color = color.new(color.black, 100), textcolor = array.get(pv_c, i), size = size.small))
+        i += 1

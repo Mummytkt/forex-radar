@@ -112,6 +112,11 @@ f_lay(array<Layer> st, string edir, float ehi, float elo, int ehit, int elot, bo
 draw_fn = f'''
 var array<line>  ln_all = array.new<line>()
 var array<label> lb_all = array.new<label>()
+// Labels waiting to be drawn: layers at the same price share one label
+var array<float>  pv_y  = array.new<float>()
+var array<string> pv_s  = array.new<string>()
+var array<color>  pv_c  = array.new<color>()
+var array<string> pv_tf = array.new<string>()
 
 f_col(int k) =>
     k == 0 ? c0 : k == 1 ? c1 : k == 2 ? c2 : k == 3 ? c3 : k == 4 ? c4 : c5
@@ -122,11 +127,13 @@ f_side(string tf, int k, float d0, float d, float y, int t, bool fixed, bool is_
         string dir = d > 0 ? "Bullish " : "Bearish "
         bool   frm = not fixed and (is_hi ? d > 0 : d < 0)
         string vs  = k > 0 and d != d0 ? " · against External" : ""
-        string txt = tf + " " + dir + array.get(NAMES, k) + (is_hi ? " high" : " low") + (frm ? " (still forming)" : "") + vs + "  " + str.tostring(y, format.mintick)
+        string txt = tf + " " + dir + array.get(NAMES, k) + (is_hi ? " high" : " low") + (frm ? " (still forming)" : "") + vs
         array.push(ln_all, line.new(t, y, time, y, xloc = xloc.bar_time, extend = extend.right, color = c, width = lw,
              style = tf == "H4" ? line.style_dashed : line.style_solid))
-        array.push(lb_all, label.new(bar_index + (tf == "H4" ? 3 : 18), y, txt, style = label.style_label_left,
-             color = color.new(color.black, 100), textcolor = c, size = size.small))
+        array.push(pv_y, y)
+        array.push(pv_s, txt)
+        array.push(pv_c, c)
+        array.push(pv_tf, tf)
 
 f_draw(string tf, int k, float d0, float d, float hi, float lo, int ht, int lt, float hf, float lf) =>
     bool on  = tf == "D" ? show_d and k < depth_d and timeframe.in_seconds() <= 86400 : show_h and k < depth_h and timeframe.in_seconds() <= 14400
@@ -141,8 +148,31 @@ if barstate.islast
         label.delete(b)
     array.clear(ln_all)
     array.clear(lb_all)
+    array.clear(pv_y)
+    array.clear(pv_s)
+    array.clear(pv_c)
+    array.clear(pv_tf)
 '''
 
-out = header + engine.split('f_layers(bool bd) =>')[0] + lay + 'f_layers(bool bd) =>' + engine.split('f_layers(bool bd) =>')[1] + '\n' + '\n'.join(ret) + '\n\n' + '\n'.join(body) + '\n' + draw_fn + '\n'.join(draw) + '\n'
+MERGE = r'''    // One label per price: the layers sharing it are listed one per line
+    int pn = array.size(pv_y)
+    array<bool> pdone = array.new<bool>(pn, false)
+    int i = 0
+    while i < pn
+        if not array.get(pdone, i)
+            string ptxt = array.get(pv_s, i)
+            int j = i + 1
+            while j < pn
+                if not array.get(pdone, j) and array.get(pv_tf, j) == array.get(pv_tf, i) and math.abs(array.get(pv_y, j) - array.get(pv_y, i)) < syminfo.mintick / 2
+                    ptxt := ptxt + "\n" + array.get(pv_s, j)
+                    array.set(pdone, j, true)
+                j += 1
+            float py = array.get(pv_y, i)
+            array.push(lb_all, label.new(bar_index + (array.get(pv_tf, i) == "H4" ? 3 : 18), py, ptxt + "  " + str.tostring(py, format.mintick),
+                 style = label.style_label_left, color = color.new(color.black, 100), textcolor = array.get(pv_c, i), size = size.small))
+        i += 1
+'''
+
+out = header + engine.split('f_layers(bool bd) =>')[0] + lay + 'f_layers(bool bd) =>' + engine.split('f_layers(bool bd) =>')[1] + '\n' + '\n'.join(ret) + '\n\n' + '\n'.join(body) + '\n' + draw_fn + '\n'.join(draw) + '\n' + MERGE
 open(OUT, 'w', encoding='utf-8', newline='\n').write(out)
 print(OUT, len(out.split('\n')), 'lines')
