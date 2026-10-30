@@ -50,7 +50,7 @@ HEAD = r'''//@version=6
 // breakout with the top timeframe is printed as a continuation of the breakout.
 // ─────────────────────────────────────────────────────────────────────────────
 
-indicator("MummyTKT — Pullback Story", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 200, max_bars_back = 5000)
+indicator("MummyTKT — Pullback Story", overlay = true, behind_chart = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 200, max_bars_back = 5000)
 
 const string G_PL = "1 · Plan and breaks"
 const string G_ST = "2 · Story notes"
@@ -71,7 +71,7 @@ string st_mode  = input.string("Latest note + dots (hover)", "Story on the chart
      tooltip = "Latest note + dots: only the newest note is written out; older ones become small dots, hover to read them.")
 int    st_n     = input.int(6, "N (notes or dots kept)", minval = 1, maxval = 40, group = G_ST)
 color  st_bg    = input.color(#0E3B43, "Note background", group = G_ST, inline = "sb")
-int    st_op    = input.int(5, "transparency %", minval = 0, maxval = 100, group = G_ST, inline = "sb")
+int    st_op    = input.int(90, "opacity %", minval = 0, maxval = 100, group = G_ST, inline = "sb")
 color  st_tx    = input.color(color.white, "Note text", group = G_ST, inline = "st")
 string st_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_ST, inline = "st")
 color  st_dot   = input.color(#26C6DA, "Older note dots", group = G_ST)
@@ -85,7 +85,7 @@ string t1_sty   = input.string("Solid", "", options = ["Solid", "Dashed", "Dotte
 int    t1_w     = input.int(2, "width", minval = 1, maxval = 4, group = G_LV, inline = "t1")
 bool   rg_on    = input.bool(true, "Shade the top timeframe external range", group = G_LV, inline = "rg")
 color  rg_col   = input.color(#7C4DFF, "", group = G_LV, inline = "rg")
-int    rg_op    = input.int(94, "transparency %", minval = 0, maxval = 100, group = G_LV, inline = "rg")
+int    rg_op    = input.int(6, "opacity %", minval = 0, maxval = 100, group = G_LV, inline = "rg")
 bool   mn_on    = input.bool(true, "Main story-timeframe high / low (while the pullback runs)", group = G_LV, inline = "mn")
 color  mn_col   = input.color(#FFB74D, "", group = G_LV, inline = "mn")
 color  lv_tx    = input.color(#E0E0E0, "Level label text", group = G_LV, inline = "lt")
@@ -95,11 +95,11 @@ bool   rx_on    = input.bool(true, "Reaction levels (opposite top-timeframe A / 
 color  rx_col   = input.color(#EF5350, "", group = G_ZN, inline = "rx")
 bool   fv_on    = input.bool(true, "Reaction FVGs (top timeframe)", group = G_ZN, inline = "fv")
 color  fv_col   = input.color(#EF5350, "", group = G_ZN, inline = "fv")
-int    fv_op    = input.int(85, "transparency %", minval = 0, maxval = 100, group = G_ZN, inline = "fv")
+int    fv_op    = input.int(15, "opacity %", minval = 0, maxval = 100, group = G_ZN, inline = "fv")
 bool   pz_on    = input.bool(true, "POIs (story timeframe, after it lines up)", group = G_ZN, inline = "pz")
 color  pz_dem   = input.color(#26A69A, "demand", group = G_ZN, inline = "pc")
 color  pz_sup   = input.color(#EF5350, "supply", group = G_ZN, inline = "pc")
-int    pz_op    = input.int(80, "transparency %", minval = 0, maxval = 100, group = G_ZN, inline = "pc")
+int    pz_op    = input.int(20, "opacity %", minval = 0, maxval = 100, group = G_ZN, inline = "pc")
 color  pz_mit   = input.color(#787B86, "Reached (mitigated)", group = G_ZN, inline = "pm")
 int    pz_max   = input.int(6, "POIs kept", minval = 1, maxval = 30, group = G_ZN, inline = "pm")
 
@@ -395,7 +395,7 @@ f_story(int t, float y, bool above, string txt) =>
                     label.set_textcolor(prev, st_dot)
                     label.set_size(prev, size.tiny)
             array.push(st_l, label.new(t, y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
-                 color = color.new(st_bg, st_op), textcolor = st_tx, size = f_sz(st_sz), textalign = text.align_left))
+                 color = color.new(st_bg, 100 - st_op), textcolor = st_tx, size = f_sz(st_sz), textalign = text.align_left))
             while array.size(st_l) > (st_mode == "Latest note only" ? 1 : st_mode == "Latest note + dots (hover)" ? st_n + 1 : st_n)
                 label.delete(array.shift(st_l))
 
@@ -429,7 +429,7 @@ f_pz_drop(int k) =>
 f_pz_add(float top, float bot, int t, bool dem) =>
     if not na(top) and not na(bot) and not na(t) and top > bot
         color c = dem ? pz_dem : pz_sup
-        array.push(pz, box.new(t, top, time, bot, xloc = xloc.bar_time, border_color = pz_on ? c : color.new(c, 100), bgcolor = pz_on ? color.new(c, pz_op) : color.new(c, 100),
+        array.push(pz, box.new(t, top, time, bot, xloc = xloc.bar_time, border_color = pz_on ? c : color.new(c, 100), bgcolor = pz_on ? color.new(c, 100 - pz_op) : color.new(c, 100),
              text = pz_on ? N2 + (dem ? " demand POI" : " supply POI") : "", text_size = f_sz(lv_sz), text_color = c, text_halign = text.align_right, text_valign = text.align_center))
         array.push(pz_t, top)
         array.push(pz_b, bot)
@@ -547,7 +547,7 @@ if array.size(pz) > 0
                 if dm ? low <= tp : high >= bb
                     array.set(pz_m, k, true)
                     if pz_on
-                        box.set_bgcolor(bx, color.new(pz_mit, pz_op))
+                        box.set_bgcolor(bx, color.new(pz_mit, 100 - pz_op))
                         box.set_border_color(bx, pz_mit)
                         box.set_text_color(bx, pz_mit)
             if array.get(pz_m, k) and not array.get(pz_e, k) and e_new
@@ -596,7 +596,7 @@ if barstate.islast
             f_lvl(a_clot, a_clo, N1 + " external low", t1_col, f_sty(t1_sty), t1_w)
             if rg_on
                 array.push(cx, box.new(math.min(a_chit, a_clot), a_chi, time, a_clo, xloc = xloc.bar_time, extend = extend.right,
-                     border_color = color.new(rg_col, 100), bgcolor = color.new(rg_col, rg_op)))
+                     border_color = color.new(rg_col, 100), bgcolor = color.new(rg_col, 100 - rg_op)))
         if D1 != 0 and ph >= 1 and ph <= 3
             if rx_on
                 float s1 = D1 > 0 ? r_s1 : r_b1
@@ -609,7 +609,7 @@ if barstate.islast
                 float zh = D1 > 0 ? r_fsh : r_fbh
                 float zl = D1 > 0 ? r_fsl : r_fbl
                 if not na(zh) and not na(zl)
-                    array.push(cx, box.new(bar_index - 20, zh, bar_index + 12, zl, border_color = fv_col, bgcolor = color.new(fv_col, fv_op),
+                    array.push(cx, box.new(bar_index - 20, zh, bar_index + 12, zl, border_color = fv_col, bgcolor = color.new(fv_col, 100 - fv_op),
                          text = N1 + (D1 > 0 ? " bearish FVG (reaction zone)" : " bullish FVG (reaction zone)"), text_size = f_sz(lv_sz), text_color = lv_tx))
         if mn_on and not na(mn_lvl) and (ph == 3 or ph == 4)
             f_lvl(mn_t, mn_lvl, "main " + N2 + (D1 > 0 ? " high" : " low") + " (" + N2 + " stays against the " + N1 + " until it is taken out)", mn_col, line.style_solid, 2)
