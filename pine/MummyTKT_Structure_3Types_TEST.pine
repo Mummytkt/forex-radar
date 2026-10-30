@@ -1,0 +1,616 @@
+//@version=6
+// ─────────────────────────────────────────────────────────────────────────────
+// MummyTKT — Swing · Internal · Fractal structure (TEST, display only, no alerts)
+//
+// Three structures, each inside the one above it:
+//   Swing    → BOS   = a candle BODY closes beyond the swing high / low
+//   Internal → i-BOS = a candle BODY closes beyond the internal high / low
+//   Fractal  → CH    = a WICK goes beyond the latest fractal high / low and turns the
+//                      fractal trend (CHoCH)
+// Highs and lows are wick levels. A fractal high / low is a candle whose wick is
+// beyond the N candles on each side (setting "Fractal: candles each side").
+//
+// How the points are set (bullish; bearish is the mirror):
+//   • The high of a leg keeps following price ("still forming") until the pullback
+//     is confirmed: an internal high by a bearish CH, a swing high by a bearish
+//     i-BOS. From then on it is fixed: the WEAK high, the target.
+//   • A body close above the fixed high is a break (i-BOS / BOS). The lowest point
+//     between that high and the break (the low that caused it) is the new STRONG low.
+//   • A body close below the strong low flips the trend: the high that took out the
+//     strong low becomes the strong high.
+//   • Strong = protected, trade from it; weak = the target.
+// POIs: at each break, the last opposite candle at the new strong point (demand
+// below for buys, supply above for sells). Faded once price returns into it
+// (mitigated), removed once a candle closes through it.
+// Phases (table): Longs A = swing + internal bullish, B = swing bullish, internal
+// pulling back, C = swing bearish, internal bullish, D = both bearish (avoid).
+// Shorts the mirror.
+// Mode: one timeframe (all three from the chart) or HTF + MTF (both timeframes'
+// structure drawn on this chart; the chart is your LTF for entries).
+// ─────────────────────────────────────────────────────────────────────────────
+
+indicator("MummyTKT — Swing · Internal · Fractal (Test)", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 200, max_bars_back = 5000)
+
+const string G_MODE = "1 · Mode"
+const string G_SHOW = "2 · What to show"
+const string G_POI  = "3 · POIs"
+const string G_TBL  = "4 · Table"
+const string G_COL  = "5 · Colours"
+
+string mode = input.string("One timeframe (chart)", "Structure from", options = ["One timeframe (chart)", "HTF + MTF"], group = G_MODE,
+     tooltip = "One timeframe: swing, internal and fractal all from this chart's candles. HTF + MTF: the structure of both timeframes below is drawn on this chart (use a lower chart, e.g. M15, as your LTF).")
+string htf  = input.timeframe("D",   "HTF (narrative)", group = G_MODE)
+string mtf  = input.timeframe("240", "MTF (bias and POIs)", group = G_MODE)
+int    flen = input.int(2, "Fractal: candles each side", minval = 1, maxval = 10, group = G_MODE,
+     tooltip = "A fractal high is a candle whose high is above this many candles on each side (low: below). 2 = the classic 5-candle fractal.")
+
+bool one_s = input.bool(true,  "One TF: Swing",    group = G_SHOW, inline = "one")
+bool one_i = input.bool(true,  "Internal",         group = G_SHOW, inline = "one")
+bool one_f = input.bool(true,  "Fractal CH",       group = G_SHOW, inline = "one")
+bool htf_s = input.bool(true,  "HTF: Swing",       group = G_SHOW, inline = "htf")
+bool htf_i = input.bool(true,  "Internal",         group = G_SHOW, inline = "htf")
+bool htf_f = input.bool(false, "Fractal CH",       group = G_SHOW, inline = "htf")
+bool mtf_s = input.bool(true,  "MTF: Swing",       group = G_SHOW, inline = "mtf")
+bool mtf_i = input.bool(true,  "Internal",         group = G_SHOW, inline = "mtf")
+bool mtf_f = input.bool(true,  "Fractal CH",       group = G_SHOW, inline = "mtf")
+bool show_pts = input.bool(true, "HH / HL / LH / LL labels at the points", group = G_SHOW)
+bool show_cur = input.bool(true, "Current strong / weak highs and lows", group = G_SHOW)
+bool show_eq  = input.bool(true, "Swing EQ 50% (premium / discount)", group = G_SHOW)
+int  keep_n   = input.int(15, "Past breaks kept (each type)", minval = 1, maxval = 100, group = G_SHOW)
+
+bool poi_s   = input.bool(true, "Swing POIs", group = G_POI, inline = "p")
+bool poi_i   = input.bool(true, "Internal POIs", group = G_POI, inline = "p")
+int  poi_max = input.int(10, "POIs kept", minval = 1, maxval = 50, group = G_POI)
+bool poi_mit = input.bool(true, "Keep mitigated POIs (faded)", group = G_POI,
+     tooltip = "A POI is mitigated once price comes back into it. On: it stays, faded. Off: it is removed. A candle closing through it always removes it.")
+
+bool   tbl_on  = input.bool(true, "Show the structure table", group = G_TBL)
+string tbl_pos = input.string("Top right", "Position", options = ["Top right", "Bottom right", "Top left", "Bottom left"], group = G_TBL)
+
+color c_bull = input.color(#26A69A, "Bullish break", group = G_COL, inline = "c1")
+color c_bear = input.color(#EF5350, "Bearish break", group = G_COL, inline = "c1")
+color c_sw   = input.color(#E0E0E0, "Swing levels", group = G_COL, inline = "c2")
+color c_in   = input.color(#FFB74D, "Internal levels", group = G_COL, inline = "c2")
+color c_pt   = input.color(#B0BEC5, "Point labels", group = G_COL, inline = "c3")
+color c_eq   = input.color(#9E9E9E, "EQ", group = G_COL, inline = "c3")
+color c_dem  = input.color(#26A69A, "Demand POI", group = G_COL, inline = "c4")
+color c_sup  = input.color(#EF5350, "Supply POI", group = G_COL, inline = "c4")
+color c_mit  = input.color(#787B86, "Mitigated", group = G_COL, inline = "c4")
+
+// ── Engine ────────────────────────────────────────────────────────────────────
+type Lvl
+    int   dir = 0
+    float hi  = na
+    int   hb  = na
+    bool  hf  = false
+    float lo  = na
+    int   lb  = na
+    bool  lf  = false
+
+// Open time of bar b (na if unknown)
+f_tb(int b) =>
+    na(b) ? na : time[math.min(bar_index - b, 4990)]
+
+// Highest high / lowest low from bar from_bar up to this bar, and its bar
+f_hi_since(int from_bar) =>
+    float m  = high
+    int   mb = bar_index
+    int   n  = math.min(bar_index - nz(from_bar, bar_index), 1500)
+    for i = 0 to n
+        if high[i] > m
+            m  := high[i]
+            mb := bar_index - i
+    [m, mb]
+f_lo_since(int from_bar) =>
+    float m  = low
+    int   mb = bar_index
+    int   n  = math.min(bar_index - nz(from_bar, bar_index), 1500)
+    for i = 0 to n
+        if low[i] < m
+            m  := low[i]
+            mb := bar_index - i
+    [m, mb]
+
+// POI: the last opposite candle at the new strong point (it, or up to 3 candles
+// before it): bearish for demand, bullish for supply. [top, bottom, open time]
+f_poi(bool bull, int pb) =>
+    int k0 = math.min(bar_index - pb, 4985)
+    int kk = k0
+    for j = 0 to 3
+        int k = k0 + j
+        if bull ? close[k] < open[k] : close[k] > open[k]
+            kk := k
+            break
+    [high[kk], low[kk], time[kk]]
+
+// One candle of one structure (internal or swing). fixH / fixL: the structure
+// below confirmed a pullback (a bearish / bullish CH for internal, i-BOS for swing).
+// Returns [break (+1 / -1 / 0), trend flipped, broken level, its bar, new strong point, its bar]
+method step(Lvl s, bool fixH, bool fixL) =>
+    int   ev   = 0
+    bool  flip = false
+    float bl   = na
+    int   bp   = na
+    float np   = na
+    int   npb  = na
+    if s.dir == 0
+        // start: the first confirmed pullback sets the direction
+        if fixL
+            [m, mb] = f_lo_since(bar_index - 20)
+            s.dir := 1
+            s.lo := m
+            s.lb := mb
+            s.lf := true
+            s.hi := high
+            s.hb := bar_index
+            s.hf := false
+        else if fixH
+            [m, mb] = f_hi_since(bar_index - 20)
+            s.dir := -1
+            s.hi := m
+            s.hb := mb
+            s.hf := true
+            s.lo := low
+            s.lb := bar_index
+            s.lf := false
+    else if s.dir == 1
+        if not s.hf and high >= s.hi
+            s.hi := high
+            s.hb := bar_index
+        if fixH
+            s.hf := true
+        if close < s.lo
+            // the strong low broke: the high that took it out is the strong high
+            ev   := -1
+            flip := true
+            bl   := s.lo
+            bp   := s.lb
+            [m, mb] = f_hi_since(s.lb)
+            s.dir := -1
+            s.hi := m
+            s.hb := mb
+            s.hf := true
+            s.lo := low
+            s.lb := bar_index
+            s.lf := false
+            np  := m
+            npb := mb
+        else if s.hf and close > s.hi
+            // break of the fixed high: the low that caused it is the new strong low
+            ev := 1
+            bl := s.hi
+            bp := s.hb
+            [m, mb] = f_lo_since(s.hb)
+            s.lo := m
+            s.lb := mb
+            s.lf := true
+            s.hi := high
+            s.hb := bar_index
+            s.hf := false
+            np  := m
+            npb := mb
+    else
+        if not s.lf and low <= s.lo
+            s.lo := low
+            s.lb := bar_index
+        if fixL
+            s.lf := true
+        if close > s.hi
+            ev   := 1
+            flip := true
+            bl   := s.hi
+            bp   := s.hb
+            [m, mb] = f_lo_since(s.hb)
+            s.dir := 1
+            s.lo := m
+            s.lb := mb
+            s.lf := true
+            s.hi := high
+            s.hb := bar_index
+            s.hf := false
+            np  := m
+            npb := mb
+        else if s.lf and close < s.lo
+            ev := -1
+            bl := s.lo
+            bp := s.lb
+            [m, mb] = f_hi_since(s.lb)
+            s.hi := m
+            s.hb := mb
+            s.hf := true
+            s.lo := low
+            s.lb := bar_index
+            s.lf := false
+            np  := m
+            npb := mb
+    [ev, flip, bl, bp, np, npb]
+
+// The whole engine on this timeframe's candles
+f_ms(simple int fln) =>
+    var Lvl IN = Lvl.new()
+    var Lvl SW = Lvl.new()
+    var float fh   = na
+    var int   fhb  = na
+    var bool  fhx  = true
+    var float fl   = na
+    var int   flb  = na
+    var bool  flx  = true
+    var int   fdir = 0
+    var int   chn  = 0
+    var int   inn  = 0
+    var int   swn  = 0
+    float ph = ta.pivothigh(high, fln, fln)
+    float pl = ta.pivotlow(low, fln, fln)
+    if not na(ph)
+        fh  := ph
+        fhb := bar_index - fln
+        fhx := false
+    if not na(pl)
+        fl  := pl
+        flb := bar_index - fln
+        flx := false
+    // Fractal CH: a wick beyond the latest fractal high / low that turns the fractal trend
+    int   ch  = 0
+    float chl = na
+    int   chp = na
+    if not fhx and high > fh
+        fhx := true
+        if fdir != 1
+            fdir := 1
+            ch   := 1
+            chl  := fh
+            chp  := fhb
+    if not flx and low < fl
+        flx := true
+        if fdir != -1
+            fdir := -1
+            ch   := -1
+            chl  := fl
+            chp  := flb
+    if ch != 0
+        chn += 1
+    [iev, ifl, ibl, ibp, inp, inpb] = IN.step(ch == -1, ch == 1)
+    if iev != 0
+        inn += 1
+    [sev, sfl, sbl, sbp, snp, snpb] = SW.step(iev == -1, iev == 1)
+    if sev != 0
+        swn += 1
+    float ipt = na
+    float ipo = na
+    int   ipq = na
+    if iev != 0 and not na(inpb)
+        [a1, a2, a3] = f_poi(iev == 1, inpb)
+        ipt := a1
+        ipo := a2
+        ipq := a3
+    float spt = na
+    float spo = na
+    int   spq = na
+    if sev != 0 and not na(snpb)
+        [b1, b2, b3] = f_poi(sev == 1, snpb)
+        spt := b1
+        spo := b2
+        spq := b3
+    [fdir, fh, f_tb(fhb), fl, f_tb(flb), ch, chl, f_tb(chp), chn, time,
+     IN.dir, IN.hi, f_tb(IN.hb), IN.hf, IN.lo, f_tb(IN.lb), IN.lf, iev, ifl, ibl, f_tb(ibp), inp, f_tb(inpb), ipt, ipo, ipq, inn,
+     SW.dir, SW.hi, f_tb(SW.hb), SW.hf, SW.lo, f_tb(SW.lb), SW.lf, sev, sfl, sbl, f_tb(sbp), snp, f_tb(snpb), spt, spo, spq, swn]
+
+// Another timeframe: [1] + lookahead_on = its last COMPLETED candle (no repaint)
+f_ms1(simple int fln) =>
+    [v_fdir, v_fh, v_fht, v_flo, v_flt, v_ch, v_chl, v_chp, v_chn, v_bt, v_idir, v_ihi, v_iht, v_ihf, v_ilo, v_ilt, v_ilf, v_iev, v_ifl, v_ibl, v_ibp, v_inp, v_inpt, v_ipt, v_ipo, v_ipq, v_in_, v_sdir, v_shi, v_sht, v_shf, v_slo, v_slt, v_slf, v_sev, v_sfl, v_sbl, v_sbp, v_snp, v_snpt, v_spt, v_spo, v_spq, v_sn] = f_ms(fln)
+    [v_fdir[1], v_fh[1], v_fht[1], v_flo[1], v_flt[1], v_ch[1], v_chl[1], v_chp[1], v_chn[1], v_bt[1], v_idir[1], v_ihi[1], v_iht[1], v_ihf[1], v_ilo[1], v_ilt[1], v_ilf[1], v_iev[1], v_ifl[1], v_ibl[1], v_ibp[1], v_inp[1], v_inpt[1], v_ipt[1], v_ipo[1], v_ipq[1], v_in_[1], v_sdir[1], v_shi[1], v_sht[1], v_shf[1], v_slo[1], v_slt[1], v_slf[1], v_sev[1], v_sfl[1], v_sbl[1], v_sbp[1], v_snp[1], v_snpt[1], v_spt[1], v_spo[1], v_spq[1], v_sn[1]]
+
+[C_fdir, C_fh, C_fht, C_flo, C_flt, C_ch, C_chl, C_chp, C_chn, C_bt, C_idir, C_ihi, C_iht, C_ihf, C_ilo, C_ilt, C_ilf, C_iev, C_ifl, C_ibl, C_ibp, C_inp, C_inpt, C_ipt, C_ipo, C_ipq, C_in_, C_sdir, C_shi, C_sht, C_shf, C_slo, C_slt, C_slf, C_sev, C_sfl, C_sbl, C_sbp, C_snp, C_snpt, C_spt, C_spo, C_spq, C_sn] = f_ms(flen)
+[H_fdir, H_fh, H_fht, H_flo, H_flt, H_ch, H_chl, H_chp, H_chn, H_bt, H_idir, H_ihi, H_iht, H_ihf, H_ilo, H_ilt, H_ilf, H_iev, H_ifl, H_ibl, H_ibp, H_inp, H_inpt, H_ipt, H_ipo, H_ipq, H_in_, H_sdir, H_shi, H_sht, H_shf, H_slo, H_slt, H_slf, H_sev, H_sfl, H_sbl, H_sbp, H_snp, H_snpt, H_spt, H_spo, H_spq, H_sn] = request.security(syminfo.tickerid, htf, f_ms1(flen), lookahead = barmerge.lookahead_on)
+[M_fdir, M_fh, M_fht, M_flo, M_flt, M_ch, M_chl, M_chp, M_chn, M_bt, M_idir, M_ihi, M_iht, M_ihf, M_ilo, M_ilt, M_ilf, M_iev, M_ifl, M_ibl, M_ibp, M_inp, M_inpt, M_ipt, M_ipo, M_ipq, M_in_, M_sdir, M_shi, M_sht, M_shf, M_slo, M_slt, M_slf, M_sev, M_sfl, M_sbl, M_sbp, M_snp, M_snpt, M_spt, M_spo, M_spq, M_sn] = request.security(syminfo.tickerid, mtf, f_ms1(flen), lookahead = barmerge.lookahead_on)
+
+bool one     = mode == "One timeframe (chart)"
+int  tf_sec  = timeframe.in_seconds()
+bool C_on    = one
+bool H_on    = not one and timeframe.in_seconds(htf) >= tf_sec
+bool M_on    = not one and timeframe.in_seconds(mtf) >= tf_sec
+
+f_tfname(string tf) =>
+    tf == "D" or tf == "1D" ? "D" : tf == "W" or tf == "1W" ? "W" : tf == "M" or tf == "1M" ? "M" : tf == "240" ? "H4" : tf == "60" ? "H1" : tf == "120" ? "H2" : tf == "30" ? "M30" : tf == "15" ? "M15" : tf == "5" ? "M5" : tf
+string C_tf = ""
+string H_tf = f_tfname(htf) + " "
+string M_tf = f_tfname(mtf) + " "
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+var array<line>  l_sw  = array.new<line>()
+var array<label> lb_sw = array.new<label>()
+var array<line>  l_in  = array.new<line>()
+var array<label> lb_in = array.new<label>()
+var array<line>  l_ch  = array.new<line>()
+var array<label> lb_ch = array.new<label>()
+var array<label> lb_pt = array.new<label>()
+
+f_cap_l(array<line> a, int cap) =>
+    while array.size(a) > cap
+        line.delete(array.shift(a))
+f_cap_lb(array<label> a, int cap) =>
+    while array.size(a) > cap
+        label.delete(array.shift(a))
+
+// A break: a line from the broken point to the breaking candle, its name in the middle
+f_brk(array<line> la, array<label> lba, int pt, int bt, float y, int d, string txt, string st, color c, int w, int cap) =>
+    array.push(la, line.new(pt, y, bt, y, xloc = xloc.bar_time, style = st, color = c, width = w))
+    array.push(lba, label.new(pt + int((bt - pt) / 2), y, txt, xloc = xloc.bar_time, style = d > 0 ? label.style_label_down : label.style_label_up,
+         color = color.new(color.black, 100), textcolor = c, size = size.tiny))
+    f_cap_l(la, cap)
+    f_cap_lb(lba, cap)
+
+f_ptl(int t, float y, bool is_hi, string txt, color c) =>
+    if not na(t) and not na(y)
+        array.push(lb_pt, label.new(t, y, txt, xloc = xloc.bar_time, style = is_hi ? label.style_label_down : label.style_label_up,
+             color = color.new(color.black, 100), textcolor = c, size = size.tiny))
+        f_cap_lb(lb_pt, keep_n * 6)
+
+// The broken point and the new strong point of a break
+f_brkname(int ev, bool flip) =>
+    ev > 0 ? (flip ? "LH" : "HH") : (flip ? "HL" : "LL")
+f_newname(int ev, bool flip) =>
+    ev > 0 ? (flip ? "LL" : "HL") : (flip ? "HH" : "LH")
+
+// POIs
+var array<box>   pz   = array.new<box>()
+var array<float> pz_t = array.new<float>()
+var array<float> pz_b = array.new<float>()
+var array<bool>  pz_d = array.new<bool>()
+var array<bool>  pz_m = array.new<bool>()
+f_pz_drop(int k) =>
+    box.delete(array.get(pz, k))
+    array.remove(pz, k)
+    array.remove(pz_t, k)
+    array.remove(pz_b, k)
+    array.remove(pz_d, k)
+    array.remove(pz_m, k)
+f_poi_add(float top, float bot, int t, bool demand, string txt) =>
+    if not na(top) and not na(bot) and not na(t)
+        color c = demand ? c_dem : c_sup
+        array.push(pz, box.new(t, top, time, bot, xloc = xloc.bar_time, border_color = c, bgcolor = color.new(c, 82),
+             text = txt, text_size = size.tiny, text_color = c, text_halign = text.align_right, text_valign = text.align_center))
+        array.push(pz_t, top)
+        array.push(pz_b, bot)
+        array.push(pz_d, demand)
+        array.push(pz_m, false)
+        while array.size(pz) > poi_max
+            f_pz_drop(0)
+
+bool C_ss = one_s
+bool C_si = one_i
+bool C_sf = one_f
+bool H_ss = htf_s
+bool H_si = htf_i
+bool H_sf = htf_f
+bool M_ss = mtf_s
+bool M_si = mtf_i
+bool M_sf = mtf_f
+
+// ── one timeframe: breaks as they happen ──
+var int C_k1 = 0
+var int C_k2 = 0
+var int C_k3 = 0
+if C_on and not na(C_chn)
+    if C_chn != C_k1
+        C_k1 := C_chn
+        if C_sf and C_ch != 0 and not na(C_chp)
+            f_brk(l_ch, lb_ch, C_chp, C_bt, C_chl, C_ch, C_tf + "CH", line.style_dashed, C_ch > 0 ? c_bull : c_bear, 1, keep_n * 2)
+    if C_in_ != C_k2
+        C_k2 := C_in_
+        if C_iev != 0 and not na(C_ibp)
+            if C_si
+                f_brk(l_in, lb_in, C_ibp, C_bt, C_ibl, C_iev, C_tf + "i-BOS", line.style_dotted, C_iev > 0 ? c_bull : c_bear, 1, keep_n * 2)
+                if show_pts
+                    f_ptl(C_ibp, C_ibl, C_iev > 0, C_tf + "i" + f_brkname(C_iev, C_ifl), c_pt)
+                    f_ptl(C_inpt, C_inp, C_iev < 0, C_tf + "i" + f_newname(C_iev, C_ifl), c_pt)
+            if poi_i and C_si
+                f_poi_add(C_ipt, C_ipo, C_ipq, C_iev > 0, C_tf + "internal " + (C_iev > 0 ? "demand" : "supply"))
+    if C_sn != C_k3
+        C_k3 := C_sn
+        if C_sev != 0 and not na(C_sbp)
+            if C_ss
+                f_brk(l_sw, lb_sw, C_sbp, C_bt, C_sbl, C_sev, C_tf + "BOS", line.style_solid, C_sev > 0 ? c_bull : c_bear, 2, keep_n * 2)
+                if show_pts
+                    f_ptl(C_sbp, C_sbl, C_sev > 0, C_tf + f_brkname(C_sev, C_sfl), c_sw)
+                    f_ptl(C_snpt, C_snp, C_sev < 0, C_tf + f_newname(C_sev, C_sfl) + " (strong)", c_sw)
+            if poi_s and C_ss
+                f_poi_add(C_spt, C_spo, C_spq, C_sev > 0, C_tf + "swing " + (C_sev > 0 ? "demand" : "supply"))
+
+// ── HTF: breaks as they happen ──
+var int H_k1 = 0
+var int H_k2 = 0
+var int H_k3 = 0
+if H_on and not na(H_chn)
+    if H_chn != H_k1
+        H_k1 := H_chn
+        if H_sf and H_ch != 0 and not na(H_chp)
+            f_brk(l_ch, lb_ch, H_chp, H_bt, H_chl, H_ch, H_tf + "CH", line.style_dashed, H_ch > 0 ? c_bull : c_bear, 1, keep_n * 2)
+    if H_in_ != H_k2
+        H_k2 := H_in_
+        if H_iev != 0 and not na(H_ibp)
+            if H_si
+                f_brk(l_in, lb_in, H_ibp, H_bt, H_ibl, H_iev, H_tf + "i-BOS", line.style_dotted, H_iev > 0 ? c_bull : c_bear, 1, keep_n * 2)
+                if show_pts
+                    f_ptl(H_ibp, H_ibl, H_iev > 0, H_tf + "i" + f_brkname(H_iev, H_ifl), c_pt)
+                    f_ptl(H_inpt, H_inp, H_iev < 0, H_tf + "i" + f_newname(H_iev, H_ifl), c_pt)
+            if poi_i and H_si
+                f_poi_add(H_ipt, H_ipo, H_ipq, H_iev > 0, H_tf + "internal " + (H_iev > 0 ? "demand" : "supply"))
+    if H_sn != H_k3
+        H_k3 := H_sn
+        if H_sev != 0 and not na(H_sbp)
+            if H_ss
+                f_brk(l_sw, lb_sw, H_sbp, H_bt, H_sbl, H_sev, H_tf + "BOS", line.style_solid, H_sev > 0 ? c_bull : c_bear, 2, keep_n * 2)
+                if show_pts
+                    f_ptl(H_sbp, H_sbl, H_sev > 0, H_tf + f_brkname(H_sev, H_sfl), c_sw)
+                    f_ptl(H_snpt, H_snp, H_sev < 0, H_tf + f_newname(H_sev, H_sfl) + " (strong)", c_sw)
+            if poi_s and H_ss
+                f_poi_add(H_spt, H_spo, H_spq, H_sev > 0, H_tf + "swing " + (H_sev > 0 ? "demand" : "supply"))
+
+// ── MTF: breaks as they happen ──
+var int M_k1 = 0
+var int M_k2 = 0
+var int M_k3 = 0
+if M_on and not na(M_chn)
+    if M_chn != M_k1
+        M_k1 := M_chn
+        if M_sf and M_ch != 0 and not na(M_chp)
+            f_brk(l_ch, lb_ch, M_chp, M_bt, M_chl, M_ch, M_tf + "CH", line.style_dashed, M_ch > 0 ? c_bull : c_bear, 1, keep_n * 2)
+    if M_in_ != M_k2
+        M_k2 := M_in_
+        if M_iev != 0 and not na(M_ibp)
+            if M_si
+                f_brk(l_in, lb_in, M_ibp, M_bt, M_ibl, M_iev, M_tf + "i-BOS", line.style_dotted, M_iev > 0 ? c_bull : c_bear, 1, keep_n * 2)
+                if show_pts
+                    f_ptl(M_ibp, M_ibl, M_iev > 0, M_tf + "i" + f_brkname(M_iev, M_ifl), c_pt)
+                    f_ptl(M_inpt, M_inp, M_iev < 0, M_tf + "i" + f_newname(M_iev, M_ifl), c_pt)
+            if poi_i and M_si
+                f_poi_add(M_ipt, M_ipo, M_ipq, M_iev > 0, M_tf + "internal " + (M_iev > 0 ? "demand" : "supply"))
+    if M_sn != M_k3
+        M_k3 := M_sn
+        if M_sev != 0 and not na(M_sbp)
+            if M_ss
+                f_brk(l_sw, lb_sw, M_sbp, M_bt, M_sbl, M_sev, M_tf + "BOS", line.style_solid, M_sev > 0 ? c_bull : c_bear, 2, keep_n * 2)
+                if show_pts
+                    f_ptl(M_sbp, M_sbl, M_sev > 0, M_tf + f_brkname(M_sev, M_sfl), c_sw)
+                    f_ptl(M_snpt, M_snp, M_sev < 0, M_tf + f_newname(M_sev, M_sfl) + " (strong)", c_sw)
+            if poi_s and M_ss
+                f_poi_add(M_spt, M_spo, M_spq, M_sev > 0, M_tf + "swing " + (M_sev > 0 ? "demand" : "supply"))
+
+// ── POIs: extend, fade when mitigated, remove when closed through ──
+if array.size(pz) > 0
+    int k = array.size(pz) - 1
+    while k >= 0
+        box   bx = array.get(pz, k)
+        bool  dm = array.get(pz_d, k)
+        float tp = array.get(pz_t, k)
+        float bb = array.get(pz_b, k)
+        if dm ? close < bb : close > tp
+            f_pz_drop(k)
+        else if not array.get(pz_m, k)
+            box.set_right(bx, time)
+            if dm ? low <= tp : high >= bb
+                if poi_mit
+                    array.set(pz_m, k, true)
+                    box.set_bgcolor(bx, color.new(c_mit, 85))
+                    box.set_border_color(bx, c_mit)
+                    box.set_text_color(bx, c_mit)
+                else
+                    f_pz_drop(k)
+        k -= 1
+
+// ── Current highs and lows (strong / weak), EQ, merged labels ──
+var array<line>   cur_l = array.new<line>()
+var array<label>  cur_b = array.new<label>()
+var array<float>  pv_y  = array.new<float>()
+var array<string> pv_s  = array.new<string>()
+var array<color>  pv_c  = array.new<color>()
+
+f_pend(float y, string txt, color c) =>
+    array.push(pv_y, y)
+    array.push(pv_s, txt)
+    array.push(pv_c, c)
+
+f_cur(string tf, string nm, int dir, float hi, int ht, bool hf, float lo, int lt, bool lf, string st, color c, bool eq) =>
+    if dir != 0 and not na(hi) and not na(lo) and not na(ht) and not na(lt)
+        string d  = dir > 0 ? "Bullish " : "Bearish "
+        string hs = dir < 0 ? "strong" : hf ? "weak (target)" : "weak, still forming"
+        string ls = dir > 0 ? "strong" : lf ? "weak (target)" : "weak, still forming"
+        array.push(cur_l, line.new(ht, hi, time, hi, xloc = xloc.bar_time, extend = extend.right, style = st, color = c))
+        array.push(cur_l, line.new(lt, lo, time, lo, xloc = xloc.bar_time, extend = extend.right, style = st, color = c))
+        f_pend(hi, tf + d + nm + " high · " + hs, c)
+        f_pend(lo, tf + d + nm + " low · " + ls, c)
+        if eq
+            float e = (hi + lo) / 2
+            array.push(cur_l, line.new(math.max(ht, lt), e, time, e, xloc = xloc.bar_time, extend = extend.right, style = line.style_dotted, color = c_eq))
+            f_pend(e, tf + "swing EQ 50% · " + (close > e ? "price in premium" : "price in discount"), c_eq)
+
+f_dirtxt(int d) =>
+    d > 0 ? "Bullish" : d < 0 ? "Bearish" : "—"
+// Phase for a trade direction: A pro swing + pro internal, B pro swing + counter
+// internal, C counter swing + pro internal, D counter both
+f_phase(int s, int i, bool long) =>
+    int ws = long ? s : -s
+    int wi = long ? i : -i
+    s == 0 or i == 0 ? "—" : ws > 0 ? (wi > 0 ? "A" : "B") : (wi > 0 ? "C" : "D")
+f_phtxt(string p) =>
+    p == "A" ? "A · full alignment" : p == "B" ? "B · internal pulling back" : p == "C" ? "C · counter swing" : p == "D" ? "D · avoid" : "—"
+f_phcol(string p) =>
+    p == "A" ? color.new(#26A69A, 40) : p == "B" or p == "C" ? color.new(#FFB74D, 50) : p == "D" ? color.new(#EF5350, 50) : color.new(color.gray, 70)
+
+f_tpos(string p) =>
+    p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : position.bottom_left
+var table tb = table.new(f_tpos(tbl_pos), 7, 3, bgcolor = color.new(#0F1120, 10), border_width = 1, border_color = color.new(color.gray, 70))
+
+f_row(int r, string tf, int s, int i, int f, float shi, float slo) =>
+    string pl = f_phase(s, i, true)
+    string ps = f_phase(s, i, false)
+    float  e  = (shi + slo) / 2
+    table.cell(tb, 0, r, tf, text_color = color.white, text_size = size.small)
+    table.cell(tb, 1, r, f_dirtxt(s), text_color = s > 0 ? c_bull : s < 0 ? c_bear : color.gray, text_size = size.small)
+    table.cell(tb, 2, r, f_dirtxt(i), text_color = i > 0 ? c_bull : i < 0 ? c_bear : color.gray, text_size = size.small)
+    table.cell(tb, 3, r, f_dirtxt(f), text_color = f > 0 ? c_bull : f < 0 ? c_bear : color.gray, text_size = size.small)
+    table.cell(tb, 4, r, f_phtxt(pl), text_color = color.white, bgcolor = f_phcol(pl), text_size = size.small)
+    table.cell(tb, 5, r, f_phtxt(ps), text_color = color.white, bgcolor = f_phcol(ps), text_size = size.small)
+    table.cell(tb, 6, r, na(e) ? "—" : close > e ? "Premium" : "Discount", text_color = color.white, text_size = size.small)
+
+if barstate.islast
+    for l in cur_l
+        line.delete(l)
+    for b in cur_b
+        label.delete(b)
+    array.clear(cur_l)
+    array.clear(cur_b)
+    array.clear(pv_y)
+    array.clear(pv_s)
+    array.clear(pv_c)
+    if show_cur
+        if C_on and C_ss
+            f_cur(C_tf, "swing", C_sdir, C_shi, C_sht, C_shf, C_slo, C_slt, C_slf, line.style_solid, c_sw, show_eq)
+        if C_on and C_si
+            f_cur(C_tf, "internal", C_idir, C_ihi, C_iht, C_ihf, C_ilo, C_ilt, C_ilf, line.style_dotted, c_in, false)
+        if H_on and H_ss
+            f_cur(H_tf, "swing", H_sdir, H_shi, H_sht, H_shf, H_slo, H_slt, H_slf, line.style_solid, c_sw, show_eq)
+        if H_on and H_si
+            f_cur(H_tf, "internal", H_idir, H_ihi, H_iht, H_ihf, H_ilo, H_ilt, H_ilf, line.style_dotted, c_in, false)
+        if M_on and M_ss
+            f_cur(M_tf, "swing", M_sdir, M_shi, M_sht, M_shf, M_slo, M_slt, M_slf, line.style_solid, c_sw, show_eq)
+        if M_on and M_si
+            f_cur(M_tf, "internal", M_idir, M_ihi, M_iht, M_ihf, M_ilo, M_ilt, M_ilf, line.style_dotted, c_in, false)
+    // one label per price: the levels sharing it are listed one per line
+    int pn = array.size(pv_y)
+    array<bool> pdone = array.new<bool>(pn, false)
+    int i = 0
+    while i < pn
+        if not array.get(pdone, i)
+            string ptxt = array.get(pv_s, i)
+            int j = i + 1
+            while j < pn
+                if not array.get(pdone, j) and math.abs(array.get(pv_y, j) - array.get(pv_y, i)) < syminfo.mintick / 2
+                    ptxt := ptxt + "\n" + array.get(pv_s, j)
+                    array.set(pdone, j, true)
+                j += 1
+            float py = array.get(pv_y, i)
+            array.push(cur_b, label.new(bar_index + 3, py, ptxt + "  " + str.tostring(py, format.mintick),
+                 style = label.style_label_left, color = color.new(color.black, 100), textcolor = array.get(pv_c, i), size = size.small))
+        i += 1
+    if tbl_on
+        table.clear(tb, 0, 0, 6, 2)
+        table.cell(tb, 0, 0, "TF", text_color = color.gray, text_size = size.small)
+        table.cell(tb, 1, 0, "Swing", text_color = color.gray, text_size = size.small)
+        table.cell(tb, 2, 0, "Internal", text_color = color.gray, text_size = size.small)
+        table.cell(tb, 3, 0, "Fractal", text_color = color.gray, text_size = size.small)
+        table.cell(tb, 4, 0, "Longs", text_color = color.gray, text_size = size.small)
+        table.cell(tb, 5, 0, "Shorts", text_color = color.gray, text_size = size.small)
+        table.cell(tb, 6, 0, "vs swing EQ", text_color = color.gray, text_size = size.small)
+        if one
+            f_row(1, "Chart", C_sdir, C_idir, C_fdir, C_shi, C_slo)
+        else
+            if H_on
+                f_row(1, "HTF " + f_tfname(htf), H_sdir, H_idir, H_fdir, H_shi, H_slo)
+            else
+                table.cell(tb, 0, 1, "HTF " + f_tfname(htf) + " is below the chart timeframe: switch the chart lower", text_color = c_bear, text_size = size.small)
+            if M_on
+                f_row(2, "MTF " + f_tfname(mtf), M_sdir, M_idir, M_fdir, M_shi, M_slo)
+            else
+                table.cell(tb, 0, 2, "MTF " + f_tfname(mtf) + " is below the chart timeframe: switch the chart lower", text_color = c_bear, text_size = size.small)
