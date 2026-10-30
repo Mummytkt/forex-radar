@@ -9,12 +9,16 @@ OUT = 'C:/Users/u/forex-radar/pine/MummyTKT_TradePlan_TEST.pine'
 
 FIELDS = ['fdir', 'fh', 'fht', 'flo', 'flt', 'ch', 'chl', 'chp', 'chn', 'bt',
           'idir', 'ihi', 'iht', 'ihf', 'ilo', 'ilt', 'ilf', 'iev', 'ifl', 'ibl', 'ibp', 'inp', 'inpt', 'ipt', 'ipo', 'ipq', 'in_',
-          'sdir', 'shi', 'sht', 'shf', 'slo', 'slt', 'slf', 'sev', 'sfl', 'sbl', 'sbp', 'snp', 'snpt', 'spt', 'spo', 'spq', 'sn']
+          'sdir', 'shi', 'sht', 'shf', 'slo', 'slt', 'slf', 'sev', 'sfl', 'sbl', 'sbp', 'snp', 'snpt', 'spt', 'spo', 'spq', 'sn',
+          'cl', 'hh', 'll']
 
 src = open(SRC, encoding='utf-8').read().split('\n')
 a = next(i for i, l in enumerate(src) if l.startswith('// ── Engine'))
-b = next(i for i, l in enumerate(src) if l.startswith('[C_fdir'))
+b = next(i for i, l in enumerate(src) if l.startswith('// Another timeframe'))
 ENGINE = '\n'.join(src[a:b])
+# the trade plan also needs each timeframe's candle (close / high / low) for the story
+assert ENGINE.count('spt, spo, spq, swn]') == 1
+ENGINE = ENGINE.replace('spt, spo, spq, swn]', 'spt, spo, spq, swn, close, high, low]')
 
 HEAD = r'''//@version=6
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,6 +73,9 @@ bool show_m   = input.bool(true, "MTF swing + internal levels", group = G_SH, in
 bool show_mb  = input.bool(true, "MTF BOS / i-BOS", group = G_SH, inline = "s2")
 bool show_abcd = input.bool(true, "MTF pullback marks: CHoCH lines + a / b / c / d", group = G_SH, inline = "s3")
 bool show_ph   = input.bool(true, "MTF phase changes (D / C / B / A)", group = G_SH, inline = "s3")
+bool show_st   = input.bool(true, "The story: what formed, the zones to watch, where the reaction may come from", group = G_SH)
+int  story_n   = input.int(8, "Story notes kept", minval = 1, maxval = 40, group = G_SH)
+bool show_rng  = input.bool(true, "Pullback range (premium / discount of the current leg)", group = G_SH)
 bool show_lch = input.bool(false, "LTF CH lines", group = G_SH)
 bool show_poi = input.bool(true, "POIs (HTF swing, MTF swing + internal)", group = G_SH)
 int  poi_max  = input.int(12, "POIs kept", minval = 1, maxval = 50, group = G_SH)
@@ -172,6 +179,25 @@ f_badge(int t, float y, string ch, int d, string tip) =>
         label.new(t, y, ch, xloc = xloc.bar_time, style = d > 0 ? label.style_label_up : label.style_label_down,
              color = d > 0 ? c_bull : c_bear, textcolor = color.white, size = size.tiny, tooltip = tip)
 
+// ── The story (MTF): each step says what formed, which zones to watch and where the
+// reaction may come from. Points: the extreme of each fractal leg becomes an internal
+// high / low when the next CHoCH confirms it; a body close beyond it breaks it.
+var array<label> st_l = array.new<label>()
+f_story(int t, float y, bool above, string txt) =>
+    if show_st and not na(t) and not na(y)
+        array.push(st_l, label.new(t, y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
+             color = color.new(#0E3B43, 5), textcolor = color.white, size = size.small, textalign = text.align_left))
+        while array.size(st_l) > story_n
+            label.delete(array.shift(st_l))
+var bool st_dem = false   // a POI on the swing's side was reached (demand in an uptrend)
+var bool st_sup = false   // a POI against the swing was reached (supply in an uptrend)
+var float pt_hi  = na
+var int   pt_hit = na
+var bool  pt_hix = true
+var float pt_lo  = na
+var int   pt_lot = na
+var bool  pt_lox = true
+
 var int H_k = 0
 var int M_k1 = 0
 var int M_k2 = 0
@@ -222,6 +248,74 @@ if M_ok and not na(M_sn) and M_sn != M_k2
         f_poi_add(M_spt, M_spo, M_spq, M_sev > 0, 2, M_tf + "swing " + (M_sev > 0 ? "demand" : "supply"))
 if show_lch and L_chev != 0 and not na(L_chpt)
     f_brk(L_chpt, time, L_chlv, L_chev, "CH", line.style_dashed, 1)
+
+// ── The story on each new MTF candle ──
+var int   lg_d = 0     // direction of the current fractal leg (+1 up, -1 down)
+var float lg_x = na    // its extreme so far
+var int   lg_t = na
+var int   st_kc = 0
+var int   st_ks = 0
+bool M_new = M_ok and not na(M_bt) and M_bt != nz(M_bt[1])
+if M_new and not na(M_cl)
+    int  S  = M_sdir
+    bool up = S >= 0                 // wording follows the MTF swing (an uptrend when it has none yet)
+    string HI = up ? "high" : "low"
+    string LO = up ? "low" : "high"
+    float meq_ = (M_shi + M_slo) / 2
+    bool deep = not na(meq_) and (up ? M_cl < meq_ : M_cl > meq_)
+    // the leg's extreme, including this candle
+    if lg_d < 0 and (na(lg_x) or M_ll < lg_x)
+        lg_x := M_ll
+        lg_t := M_bt
+    if lg_d > 0 and (na(lg_x) or M_hh > lg_x)
+        lg_x := M_hh
+        lg_t := M_bt
+    // a swing BOS
+    if M_sn != st_ks
+        st_ks := M_sn
+        if M_sev != 0
+            st_dem := false
+            st_sup := false
+            f_story(M_bt, M_sev > 0 ? M_hh : M_ll, M_sev > 0, "Breakout (" + M_tf + "BOS " + (M_sev > 0 ? "up" : "down") + "). Expect a pullback.\nMark the zones: " + (M_sev > 0 ? "demand below (where buys may come from),\nsupply above (where sells come from)." : "supply above (where sells may come from),\ndemand below (where buys come from)."))
+    // a CHoCH: the leg before it is now an internal point
+    if M_chn != st_kc and M_ch != 0
+        st_kc := M_chn
+        if M_ch > 0 and lg_d < 0 and not na(lg_x)
+            pt_lo  := lg_x
+            pt_lot := lg_t
+            pt_lox := false
+        if M_ch < 0 and lg_d > 0 and not na(lg_x)
+            pt_hi  := lg_x
+            pt_hit := lg_t
+            pt_hix := false
+        if S != 0
+            bool with_ = M_ch == S
+            float y_ = M_ch > 0 ? M_hh : M_ll
+            if not with_ and st_sup
+                st_sup := false
+                f_story(M_bt, y_, not up, "Price tapped " + (up ? "supply" : "demand") + " and gave a CHoCH " + (up ? "down" : "up") + ": " + (up ? "sells." : "buys.") + (deep ? "\nCareful: we are in " + (up ? "discount" : "premium") + ",\nespecially if the " + (up ? "demand" : "supply") + " block holds." : ""))
+            else if not with_
+                f_story(M_bt, y_, not up, "CHoCH " + (up ? "down" : "up") + ": pullback starting.\nThe " + HI + " before it is an internal " + HI + " now.\nMark the zones: " + (up ? "demand below (buys), supply above (sells)." : "supply above (sells), demand below (buys)."))
+            else
+                f_story(M_bt, y_, up, "CHoCH " + (up ? "up" : "down") + ": the " + (up ? "bounce" : "drop") + " is confirmed.\nThe " + LO + " before it is an internal " + LO + " now.\n" + (up ? "Sells come from the supply in the premium of the new range;\nbuys are strong only if that supply breaks." : "Buys come from the demand in the discount of the new range;\nsells are strong only if that demand breaks."))
+        lg_d := M_ch
+        lg_x := M_ch > 0 ? M_hh : M_ll
+        lg_t := M_bt
+    // a body close beyond an internal point
+    if S != 0 and not pt_lox and M_cl < pt_lo
+        pt_lox := true
+        if up
+            f_story(M_bt, M_ll, false, "Internal low broken: the pullback continues.\nExpect a bounce (confirmed by a CHoCH up).\nThe demand below is where the pullback may end.")
+        else
+            f_story(M_bt, M_ll, false, (st_dem ? "Supply held and pushed price down: the internal low broke." : "Internal low broken.") + "\nSellers are strong; the pullback may be ending (watch the i-BOS).")
+            st_dem := false
+    if S != 0 and not pt_hix and M_cl > pt_hi
+        pt_hix := true
+        if up
+            f_story(M_bt, M_hh, true, (st_dem ? "Demand held and pushed price up: the internal high broke." : "Internal high broken.") + "\nBuyers are strong; the pullback may be ending (watch the i-BOS).")
+            st_dem := false
+        else
+            f_story(M_bt, M_hh, true, "Internal high broken: the pullback continues.\nExpect a drop (confirmed by a CHoCH down).\nThe supply above is where the pullback may end.")
 
 // ── The plan ─────────────────────────────────────────────────────────────────
 // Phase for a trade direction: A pro swing + pro internal, B pro swing + counter
@@ -278,6 +372,17 @@ if array.size(pz) > 0
                     array.set(pz_m, k, bar_index)
                     if M_sdir != 0 and M_idir == -M_sdir and dm == (M_sdir > 0) and not na(m_eq) and (M_sdir > 0 ? close < m_eq : close > m_eq)
                         pb_poi := true
+                    if M_sdir != 0 and array.get(pz_f, k) <= 2
+                        bool sup_ = M_sdir > 0
+                        if dm == sup_
+                            st_dem := true
+                            bool deep_ = not na(m_eq) and (sup_ ? close < m_eq : close > m_eq)
+                            f_story(time, sup_ ? tp : bb, not sup_, "Price reached " + (array.get(pz_f, k) == 1 ? "HTF " : "") + (sup_ ? "demand" : "supply") + (deep_ ? " in " + (sup_ ? "discount" : "premium") : "") + ".\nWatch for a CHoCH " + (sup_ ? "up (buys)" : "down (sells)") + ";\n" + (sup_ ? "sells" : "buys") + " need care while it holds.")
+                        else
+                            st_sup := true
+                            float r_eq = (pt_hi + pt_lo) / 2
+                            bool  prem_ = not na(r_eq) and (sup_ ? close > r_eq : close < r_eq)
+                            f_story(time, sup_ ? bb : tp, sup_, "Price pulled back into " + (sup_ ? "supply" : "demand") + (prem_ ? " (" + (sup_ ? "premium" : "discount") + " of the range)" : "") + ".\nWatch for a CHoCH " + (sup_ ? "down: sells." : "up: buys."))
                     if show_poi
                         box.set_bgcolor(bx, color.new(c_mit, 85))
                         box.set_border_color(bx, c_mit)
@@ -359,6 +464,15 @@ if barstate.islast
     array.clear(pv_c)
     if show_h and H_ok
         f_cur(H_tf, "HTF swing", H_sdir, H_shi, H_sht, H_shf, H_slo, H_slt, H_slf, line.style_solid, c_htf, 2, true)
+    if show_rng and M_ok and not na(pt_hi) and not na(pt_lo) and pt_hi > pt_lo
+        int   r0  = math.min(pt_hit, pt_lot)
+        float req = (pt_hi + pt_lo) / 2
+        array.push(cur_l, line.new(r0, pt_hi, time, pt_hi, xloc = xloc.bar_time, extend = extend.right, color = color.new(color.gray, 30)))
+        array.push(cur_l, line.new(r0, pt_lo, time, pt_lo, xloc = xloc.bar_time, extend = extend.right, color = color.new(color.gray, 30)))
+        array.push(cur_l, line.new(r0, req, time, req, xloc = xloc.bar_time, extend = extend.right, color = color.new(#7CB342, 0), width = 2))
+        f_pend(pt_hi, "Range " + str.tostring(pt_hi, format.mintick) + " (internal high)", color.gray)
+        f_pend(req, "Range 0.5 · premium above (sells), discount below (buys)", color.new(#7CB342, 0))
+        f_pend(pt_lo, "Range " + str.tostring(pt_lo, format.mintick) + " (internal low)", color.gray)
     if show_m and M_ok
         f_cur(M_tf, "MTF swing", M_sdir, M_shi, M_sht, M_shf, M_slo, M_slt, M_slf, line.style_solid, c_mtf, 1, false)
         f_cur(M_tf, "MTF internal", M_idir, M_ihi, M_iht, M_ihf, M_ilo, M_ilt, M_ilf, line.style_dotted, c_mtf, 1, false)
@@ -388,8 +502,8 @@ if barstate.islast
         string side = bull ? "BUYS" : bear ? "SELLS" : "RANGE · no HTF direction yet"
         table.cell(tb, 0, 0, "", text_size = size.small)
         table.cell(tb, 1, 0, "WATCHLIST · " + side, text_color = color.new(#B39DDB, 0), text_size = size.normal, text_halign = text.align_left)
-        if not H_ok or not M_ok or not L_ok
-            f_row(1, false, plan + ": put the chart on " + f_tfname(ltf) + " (or lower)")
+        if not H_ok or not M_ok
+            f_row(1, false, plan + ": put the chart on " + f_tfname(mtf) + " or lower (" + f_tfname(ltf) + " for the LTF entries)")
         else
             // 1 HTF objective
             f_row(1, H_sdir != 0, H_tf + "swing " + f_dirw(H_sdir) + (H_sdir > 0 ? " · objective: weak high " + str.tostring(H_shi, format.mintick) : H_sdir < 0 ? " · objective: weak low " + str.tostring(H_slo, format.mintick) : ""))
@@ -429,7 +543,7 @@ if barstate.islast
             f_row(11, false, "Always ask: what is the HTF objective? What has been mitigated?")
             string pbs = M_sdir == 0 ? "—" : M_idir == M_sdir ? (pb_a ? "a · CHoCH against the swing: pullback may be starting" : "d · internal with the swing") : (pb_c ? "c · CHoCH back with the swing: pullback may be ending" : "b · i-BOS: pullback confirmed")
             f_row(12, flow == "A", M_tf + "phase now: " + f_flowtxt(flow) + "  ·  last mark " + pbs)
-            table.cell(tb, 1, 13, plan + (L_eq ? "" : " · LTF " + f_tfname(ltf) + " read from a lower chart"), text_color = color.gray, text_size = size.tiny, text_halign = text.align_left)
+            table.cell(tb, 1, 13, plan + (not L_ok ? " · LTF entries (▲ / ▼) need the chart on " + f_tfname(ltf) : L_eq ? "" : " · LTF " + f_tfname(ltf) + " read from a lower chart"), text_color = color.gray, text_size = size.tiny, text_halign = text.align_left)
 '''
 
 
@@ -438,9 +552,20 @@ def names(p):
 
 
 body = HEAD + ENGINE + '\n'
+body += '// Another timeframe: [1] + lookahead_on = its last COMPLETED candle (no repaint)\n'
+body += 'f_ms1(simple int fln) =>\n'
+body += f'    [{names("v_")}] = f_ms(fln)\n'
+body += '    [' + ', '.join('v_' + f + '[1]' for f in FIELDS) + ']\n\n'
 body += f'[{names("C_")}] = f_ms(flen)\n'
-body += f'[{names("H_")}] = request.security(syminfo.tickerid, htf, f_ms1(flen), lookahead = barmerge.lookahead_on)\n'
-body += f'[{names("M_")}] = request.security(syminfo.tickerid, mtf, f_ms1(flen), lookahead = barmerge.lookahead_on)\n'
+body += f'[{names("Hs_")}] = request.security(syminfo.tickerid, htf, f_ms1(flen), lookahead = barmerge.lookahead_on)\n'
+body += f'[{names("Ms_")}] = request.security(syminfo.tickerid, mtf, f_ms1(flen), lookahead = barmerge.lookahead_on)\n'
+body += '// When the chart IS the HTF / MTF, use its own candles (no one-candle delay)\n'
+body += 'bool H_eq = timeframe.in_seconds(htf) == timeframe.in_seconds()\n'
+body += 'bool M_eq = timeframe.in_seconds(mtf) == timeframe.in_seconds()\n'
+for f in FIELDS:
+    body += f'H_{f} = H_eq ? C_{f} : Hs_{f}\n'
+for f in FIELDS:
+    body += f'M_{f} = M_eq ? C_{f} : Ms_{f}\n'
 body += f'[{names("L_")}] = request.security(syminfo.tickerid, ltf, f_ms1(flen), lookahead = barmerge.lookahead_on)\n'
 body += TAIL
 open(OUT, 'w', encoding='utf-8', newline='\n').write(body)
