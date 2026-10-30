@@ -1352,6 +1352,12 @@ def delete_price_alert(alert_id: int, request: Request):
 # ── Entry Pattern Alerts (PCL + Engulfing Sweep at user-set levels) ──────────
 
 _MAX_ACTIVE_ENTRY_ALERTS = 20
+# The formations a level can watch: "<timeframe>:<pattern>"
+#   sweep        = a candle sweeping the opposite candle before it (Engulfing Sweep)
+#   sweep_break  = a low (high) at the level, its sweep, then the break of the last lower high (higher low)
+#   pcl          = MummyTKT's PCL
+ENTRY_WATCH_TFS = ("H1", "H2", "M15", "M5")
+ENTRY_WATCH_PATTERNS = ("sweep", "sweep_break", "pcl")
 
 
 class EntryAlertItem(BaseModel):
@@ -1367,6 +1373,8 @@ class EntryAlertItem(BaseModel):
     triggered_pattern: Optional[str]
     triggered_tf: Optional[str]
     created_at: str
+    watches: Optional[list[str]] = None   # e.g. ["H1:sweep", "M15:sweep_break"]; None = PCL / Engulfing Sweep on H1 / H2
+    keep_open: bool = False               # stay active after the first formation (fires each one)
 
 
 class EntryAlertsList(BaseModel):
@@ -1382,6 +1390,8 @@ class EntryAlertCreate(BaseModel):
     tolerance_pips: float = 20
     note: Optional[str] = None
     expires_at: Optional[str] = None
+    watches: Optional[list[str]] = None
+    keep_open: bool = False
 
 
 def _row_to_entry_alert(row: sqlite3.Row) -> EntryAlertItem:
@@ -1399,6 +1409,8 @@ def _row_to_entry_alert(row: sqlite3.Row) -> EntryAlertItem:
         triggered_pattern=d.get("triggered_pattern"),
         triggered_tf=d.get("triggered_tf"),
         created_at=d["created_at"],
+        watches=[w for w in (d.get("watches") or "").split(",") if w] or None,
+        keep_open=bool(d.get("keep_open") or 0),
     )
 
 
@@ -1438,6 +1450,18 @@ def create_entry_alert(body: EntryAlertCreate, request: Request):
         raise HTTPException(status_code=400, detail="direction must be 'bullish' or 'bearish'")
     if body.tolerance_pips <= 0:
         raise HTTPException(status_code=400, detail="tolerance_pips must be > 0")
+    watches = None
+    if body.watches is not None:
+        clean = []
+        for w in body.watches:
+            tf, _, pat = (w or "").partition(":")
+            if tf not in ENTRY_WATCH_TFS or pat not in ENTRY_WATCH_PATTERNS:
+                raise HTTPException(status_code=400, detail=f"Unknown formation '{w}'")
+            if w not in clean:
+                clean.append(w)
+        if not clean:
+            raise HTTPException(status_code=400, detail="Pick at least one formation to watch")
+        watches = ",".join(clean)
     with _db_write(request) as conn:
         if uid:
             count = conn.execute(
@@ -1455,9 +1479,10 @@ def create_entry_alert(body: EntryAlertCreate, request: Request):
         now = datetime.now(timezone.utc).isoformat()
         cur = conn.execute("""
             INSERT INTO entry_pattern_alerts
-                (user_id, instrument, direction, price, tolerance_pips, note, expires_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (uid, instrument, direction, body.price, body.tolerance_pips, body.note, body.expires_at, now))
+                (user_id, instrument, direction, price, tolerance_pips, note, expires_at, created_at, watches, keep_open)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (uid, instrument, direction, body.price, body.tolerance_pips, body.note, body.expires_at, now,
+              watches, 1 if body.keep_open else 0))
         row = conn.execute("SELECT * FROM entry_pattern_alerts WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row_to_entry_alert(row)
 

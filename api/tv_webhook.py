@@ -209,7 +209,8 @@ class TVWebhookPayload(BaseModel):
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
     cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | inline_break | breaker_origin | breaker_cont | oc_cont
     price: Optional[float] = None      # current close price (PRICE_UPDATE / ENTRY_CONFIRMATION)
-    pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "engulfing_sweep"
+    pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "engulfing_sweep" | "sweep_break"
+    touch_price: Optional[float] = None  # ENTRY_CONFIRMATION: the wick that reached the level (sweep low / high)
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
     snapshot: Optional[dict] = None    # PRICE_UPDATE: chart stage + levels (Bias Pointer 2026-10-16+)
@@ -962,7 +963,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     price = payload.price
     swept_level = payload.swept_level
 
-    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "engulfing_sweep"):
+    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "engulfing_sweep", "sweep_break"):
         logger.warning("%s ENTRY_CONFIRMATION ignored — bad direction/pattern (%s/%s)",
                        instrument, direction, pattern)
         return
@@ -975,7 +976,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
 
     # Find every active, matching, non-expired entry alert for this instrument + direction
     rows = conn.execute("""
-        SELECT epa.id, epa.price, epa.tolerance_pips, epa.note,
+        SELECT epa.id, epa.price, epa.tolerance_pips, epa.note, epa.watches, epa.keep_open,
                u.telegram_chat_id, epa.user_id, u.role, u.plan, u.plan_expires_at
         FROM entry_pattern_alerts epa
         LEFT JOIN users u ON u.id = epa.user_id
@@ -990,7 +991,11 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
                     instrument, direction, pattern, price)
         return
 
-    tf_label = "H1" if tf == "60" else ("H2" if tf == "120" else tf)
+    tf_label = {"60": "H1", "120": "H2", "15": "M15", "5": "M5"}.get(tf, tf)
+    # the formation as a level names it in its watch list (Engulfing Sweep = "sweep")
+    watch_key = f"{tf_label}:{'sweep' if pattern == 'engulfing_sweep' else pattern}"
+    # how close to the level: the wick that reached it when the script sends it, else the close
+    touch = payload.touch_price if payload.touch_price is not None else price
 
     for row in rows:
         alert_id = row["id"]
@@ -1001,17 +1006,24 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         chat_id = _resolve_chat(config, row["user_id"], row["telegram_chat_id"],
                                 row["role"], row["plan"], row["plan_expires_at"])
 
+        watches = [w for w in (row["watches"] or "").split(",") if w]
+        if watches:
+            if watch_key not in watches:
+                continue  # this level doesn't watch this formation on this timeframe
+        elif pattern not in ("pcl", "engulfing_sweep") or tf_label not in ("H1", "H2"):
+            continue  # an older level: PCL / Engulfing Sweep on H1 / H2 only
+
         proximity = tol_pips * pip_size
-        if abs(price - alert_price) > proximity:
+        if abs(touch - alert_price) > proximity:
             continue  # pattern formed too far from this user's watched level
 
-        # Mark the alert as triggered (one-shot — auto-closes)
+        # The first formation closes the level, unless it keeps watching the others
         conn.execute("""
             UPDATE entry_pattern_alerts
-            SET is_active = 0, triggered_at = ?,
+            SET is_active = ?, triggered_at = ?,
                 triggered_pattern = ?, triggered_tf = ?
             WHERE id = ?
-        """, (now_iso, pattern, tf_label, alert_id))
+        """, (1 if row["keep_open"] else 0, now_iso, pattern, tf_label, alert_id))
         conn.commit()
 
         alert_text = format_entry_alert(

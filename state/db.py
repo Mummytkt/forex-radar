@@ -507,6 +507,13 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_pattern_alerts_inst ON entry_pattern_alerts (instrument, is_active)")
+    # Entry alerts: the formations watched on the level ("H1:sweep,M15:sweep_break", NULL =
+    # the original PCL / Engulfing Sweep on H1 / H2), and keep_open = stay active after one forms
+    epa_cols = {row[1] for row in conn.execute("PRAGMA table_info(entry_pattern_alerts)").fetchall()}
+    if "watches" not in epa_cols:
+        conn.execute("ALTER TABLE entry_pattern_alerts ADD COLUMN watches TEXT")
+    if "keep_open" not in epa_cols:
+        conn.execute("ALTER TABLE entry_pattern_alerts ADD COLUMN keep_open INTEGER NOT NULL DEFAULT 0")
 
     # When the owner paid out a commission (Business page → Mark paid)
     if "commissions" in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:

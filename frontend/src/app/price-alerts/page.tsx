@@ -186,6 +186,19 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
 
 // ── Entry Pattern Alert row ───────────────────────────────────────────────────
 
+// The formations a level can watch: "<timeframe>:<pattern>"
+const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
+  { key: 'H1:sweep',        label: 'H1 Sweep',            hint: 'a bullish candle sweeps the bearish candle before it (sell: mirror)' },
+  { key: 'H2:sweep',        label: 'H2 Sweep',            hint: 'the same on 2-hour candles' },
+  { key: 'M15:sweep_break', label: 'M15 Sweep and Break', hint: 'a low at the level, its sweep, then a close above the last lower high' },
+  { key: 'M5:sweep_break',  label: 'M5 Sweep and Break',  hint: 'the same on 5-minute candles' },
+  { key: 'H1:pcl',          label: 'H1 PCL',              hint: "MummyTKT's PCL on H1" },
+  { key: 'H2:pcl',          label: 'H2 PCL',              hint: "MummyTKT's PCL on H2" },
+]
+const ENTRY_DEFAULT_WATCHES = ['H1:sweep', 'H2:sweep', 'M15:sweep_break', 'M5:sweep_break']
+const watchLabel = (k: string) => ENTRY_WATCHES.find(w => w.key === k)?.label ?? k
+const patternLabel = (p: string) => p === 'pcl' ? 'PCL' : p === 'sweep_break' ? 'Sweep and Break' : 'Sweep'
+
 function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id: number) => void }) {
   const triggered = !!item.triggered_at
   const dirLabel = item.direction === 'bullish' ? 'Buy' : 'Sell'
@@ -223,14 +236,15 @@ function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            PCL or Engulfing Sweep · H1/H2
+            {item.watches ? item.watches.map(watchLabel).join(' · ') : 'PCL or Engulfing Sweep · H1/H2'}
+            {item.keep_open ? ' · keeps watching' : ''}
           </span>
           {item.note && (
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {item.note}</span>
           )}
           {triggered && item.triggered_pattern && (
             <span style={{ fontSize: 11, color: 'var(--bullish)' }}>
-              · {item.triggered_pattern === 'pcl' ? 'PCL' : 'Engulfing Sweep'} on {item.triggered_tf} · {timeAgo(item.triggered_at!)}
+              · {patternLabel(item.triggered_pattern)} on {item.triggered_tf} · {timeAgo(item.triggered_at!)}
             </span>
           )}
           {!triggered && item.expires_at && (
@@ -270,6 +284,8 @@ function EntryAlertsPanel({ instruments, prices }: {
   const [expiry, setExpiry] = useState('1week')
   const [customExpiry, setCustomExpiry] = useState('')
   const [note, setNote] = useState('')
+  const [watches, setWatches] = useState<string[]>(ENTRY_DEFAULT_WATCHES)
+  const [keepOpen, setKeepOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -292,6 +308,10 @@ function EntryAlertsPanel({ instruments, prices }: {
     const tolVal = tolerance.trim() === '' ? 20 : parseFloat(tolerance)   // optional: blank = the default 20 pips
     if (!instrument || isNaN(priceVal) || priceVal <= 0) {
       setFormError('Select an instrument and enter a valid price.')
+      return
+    }
+    if (watches.length === 0) {
+      setFormError('Tick at least one formation to watch on this level.')
       return
     }
     if (isNaN(tolVal) || tolVal <= 0) {
@@ -317,6 +337,8 @@ function EntryAlertsPanel({ instruments, prices }: {
           tolerance_pips: tolVal,
           note: note.trim() || null,
           expires_at: expiresAt,
+          watches,
+          keep_open: keepOpen,
         }),
       })
       if (!res.ok) {
@@ -360,7 +382,7 @@ function EntryAlertsPanel({ instruments, prices }: {
           <div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>New Entry Pattern Alert</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-              Notify me when PCL or Engulfing Sweep forms at my level
+              Notify me when the formations I pick form at my level
             </div>
           </div>
         </div>
@@ -452,6 +474,42 @@ function EntryAlertsPanel({ instruments, prices }: {
               How close the pattern must form to your level. Default 20 pips covers
               normal overshoots. Use smaller (5-10) for tight levels, larger (30-50)
               for wider zones.
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+              Formations to watch on this level
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {ENTRY_WATCHES.map(w => {
+                const on = watches.includes(w.key)
+                return (
+                  <label key={w.key} title={w.hint} style={{
+                    display: 'flex', alignItems: 'center', gap: 7, padding: '7px 9px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                    border: '1px solid', borderColor: on ? 'var(--accent)' : 'var(--border)',
+                    background: on ? 'var(--accent-bg)' : 'var(--bg)', color: 'var(--text-primary)',
+                  }}>
+                    <input type="checkbox" checked={on}
+                      onChange={() => setWatches(on ? watches.filter(x => x !== w.key) : [...watches, w.key])} />
+                    {w.label}
+                  </label>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              Each one is checked on its own timeframe, at this level. Sweep: a candle sweeps the opposite candle before it.
+              Sweep and Break: a low (a high for sells) at the level, its sweep, then a close through the last lower high (higher low).
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
+              {([[false, 'Close it at the first one'], [true, 'Keep watching the others']] as const).map(([val, lbl]) => (
+                <button key={lbl} type="button" onClick={() => setKeepOpen(val)} style={{
+                  padding: '7px 10px', borderRadius: 8, fontSize: 12, fontWeight: 500, border: '1px solid', cursor: 'pointer',
+                  borderColor: keepOpen === val ? 'var(--accent)' : 'var(--border)',
+                  background: keepOpen === val ? 'var(--accent)' : 'var(--bg)',
+                  color: keepOpen === val ? 'white' : 'var(--text-secondary)',
+                }}>{lbl}</button>
+              ))}
             </div>
           </div>
 
@@ -1079,7 +1137,7 @@ export default function PriceAlertsPage() {
           <Clock size={13} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
             {mainTab === 'entry'
-              ? 'Entry Pattern alerts fire at H1 or H2 candle close when a PCL or Engulfing Sweep forms within tolerance of your level and matches your direction. Fires once, then auto-closes.'
+              ? 'Entry Pattern alerts fire when a formation you picked (H1 / H2 Sweep, M15 / M5 Sweep and Break, or PCL) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others.'
               : 'On touch alerts fire within 5 minutes of the level being crossed. Candle close alerts fire only at the close of your chosen timeframe candle.'}
           </span>
         </div>

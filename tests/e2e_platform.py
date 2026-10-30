@@ -1149,6 +1149,31 @@ check("every menu reply has a Close button", _m[0][2].inline_keyboard[-1][0].cal
 _bm.send_message_id, _bm.answer_button, _bm.delete_message = _old_bm
 config.telegram_bot_token = ""
 
+# ── Entry alerts: several formations watched on one level (2026-10-30) ──
+_ea = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD", "direction": "bullish", "price": 1.1000,
+             "tolerance_pips": 10, "watches": ["H1:sweep", "M15:sweep_break"]}).json()
+check("an entry alert keeps the formations it watches", _ea.get("watches") == ["H1:sweep", "M15:sweep_break"] and _ea.get("keep_open") is False)
+check("an unknown formation is refused",
+      c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD", "direction": "bullish", "price": 1.1, "watches": ["H4:sweep"]}).status_code == 400)
+_eb = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD", "direction": "bullish", "price": 1.1000,
+             "tolerance_pips": 10, "watches": ["M5:sweep_break"], "keep_open": True}).json()
+_old = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD", "direction": "bullish", "price": 1.1000, "tolerance_pips": 10}).json()
+_ent = lambda: {a["id"]: a for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"]}
+# an M5 sweep and break: its close is far above the level, the sweep wick is at it
+tv(type="ENTRY_CONFIRMATION", instrument="EURUSD", direction="bullish", pattern="sweep_break", timeframe="5",
+   price=1.1040, swept_level=1.1002, touch_price=1.0998)
+_a = _ent()
+check("an M5 sweep and break fires only the level watching it, matched on the sweep wick, and keep-open stays active",
+      _ea["id"] in _a and _eb["id"] in _a and _a[_eb["id"]]["triggered_tf"] == "M5" and _a[_eb["id"]]["triggered_pattern"] == "sweep_break"
+      and _a[_ea["id"]]["triggered_at"] is None and _a[_old["id"]]["triggered_at"] is None)
+tv(type="ENTRY_CONFIRMATION", instrument="EURUSD", direction="bullish", pattern="engulfing_sweep", timeframe="60",
+   price=1.1015, swept_level=1.1001, touch_price=1.0999)
+_a = _ent()
+check("an H1 sweep closes the level watching H1 sweep, and an older level (no list) still fires on H1 Engulfing Sweep",
+      _ea["id"] not in _a and _old["id"] not in _a and _eb["id"] in _a)
+for _x in (_ea, _eb, _old):
+    c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
+
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

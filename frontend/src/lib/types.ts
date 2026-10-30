@@ -84,9 +84,11 @@ export interface EntryAlertItem {
   expires_at: string | null
   is_active: boolean
   triggered_at: string | null
-  triggered_pattern: string | null  // 'pcl' | 'engulfing_sweep'
-  triggered_tf: string | null       // 'H1' | 'H2'
+  triggered_pattern: string | null  // 'pcl' | 'engulfing_sweep' | 'sweep_break'
+  triggered_tf: string | null       // 'H1' | 'H2' | 'M15' | 'M5'
   created_at: string
+  watches: string[] | null          // e.g. ['H1:sweep', 'M15:sweep_break']; null = PCL / Engulfing Sweep on H1 / H2
+  keep_open: boolean                // stays active after the first formation
 }
 
 export interface EntryAlertsList {

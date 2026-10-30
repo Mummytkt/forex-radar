@@ -834,13 +834,16 @@ def _reason_origin(
 
 _ENTRY_PATTERN_NAMES: dict[str, str] = {
     "pcl":              "MummyTKT's PCL",
-    "engulfing_sweep":  "Engulfing Sweep",
+    "engulfing_sweep":  "Sweep (Engulfing Sweep)",
+    "sweep_break":      "Sweep and Break",
 }
 
 _TF_LABELS: dict[str, str] = {
     "60":  "H1",
     "120": "H2",
     "240": "H4",
+    "15":  "M15",
+    "5":   "M5",
 }
 
 
@@ -875,6 +878,19 @@ def format_entry_alert(
                 f"The {tf_label} candle wicked above the previous bearish body high "
                 f"@ {swept_str} but closed back below it — a liquidity sweep "
                 f"without a body close-through."
+            )
+    elif pattern == "sweep_break":
+        if direction == "bearish":
+            desc = (
+                f"On {tf_label}, price made a high at your level, a wick swept it "
+                f"@ {swept_str} and closed back below, then a candle body closed below "
+                f"the last higher low — sweep and break."
+            )
+        else:
+            desc = (
+                f"On {tf_label}, price made a low at your level, a wick swept it "
+                f"@ {swept_str} and closed back above, then a candle body closed above "
+                f"the last lower high — sweep and break."
             )
     else:  # engulfing_sweep
         if direction == "bearish":
