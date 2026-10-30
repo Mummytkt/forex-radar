@@ -970,12 +970,12 @@ if chart_ok
                 ex_lvl := na
                 f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + bcls, D1 < 0)
                 f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (again ? "a new " : "the ") + N1 + " pullback is confirmed." + bwhy + "\nAfter every breakout a pullback is expected:\nwatch for an " + N2 + " CHoCH " + up + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + "\nuntil its main " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out.")
-            else if (sph == 3 or sph == 4) and not na(ex_lvl) and (bcls == " · Internal" or (D1 > 0 ? b_blvl > ex_lvl : b_blvl < ex_lvl))
-                // an Internal break inside the range: marked, but the range high and the story
-                // stay; the move only continues once the external low breaks (body close)
+            else if (sph == 3 or sph == 4) and (bcls == " · Internal" or (not na(ex_lvl) and (D1 > 0 ? b_blvl > ex_lvl : b_blvl < ex_lvl)))
+                // an Internal break (its level formed after price reached the reaction zone, or it
+                // sits inside the range): marked, but the main / range high and the story stay
                 int_brk := true
                 f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + " · Internal", D1 < 0)
-                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + " inside the " + N2 + " range (Internal)." + bwhy + "\nThe range " + HI + " " + str.tostring(mn_lvl, format.mintick) + " stays. The " + (D1 > 0 ? "bearish" : "bullish") + " move only continues\nonce the " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " breaks (body close).")
+                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + " (Internal)." + bwhy + "\nThe main " + N2 + " " + HI + " " + str.tostring(mn_lvl, format.mintick) + " stays. " + (na(ex_lvl) ? "Only an External break moves the story on." : "The " + (D1 > 0 ? "bearish" : "bullish") + " move only continues\nonce the " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " breaks (body close)."))
             else if sph == 3 or sph == 4
                 // the pullback keeps going: a continuation (after a CHoCH: it failed)
                 bool failed = sph == 4
