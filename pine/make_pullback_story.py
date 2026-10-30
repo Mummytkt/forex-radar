@@ -509,43 +509,64 @@ if chart_ok
             rx_lvl := hit_l ? lv : fz
             string kd = hit_l ? f_kind(D1 > 0 ? r_s1k : r_b1k, D1 > 0) : (D1 > 0 ? "bearish FVG" : "bullish FVG")
             f_story(time, D1 > 0 ? high : low, D1 > 0, "Price reached the " + N1 + " " + kd + " " + str.tostring(rx_lvl, format.mintick) + ".\nWatch for an " + N2 + " breakout " + dn + ": the " + N1 + " pullback.")
-    // 3 / 5. a story-timeframe breakout
+    // 3 / 5. a story-timeframe breakout. After every breakout, each breakout the same
+    // way is marked as a continuation until a CHoCH or the breakout the other way.
     if not na(b_bcnt) and b_bcnt != k2
         k2 := b_bcnt
-        if D1 != 0 and D2 == D1 and ph >= 1 and ph <= 2
-            // still the breakout's move: each story-timeframe breakout with it is a continuation
-            f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
-            f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + ": a continuation of the " + N1 + " breakout.\nNo pullback yet: waiting for price to reach a reaction level\n(" + (D1 > 0 ? "A-shape / resistance, OC, FVG, supply above" : "V-shape / support, OC, FVG, demand below") + ") and an " + N2 + " breakout " + dn + ".")
-        else if D1 != 0 and D2 == -D1 and ph >= 1 and ph <= 2
-            ph := 3
-            mn_lvl := D1 > 0 ? b_chi : b_clo
-            mn_t   := D1 > 0 ? b_chit : b_clot
-            f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
-            f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": the " + N1 + " pullback is confirmed.\nAfter every breakout a pullback is expected:\nwatch for an " + N2 + " CHoCH " + up + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + "\nuntil its main " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out.")
-        else if D1 != 0 and D2 == D1 and ph >= 3 and ph <= 4
-            ph := 5
-            f_sline(mn_t, time, mn_lvl, N2 + " BOS " + up, D1 > 0)
-            if D1 > 0
-                f_pz_add(pc_lot, pc_lo, pc_lt, true)
-            else
-                f_pz_add(pc_hi, pc_hib, pc_ht, false)
-            f_story(time, D1 > 0 ? high : low, D1 > 0, "The main " + N2 + " " + HI + " is taken out: " + N2 + " is aligned with the " + N1 + ".\nEntries: the " + N2 + (D1 > 0 ? " demand" : " supply") + " POI with an " + N3 + " confirmation.\nTarget: the " + N1 + " external " + HI + ".")
-            mn_lvl := na
-        else if D1 != 0 and D2 == D1 and ph == 5
-            if D1 > 0
-                f_pz_add(pc_lot, pc_lo, pc_lt, true)
-            else
-                f_pz_add(pc_hi, pc_hib, pc_ht, false)
-            f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
+        if D1 != 0 and D2 == D1
+            if ph >= 1 and ph <= 2
+                // still the top timeframe's breakout move
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
+                f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + ": a continuation of the " + N1 + " breakout.\nNo pullback yet: waiting for price to reach a reaction level\n(" + (D1 > 0 ? "A-shape / resistance, OC, FVG, supply above" : "V-shape / support, OC, FVG, demand below") + ") and an " + N2 + " breakout " + dn + ".")
+            else if ph >= 3 and ph <= 4
+                // the main high is taken out: aligned
+                ph := 5
+                f_sline(mn_t, time, mn_lvl, N2 + " BOS " + up, D1 > 0)
+                if D1 > 0
+                    f_pz_add(pc_lot, pc_lo, pc_lt, true)
+                else
+                    f_pz_add(pc_hi, pc_hib, pc_ht, false)
+                f_story(time, D1 > 0 ? high : low, D1 > 0, "The main " + N2 + " " + HI + " is taken out: " + N2 + " is aligned with the " + N1 + ".\nEntries: the " + N2 + (D1 > 0 ? " demand" : " supply") + " POI with an " + N3 + " confirmation.\nTarget: the " + N1 + " external " + HI + ".")
+                mn_lvl := na
+            else if ph == 5
+                // aligned and still going: a continuation, with a fresh POI
+                if D1 > 0
+                    f_pz_add(pc_lot, pc_lo, pc_lt, true)
+                else
+                    f_pz_add(pc_hi, pc_hib, pc_ht, false)
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
+                f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + ": a continuation, " + N2 + " still aligned with the " + N1 + ".\nNew " + N2 + (D1 > 0 ? " demand" : " supply") + " POI. Waiting for an " + N2 + " CHoCH " + dn + "\nor breakout " + dn + " (the next pullback).")
+        else if D1 != 0 and D2 == -D1
+            if ph == 1 or ph == 2 or ph == 5
+                // the top timeframe's pullback starts (again)
+                bool again = ph == 5
+                ph := 3
+                mn_lvl := D1 > 0 ? b_chi : b_clo
+                mn_t   := D1 > 0 ? b_chit : b_clot
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
+                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (again ? "a new " : "the ") + N1 + " pullback is confirmed.\nAfter every breakout a pullback is expected:\nwatch for an " + N2 + " CHoCH " + up + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + "\nuntil its main " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out.")
+            else if ph == 3 or ph == 4
+                // the pullback keeps going: a continuation (after a CHoCH: it failed)
+                bool failed = ph == 4
+                ph := 3
+                mn_lvl := D1 > 0 ? b_chi : b_clo
+                mn_t   := D1 > 0 ? b_chit : b_clot
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
+                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (failed ? "the CHoCH " + up + " failed, " : "") + "a continuation of the " + N1 + " pullback.\nStill waiting for an " + N2 + " CHoCH " + up + ".\nThe main " + N2 + " " + HI + " is now " + str.tostring(mn_lvl, format.mintick) + ".")
         pc_lo := na
         pc_hi := na
-    // 4. a story-timeframe CHoCH back in the top timeframe's direction
+    // 4. a story-timeframe CHoCH
     if not na(b_chn) and b_chn != kc
         kc := b_chn
         if ph == 3 and b_ch == D1
+            // back with the top timeframe: the story timeframe's pullback starts
             ph := 4
             f_sline(b_chp, time, b_chl, N2 + " CHoCH " + up, D1 > 0)
             f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " CHoCH " + up + ": the " + N2 + " pullback starts, in line with the " + N1 + ".\nCareful: " + N2 + " is still " + (D1 > 0 ? "bearish" : "bullish") + " until the main " + HI + "\n" + str.tostring(mn_lvl, format.mintick) + " is taken out; it can still push price " + dn + ".")
+        else if b_ch == -D1 and (ph == 1 or ph == 2 or ph == 5)
+            // against the top timeframe: a pullback may be starting
+            f_sline(b_chp, time, b_chl, N2 + " CHoCH " + dn, D1 < 0)
+            f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " CHoCH " + dn + ": a pullback may be starting.\nIt is confirmed by an " + N2 + " breakout " + dn + "; until then the\n" + (D1 > 0 ? "up" : "down") + " move can still continue.")
 
 // POIs: extend, fade once reached, remove once closed through; entries at a reached POI
 if array.size(pz) > 0
