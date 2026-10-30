@@ -30,7 +30,7 @@ draw = []
 for p, tf in (('D_', 'D'), ('H_', 'H4')):
     for k in range(N):
         a = ', '.join(f'{p}{f}{k}' for f in FIELDS)
-        draw.append(f'        f_draw("{tf}", {k}, {p}d0, {a})')
+        draw.append(f'    f_draw("{tf}", {k}, {p}d0, {a})')
 
 header = f'''//@version=6
 // ─────────────────────────────────────────────────────────────────────────────
