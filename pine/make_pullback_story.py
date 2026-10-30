@@ -600,8 +600,9 @@ if chart_ok
             f_story(time, D1 > 0 ? high : low, D1 > 0, "Price reached the " + N1 + " " + kd + " " + str.tostring(rx_lvl, format.mintick) + ".\nWatch for an " + N2 + " breakout " + dn + ": the " + N1 + " pullback.")
     // 3 / 5. a story-timeframe breakout. After every breakout, each breakout the same
     // way is marked as a continuation until a CHoCH or the breakout the other way.
-    int  b_pbt = D2 > 0 ? b_flt : b_fht
-    bool b_dup = D2 == lb_dir and not na(lb_t) and (na(b_pbt) or b_pbt <= lb_t or (not na(lb_lvl) and not na(b_blvl) and math.abs(b_blvl - lb_lvl) <= syminfo.mintick * 2))
+    // the same breakout counted twice by the engine (outer and inner structure): the same
+    // way, at the same level or on the very next candle. Any other breakout is told.
+    bool b_dup = D2 == lb_dir and not na(lb_t) and not na(b_t) and ((not na(lb_lvl) and not na(b_blvl) and math.abs(b_blvl - lb_lvl) <= syminfo.mintick * 2) or b_t - lb_t <= timeframe.in_seconds(T2) * 1000)
     if not na(b_bcnt) and b_bcnt != k2 and b_dup
         k2 := b_bcnt
     if not na(b_bcnt) and b_bcnt != k2
