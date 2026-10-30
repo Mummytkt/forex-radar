@@ -480,6 +480,12 @@ var int   kc      = 0
 var float lb_lvl  = na      // the last story-timeframe breakout (level, direction): the same one again is skipped
 var int   lb_dir  = 0
 var int   lb_t    = na
+var float pp_lo   = na      // the pullback's lowest story-timeframe candle (buys) ...
+var float pp_lot  = na
+var int   pp_lt   = na
+var float pp_hi   = na      // ... highest (sells)
+var float pp_hib  = na
+var int   pp_ht   = na
 var float mn_lvl  = na      // the main story-timeframe high (buys) / low (sells)
 var int   mn_t    = na
 var float rx_lvl  = na      // the reaction level reached
@@ -505,6 +511,31 @@ if chart_ok
             pc_hi  := b_h
             pc_hib := math.min(b_o, b_c)
             pc_ht  := b_t
+    // the pullback's own extreme (the demand / supply POI once the main level is taken out)
+    if t2_new and (ph == 3 or ph == 4)
+        if na(pp_lo) or b_l < pp_lo
+            pp_lo  := b_l
+            pp_lot := math.max(b_o, b_c)
+            pp_lt  := b_t
+        if na(pp_hi) or b_h > pp_hi
+            pp_hi  := b_h
+            pp_hib := math.min(b_o, b_c)
+            pp_ht  := b_t
+    // 5. the main story-timeframe high / low taken out = aligned
+    if t2_new and (ph == 3 or ph == 4) and not na(mn_lvl) and D1 != 0
+        bool taken = D1 > 0 ? (bos_wick ? b_h : b_c) > mn_lvl : (bos_wick ? b_l : b_c) < mn_lvl
+        if taken
+            ph := 5
+            f_sline(mn_t, b_t, mn_lvl, N2 + " BOS " + up + " (main " + HI + ")", D1 > 0)
+            if D1 > 0
+                f_pz_add(pp_lot, pp_lo, pp_lt, true)
+            else
+                f_pz_add(pp_hi, pp_hib, pp_ht, false)
+            f_story(time, D1 > 0 ? high : low, D1 > 0, "The main " + N2 + " " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out: " + N2 + " is aligned with the " + N1 + ".\nEntries: the " + N2 + (D1 > 0 ? " demand" : " supply") + " POI with an " + N3 + " confirmation.\nTarget: the " + N1 + " external " + HI + ".")
+            mn_lvl := na
+            lb_lvl := na
+            if not na(b_bcnt)
+                k2 := b_bcnt      // this candle's breakout is the one just told
     // 1. a top-timeframe breakout starts a new story
     if not na(a_bcnt) and a_bcnt != k1
         k1 := a_bcnt
@@ -541,15 +572,11 @@ if chart_ok
                 f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
                 f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + ": a continuation of the " + N1 + " breakout.\nNo pullback yet: waiting for price to reach a reaction level\n(" + (D1 > 0 ? "A-shape / resistance, OC, FVG, supply above" : "V-shape / support, OC, FVG, demand below") + ") and an " + N2 + " breakout " + dn + ".")
             else if ph >= 3 and ph <= 4
-                // the main high is taken out: aligned
-                ph := 5
-                f_sline(mn_t, time, mn_lvl, N2 + " BOS " + up, D1 > 0)
-                if D1 > 0
-                    f_pz_add(pc_lot, pc_lo, pc_lt, true)
-                else
-                    f_pz_add(pc_hi, pc_hib, pc_ht, false)
-                f_story(time, D1 > 0 ? high : low, D1 > 0, "The main " + N2 + " " + HI + " is taken out: " + N2 + " is aligned with the " + N1 + ".\nEntries: the " + N2 + (D1 > 0 ? " demand" : " supply") + " POI with an " + N3 + " confirmation.\nTarget: the " + N1 + " external " + HI + ".")
-                mn_lvl := na
+                // inside the pullback (short of the main high): the story timeframe's pullback
+                bool first_ = ph == 3
+                ph := 4
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
+                f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + " inside the pullback: " + (first_ ? "the " + N2 + " pullback is confirmed" : "the " + N2 + " pullback continues") + ",\nin line with the " + N1 + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + " until the main " + HI + "\n" + str.tostring(mn_lvl, format.mintick) + " is taken out (body close).")
             else if ph == 5
                 // aligned and still going: a continuation, with a fresh POI
                 if D1 > 0
@@ -563,6 +590,8 @@ if chart_ok
                 // the top timeframe's pullback starts (again)
                 bool again = ph == 5
                 ph := 3
+                pp_lo := na
+                pp_hi := na
                 mn_lvl := D1 > 0 ? b_chi : b_clo
                 mn_t   := D1 > 0 ? b_chit : b_clot
                 f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
