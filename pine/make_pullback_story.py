@@ -67,14 +67,19 @@ bool   d_body   = input.string("Body", "Levels from", options = ["Body", "Wick"]
      tooltip = "Highs, lows, A-shapes and V-shapes from candle bodies (as the Bias Pointer) or wicks.") == "Body"
 int    fr_n     = input.int(2, "CHoCH: fractal candles each side", minval = 1, maxval = 5, group = G_PL)
 
-string st_mode  = input.string("Latest note + dots (hover)", "Story on the chart", options = ["Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_ST,
+string st_mode  = input.string("Dots only (hover)", "Story on the chart", options = ["Dots only (hover)", "Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_ST,
      tooltip = "Latest note + dots: only the newest note is written out; older ones become small dots, hover to read them.")
 int    st_n     = input.int(6, "N (notes or dots kept)", minval = 1, maxval = 40, group = G_ST)
 color  st_bg    = input.color(#0E3B43, "Note background", group = G_ST, inline = "sb")
 int    st_op    = input.int(90, "opacity %", minval = 0, maxval = 100, group = G_ST, inline = "sb")
 color  st_tx    = input.color(color.white, "Note text", group = G_ST, inline = "st")
 string st_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_ST, inline = "st")
-color  st_dot   = input.color(#26C6DA, "Older note dots", group = G_ST)
+color  st_dot   = input.color(#26C6DA, "Note dots", group = G_ST)
+bool   sk_on    = input.bool(true, "Story table (separate from the status table)", group = G_ST, inline = "sk")
+string sk_pos   = input.string("Bottom right", "", options = ["Top right", "Bottom right", "Top left", "Bottom left", "Middle right", "Middle left"], group = G_ST, inline = "sk")
+int    sk_n     = input.int(3, "Notes in the story table (newest first)", minval = 1, maxval = 10, group = G_ST)
+color  sk_bg    = input.color(color.new(#0E3B43, 10), "Story table background", group = G_ST, inline = "sc")
+color  sk_tx    = input.color(color.white, "text", group = G_ST, inline = "sc")
 bool   sl_on    = input.bool(true, "Story lines (CHoCH / BOS from the level to the candle that broke it)", group = G_ST)
 color  sl_col   = input.color(color.new(color.white, 20), "Story line colour", group = G_ST, inline = "sl")
 color  sl_tx    = input.color(color.white, "text", group = G_ST, inline = "sl")
@@ -380,10 +385,21 @@ int D2 = b_bdir == "bullish" ? 1 : b_bdir == "bearish" ? -1 : 0
 // ── Drawing helpers ──────────────────────────────────────────────────────────
 var array<label> st_l = array.new<label>()
 var st_last = array.from("")
+var array<string> st_h  = array.new<string>()   // the notes for the story table, newest last
+var array<int>    st_ht = array.new<int>()
 f_story(int t, float y, bool above, string txt) =>
     if not na(t) and not na(y)
         array.set(st_last, 0, txt)
-        if st_mode != "Off"
+        array.push(st_h, txt)
+        array.push(st_ht, t)
+        while array.size(st_h) > 10
+            array.shift(st_h)
+            array.shift(st_ht)
+        if st_mode == "Dots only (hover)"
+            array.push(st_l, label.new(t, y, "●", xloc = xloc.bar_time, style = label.style_none, textcolor = st_dot, size = size.tiny, tooltip = txt))
+            while array.size(st_l) > st_n
+                label.delete(array.shift(st_l))
+        else if st_mode != "Off"
             if array.size(st_l) > 0
                 label prev = array.last(st_l)
                 if st_mode == "Latest note only"
@@ -574,7 +590,8 @@ f_lvl(int t, float y, string txt, color c, string st, int w) =>
              color = color.new(color.black, 100), textcolor = lv_tx, size = f_sz(lv_sz)))
 
 f_tpos(string p) =>
-    p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : position.bottom_left
+    p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : p == "Middle right" ? position.middle_right : p == "Middle left" ? position.middle_left : position.bottom_left
+var table sk = table.new(f_tpos(sk_pos), 2, 11, bgcolor = sk_bg, border_width = 1, border_color = color.new(color.gray, 75))
 var table tb = table.new(f_tpos(tb_pos), 2, 8, bgcolor = tb_bg, border_width = 1, border_color = color.new(color.gray, 75))
 f_row(int r, string a, string b) =>
     table.cell(tb, 0, r, a, text_color = color.gray, text_size = size.small, text_halign = text.align_left)
@@ -613,6 +630,19 @@ if barstate.islast
                          text = N1 + (D1 > 0 ? " bearish FVG (reaction zone)" : " bullish FVG (reaction zone)"), text_size = f_sz(lv_sz), text_color = lv_tx))
         if mn_on and not na(mn_lvl) and (ph == 3 or ph == 4)
             f_lvl(mn_t, mn_lvl, "main " + N2 + (D1 > 0 ? " high" : " low") + " (" + N2 + " stays against the " + N1 + " until it is taken out)", mn_col, line.style_solid, 2)
+    // the story table: the newest notes first, each with its time
+    table.clear(sk, 0, 0, 1, 10)
+    if sk_on and chart_ok
+        table.cell(sk, 0, 0, "STORY", text_color = sk_tx, text_size = size.small, text_halign = text.align_left)
+        table.cell(sk, 1, 0, plan, text_color = color.new(sk_tx, 40), text_size = size.small, text_halign = text.align_left)
+        int nh = array.size(st_h)
+        if nh == 0
+            table.cell(sk, 1, 1, "Waiting for a " + N1 + " breakout", text_color = sk_tx, text_size = size.small, text_halign = text.align_left)
+        else
+            for j = 0 to math.min(sk_n, nh) - 1
+                int ix = nh - 1 - j
+                table.cell(sk, 0, j + 1, str.format_time(array.get(st_ht, ix), "dd MMM HH:mm"), text_color = color.new(sk_tx, 40), text_size = size.tiny, text_halign = text.align_left)
+                table.cell(sk, 1, j + 1, array.get(st_h, ix), text_color = j == 0 ? sk_tx : color.new(sk_tx, 35), text_size = size.small, text_halign = text.align_left)
     if tb_on
         table.clear(tb, 0, 0, 1, 7)
         if not chart_ok
@@ -626,8 +656,7 @@ if barstate.islast
             if not na(mn_lvl) and (ph == 3 or ph == 4)
                 f_row(4, "Main " + N2, str.tostring(mn_lvl, format.mintick))
             f_row(5, "Entries", N3 + " " + (en_conf == "Both" ? "sweep or sweep and break" : en_conf == "Sweep" ? "sweep" : "sweep and break") + (e_own ? "" : " (read from " + N3 + ")"))
-            if array.get(st_last, 0) != ""
-                f_row(6, "✎", array.get(st_last, 0))
+            f_row(6, "Story", sk_on ? "see the story table" : array.get(st_last, 0))
 '''
 
 # the story's phase is "sph" (keeps clear of the pivot variables inside the functions)
