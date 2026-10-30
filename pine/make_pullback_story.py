@@ -66,6 +66,8 @@ bool   brk_wick = input.string("Wick", "Break confirmed by", options = ["Wick", 
 bool   d_body   = input.string("Body", "Levels from", options = ["Body", "Wick"], group = G_PL,
      tooltip = "Highs, lows, A-shapes and V-shapes from candle bodies (as the Bias Pointer) or wicks.") == "Body"
 int    fr_n     = input.int(2, "CHoCH: fractal candles each side", minval = 1, maxval = 5, group = G_PL)
+bool   ch_wlvl  = input.string("Wick", "CHoCH level", options = ["Wick", "Body"], group = G_PL,
+     tooltip = "Wick (default): the fractal candle's high / low. Body: its body top / bottom.") == "Wick"
 bool   ch_body  = input.string("Body close", "CHoCH confirmed by", options = ["Body close", "Wick"], group = G_PL,
      tooltip = "Body close (default): a candle body must close beyond the CHoCH level. With Levels from = Body, that level is the body of the fractal candle (not its wick).") == "Body close"
 
@@ -299,7 +301,7 @@ f_t2(simple int n, bool bd, bool cb) =>
             chp := flt
     if ch != 0
         chn += 1
-    [ch[1], chl[1], chp[1], chn[1], open[1], high[1], low[1], close[1], time[1]]
+    [ch[1], chl[1], chp[1], chn[1], open[1], high[1], low[1], close[1], time[1], fht[1], flt[1]]
 
 // ── Entry timeframe: sweep, sweep and break ──────────────────────────────────
 f_forms(simple int n, simple int win) =>
@@ -365,7 +367,7 @@ f_forms1(simple int n, simple int win) =>
 [a_cdir, a_chi, a_clo, a_chif, a_clof, a_chit, a_clot, a_bcnt, a_bdir, a_blvl, a_bopp, a_da, a_dat, a_dv, a_dvt, a_bt] = request.security(syminfo.tickerid, T1, f_structure(d_body), lookahead = barmerge.lookahead_on)
 [r_s1, r_s1k, r_s2, r_s2k, r_b1, r_b1k, r_b2, r_b2k, r_fsh, r_fsl, r_fbh, r_fbl] = request.security(syminfo.tickerid, T1, f_rlv(d_body), lookahead = barmerge.lookahead_on)
 [b_cdir, b_chi, b_clo, b_chif, b_clof, b_chit, b_clot, b_bcnt, b_bdir, b_blvl, b_bopp, b_da, b_dat, b_dv, b_dvt, b_bt] = request.security(syminfo.tickerid, T2, f_structure(d_body), lookahead = barmerge.lookahead_on)
-[b_ch, b_chl, b_chp, b_chn, b_o, b_h, b_l, b_c, b_t] = request.security(syminfo.tickerid, T2, f_t2(fr_n, d_body, ch_body), lookahead = barmerge.lookahead_on)
+[b_ch, b_chl, b_chp, b_chn, b_o, b_h, b_l, b_c, b_t, b_fht, b_flt] = request.security(syminfo.tickerid, T2, f_t2(fr_n, not ch_wlvl, ch_body), lookahead = barmerge.lookahead_on)
 [q_bsw, q_ssw, q_bsb, q_ssb, q_l, q_h, q_btp, q_stp, q_t] = request.security(syminfo.tickerid, T3, f_forms1(fr_n, en_win), lookahead = barmerge.lookahead_on)
 [d_bsw, d_ssw, d_bsb, d_ssb, d_l, d_h, d_btp, d_stp, d_t] = f_forms(fr_n, en_win)
 // on the entry timeframe itself, its own candles (no one-candle delay)
@@ -470,6 +472,7 @@ var int   k2      = 0
 var int   kc      = 0
 var float lb_lvl  = na      // the last story-timeframe breakout (level, direction): the same one again is skipped
 var int   lb_dir  = 0
+var int   lb_t    = na
 var float mn_lvl  = na      // the main story-timeframe high (buys) / low (sells)
 var int   mn_t    = na
 var float rx_lvl  = na      // the reaction level reached
@@ -516,13 +519,15 @@ if chart_ok
             f_story(time, D1 > 0 ? high : low, D1 > 0, "Price reached the " + N1 + " " + kd + " " + str.tostring(rx_lvl, format.mintick) + ".\nWatch for an " + N2 + " breakout " + dn + ": the " + N1 + " pullback.")
     // 3 / 5. a story-timeframe breakout. After every breakout, each breakout the same
     // way is marked as a continuation until a CHoCH or the breakout the other way.
-    bool b_dup = not na(lb_lvl) and not na(b_blvl) and math.abs(b_blvl - lb_lvl) <= syminfo.mintick * 2 and D2 == lb_dir
+    int  b_pbt = D2 > 0 ? b_flt : b_fht
+    bool b_dup = D2 == lb_dir and not na(lb_t) and (na(b_pbt) or b_pbt <= lb_t or (not na(lb_lvl) and not na(b_blvl) and math.abs(b_blvl - lb_lvl) <= syminfo.mintick * 2))
     if not na(b_bcnt) and b_bcnt != k2 and b_dup
         k2 := b_bcnt
     if not na(b_bcnt) and b_bcnt != k2
         k2 := b_bcnt
         lb_lvl := b_blvl
         lb_dir := D2
+        lb_t   := b_t
         if D1 != 0 and D2 == D1
             if ph >= 1 and ph <= 2
                 // still the top timeframe's breakout move
