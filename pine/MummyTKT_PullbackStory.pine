@@ -60,6 +60,8 @@ int    sk_n     = input.int(3, "Notes in the story table (newest first)", minval
 color  sk_bg    = input.color(color.new(#0E3B43, 10), "Story table background", group = G_ST, inline = "sc")
 color  sk_tx    = input.color(color.white, "text", group = G_ST, inline = "sc")
 bool   sl_on    = input.bool(true, "Story lines (CHoCH / BOS from the level to the candle that broke it)", group = G_ST)
+bool   show_int = input.bool(false, "Show Internal breaks (marked only; they are not continuations)", group = G_ST,
+     tooltip = "Off (default): an Internal break of a story-timeframe level is not a continuation and isn't shown. The story only continues when an External level breaks (an External break, or the external low / high).")
 color  sl_col   = input.color(color.new(color.white, 20), "Story line colour", group = G_ST, inline = "sl")
 color  sl_tx    = input.color(color.white, "text", group = G_ST, inline = "sl")
 
@@ -974,8 +976,10 @@ if chart_ok
                 // an Internal break (its level formed after price reached the reaction zone, or it
                 // sits inside the range): marked, but the main / range high and the story stay
                 int_brk := true
-                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + " · Internal", D1 < 0)
-                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + " (Internal)." + bwhy + "\nThe main " + N2 + " " + HI + " " + str.tostring(mn_lvl, format.mintick) + " stays. " + (na(ex_lvl) ? "Only an External break moves the story on." : "The " + (D1 > 0 ? "bearish" : "bullish") + " move only continues\nonce the " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " breaks (body close)."))
+                if show_int
+                    f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + " · Internal", D1 < 0)
+                if show_int
+                    f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + " (Internal)." + bwhy + "\nThe main " + N2 + " " + HI + " " + str.tostring(mn_lvl, format.mintick) + " stays. " + (na(ex_lvl) ? "Only an External break moves the story on." : "The " + (D1 > 0 ? "bearish" : "bullish") + " move only continues\nonce the " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " breaks (body close)."))
             else if sph == 3 or sph == 4
                 // the pullback keeps going: a continuation (after a CHoCH: it failed)
                 bool failed = sph == 4
