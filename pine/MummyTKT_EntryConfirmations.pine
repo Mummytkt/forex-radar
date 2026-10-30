@@ -12,9 +12,10 @@
 // M15 Sweep and Break, M5 Sweep and Break, H1 / H2 PCL), within your tolerance.
 //
 // Formations (buys; sells are the mirror):
-//   Sweep (Engulfing Sweep) — H1 / H2
+//   Sweep — H1 / H2 (only once the candle has closed)
 //       The previous candle is bearish; this bullish candle's wick goes BELOW its low
-//       (the sweep) and its body closes ABOVE its high.
+//       (the sweep) and the candle closes back ABOVE that low. It doesn't have to close
+//       above the whole candle.
 //   Sweep and Break — M15 / M5
 //       A fractal low forms (a low below the 2 candles on each side). A candle's wick
 //       goes below it and closes back above (the sweep). Then, before a close below
@@ -49,8 +50,8 @@ f_forms(simple int n, simple int win) =>
     bool pbear = close[1] < open[1]
     bool cbull = close > open
     bool cbear = close < open
-    bool b_sw  = pbear and cbull and low < low[1] and close > high[1]
-    bool s_sw  = pbull and cbear and high > high[1] and close < low[1]
+    bool b_sw  = pbear and cbull and low < low[1] and close > low[1]
+    bool s_sw  = pbull and cbear and high > high[1] and close < high[1]
     bool b_pcl = pbear and cbull and high > math.max(open[1], close[1]) and close <= math.max(open[1], close[1])
     bool s_pcl = pbull and cbear and low < math.min(open[1], close[1]) and close >= math.min(open[1], close[1])
     // Sweep and Break
@@ -157,11 +158,11 @@ f_tf(bool on, bool conf, string tf, string nm, int t, bool bsw, bool ssw, bool b
     if on and newc and conf
         bool rt = barstate.isrealtime
         if bsw
-            f_mark(nm + " Sweep", true, nm + " bullish Sweep: wick below the bearish candle's low, close above its high")
+            f_mark(nm + " Sweep", true, nm + " bullish Sweep: wick below the bearish candle's low, closed back above it")
             if rt
                 f_send("engulfing_sweep", "bullish", tf, c, pl, l)
         if ssw
-            f_mark(nm + " Sweep", false, nm + " bearish Sweep: wick above the bullish candle's high, close below its low")
+            f_mark(nm + " Sweep", false, nm + " bearish Sweep: wick above the bullish candle's high, closed back below it")
             if rt
                 f_send("engulfing_sweep", "bearish", tf, c, ph, h)
         if bpcl

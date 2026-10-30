@@ -188,7 +188,7 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
 
 // The formations a level can watch: "<timeframe>:<pattern>"
 const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
-  { key: 'H1:sweep',        label: 'H1 Sweep',            hint: 'a bullish candle sweeps the bearish candle before it (sell: mirror)' },
+  { key: 'H1:sweep',        label: 'H1 Sweep',            hint: "a bullish candle wicks below the bearish candle before it and closes back above that low (sell: mirror)" },
   { key: 'H2:sweep',        label: 'H2 Sweep',            hint: 'the same on 2-hour candles' },
   { key: 'M15:sweep_break', label: 'M15 Sweep and Break', hint: 'a low at the level, its sweep, then a close above the last lower high' },
   { key: 'M5:sweep_break',  label: 'M5 Sweep and Break',  hint: 'the same on 5-minute candles' },
@@ -498,7 +498,7 @@ function EntryAlertsPanel({ instruments, prices }: {
               })}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-              Each one is checked on its own timeframe, at this level. Sweep: a candle sweeps the opposite candle before it.
+              Each one is checked on its own timeframe, at this level, once the candle has closed. Sweep: a bullish candle wicks below the bearish candle before it and closes back above that low (sells: mirror).
               Sweep and Break: a low (a high for sells) at the level, its sweep, then a close through the last lower high (higher low).
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>

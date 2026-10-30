@@ -834,7 +834,7 @@ def _reason_origin(
 
 _ENTRY_PATTERN_NAMES: dict[str, str] = {
     "pcl":              "MummyTKT's PCL",
-    "engulfing_sweep":  "Sweep (Engulfing Sweep)",
+    "engulfing_sweep":  "Sweep",
     "sweep_break":      "Sweep and Break",
 }
 
@@ -892,18 +892,16 @@ def format_entry_alert(
                 f"@ {swept_str} and closed back above, then a candle body closed above "
                 f"the last lower high — sweep and break."
             )
-    else:  # engulfing_sweep
+    else:  # engulfing_sweep: the sweep (wick beyond the previous candle, closed back)
         if direction == "bearish":
             desc = (
-                f"The {tf_label} candle swept the previous bullish body low "
-                f"@ {swept_str} AND closed below it — a full sweep with body "
-                f"close-through (stronger than a PCL)."
+                f"The {tf_label} bearish candle wicked above the previous bullish "
+                f"candle's high @ {swept_str} and closed back below it — a sweep."
             )
         else:
             desc = (
-                f"The {tf_label} candle swept the previous bearish body high "
-                f"@ {swept_str} AND closed above it — a full sweep with body "
-                f"close-through (stronger than a PCL)."
+                f"The {tf_label} bullish candle wicked below the previous bearish "
+                f"candle's low @ {swept_str} and closed back above it — a sweep."
             )
 
     lines = [
