@@ -72,6 +72,8 @@ color  rg_col   = input.color(#7C4DFF, "", group = G_LV, inline = "rg")
 int    rg_op    = input.int(6, "opacity %", minval = 0, maxval = 100, group = G_LV, inline = "rg")
 bool   mn_on    = input.bool(true, "Main story-timeframe high / low (while the pullback runs)", group = G_LV, inline = "mn")
 color  mn_col   = input.color(#FFB74D, "", group = G_LV, inline = "mn")
+bool   ex_on    = input.bool(true, "Story-timeframe external low / high (watch it: it may reverse price)", group = G_LV, inline = "ex")
+color  ex_col   = input.color(#4FC3F7, "", group = G_LV, inline = "ex")
 color  lv_tx    = input.color(#E0E0E0, "Level label text", group = G_LV, inline = "lt")
 string lv_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_LV, inline = "lt")
 
@@ -799,6 +801,10 @@ var int   kc      = 0
 var float lb_lvl  = na      // the last story-timeframe breakout (level, direction): the same one again is skipped
 var int   lb_dir  = 0
 var int   lb_t    = na
+var int   rx_t    = na      // when price last entered a reaction level / zone (External vs Internal)
+var float rx_key  = na
+var float ex_lvl  = na      // the story timeframe's external low (buys) / high (sells), once its pullback is confirmed
+var int   ex_t    = na
 var float ag_hi   = na      // the extreme since the last breakout against the top timeframe
 var int   ag_hit  = na
 var float ag_lo   = na
@@ -853,6 +859,10 @@ if chart_ok
             pp_hi  := b_h
             pp_hib := math.min(b_o, b_c)
             pp_ht  := b_t
+    if t2_new and not na(ex_lvl) and (sph == 3 or sph == 4) and (D1 > 0 ? b_c < ex_lvl : b_c > ex_lvl)
+        f_sline(ex_t, b_t, ex_lvl, N2 + " external " + LO + " broken", D1 < 0)
+        f_story(time, D1 > 0 ? low : high, D1 < 0, "The " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " is broken (body close):\nthe " + N1 + " pullback goes deeper. Watch the next reaction level " + (D1 > 0 ? "below." : "above."))
+        ex_lvl := na
     // 5. the main story-timeframe high / low taken out = aligned
     if t2_new and (sph == 3 or sph == 4) and not na(mn_lvl) and D1 != 0
         bool taken = D1 > 0 ? (bos_wick ? b_h : b_c) > mn_lvl : (bos_wick ? b_l : b_c) < mn_lvl
@@ -865,6 +875,7 @@ if chart_ok
                 f_pz_add(pp_hi, pp_hib, pp_ht, false)
             f_story(time, D1 > 0 ? high : low, D1 > 0, "The main " + N2 + " " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out: " + N2 + " is aligned with the " + N1 + ".\nEntries: the " + N2 + (D1 > 0 ? " demand" : " supply") + " POI with an " + N3 + " confirmation.\nTarget: the " + N1 + " external " + HI + ".")
             mn_lvl := na
+            ex_lvl := na
             lb_lvl := na
             if not na(b_bcnt)
                 k2 := b_bcnt      // this candle's breakout is the one just told
@@ -875,7 +886,22 @@ if chart_ok
             sph := 1
             mn_lvl := na
             rx_lvl := na
+            ex_lvl := na
+            rx_t   := na
+            rx_key := na
             f_story(time, D1 > 0 ? high : low, D1 > 0, N1 + " external breakout " + up + " (" + (brk_wick ? "wick" : "body close") + " beyond " + str.tostring(a_blvl, format.mintick) + ").\nA pullback is expected. Watch the reaction levels " + (D1 > 0 ? "above" : "below") + ":\n" + (D1 > 0 ? "A-shapes / resistance, bearish OCs, bearish FVGs." : "V-shapes / support, bullish OCs, bullish FVGs."))
+    string LO = D1 > 0 ? "low" : "high"
+    // price entering a reaction level / zone (any time in the story): its time decides
+    // whether a later story-timeframe breakout is External (level formed before) or Internal
+    if D1 != 0 and sph >= 1 and sph <= 4
+        float zl = D1 > 0 ? r_s1 : r_b1
+        float zf = D1 > 0 ? r_fsl : r_fbh
+        float zk = na(zl) ? zf : na(zf) ? zl : (D1 > 0 ? math.min(zl, zf) : math.max(zl, zf))
+        if not na(zk) and (D1 > 0 ? high >= zk : low <= zk) and (na(rx_key) or math.abs(zk - rx_key) > syminfo.mintick)
+            rx_key := zk
+            rx_t   := time
+    string bcls = na(rx_t) or na(b_bt) ? "" : b_bt < rx_t ? " · External" : " · Internal"
+    string bwhy = na(rx_t) or na(b_bt) ? "" : b_bt < rx_t ? "\nExternal: its level formed before price reached the reaction zone." : "\nInternal: its level formed after price reached the reaction zone."
     // 2. price reaches a reaction level on the far side
     if sph == 1 and D1 != 0
         float lv = D1 > 0 ? r_s1 : r_b1
@@ -907,6 +933,9 @@ if chart_ok
                 // inside the pullback (short of the main high): the story timeframe's pullback
                 bool first_ = sph == 3
                 sph := 4
+                if first_ or na(ex_lvl)
+                    ex_lvl := D1 > 0 ? pp_lo : pp_hi
+                    ex_t   := D1 > 0 ? pp_lt : pp_ht
                 f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
                 f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + " inside the pullback: " + (first_ ? "the " + N2 + " pullback is confirmed" : "the " + N2 + " pullback continues") + ",\nin line with the " + N1 + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + " until the main " + HI + "\n" + str.tostring(mn_lvl, format.mintick) + " is taken out (body close).")
             else if sph == 5
@@ -926,8 +955,9 @@ if chart_ok
                 pp_hi := na
                 mn_lvl := D1 > 0 ? b_chi : b_clo
                 mn_t   := D1 > 0 ? b_chit : b_clot
-                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
-                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (again ? "a new " : "the ") + N1 + " pullback is confirmed.\nAfter every breakout a pullback is expected:\nwatch for an " + N2 + " CHoCH " + up + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + "\nuntil its main " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out.")
+                ex_lvl := na
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + bcls, D1 < 0)
+                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (again ? "a new " : "the ") + N1 + " pullback is confirmed." + bwhy + "\nAfter every breakout a pullback is expected:\nwatch for an " + N2 + " CHoCH " + up + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + "\nuntil its main " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out.")
             else if sph == 3 or sph == 4
                 // the pullback keeps going: a continuation (after a CHoCH: it failed)
                 bool failed = sph == 4
@@ -935,8 +965,8 @@ if chart_ok
                 // the high that caused this break: the highest point since the last break down
                 mn_lvl := D1 > 0 ? nz(ag_hi, b_chi) : nz(ag_lo, b_clo)
                 mn_t   := D1 > 0 ? (na(ag_hi) ? b_chit : ag_hit) : (na(ag_lo) ? b_clot : ag_lot)
-                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
-                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (failed ? "the CHoCH " + up + " failed, " : "") + "a continuation of the " + N1 + " pullback.\nStill waiting for an " + N2 + " CHoCH " + up + ".\nThe main " + N2 + " " + HI + " is now " + str.tostring(mn_lvl, format.mintick) + ".")
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + bcls, D1 < 0)
+                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (failed ? "the CHoCH " + up + " failed, " : "") + "a continuation of the " + N1 + " pullback." + bwhy + "\nStill waiting for an " + N2 + " CHoCH " + up + ". The main " + N2 + " " + HI + " is now " + str.tostring(mn_lvl, format.mintick) + "." + (na(ex_lvl) ? "" : "\nWatch the " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + ": it may reverse price."))
         pc_lo := na
         pc_hi := na
         if D1 != 0 and D2 == -D1
@@ -948,6 +978,8 @@ if chart_ok
         if sph == 3 and b_ch == D1
             // back with the top timeframe: the story timeframe's pullback starts
             sph := 4
+            ex_lvl := D1 > 0 ? pp_lo : pp_hi
+            ex_t   := D1 > 0 ? pp_lt : pp_ht
             f_sline(b_chp, time, b_chl, N2 + " CHoCH " + up, D1 > 0)
             f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " CHoCH " + up + ": the " + N2 + " pullback starts, in line with the " + N1 + ".\nCareful: " + N2 + " is still " + (D1 > 0 ? "bearish" : "bullish") + " until the main " + HI + "\n" + str.tostring(mn_lvl, format.mintick) + " is taken out; it can still push price " + dn + ".")
         else if b_ch == -D1 and (sph == 1 or sph == 2 or sph == 5)
@@ -1036,6 +1068,8 @@ if barstate.islast
                 if not na(zh) and not na(zl)
                     array.push(cx, box.new(bar_index - 20, zh, bar_index + 12, zl, border_color = fv_col, bgcolor = color.new(fv_col, 100 - fv_op),
                          text = N1 + (D1 > 0 ? " bearish FVG (reaction zone)" : " bullish FVG (reaction zone)"), text_size = f_sz(lv_sz), text_color = lv_tx))
+        if ex_on and not na(ex_lvl) and (sph == 3 or sph == 4)
+            f_lvl(ex_t, ex_lvl, N2 + " external " + (D1 > 0 ? "low" : "high") + " (watch it: it may reverse price)", ex_col, line.style_dashed, 2)
         if mn_on and not na(mn_lvl) and (sph == 3 or sph == 4)
             f_lvl(mn_t, mn_lvl, "main " + N2 + (D1 > 0 ? " high" : " low") + " (" + N2 + " stays against the " + N1 + " until it is taken out)", mn_col, line.style_solid, 2)
     // the story table: the newest notes first, each with its time
