@@ -864,9 +864,16 @@ if chart_ok
             pp_hib := math.min(b_o, b_c)
             pp_ht  := b_t
     if t2_new and not na(ex_lvl) and (sph == 3 or sph == 4) and (D1 > 0 ? b_c < ex_lvl : b_c > ex_lvl)
-        f_sline(ex_t, b_t, ex_lvl, N2 + " external " + LO + " broken", D1 < 0)
-        f_story(time, D1 > 0 ? low : high, D1 < 0, "The " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " is broken (body close):\nthe " + N1 + " pullback goes deeper. Watch the next reaction level " + (D1 > 0 ? "below." : "above."))
+        sph := 3
+        mn_lvl := D1 > 0 ? nz(ag_hi, mn_lvl) : nz(ag_lo, mn_lvl)
+        mn_t   := D1 > 0 ? (na(ag_hi) ? mn_t : ag_hit) : (na(ag_lo) ? mn_t : ag_lot)
+        f_sline(ex_t, b_t, ex_lvl, N2 + " BOS " + dn + " · external " + LO + " broken", D1 < 0)
+        f_story(time, D1 > 0 ? low : high, D1 < 0, "The " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " is broken (body close):\nthe " + (D1 > 0 ? "bearish" : "bullish") + " move continues, the " + N1 + " pullback goes deeper.\nThe main " + N2 + " " + HI + " is now " + str.tostring(mn_lvl, format.mintick) + ". Watch the next reaction level " + (D1 > 0 ? "below." : "above."))
         ex_lvl := na
+        ag_hi := na
+        ag_lo := na
+        if not na(b_bcnt)
+            k2 := b_bcnt      // this candle's breakout is the one just told
     // 5. the main story-timeframe high / low taken out = aligned
     if t2_new and (sph == 3 or sph == 4) and not na(mn_lvl) and D1 != 0
         bool taken = D1 > 0 ? (bos_wick ? b_h : b_c) > mn_lvl : (bos_wick ? b_l : b_c) < mn_lvl
@@ -916,6 +923,7 @@ if chart_ok
             rx_lvl := hit_l ? lv : fz
             string kd = hit_l ? f_kind(D1 > 0 ? r_s1k : r_b1k, D1 > 0) : (D1 > 0 ? "bearish FVG" : "bullish FVG")
             f_story(time, D1 > 0 ? high : low, D1 > 0, "Price reached the " + N1 + " " + kd + " " + str.tostring(rx_lvl, format.mintick) + ".\nWatch for an " + N2 + " breakout " + dn + ": the " + N1 + " pullback.")
+    bool int_brk = false
     // 3 / 5. a story-timeframe breakout. After every breakout, each breakout the same
     // way is marked as a continuation until a CHoCH or the breakout the other way.
     // the same breakout counted twice by the engine (outer and inner structure): the same
@@ -962,6 +970,12 @@ if chart_ok
                 ex_lvl := na
                 f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + bcls, D1 < 0)
                 f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (again ? "a new " : "the ") + N1 + " pullback is confirmed." + bwhy + "\nAfter every breakout a pullback is expected:\nwatch for an " + N2 + " CHoCH " + up + ". " + N2 + " stays " + (D1 > 0 ? "bearish" : "bullish") + "\nuntil its main " + HI + " " + str.tostring(mn_lvl, format.mintick) + " is taken out.")
+            else if (sph == 3 or sph == 4) and not na(ex_lvl) and (bcls == " · Internal" or (D1 > 0 ? b_blvl > ex_lvl : b_blvl < ex_lvl))
+                // an Internal break inside the range: marked, but the range high and the story
+                // stay; the move only continues once the external low breaks (body close)
+                int_brk := true
+                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + " · Internal", D1 < 0)
+                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + " inside the " + N2 + " range (Internal)." + bwhy + "\nThe range " + HI + " " + str.tostring(mn_lvl, format.mintick) + " stays. The " + (D1 > 0 ? "bearish" : "bullish") + " move only continues\nonce the " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + " breaks (body close).")
             else if sph == 3 or sph == 4
                 // the pullback keeps going: a continuation (after a CHoCH: it failed)
                 bool failed = sph == 4
@@ -973,7 +987,7 @@ if chart_ok
                 f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": " + (failed ? "the CHoCH " + up + " failed, " : "") + "a continuation of the " + N1 + " pullback." + bwhy + "\nStill waiting for an " + N2 + " CHoCH " + up + ". The main " + N2 + " " + HI + " is now " + str.tostring(mn_lvl, format.mintick) + "." + (na(ex_lvl) ? "" : "\nWatch the " + N2 + " external " + LO + " " + str.tostring(ex_lvl, format.mintick) + ": it may reverse price."))
         pc_lo := na
         pc_hi := na
-        if D1 != 0 and D2 == -D1
+        if D1 != 0 and D2 == -D1 and not int_brk
             ag_hi := na
             ag_lo := na
     // 4. a story-timeframe CHoCH
