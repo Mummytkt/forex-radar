@@ -21,8 +21,13 @@ a = next(i for i, l in enumerate(src) if l.startswith('// High / low of the dail
 b = next(i for i, l in enumerate(src) if l.startswith('[s_cdir, s_chi'))
 ENGINE = '\n'.join(src[a:b])
 n_before = len(re.findall(r'close ([<>]) (?!open)', ENGINE))
-ENGINE = re.sub(r'close > (?!open)', 'f_cu() > ', ENGINE)
-ENGINE = re.sub(r'close < (?!open)', 'f_cd() < ', ENGINE)
+ENGINE = re.sub(r'close > (?!open)', 'f_cu(bw) > ', ENGINE)
+ENGINE = re.sub(r'close < (?!open)', 'f_cd(bw) < ', ENGINE)
+for _a, _b in (('bool lVok, bool bd) =>', 'bool lVok, bool bd, bool bw) =>'),
+               ('f_structure(bool bd) =>', 'f_structure(bool bd, bool bw) =>'),
+               ('lastV_ok, bd)', 'lastV_ok, bd, bw)')):
+    assert _a in ENGINE, _a
+    ENGINE = ENGINE.replace(_a, _b)
 assert n_before >= 20, n_before
 
 HEAD = r'''//@version=6
@@ -61,7 +66,9 @@ const string G_TB = "6 · Status table"
 
 string plan     = input.string("D → H4 → M15", "Plan (top → story → entry)", options = ["W → D → H4", "D → H4 → M15", "H4 → M15 → M5"], group = G_PL,
      tooltip = "The top timeframe's breakout starts the story, the story timeframe tells the pullback, the entry timeframe confirms. Put the chart on the story or the entry timeframe.")
-bool   brk_wick = input.string("Wick", "Break confirmed by", options = ["Wick", "Body close"], group = G_PL,
+bool   bos_wick = input.string("Body close", "Story-timeframe BOS confirmed by", options = ["Body close", "Wick"], group = G_PL,
+     tooltip = "Body close (default): an H4 (story timeframe) breakout needs a candle body to close beyond the level; a wick through it is not a BOS.") == "Wick"
+bool   brk_wick = input.string("Wick", "Top-timeframe break confirmed by", options = ["Wick", "Body close"], group = G_PL,
      tooltip = "Wick (default): a wick beyond the level breaks it. Body close: the candle must close beyond it.") == "Wick"
 bool   d_body   = input.string("Body", "Levels from", options = ["Body", "Wick"], group = G_PL,
      tooltip = "Highs, lows, A-shapes and V-shapes from candle bodies (as the Bias Pointer) or wicks.") == "Body"
@@ -136,10 +143,10 @@ f_sty(string s) =>
     s == "Dashed" ? line.style_dashed : s == "Dotted" ? line.style_dotted : line.style_solid
 
 // A break: a wick beyond the level (default) or a body close
-f_cu() =>
-    brk_wick ? high : close
-f_cd() =>
-    brk_wick ? low : close
+f_cu(bool w) =>
+    w ? high : close
+f_cd(bool w) =>
+    w ? low : close
 
 '''
 
@@ -160,25 +167,25 @@ f_rlv(bool bd) =>
     var array<float> bfl = array.new<float>()
     int k = array.size(sl) - 1
     while k >= 0
-        if f_cu() > array.get(sl, k)
+        if f_cu(brk_wick) > array.get(sl, k)
             array.remove(sl, k)
             array.remove(sk, k)
         k -= 1
     k := array.size(bl) - 1
     while k >= 0
-        if f_cd() < array.get(bl, k)
+        if f_cd(brk_wick) < array.get(bl, k)
             array.remove(bl, k)
             array.remove(bk, k)
         k -= 1
     k := array.size(sfh) - 1
     while k >= 0
-        if f_cu() > array.get(sfh, k)
+        if f_cu(brk_wick) > array.get(sfh, k)
             array.remove(sfh, k)
             array.remove(sfl, k)
         k -= 1
     k := array.size(bfl) - 1
     while k >= 0
-        if f_cd() < array.get(bfl, k)
+        if f_cd(brk_wick) < array.get(bfl, k)
             array.remove(bfh, k)
             array.remove(bfl, k)
         k -= 1
@@ -364,9 +371,9 @@ f_forms1(simple int n, simple int win) =>
     [a1[1], a2[1], a3[1], a4[1], a5[1], a6[1], a7[1], a8[1], a9[1]]
 
 // ── The three timeframes ─────────────────────────────────────────────────────
-[a_cdir, a_chi, a_clo, a_chif, a_clof, a_chit, a_clot, a_bcnt, a_bdir, a_blvl, a_bopp, a_da, a_dat, a_dv, a_dvt, a_bt] = request.security(syminfo.tickerid, T1, f_structure(d_body), lookahead = barmerge.lookahead_on)
+[a_cdir, a_chi, a_clo, a_chif, a_clof, a_chit, a_clot, a_bcnt, a_bdir, a_blvl, a_bopp, a_da, a_dat, a_dv, a_dvt, a_bt] = request.security(syminfo.tickerid, T1, f_structure(d_body, brk_wick), lookahead = barmerge.lookahead_on)
 [r_s1, r_s1k, r_s2, r_s2k, r_b1, r_b1k, r_b2, r_b2k, r_fsh, r_fsl, r_fbh, r_fbl] = request.security(syminfo.tickerid, T1, f_rlv(d_body), lookahead = barmerge.lookahead_on)
-[b_cdir, b_chi, b_clo, b_chif, b_clof, b_chit, b_clot, b_bcnt, b_bdir, b_blvl, b_bopp, b_da, b_dat, b_dv, b_dvt, b_bt] = request.security(syminfo.tickerid, T2, f_structure(d_body), lookahead = barmerge.lookahead_on)
+[b_cdir, b_chi, b_clo, b_chif, b_clof, b_chit, b_clot, b_bcnt, b_bdir, b_blvl, b_bopp, b_da, b_dat, b_dv, b_dvt, b_bt] = request.security(syminfo.tickerid, T2, f_structure(d_body, bos_wick), lookahead = barmerge.lookahead_on)
 [b_ch, b_chl, b_chp, b_chn, b_o, b_h, b_l, b_c, b_t, b_fht, b_flt] = request.security(syminfo.tickerid, T2, f_t2(fr_n, not ch_wlvl, ch_body), lookahead = barmerge.lookahead_on)
 [q_bsw, q_ssw, q_bsb, q_ssb, q_l, q_h, q_btp, q_stp, q_t] = request.security(syminfo.tickerid, T3, f_forms1(fr_n, en_win), lookahead = barmerge.lookahead_on)
 [d_bsw, d_ssw, d_bsb, d_ssb, d_l, d_h, d_btp, d_stp, d_t] = f_forms(fr_n, en_win)
@@ -685,7 +692,7 @@ if barstate.islast
             f_row(0, plan, "Put the chart on " + N2 + " or lower (" + N3 + " for the entries)")
         else
             string phs = ph == 0 ? "waiting for a " + N1 + " breakout" : ph == 1 ? "pullback expected: watch the reaction levels" : ph == 2 ? "reaction level reached: watch for an " + N2 + " breakout against" : ph == 3 ? N1 + " pullback confirmed: watch for an " + N2 + " CHoCH back" : ph == 4 ? N2 + " pullback, in line: watch the main " + N2 + (D1 > 0 ? " high" : " low") : "aligned: entries at the " + N2 + " POIs with an " + N3 + " confirmation"
-            f_row(0, "Plan", plan + " · breaks by " + (brk_wick ? "wick" : "body close"))
+            f_row(0, "Plan", plan + " · " + N1 + " breaks by " + (brk_wick ? "wick" : "body close") + " · " + N2 + " BOS by " + (bos_wick ? "wick" : "body close"))
             f_row(1, N1, D1 > 0 ? "bullish · external range " + str.tostring(a_clo, format.mintick) + " – " + str.tostring(a_chi, format.mintick) : D1 < 0 ? "bearish · external range " + str.tostring(a_clo, format.mintick) + " – " + str.tostring(a_chi, format.mintick) : "—")
             f_row(2, N2, D2 > 0 ? "bullish" : D2 < 0 ? "bearish" : "—")
             f_row(3, "Story", phs)
