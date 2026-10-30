@@ -50,12 +50,14 @@ bool show_hb  = input.bool(true, "HTF BOS", group = G_SH, inline = "s1")
 bool show_m   = input.bool(true, "MTF swing + internal levels", group = G_SH, inline = "s2")
 bool show_mb  = input.bool(true, "MTF BOS / i-BOS", group = G_SH, inline = "s2")
 bool show_abcd = input.bool(true, "MTF pullback marks: CHoCH lines + a / b / c / d", group = G_SH, inline = "s3")
-bool show_ph   = input.bool(true, "MTF phase changes (D / C / B / A)", group = G_SH, inline = "s3")
+bool show_ph   = input.bool(false, "MTF phase labels (D / C / B / A)", group = G_SH, inline = "s3")
 string st_mode  = input.string("Latest note + dots (hover)", "Story on the chart", options = ["Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_SH,
      tooltip = "The story: what formed, the zones to watch, where the reaction may come from. Latest note + dots: only the newest note is written out; older ones become small dots, hover a dot to read it. The newest note is also in the watchlist table.")
 int  story_n   = input.int(6, "N (notes or dots kept)", minval = 1, maxval = 40, group = G_SH)
 bool show_st   = st_mode != "Off"
-bool show_rng  = input.bool(true, "Pullback range (premium / discount of the current leg)", group = G_SH)
+bool show_stl  = input.bool(true, "Story lines: CHoCH / i-BOS from the level to the candle that broke it", group = G_SH)
+bool show_rng  = input.bool(true, "Internal range: high and low lines", group = G_SH, inline = "rg")
+bool show_req  = input.bool(true, "Premium / discount 0.5 line", group = G_SH, inline = "rg")
 bool show_lch = input.bool(false, "LTF CH lines", group = G_SH)
 bool show_poi = input.bool(true, "POIs (HTF swing, MTF swing + internal)", group = G_SH)
 int  poi_max  = input.int(12, "POIs kept", minval = 1, maxval = 50, group = G_SH)
@@ -505,6 +507,18 @@ f_story(int t, float y, bool above, string txt) =>
                  color = color.new(#0E3B43, 5), textcolor = color.white, size = size.small, textalign = text.align_left))
             while array.size(st_l) > (st_mode == "Latest note only" ? 1 : st_mode == "Latest note + dots (hover)" ? story_n + 1 : story_n)
                 label.delete(array.shift(st_l))
+// Story lines: from the level that broke to the candle that broke it, with its name
+var array<line>  sl_l = array.new<line>()
+var array<label> sl_b = array.new<label>()
+f_stline(int t1, int t2, float y, string txt, bool above) =>
+    if show_stl and not na(t1) and not na(t2) and not na(y)
+        array.push(sl_l, line.new(t1, y, t2, y, xloc = xloc.bar_time, color = color.new(color.white, 25), width = 1))
+        array.push(sl_b, label.new(t1 + int((t2 - t1) / 2), y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
+             color = color.new(color.black, 100), textcolor = color.white, size = size.small))
+        while array.size(sl_l) > story_n * 2
+            line.delete(array.shift(sl_l))
+        while array.size(sl_b) > story_n * 2
+            label.delete(array.shift(sl_b))
 var bool st_dem = false   // a POI on the swing's side was reached (demand in an uptrend)
 var bool st_sup = false   // a POI against the swing was reached (supply in an uptrend)
 var float pt_hi  = na
@@ -604,6 +618,7 @@ if M_new and not na(M_cl)
             pt_hi  := lg_x
             pt_hit := lg_t
             pt_hix := false
+        f_stline(M_chp, M_bt, M_chl, "CHoCH", M_ch > 0)
         if S != 0
             bool with_ = M_ch == S
             float y_ = M_ch > 0 ? M_hh : M_ll
@@ -620,6 +635,7 @@ if M_new and not na(M_cl)
     // a body close beyond an internal point
     if S != 0 and not pt_lox and M_cl < pt_lo
         pt_lox := true
+        f_stline(pt_lot, M_bt, pt_lo, "i-BOS", false)
         if up
             f_story(M_bt, M_ll, false, "Internal low broken: the pullback continues.\nExpect a bounce (confirmed by a CHoCH up).\nThe demand below is where the pullback may end.")
         else
@@ -627,6 +643,7 @@ if M_new and not na(M_cl)
             st_dem := false
     if S != 0 and not pt_hix and M_cl > pt_hi
         pt_hix := true
+        f_stline(pt_hit, M_bt, pt_hi, "i-BOS", true)
         if up
             f_story(M_bt, M_hh, true, (st_dem ? "Demand held and pushed price up: the internal high broke." : "Internal high broken.") + "\nBuyers are strong; the pullback may be ending (watch the i-BOS).")
             st_dem := false
@@ -780,15 +797,17 @@ if barstate.islast
     array.clear(pv_c)
     if show_h and H_ok
         f_cur(H_tf, "HTF swing", H_sdir, H_shi, H_sht, H_shf, H_slo, H_slt, H_slf, line.style_solid, c_htf, 2, true)
-    if show_rng and M_ok and not na(pt_hi) and not na(pt_lo) and pt_hi > pt_lo
+    if (show_rng or show_req) and M_ok and not na(pt_hi) and not na(pt_lo) and pt_hi > pt_lo
         int   r0  = math.min(pt_hit, pt_lot)
         float req = (pt_hi + pt_lo) / 2
-        array.push(cur_l, line.new(r0, pt_hi, time, pt_hi, xloc = xloc.bar_time, extend = extend.right, color = color.new(color.gray, 30)))
-        array.push(cur_l, line.new(r0, pt_lo, time, pt_lo, xloc = xloc.bar_time, extend = extend.right, color = color.new(color.gray, 30)))
-        array.push(cur_l, line.new(r0, req, time, req, xloc = xloc.bar_time, extend = extend.right, color = color.new(#7CB342, 0), width = 2))
-        f_pend(pt_hi, "Range " + str.tostring(pt_hi, format.mintick) + " (internal high)", color.gray)
-        f_pend(req, "Range 0.5 · premium above (sells), discount below (buys)", color.new(#7CB342, 0))
-        f_pend(pt_lo, "Range " + str.tostring(pt_lo, format.mintick) + " (internal low)", color.gray)
+        if show_rng
+            array.push(cur_l, line.new(pt_hit, pt_hi, time, pt_hi, xloc = xloc.bar_time, extend = extend.right, color = color.new(color.gray, 30)))
+            array.push(cur_l, line.new(pt_lot, pt_lo, time, pt_lo, xloc = xloc.bar_time, extend = extend.right, color = color.new(color.gray, 30)))
+            f_pend(pt_hi, "Internal range high", color.gray)
+            f_pend(pt_lo, "Internal range low", color.gray)
+        if show_req
+            array.push(cur_l, line.new(r0, req, time, req, xloc = xloc.bar_time, extend = extend.right, color = color.new(#7CB342, 0), width = 2))
+            f_pend(req, "0.5 · premium above (sells), discount below (buys)", color.new(#7CB342, 0))
     if show_m and M_ok
         f_cur(M_tf, "MTF swing", M_sdir, M_shi, M_sht, M_shf, M_slo, M_slt, M_slf, line.style_solid, c_mtf, 1, false)
         f_cur(M_tf, "MTF internal", M_idir, M_ihi, M_iht, M_ihf, M_ilo, M_ilt, M_ilf, line.style_dotted, c_mtf, 1, false)
