@@ -945,12 +945,21 @@ if barstate.islast
     array.clear(cl)
     array.clear(cb)
     array.clear(cx)
+    // on the direction (top) timeframe's chart: its external high / low and, while the pullback is
+    // still forming (the story timeframe still with it), the pullback line: the last story-timeframe
+    // low that caused its latest breakout; a story-timeframe close beyond it = the pullback
+    if not chart_ok and D1 != 0
+        if t1x_on and not na(a_chi) and not na(a_clo)
+            f_lvl(a_chit, a_chi, N1 + " external high (Bias Pointer)", t1x_col, line.style_solid, 2)
+            f_lvl(a_clot, a_clo, N1 + " external low (Bias Pointer)", t1x_col, line.style_solid, 2)
+        if tl_on and D2 == D1
+            f_lvl(D1 > 0 ? b_clot : b_chit, D1 > 0 ? b_clo : b_chi, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
     if chart_ok and D1 != 0
         if sph <= 1 and t1x_on and not na(a_chi) and not na(a_clo)
             f_lvl(a_chit, a_chi, N1 + " external high (Bias Pointer)", t1x_col, line.style_solid, 2)
             f_lvl(a_clot, a_clo, N1 + " external low (Bias Pointer)", t1x_col, line.style_solid, 2)
         if sph == 1 and tl_on and not na(tl)
-            f_lvl(tl_t, tl, "last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
+            f_lvl(tl_t, tl, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
         if sph >= 2 and not na(rh) and not na(rl)
             if rg_on
                 f_lvl(rh_t, rh, N1 + " range " + HI + " (target)", rg_col, line.style_solid, rg_w)
@@ -1001,7 +1010,10 @@ if barstate.islast
     if tb_on
         table.clear(tb, 0, 0, 1, 7)
         if not chart_ok
-            f_row(0, PLAN, "Put the chart on " + N2 + " or lower (" + N3 + " for the entries)")
+            f_row(0, PLAN, "On this chart: the " + N1 + " external high / low and the pullback line")
+            f_row(1, N1, D1 > 0 ? "bullish" : D1 < 0 ? "bearish" : "—")
+            f_row(2, N2, D2 == 0 ? "—" : D2 == D1 ? "with the " + N1 + ": no pullback yet" : "against the " + N1 + ": the pullback")
+            f_row(3, "Story", "put the chart on " + N2 + " or lower (" + N3 + " for the entries)")
         else
             string phs = sph == 0 ? "waiting for a " + N1 + " breakout" : sph == 1 ? N1 + " breakout: " + N2 + " continuations; an " + N2 + " close beyond the last " + N2 + " " + LO + " = the pullback" : sph == 2 ? (na(rx_t) ? N1 + " pullback: watch the " + N1 + " levels in the " + (D1 > 0 ? "discount" : "premium") : N1 + " level reached: watch for an " + N2 + " External breakout " + up) : N1 + " + " + N2 + " aligned: " + N3 + " sweep and break at the " + N2 + " levels"
             f_row(0, "Plan", PLAN + " · " + N1 + " breaks by " + (brk_wick ? "wick" : "body close") + " · " + N2 + " by " + (bos_wick ? "wick" : "body close"))
