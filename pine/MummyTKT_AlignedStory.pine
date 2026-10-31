@@ -44,7 +44,8 @@ bool   brk_wick = input.string("Wick", "Top-timeframe breakout confirmed by", op
      tooltip = "Wick (default, as the Bias Pointer): a wick beyond the external level breaks it. Body close: the candle must close beyond it.") == "Wick"
 bool   bos_wick = input.string("Body close", "Story-timeframe BOS confirmed by", options = ["Body close", "Wick"], group = G_PL,
      tooltip = "Body close (default): a story-timeframe breakout, the break of the tracked low and of its range low need a candle body to close beyond the level.") == "Wick"
-bool   d_body   = input.string("Body", "Highs / lows / A / V-shapes from", options = ["Body", "Wick"], group = G_PL) == "Body"
+bool   d_body   = input.string("Wick", "Highs / lows / A / V-shapes from", options = ["Wick", "Body"], group = G_PL,
+     tooltip = "Wick (default): external highs / lows, A-shapes and V-shapes on the candle wicks. Body: on the bodies.") == "Body"
 bool   show_int = input.bool(true, "Show breaks that don't move the story (Internal, or before a level is reached)", group = G_PL)
 
 string st_mode  = input.string("Dots only (hover)", "Story on the chart", options = ["Dots only (hover)", "Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_ST)
@@ -72,6 +73,7 @@ int    tg_op    = input.int(100, "Tag opacity %", minval = 0, maxval = 100, grou
 
 bool   t1x_on   = input.bool(true, "Top-timeframe external high / low (until the pullback)", group = G_RG, inline = "tx")
 color  t1x_col  = input.color(#E0E0E0, "", group = G_RG, inline = "tx")
+int    t1x_w    = input.int(2, "width", minval = 1, maxval = 4, group = G_RG, inline = "tx")
 bool   tl_on    = input.bool(true, "Last story-timeframe low / high (pullback readiness)", group = G_RG, inline = "tl")
 color  tl_col   = input.color(#29B6F6, "", group = G_RG, inline = "tl")
 int    tl_w     = input.int(2, "width", minval = 1, maxval = 4, group = G_RG, inline = "tl")
@@ -92,6 +94,8 @@ color  l1_bear  = input.color(#EF5350, "sells", group = G_L1, inline = "l1")
 int    l1_op    = input.int(18, "Box opacity %", minval = 0, maxval = 100, group = G_L1, inline = "l1b")
 int    l1_w     = input.int(2, "line width", minval = 1, maxval = 4, group = G_L1, inline = "l1b")
 int    l1_max   = input.int(12, "Most shown", minval = 1, maxval = 40, group = G_L1)
+float  mg_pct   = input.float(0.03, "Merge levels that overlap or are closer than (% of price)", minval = 0, maxval = 2, step = 0.01, group = G_L1,
+     tooltip = "Overlapping levels on the same side are shown as one (e.g. Daily bullish FVG + demand). Each part still dies on its own close: if a candle closes through the demand but not the FVG, it shows as the FVG only.")
 bool   k_fvg    = input.bool(true, "FVGs (box)", group = G_L1, inline = "k1")
 bool   k_zone   = input.bool(true, "Demand / supply (box)", group = G_L1, inline = "k1")
 bool   k_vs     = input.bool(true, "V / A-shapes (line)", group = G_L1, inline = "k2")
@@ -530,7 +534,8 @@ bool  x1_new = not na(x1t) and x1t != nz(x1t[1])
 bool  x2_new = not na(x2t) and x2t != nz(x2t[1])
 bool  chart_ok = timeframe.in_seconds() <= timeframe.in_seconds(T2)
 
-int D1 = a_bdir == "bullish" ? 1 : a_bdir == "bearish" ? -1 : 0
+int AD = a_bdir == "bullish" ? 1 : a_bdir == "bearish" ? -1 : 0      // the engine's latest break
+var int D1 = 0                                                          // the story's direction
 int D2 = b_bdir == "bullish" ? 1 : b_bdir == "bearish" ? -1 : 0
 string up = D1 > 0 ? "up" : "down"
 string dn = D1 > 0 ? "down" : "up"
@@ -643,7 +648,7 @@ var st_last = array.from("")
 var array<string> st_h  = array.new<string>()   // the notes for the story table, newest last
 var array<int>    st_ht = array.new<int>()
 f_story(int t, float y, bool above, string txt) =>
-    if not na(t) and not na(y)
+    if chart_ok and not na(t) and not na(y)
         array.set(st_last, 0, txt)
         array.push(st_h, txt)
         array.push(st_ht, t)
@@ -673,7 +678,7 @@ f_story(int t, float y, bool above, string txt) =>
 var array<line>  sl_l = array.new<line>()
 var array<label> sl_b = array.new<label>()
 f_sline(int t1, int t2, float y, string txt, bool above) =>
-    if sl_on and not na(t1) and not na(t2) and not na(y)
+    if chart_ok and sl_on and not na(t1) and not na(t2) and not na(y)
         array.push(sl_l, line.new(t1, y, t2, y, xloc = xloc.bar_time, color = sl_col, width = 1))
         array.push(sl_b, label.new(t1 + int((t2 - t1) / 2), y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
              color = color.new(color.black, 100), textcolor = sl_tx, size = f_sz(lv_sz)))
@@ -683,13 +688,13 @@ f_sline(int t1, int t2, float y, string txt, bool above) =>
             label.delete(array.shift(sl_b))
 
 f_tag(string txt, bool above, color c) =>
-    if tg_on
+    if chart_ok and tg_on
         label.new(bar_index, above ? high : low, txt, style = above ? label.style_label_down : label.style_label_up,
              color = color.new(c, 100 - tg_op), textcolor = tg_tx, size = f_sz(tg_sz))
 
 var array<line> tl_seg = array.new<line>()
 f_seg(int t0, float y) =>
-    if tl_on and not na(t0) and not na(y)
+    if chart_ok and tl_on and not na(t0) and not na(y)
         array.push(tl_seg, line.new(t0, y, time, y, xloc = xloc.bar_time, color = tl_col, width = tl_w))
         while array.size(tl_seg) > 40
             line.delete(array.shift(tl_seg))
@@ -702,6 +707,10 @@ var int   k1     = 0
 var int   k2     = 0
 var float tl     = na      // the last story-timeframe low (buys) / high (sells)
 var int   tl_t   = na
+var float fl     = na      // the story's top-timeframe external low (buys) / high (sells)
+var int   fl_t   = na
+var float pb_x   = na      // the pullback's extreme on the top timeframe (causes the next breakout)
+var int   pb_t   = na
 var float xt     = na      // the extreme since the top-timeframe breakout (the range high / low)
 var int   xt_t   = na
 var float rh     = na      // top-timeframe range: high (target) · low · 0.5 (buys; sells mirror)
@@ -745,48 +754,108 @@ if x2_new
         z2hb := math.min(x2o, x2c)
         z2ht := x2t
 
-// 2. a top-timeframe breakout: its Breaker and demand / supply; it starts a new story
-if not na(a_bcnt) and a_bcnt != k1
-    bool first_ = k1 == 0
+// 2. the engine's breaks feed the levels (Breaker, demand / supply)
+bool a_new  = not na(a_bcnt) and a_bcnt != k1
+bool first_ = k1 == 0
+if a_new
     k1 := a_bcnt
-    if D1 > 0
+    if AD > 0
         f_add(bk1, 5, true, a_blvl, a_blvl, a_bt)
         f_add(bk1, 4, true, z1lt, z1lo, z1t)
-    else if D1 < 0
+    else if AD < 0
         f_add(bk1, 5, false, a_blvl, a_blvl, a_bt)
         f_add(bk1, 4, false, z1hi, z1hb, z1ht)
     z1lo := na
     z1hi := na
-    if D1 != 0 and not first_ and chart_ok
-        sph := 1
-        tl   := D2 == D1 ? (D1 > 0 ? b_clo : b_chi) : na
-        tl_t := D2 == D1 ? (D1 > 0 ? b_clot : b_chit) : na
+// The story. It starts on a top-timeframe external breakout (the Bias Pointer engine) when none
+// is running. While one runs, only ITS external levels move it: a break beyond its external low
+// (buys) = the breakout the other way (a new story); beyond the range high after the pullback =
+// a new breakout the same way. Structures that form inside the range don't change it.
+if x1_new and sph == 1 and D1 != 0
+    if D1 > 0 ? x1h > nz(xt, x1h - 1) : x1l < nz(xt, x1l + 1)
         xt   := D1 > 0 ? x1h : x1l
         xt_t := x1t
-        rh := na
-        rl := na
-        req := na
-        hl := na
-        rx_t := na
-        tg_done := false
-        ea_on := false
-        f_story(time, D1 > 0 ? high : low, D1 > 0, N1 + " external breakout " + up + " (" + (brk_wick ? "wick" : "body close") + " beyond " + str.tostring(a_blvl, format.mintick) + ").\nEvery " + N2 + " breakout " + up + " now is a continuation. The " + N1 + " pullback is confirmed\nonce an " + N2 + " candle closes beyond the last " + N2 + " " + LO + " (blue line).")
+if x1_new and sph >= 2 and D1 != 0
+    if na(pb_x) or (D1 > 0 ? x1l < pb_x : x1h > pb_x)
+        pb_x := D1 > 0 ? x1l : x1h
+        pb_t := x1t
+int   s_dir = 0
+float s_lvl = na
+int   s_lvt = na
+float s_lo  = na
+int   s_lot = na
+float s_hi  = na
+int   s_hit = na
+if sph == 0 and a_new and not first_ and AD != 0
+    s_dir := AD
+    s_lvl := a_blvl
+    s_lvt := a_bt
+    s_lo  := AD > 0 ? a_clo : x1l
+    s_lot := AD > 0 ? a_clot : x1t
+    s_hi  := AD > 0 ? x1h : a_chi
+    s_hit := AD > 0 ? x1t : a_chit
+else if sph >= 1 and D1 != 0 and x1_new and not na(fl) and (D1 > 0 ? (brk_wick ? x1l : x1c) < fl : (brk_wick ? x1h : x1c) > fl)
+    float ox  = sph == 1 ? xt : rh
+    int   oxt = sph == 1 ? xt_t : rh_t
+    s_dir := -D1
+    s_lvl := fl
+    s_lvt := fl_t
+    s_lo  := D1 > 0 ? x1l : ox
+    s_lot := D1 > 0 ? x1t : oxt
+    s_hi  := D1 > 0 ? ox : x1h
+    s_hit := D1 > 0 ? oxt : x1t
+else if sph >= 2 and D1 != 0 and x1_new and not na(rh) and (D1 > 0 ? (brk_wick ? x1h : x1c) > rh : (brk_wick ? x1l : x1c) < rh)
+    float px  = nz(pb_x, rl)
+    int   pxt = na(pb_x) ? rl_t : pb_t
+    s_dir := D1
+    s_lvl := rh
+    s_lvt := rh_t
+    s_lo  := D1 > 0 ? px : x1l
+    s_lot := D1 > 0 ? pxt : x1t
+    s_hi  := D1 > 0 ? x1h : px
+    s_hit := D1 > 0 ? x1t : pxt
+if s_dir != 0
+    if sph >= 1
+        f_add(bk1, 5, s_dir > 0, s_lvl, s_lvl, s_lvt)
+    D1 := s_dir
+    up := D1 > 0 ? "up" : "down"
+    dn := D1 > 0 ? "down" : "up"
+    HI := D1 > 0 ? "high" : "low"
+    LO := D1 > 0 ? "low" : "high"
+    sph  := 1
+    fl   := D1 > 0 ? s_lo : s_hi
+    fl_t := D1 > 0 ? s_lot : s_hit
+    xt   := D1 > 0 ? s_hi : s_lo
+    xt_t := D1 > 0 ? s_hit : s_lot
+    tl   := D2 == D1 ? (D1 > 0 ? b_clo : b_chi) : na
+    tl_t := D2 == D1 ? (D1 > 0 ? b_clot : b_chit) : na
+    rh := na
+    rl := na
+    req := na
+    hl := na
+    rx_t := na
+    pb_x := na
+    tg_done := false
+    ea_on := false
+    f_story(time, D1 > 0 ? high : low, D1 > 0, N1 + " " + (D1 > 0 ? "bullish" : "bearish") + " external breakout (" + (brk_wick ? "wick" : "body close") + " beyond " + str.tostring(s_lvl, format.mintick) + ").\nEvery " + N2 + " breakout " + up + " now is a continuation. The " + N1 + " pullback is confirmed\nonce an " + N2 + " candle closes beyond the last " + N2 + " " + LO + " (pullback line).")
 
 bool conf_now = false
-if chart_ok and D1 != 0 and x2_new
+if D1 != 0 and x2_new
     // the extreme since the breakout: the range high once the pullback is confirmed
     if sph == 1
         if D1 > 0 ? x2h > nz(xt, x2h - 1) : x2l < nz(xt, x2l + 1)
             xt   := D1 > 0 ? x2h : x2l
             xt_t := x2t
     // 3. a story-timeframe close beyond the last low = the top timeframe's pullback
-    if sph == 1 and not na(tl) and (D1 > 0 ? (bos_wick ? x2l : x2c) < tl : (bos_wick ? x2h : x2c) > tl)
+    // (on the top timeframe's own chart it only sees one story-timeframe candle per candle, so
+    // there the story timeframe turning against it also counts)
+    if sph == 1 and ((not na(tl) and (D1 > 0 ? (bos_wick ? x2l : x2c) < tl : (bos_wick ? x2h : x2c) > tl)) or (not chart_ok and D2 == -D1))
         sph := 2
         conf_now := true
         rh   := xt
         rh_t := xt_t
-        rl   := D1 > 0 ? a_clo : a_chi
-        rl_t := D1 > 0 ? a_clot : a_chit
+        rl   := fl
+        rl_t := fl_t
         if na(rl) or (D1 > 0 ? rl >= rh : rl <= rh)
             rl   := D1 > 0 ? math.min(x1l, tl) : math.max(x1h, tl)
             rl_t := tl_t
@@ -810,7 +879,7 @@ if chart_ok and D1 != 0 and x2_new
         f_story(time, D1 > 0 ? high : low, D1 > 0, "Target reached: the " + N1 + " range " + HI + " " + str.tostring(rh, format.mintick) + ".")
 
 // 4. price reaches a top-timeframe level in the discount (premium for sells)
-if chart_ok and sph == 2 and D1 != 0 and array.size(bk1) > 0
+if sph == 2 and D1 != 0 and array.size(bk1) > 0
     for v in bk1
         if v.bull == (D1 > 0) and not v.hit and f_kon(v.kind) and f_inz(v, rl, req) and (D1 > 0 ? low <= v.top : high >= v.bot)
             v.hit := true
@@ -835,15 +904,15 @@ if not na(b_bcnt) and b_bcnt != k2
         f_add(bk2, 4, false, z2hi, z2hb, z2ht)
     z2lo := na
     z2hi := na
-    if chart_ok and D1 != 0 and not conf_now
+    if D1 != 0 and not conf_now
         if D2 == D1
             if sph == 1
                 // a continuation: the last low moves up to the low that caused it
                 f_seg(tl_t, tl)
                 tl   := D1 > 0 ? b_clo : b_chi
                 tl_t := D1 > 0 ? b_clot : b_chit
-                f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
-                f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + ": a continuation of the " + N1 + " breakout.\nThe last " + N2 + " " + LO + " moves to " + str.tostring(tl, format.mintick) + ": an " + N2 + " close beyond it = the " + N1 + " pullback.")
+                f_sline(b_bt, time, b_blvl, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation", D1 > 0)
+                f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation: still the " + N1 + " breakout, no pullback yet.\nThe last " + N2 + " " + LO + " moves to " + str.tostring(tl, format.mintick) + ": an " + N2 + " close beyond it = the " + N1 + " pullback.")
             else if sph == 2
                 if not na(rx_t) and not na(b_bt) and b_bt < rx_t
                     sph := 3
@@ -927,6 +996,61 @@ f_draw(Lv v, string tfn, color c, int op, int w) =>
     else
         f_lvl(v.t, v.top, nm, c, v.kind == 2 ? line.style_dashed : v.kind == 5 ? line.style_dotted : line.style_solid, w)
 
+// the levels of one book on the story's side inside the band a – b; overlapping ones (or closer than
+// tol) are drawn as one: a box if any of them is a box, else their lines with one label
+f_book(array<Lv> bk, float a, float b, string tfn, color c, int op, int w, int mx, float tol) =>
+    array<int> cand = array.new<int>()
+    int n = array.size(bk)
+    if n > 0
+        for i = n - 1 to 0
+            Lv v = array.get(bk, i)
+            if array.size(cand) < mx and v.bull == (D1 > 0) and f_kon(v.kind) and f_inz(v, a, b)
+                array.push(cand, i)
+    int m = array.size(cand)
+    array<bool> done = array.new<bool>(m, false)
+    if m > 0
+        for g = 0 to m - 1
+            if not array.get(done, g)
+                array.set(done, g, true)
+                Lv v0 = array.get(bk, array.get(cand, g))
+                float  gt   = v0.top
+                float  gb   = v0.bot
+                int    t0   = v0.t
+                bool   isbx = v0.kind == 3 or v0.kind == 4
+                bool   hit  = v0.hit
+                bool   used = v0.used
+                string nm   = f_kname(v0.kind, v0.bull)
+                array<int> mem = array.from(array.get(cand, g))
+                for pass = 0 to 2
+                    for j = 0 to m - 1
+                        if not array.get(done, j)
+                            Lv vj = array.get(bk, array.get(cand, j))
+                            if vj.top >= gb - tol and vj.bot <= gt + tol
+                                array.set(done, j, true)
+                                array.push(mem, array.get(cand, j))
+                                gt := math.max(gt, vj.top)
+                                gb := math.min(gb, vj.bot)
+                                t0 := math.min(t0, vj.t)
+                                isbx := isbx or vj.kind == 3 or vj.kind == 4
+                                hit := hit or vj.hit
+                                used := used or vj.used
+                                string kn = f_kname(vj.kind, vj.bull)
+                                if not str.contains(nm, kn)
+                                    nm := nm + " + " + kn
+                string lab = tfn + " " + nm + (hit ? " · reached" : "") + (used ? " · entry" : "")
+                if isbx
+                    int r = time + 12 * timeframe.in_seconds() * 1000
+                    array.push(cx, box.new(t0, gt, r, gb, xloc = xloc.bar_time, border_color = color.new(c, 30), bgcolor = color.new(c, 100 - op),
+                         text = lab, text_size = f_sz(lv_sz), text_color = lv_tx, text_halign = text.align_right, text_valign = text.align_center))
+                else
+                    for k in mem
+                        Lv vk = array.get(bk, k)
+                        array.push(cl, line.new(vk.t, vk.top, time, vk.top, xloc = xloc.bar_time, extend = extend.right, color = c,
+                             style = vk.kind == 2 ? line.style_dashed : vk.kind == 5 ? line.style_dotted : line.style_solid, width = w))
+                    string px = gt - gb > syminfo.mintick ? str.tostring(gb, format.mintick) + " – " + str.tostring(gt, format.mintick) : str.tostring(gt, format.mintick)
+                    array.push(cb, label.new(bar_index + 3, (gt + gb) / 2, lab + "  " + px, style = label.style_label_left,
+                         color = color.new(color.black, 100), textcolor = lv_tx, size = f_sz(lv_sz)))
+
 f_tpos(string p) =>
     p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : p == "Middle right" ? position.middle_right : p == "Middle left" ? position.middle_left : position.bottom_left
 var table sk = table.new(f_tpos(sk_pos), 2, 11, bgcolor = sk_bg, border_width = 1, border_color = color.new(color.gray, 75))
@@ -945,25 +1069,18 @@ if barstate.islast
     array.clear(cl)
     array.clear(cb)
     array.clear(cx)
-    // on the direction (top) timeframe's chart: its external high / low and, while the pullback is
-    // still forming (the story timeframe still with it), the pullback line: the last story-timeframe
-    // low that caused its latest breakout; a story-timeframe close beyond it = the pullback
-    if not chart_ok and D1 != 0
-        if t1x_on and not na(a_chi) and not na(a_clo)
-            f_lvl(a_chit, a_chi, N1 + " external high (Bias Pointer)", t1x_col, line.style_solid, 2)
-            f_lvl(a_clot, a_clo, N1 + " external low (Bias Pointer)", t1x_col, line.style_solid, 2)
-        if tl_on and D2 == D1
-            f_lvl(D1 > 0 ? b_clot : b_chit, D1 > 0 ? b_clo : b_chi, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
-    if chart_ok and D1 != 0
-        if sph <= 1 and t1x_on and not na(a_chi) and not na(a_clo)
-            f_lvl(a_chit, a_chi, N1 + " external high (Bias Pointer)", t1x_col, line.style_solid, 2)
-            f_lvl(a_clot, a_clo, N1 + " external low (Bias Pointer)", t1x_col, line.style_solid, 2)
+    float tol = close * mg_pct / 100
+    if D1 != 0 and sph >= 1
+        string dw = D1 > 0 ? "bullish" : "bearish"
+        if sph == 1 and t1x_on
+            f_lvl(xt_t, xt, N1 + " " + dw + " external " + HI, t1x_col, line.style_solid, t1x_w)
+            f_lvl(fl_t, fl, N1 + " " + dw + " external " + LO, t1x_col, line.style_solid, t1x_w)
         if sph == 1 and tl_on and not na(tl)
             f_lvl(tl_t, tl, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
         if sph >= 2 and not na(rh) and not na(rl)
             if rg_on
-                f_lvl(rh_t, rh, N1 + " range " + HI + " (target)", rg_col, line.style_solid, rg_w)
-                f_lvl(rl_t, rl, N1 + " range " + LO, rg_col, line.style_solid, rg_w)
+                f_lvl(rh_t, rh, N1 + " " + dw + " external " + HI + " · range " + HI + " (target)", rg_col, line.style_solid, rg_w)
+                f_lvl(rl_t, rl, N1 + " " + dw + " external " + LO + " · range " + LO, rg_col, line.style_solid, rg_w)
                 f_lvl(math.min(rh_t, rl_t), req, N1 + " range 0.5 · " + (D1 > 0 ? "discount below" : "premium above"), eq_col, line.style_dashed, 1)
             if sh_on
                 int r0 = math.min(rh_t, rl_t)
@@ -971,23 +1088,13 @@ if barstate.islast
                      border_color = color.new(color.black, 100), bgcolor = color.new(D1 > 0 ? l1_bull : l1_bear, 100 - sh_op)))
                 array.push(cx, box.new(r0, math.max(rh, req), time, math.min(rh, req), xloc = xloc.bar_time, extend = extend.right,
                      border_color = color.new(color.black, 100), bgcolor = color.new(D1 > 0 ? l1_bear : l1_bull, 100 - sh_op)))
-            if l1_on and array.size(bk1) > 0
-                int n1 = 0
-                for i = array.size(bk1) - 1 to 0
-                    Lv v = array.get(bk1, i)
-                    if n1 < l1_max and v.bull == (D1 > 0) and f_kon(v.kind) and f_inz(v, rl, req)
-                        f_draw(v, N1, D1 > 0 ? l1_bull : l1_bear, l1_op, l1_w)
-                        n1 += 1
-        if sph == 3 and not na(hl)
+            if l1_on
+                f_book(bk1, rl, req, N1, D1 > 0 ? l1_bull : l1_bear, l1_op, l1_w, l1_max, tol)
+        if chart_ok and sph == 3 and not na(hl)
             if hl_on
                 f_lvl(hl_t, hl, N2 + " range " + LO + " (an " + N2 + " close beyond it: " + N2 + " still against the " + N1 + ")", hl_col, line.style_solid, 2)
-            if l2_on and array.size(bk2) > 0
-                int n2 = 0
-                for i = array.size(bk2) - 1 to 0
-                    Lv v = array.get(bk2, i)
-                    if n2 < l2_max and v.bull == (D1 > 0) and f_kon(v.kind) and f_inz(v, hl, rh)
-                        f_draw(v, N2, D1 > 0 ? l2_bull : l2_bear, l2_op, l2_w)
-                        n2 += 1
+            if l2_on
+                f_book(bk2, hl, rh, N2, D1 > 0 ? l2_bull : l2_bear, l2_op, l2_w, l2_max, tol)
     // the story table: the newest notes first, each with its time
     // both tables in the same corner (even with the status table off, its empty table holds that
     // corner): TradingView shows only one, so the story goes into the status table, under it
