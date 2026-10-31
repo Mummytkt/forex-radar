@@ -562,7 +562,7 @@ f_draw(Lv v, string tfn, color c, int op, int w) =>
 f_tpos(string p) =>
     p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : p == "Middle right" ? position.middle_right : p == "Middle left" ? position.middle_left : position.bottom_left
 var table sk = table.new(f_tpos(sk_pos), 2, 11, bgcolor = sk_bg, border_width = 1, border_color = color.new(color.gray, 75))
-var table tb = table.new(f_tpos(tb_pos), 2, 8, bgcolor = tb_bg, border_width = 1, border_color = color.new(color.gray, 75))
+var table tb = table.new(f_tpos(tb_pos), 2, 20, bgcolor = tb_bg, border_width = 1, border_color = color.new(color.gray, 75))
 f_row(int r, string a, string b) =>
     table.cell(tb, 0, r, a, text_color = color.gray, text_size = size.small, text_halign = text.align_left)
     table.cell(tb, 1, r, b, text_color = tb_tx, text_size = size.small, text_halign = text.align_left)
@@ -612,18 +612,23 @@ if barstate.islast
                         f_draw(v, N2, D1 > 0 ? l2_bull : l2_bear, l2_op, l2_w)
                         n2 += 1
     // the story table: the newest notes first, each with its time
+    // both tables in the same corner: TradingView shows only one, so the story goes under the status
+    bool  sk_same = tb_on and sk_pos == tb_pos
+    table st_tb   = sk_same ? tb : sk
+    int   so      = sk_same ? 8 : 0
     table.clear(sk, 0, 0, 1, 10)
+    table.clear(tb, 0, 8, 1, 19)
     if sk_on and chart_ok
-        table.cell(sk, 0, 0, "STORY", text_color = sk_tx, text_size = size.small, text_halign = text.align_left)
-        table.cell(sk, 1, 0, PLAN, text_color = color.new(sk_tx, 40), text_size = size.small, text_halign = text.align_left)
+        table.cell(st_tb, 0, so, "STORY", text_color = sk_tx, text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
+        table.cell(st_tb, 1, so, PLAN, text_color = color.new(sk_tx, 40), text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
         int nh = array.size(st_h)
         if nh == 0
-            table.cell(sk, 1, 1, "Waiting for a " + N1 + " breakout", text_color = sk_tx, text_size = size.small, text_halign = text.align_left)
+            table.cell(st_tb, 1, so + 1, "Waiting for a " + N1 + " breakout", text_color = sk_tx, text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
         else
             for j = 0 to math.min(sk_n, nh) - 1
                 int ix = nh - 1 - j
-                table.cell(sk, 0, j + 1, str.format_time(array.get(st_ht, ix), "dd MMM HH:mm"), text_color = color.new(sk_tx, 40), text_size = size.tiny, text_halign = text.align_left)
-                table.cell(sk, 1, j + 1, array.get(st_h, ix), text_color = j == 0 ? sk_tx : color.new(sk_tx, 35), text_size = size.small, text_halign = text.align_left)
+                table.cell(st_tb, 0, so + j + 1, str.format_time(array.get(st_ht, ix), "dd MMM HH:mm"), text_color = color.new(sk_tx, 40), text_size = size.tiny, text_halign = text.align_left, bgcolor = sk_bg)
+                table.cell(st_tb, 1, so + j + 1, array.get(st_h, ix), text_color = j == 0 ? sk_tx : color.new(sk_tx, 35), text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
     if tb_on
         table.clear(tb, 0, 0, 1, 7)
         if not chart_ok
