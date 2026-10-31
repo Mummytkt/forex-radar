@@ -1,0 +1,602 @@
+// ═════════════════════════════════════════════════════════════════════════════
+// ALIGNED STORY FEATURES (MERGE TEST) — added on top of the Bias Pointer, which runs above
+// exactly as it is. The Daily breakout is the Bias Pointer's (s_*). Display + alerts of the steps
+// chosen in "11 · Aligned Story: choose how each step runs". Only on the 4H chart.
+// ═════════════════════════════════════════════════════════════════════════════
+f_agsty(string v_) =>
+    v_ == "Dashed" ? line.style_dashed : v_ == "Dotted" ? line.style_dotted : line.style_solid
+f_agsz(string v_) =>
+    v_ == "Tiny" ? size.tiny : v_ == "Normal" ? size.normal : size.small
+
+// the last closed Daily / H4 candle, and the M15 candles inside each 4H candle
+f_agc() =>
+    [open[1], high[1], low[1], close[1], time[1]]
+[g1o, g1h, g1l, g1c, g1t] = request.security(syminfo.tickerid, "D", f_agc(), lookahead = barmerge.lookahead_on)
+[g2o, g2h, g2l, g2c, g2t] = request.security(syminfo.tickerid, "240", f_agc(), lookahead = barmerge.lookahead_on)
+f_ag3(simple int n) =>
+    float ph_ = ta.pivothigh(high, n, n)
+    float pl_ = ta.pivotlow(low, n, n)
+    var float lfh = na
+    var float lfl = na
+    if not na(ph_)
+        lfh := ph_
+    if not na(pl_)
+        lfl := pl_
+    [high, low, close, lfh, lfl]
+bool g_lotf = timeframe.in_seconds() > 900
+[g3h, g3l, g3c, g3fh, g3fl] = request.security_lower_tf(syminfo.tickerid, g_lotf ? "15" : timeframe.period, f_ag3(ag_frn))
+bool g1_new = not na(g1t) and g1t != nz(g1t[1])
+bool g2_new = not na(g2t) and g2t != nz(g2t[1])
+bool g_h4   = timeframe.period == "240"
+int  gAD    = s_bdir == "bullish" ? 1 : s_bdir == "bearish" ? -1 : 0
+
+// ── Levels of one timeframe (V / A-shape and OC on bodies, FVG, demand / supply, Breaker). A level
+// dies only on a close of its own timeframe through it; its first touch uses it (FVGs: only a close
+// beyond the far side kills them).
+type AgLv
+    int   kind      // 1 V / A-shape · 2 OC · 3 FVG · 4 demand / supply · 5 Breaker
+    bool  bull
+    float top
+    float bot
+    int   t
+    bool  hit  = false
+    bool  used = false
+    bool  tch  = false
+f_agkn(int k, bool bull) =>
+    k == 1 ? (bull ? "V-shape" : "A-shape") : k == 2 ? (bull ? "bullish OC" : "bearish OC") : k == 3 ? (bull ? "bullish FVG" : "bearish FVG") : k == 4 ? (bull ? "demand" : "supply") : "Breaker"
+f_agin(AgLv v, float a, float b) =>
+    not na(a) and not na(b) and v.top >= math.min(a, b) and v.bot <= math.max(a, b)
+f_agadd(array<AgLv> bk, int k, bool bull, float p1, float p2, int t) =>
+    if not na(p1) and not na(p2) and not na(t) and (k != 4 or ag_zone)
+        array.push(bk, AgLv.new(k, bull, math.max(p1, p2), math.min(p1, p2), t))
+        while array.size(bk) > 200
+            array.shift(bk)
+f_agfeed(array<AgLv> bk, array<float> ho, array<float> hh, array<float> hl_, array<float> hc, array<int> ht, float o, float h, float l, float c, int t) =>
+    int k = array.size(bk) - 1
+    while k >= 0
+        AgLv v = array.get(bk, k)
+        if v.bull ? c < v.bot : c > v.top
+            array.remove(bk, k)
+        else if v.kind != 3 and not v.tch and (v.bull ? l <= v.top : h >= v.bot)
+            v.tch := true
+        k -= 1
+    array.push(ho, o)
+    array.push(hh, h)
+    array.push(hl_, l)
+    array.push(hc, c)
+    array.push(ht, t)
+    while array.size(ho) > 3
+        array.shift(ho)
+        array.shift(hh)
+        array.shift(hl_)
+        array.shift(hc)
+        array.shift(ht)
+    int n = array.size(ho)
+    if n >= 2
+        float o1 = array.get(ho, n - 2)
+        float c1 = array.get(hc, n - 2)
+        int   t1 = array.get(ht, n - 2)
+        float b0h = math.max(o, c)
+        float b0l = math.min(o, c)
+        float b1h = math.max(o1, c1)
+        float b1l = math.min(o1, c1)
+        if c1 < o1 and c > o
+            f_agadd(bk, 1, true, math.min(b0l, b1l), math.min(b0l, b1l), b0l <= b1l ? t : t1)
+        if c1 > o1 and c < o
+            f_agadd(bk, 1, false, math.max(b0h, b1h), math.max(b0h, b1h), b0h >= b1h ? t : t1)
+        if c1 > o1 and c > o
+            f_agadd(bk, 2, true, c1, c1, t1)
+        if c1 < o1 and c < o
+            f_agadd(bk, 2, false, c1, c1, t1)
+    if n >= 3
+        float h2 = array.get(hh, n - 3)
+        float l2 = array.get(hl_, n - 3)
+        int   t2 = array.get(ht, n - 3)
+        if h2 < l
+            f_agadd(bk, 3, true, l, h2, t2)
+        if l2 > h
+            f_agadd(bk, 3, false, l2, h, t2)
+
+var array<AgLv>  gk1 = array.new<AgLv>()
+var array<float> ga1o = array.new<float>()
+var array<float> ga1h = array.new<float>()
+var array<float> ga1l = array.new<float>()
+var array<float> ga1c = array.new<float>()
+var array<int>   ga1t = array.new<int>()
+var array<AgLv>  gk2 = array.new<AgLv>()
+var array<float> ga2o = array.new<float>()
+var array<float> ga2h = array.new<float>()
+var array<float> ga2l = array.new<float>()
+var array<float> ga2c = array.new<float>()
+var array<int>   ga2t = array.new<int>()
+// the candle with the lowest low / highest high since the last break (demand / supply)
+var float gz1lo = na
+var float gz1lt = na
+var int   gz1t  = na
+var float gz1hi = na
+var float gz1hb = na
+var int   gz1ht = na
+var float gz2lo = na
+var float gz2lt = na
+var int   gz2t  = na
+var float gz2hi = na
+var float gz2hb = na
+var int   gz2ht = na
+// Daily candle history (the low before a breakout)
+var array<float> gq1h = array.new<float>()
+var array<float> gq1l = array.new<float>()
+var array<int>   gq1t = array.new<int>()
+if g1_new
+    f_agfeed(gk1, ga1o, ga1h, ga1l, ga1c, ga1t, g1o, g1h, g1l, g1c, g1t)
+    if na(gz1lo) or g1l < gz1lo
+        gz1lo := g1l
+        gz1lt := math.max(g1o, g1c)
+        gz1t  := g1t
+    if na(gz1hi) or g1h > gz1hi
+        gz1hi := g1h
+        gz1hb := math.min(g1o, g1c)
+        gz1ht := g1t
+    array.push(gq1h, g1h)
+    array.push(gq1l, g1l)
+    array.push(gq1t, g1t)
+    if array.size(gq1t) > 600
+        array.shift(gq1h)
+        array.shift(gq1l)
+        array.shift(gq1t)
+if g2_new
+    f_agfeed(gk2, ga2o, ga2h, ga2l, ga2c, ga2t, g2o, g2h, g2l, g2c, g2t)
+    if na(gz2lo) or g2l < gz2lo
+        gz2lo := g2l
+        gz2lt := math.max(g2o, g2c)
+        gz2t  := g2t
+    if na(gz2hi) or g2h > gz2hi
+        gz2hi := g2h
+        gz2hb := math.min(g2o, g2c)
+        gz2ht := g2t
+// lowSide: a broken LOW -> the highest high since it first formed; else a broken HIGH -> the lowest
+// low since it first formed (an equal level up to 15 candles earlier counts as where it formed)
+f_agsince(bool lowSide, float lvl, int t0, float tl_) =>
+    int   n  = array.size(gq1t)
+    float v  = na
+    int   vt = na
+    if n > 0 and not na(lvl) and not na(t0)
+        int s0 = n - 1
+        while s0 > 0 and array.get(gq1t, s0 - 1) >= t0
+            s0 -= 1
+        int k = s0 - 1
+        int stop_ = math.max(0, s0 - 15)
+        while k >= stop_
+            float kh = array.get(gq1h, k)
+            float kl = array.get(gq1l, k)
+            if lowSide ? kl < lvl - tl_ : kh > lvl + tl_
+                break
+            if lowSide ? math.abs(kl - lvl) <= tl_ : math.abs(kh - lvl) <= tl_
+                s0 := k
+            k -= 1
+        for j = s0 to n - 1
+            float x = lowSide ? array.get(gq1h, j) : array.get(gq1l, j)
+            if na(v) or (lowSide ? x > v : x < v)
+                v  := x
+                vt := array.get(gq1t, j)
+    [v, vt]
+
+// ── H4 External breaks, as the Bias Pointer: a body close above the last H4 A-shape that formed
+// before the leg's pullback low (sells: below the last V-shape before the high). After a break only
+// newer A-shapes count; the low that caused it moves the pullback line.
+var array<float> gxa_l = array.new<float>()
+var array<int>   gxa_t = array.new<int>()
+var array<float> gxv_l = array.new<float>()
+var array<int>   gxv_t = array.new<int>()
+var array<float> gaa_l = array.new<float>()
+var array<int>   gaa_t = array.new<int>()
+var array<float> gvv_l = array.new<float>()
+var array<int>   gvv_t = array.new<int>()
+var float gu_hh  = na
+var float gu_pl  = na
+var int   gu_plt = na
+var float gd_ll  = na
+var float gd_ph  = na
+var int   gd_pht = na
+var float gub_pl  = na
+var int   gub_plt = na
+var float gdb_ph  = na
+var int   gdb_pht = na
+bool  gub     = false
+float gub_lvl = na
+int   gub_lt  = na
+bool  gdb     = false
+float gdb_lvl = na
+int   gdb_lt  = na
+f_aglast(array<float> l, array<int> t, int maxt) =>
+    float v = na
+    int   vt = na
+    if array.size(l) > 0
+        for i = array.size(l) - 1 to 0
+            if array.get(t, i) <= maxt
+                v := array.get(l, i)
+                vt := array.get(t, i)
+                break
+    [v, vt]
+if g2_new
+    bool  nl  = na(gu_pl) or g2l < gu_pl
+    int   plt = nl ? g2t : gu_plt
+    [ea, eat] = f_aglast(gxa_l, gxa_t, nl ? g2t - 1 : plt)
+    if not na(gu_hh) and not na(ea) and g2c > ea
+        gub     := true
+        gub_lvl := ea
+        gub_lt  := eat
+        gub_pl  := nl ? g2l : gu_pl
+        gub_plt := plt
+        array.clear(gxa_l)
+        array.clear(gxa_t)
+        gu_hh := g2h
+        gu_pl := na
+    bool  nh  = na(gd_ph) or g2h > gd_ph
+    int   pht = nh ? g2t : gd_pht
+    [ev, evt] = f_aglast(gxv_l, gxv_t, nh ? g2t - 1 : pht)
+    if not na(gd_ll) and not na(ev) and g2c < ev
+        gdb     := true
+        gdb_lvl := ev
+        gdb_lt  := evt
+        gdb_ph  := nh ? g2h : gd_ph
+        gdb_pht := pht
+        array.clear(gxv_l)
+        array.clear(gxv_t)
+        gd_ll := g2l
+        gd_ph := na
+    // each External break leaves its Breaker (from its breakout candle) and demand / supply
+    if gub
+        f_agadd(gk2, 5, true, gub_lvl, gub_lvl, g2t)
+        f_agadd(gk2, 4, true, gz2lt, gz2lo, gz2t)
+    if gdb
+        f_agadd(gk2, 5, false, gdb_lvl, gdb_lvl, g2t)
+        f_agadd(gk2, 4, false, gz2hi, gz2hb, gz2ht)
+    if gub or gdb
+        gz2lo := na
+        gz2hi := na
+    int n2h = array.size(ga2o)
+    if n2h >= 2
+        float po = array.get(ga2o, n2h - 2)
+        float pc = array.get(ga2c, n2h - 2)
+        if pc > po and g2c < g2o
+            array.push(gxa_l, math.max(po, pc))
+            array.push(gxa_t, g2t)
+            array.push(gaa_l, math.max(po, pc))
+            array.push(gaa_t, g2t)
+        if pc < po and g2c > g2o
+            array.push(gxv_l, math.min(po, pc))
+            array.push(gxv_t, g2t)
+            array.push(gvv_l, math.min(po, pc))
+            array.push(gvv_t, g2t)
+        while array.size(gaa_l) > 150
+            array.shift(gaa_l)
+            array.shift(gaa_t)
+        while array.size(gvv_l) > 150
+            array.shift(gvv_l)
+            array.shift(gvv_t)
+    if not gub
+        if na(gu_hh) or g2h > gu_hh
+            gu_hh := g2h
+            gu_pl := na
+        else if na(gu_pl) or g2l < gu_pl
+            gu_pl  := g2l
+            gu_plt := g2t
+    if not gdb
+        if na(gd_ll) or g2l < gd_ll
+            gd_ll := g2l
+            gd_ph := na
+        else if na(gd_ph) or g2h > gd_ph
+            gd_ph  := g2h
+            gd_pht := g2t
+
+// the Bias Pointer's H4 Breaker after its confirmation is an H4 level too (for the M15 entries)
+if not na(h4_breaker_lvl) and h4_breaker_lvl != nz(h4_breaker_lvl[1]) and not na(bo_dir)
+    f_agadd(gk2, 5, bo_dir == "bullish", h4_breaker_lvl, h4_breaker_lvl, time)
+
+// ── The story: 0 none · 1 Daily breakout, H4 continuations · 2 Daily pullback (range, levels) ·
+// 3 aligned (H4 range). Starts on every Bias Pointer Daily breakout.
+var int   gph   = 0
+var int   gD    = 0
+var int   gk1c  = 0
+var float gtl   = na      // the pullback line: the last H4 low (buys) / high (sells)
+var int   gtl_t = na
+var float gfl   = na      // the low before the Daily breakout (buys) / high (sells)
+var int   gfl_t = na
+var float gxt   = na      // the extreme since the breakout (the range high once the pullback is confirmed)
+var int   gxt_t = na
+var float grh   = na
+var int   grh_t = na
+var float grl   = na
+var int   grl_t = na
+var float greq  = na
+var float ghl   = na      // H4 range low (buys) after aligned
+var int   ghl_t = na
+var int   grx_t = na      // the first touch of a Daily level in this pullback
+var float grx_a = na      // its External H4 level: the last A before the touch
+var float grx_x = na
+var int   grx_xt = na
+var label g_tag_al = na
+var label g_tag_en = na
+var array<line>  g_cl = array.new<line>()
+var array<label> g_cb = array.new<label>()
+f_agline(int t1, float y, string txt, bool above) =>
+    if g_h4 and not na(t1) and not na(y)
+        array.push(g_cl, line.new(t1, y, time, y, xloc = xloc.bar_time, color = ag_cn_c, style = f_agsty(ag_cn_s), width = 1))
+        array.push(g_cb, label.new(t1 + int((time - t1) / 2), y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
+             color = color.new(color.black, 100), textcolor = ag_lvx, size = f_agsz(ag_lvz)))
+        while array.size(g_cl) > 8
+            line.delete(array.shift(g_cl))
+        while array.size(g_cb) > 8
+            label.delete(array.shift(g_cb))
+// tags: only the newest of each stays; the colour is used as picked (its opacity works)
+f_agtag(label old, string txt, bool above, color c) =>
+    label.delete(old)
+    g_h4 ? label.new(bar_index, above ? high : low, txt, style = above ? label.style_label_down : label.style_label_up, color = c, textcolor = ag_tgx, size = f_agsz(ag_lvz)) : label(na)
+f_agal(string typ, string body) =>
+    if barstate.isrealtime and g_h4
+        alert(f_hdrw(typ) + '"' + body + '}', alert.freq_once_per_bar)
+
+bool g_anew  = not na(s_bcnt) and s_bcnt != gk1c
+bool g_first = gk1c == 0
+float g_tol  = nz(g1c, close) * 0.0004
+if g_anew
+    gk1c := s_bcnt
+    if gAD > 0
+        f_agadd(gk1, 5, true, s_blvl, s_blvl, s_bt)
+        f_agadd(gk1, 4, true, gz1lt, gz1lo, gz1t)
+    else if gAD < 0
+        f_agadd(gk1, 5, false, s_blvl, s_blvl, s_bt)
+        f_agadd(gk1, 4, false, gz1hi, gz1hb, gz1ht)
+    gz1lo := na
+    gz1hi := na
+    if not g_first and gAD != 0
+        gD  := gAD
+        gph := 1
+        [sx, sxt] = f_agsince(gD < 0, s_blvl, s_bt, g_tol)
+        gfl   := nz(sx, gD > 0 ? s_clo : s_chi)
+        gfl_t := na(sx) ? (gD > 0 ? s_clot : s_chit) : sxt
+        gxt   := gD > 0 ? g1h : g1l
+        gxt_t := g1t
+        gtl   := gD > 0 ? gub_pl : gdb_ph
+        gtl_t := gD > 0 ? gub_plt : gdb_pht
+        if not na(gtl) and not na(gfl) and (gD > 0 ? gtl < gfl : gtl > gfl)
+            gtl := na
+        grh := na
+        grl := na
+        greq := na
+        ghl := na
+        grx_t := na
+        grx_a := na
+bool g_conf = false
+if gD != 0 and gph == 1
+    if g1_new and (gD > 0 ? g1h > nz(gxt, g1h - 1) : g1l < nz(gxt, g1l + 1))
+        gxt   := gD > 0 ? g1h : g1l
+        gxt_t := g1t
+    if g2_new and (gD > 0 ? g2h > nz(gxt, g2h - 1) : g2l < nz(gxt, g2l + 1))
+        gxt   := gD > 0 ? g2h : g2l
+        gxt_t := g2t
+if gD != 0 and g2_new
+    // an H4 close beyond the pullback line = the Daily pullback
+    if gph == 1 and not na(gtl) and (gD > 0 ? g2c < gtl : g2c > gtl)
+        gph := 2
+        g_conf := true
+        grh   := gxt
+        grh_t := gxt_t
+        grl   := gfl
+        grl_t := gfl_t
+        if na(grl) or (gD > 0 ? grl >= grh : grl <= grh)
+            grl   := gD > 0 ? math.min(g1l, gtl) : math.max(g1h, gtl)
+            grl_t := gtl_t
+        greq := (grh + grl) / 2
+        grx_t := na
+        grx_a := na
+        if AG_D
+            f_agline(gtl_t, gtl, "H4 close beyond the pullback line: Daily pullback confirmed", gD < 0)
+        if ag_pb_al
+            f_agal("DAILY_PULLBACK", ',"direction":"' + (gD > 0 ? "bullish" : "bearish") + '","pullback_line":' + str.tostring(gtl) + ',"range_high":' + str.tostring(math.max(grh, grl)) + ',"range_low":' + str.tostring(math.min(grh, grl)) + ',"range_mid":' + str.tostring(greq))
+        gtl := na
+    // the H4 range low broken first: H4 still against the Daily, the pullback goes on
+    if gph == 3 and not na(ghl) and (gD > 0 ? g2c < ghl : g2c > ghl)
+        gph := 2
+        g_conf := true
+        grx_t := na
+        grx_a := na
+        if AG_D
+            f_agline(ghl_t, ghl, "H4 range " + (gD > 0 ? "low" : "high") + " broken: the Daily pullback goes on", gD < 0)
+        ghl := na
+// price reaches a Daily level of the current leg inside the range (first touch of each)
+if gph == 2 and gD != 0 and array.size(gk1) > 0
+    for v in gk1
+        if v.bull == (gD > 0) and not v.hit and not v.tch and v.t >= nz(grl_t) and f_agin(v, grl, grh) and (gD > 0 ? low <= v.top : high >= v.bot)
+            v.hit := true
+            grx_t := time
+            [ra1, rt1] = f_aglast(gaa_l, gaa_t, time - 14400000)
+            [ra2, rt2] = f_aglast(gvv_l, gvv_t, time - 14400000)
+            grx_a  := gD > 0 ? ra1 : ra2
+            grx_x  := gD > 0 ? low : high
+            grx_xt := time
+if g2_new and gph == 2 and not na(grx_t)
+    if gD > 0 ? g2l < nz(grx_x, g2l + 1) : g2h > nz(grx_x, g2h - 1)
+        grx_x  := gD > 0 ? g2l : g2h
+        grx_xt := g2t
+bool  g_with = gD > 0 ? gub : gdb
+float g_wl   = gD > 0 ? gub_lvl : gdb_lvl
+int   g_wlt  = gD > 0 ? gub_lt : gdb_lt
+float g_cx   = gD > 0 ? gub_pl : gdb_ph
+int   g_cxt  = gD > 0 ? gub_plt : gdb_pht
+string g_dw  = gD > 0 ? "bullish" : "bearish"
+if gD != 0 and g2_new and not g_conf
+    if gph == 1 and g_with
+        // an H4 continuation: the pullback line moves to the low that caused it
+        gtl   := g_cx
+        gtl_t := g_cxt
+        if AG_D
+            f_agline(g_wlt, g_wl, "H4 " + g_dw + " continuation", gD > 0)
+            f_agal("H4_CONTINUATION", ',"direction":"' + (gD > 0 ? "bullish" : "bearish") + '","cont_type":"breakout_cont","h4_class":"external","h4_level":' + str.tostring(g_wl) + ',"pullback_line":' + str.tostring(gtl))
+    else if gph == 2 and not na(grx_t) and not na(grx_a) and (gD > 0 ? g2c > grx_a : g2c < grx_a)
+        // the Daily level's reaction + an H4 External breakout = aligned
+        gph   := 3
+        ghl   := grx_x
+        ghl_t := grx_xt
+        f_agadd(gk2, 5, gD > 0, grx_a, grx_a, g2t)
+        if AG_D
+            f_agline(grx_xt, grx_a, "H4 " + g_dw + " External breakout", gD > 0)
+            g_tag_al := f_agtag(g_tag_al, AG_C ? "Daily + H4 aligned" : (gD > 0 ? "BUY CONFIRMED" : "SELL CONFIRMED") + " · Daily reaction + H4 breakout", gD > 0, gD > 0 ? ag_alb : ag_als)
+            f_agal("CONFIRMED", ',"direction":"' + (gD > 0 ? "bullish" : "bearish") + '","source":"daily_range_level","h4_class":"external","h4_level":' + str.tostring(grx_a) + ',"target":' + str.tostring(grh))
+    else if gph == 3 and g_with
+        ghl   := g_cx
+        ghl_t := g_cxt
+        if AG_D
+            f_agline(g_wlt, g_wl, "H4 " + g_dw + " continuation", gD > 0)
+
+// ── M15 entries (choice 3 = Aligned): an M15 candle sweeps an H4 level of the current leg (wick
+// through it, close back) and price then closes beyond the last M15 high (sells: low)
+var bool  gea_on = false
+var float gea_sw = na
+var float gea_br = na
+var float gea_lv = na
+var int   gea_n  = 0
+var AgLv  gea_v  = na
+var int   g_bpt  = na
+if not na(bk_origin) and bk_origin != nz(bk_origin[1])
+    g_bpt := time
+int   gED   = AG_D ? gD : (bo_dir == "bullish" ? 1 : bo_dir == "bearish" ? -1 : 0)
+bool  g_eon = AG_D ? (gph == 1 or gph == 3) : (h4_aligned and not na(h4_invalid_lvl))
+float geb_lo = AG_D ? (gph == 1 ? gtl : ghl) : (gED > 0 ? h4_invalid_lvl : -1e12)
+float geb_hi = AG_D ? (gph == 1 ? gxt : grh) : (gED > 0 ? 1e12 : h4_invalid_lvl)
+int   geb_t  = AG_D ? (gph == 1 ? gtl_t : ghl_t) : g_bpt
+int   gne    = 0
+if g_h4 and AG_H and g_eon and gED != 0 and barstate.isconfirmed
+    gne := array.size(g3c)
+if not g_eon
+    gea_on := false
+if gne > 0
+    for ii = 0 to gne - 1
+        float c_h  = array.get(g3h, ii)
+        float c_l  = array.get(g3l, ii)
+        float c_c  = array.get(g3c, ii)
+        float c_fh = array.get(g3fh, ii)
+        float c_fl = array.get(g3fl, ii)
+        bool just = false
+        if gea_on
+            gea_n += 1
+            if (gED > 0 ? c_c < gea_sw : c_c > gea_sw) or gea_n > ag_win
+                gea_on := false
+            else if gED > 0 ? c_c > gea_br : c_c < gea_br
+                gea_on := false
+                just := true
+                if not na(gea_v)
+                    gea_v.used := true
+                g_tag_en := f_agtag(g_tag_en, "M15 entry confirmed", gED < 0, ag_enc)
+                f_agal("M15_ENTRY", ',"direction":"' + (gED > 0 ? "bullish" : "bearish") + '","h4_level":' + str.tostring(gea_lv) + ',"sweep":' + str.tostring(gea_sw) + ',"invalid_beyond":' + str.tostring(gea_sw))
+        if not gea_on and not just and array.size(gk2) > 0
+            for v in gk2
+                if v.bull == (gED > 0) and not v.used and not v.tch and v.t >= nz(geb_t) and f_agin(v, geb_lo, geb_hi)
+                    float lv_ = na
+                    if gED > 0
+                        if c_l < v.top and c_c > v.top
+                            lv_ := v.top
+                        else if v.top != v.bot and c_l < v.bot and c_c > v.bot
+                            lv_ := v.bot
+                    else
+                        if c_h > v.bot and c_c < v.bot
+                            lv_ := v.bot
+                        else if v.top != v.bot and c_h > v.top and c_c < v.top
+                            lv_ := v.top
+                    float br = gED > 0 ? c_fh : c_fl
+                    if not na(lv_) and not na(br) and (gED > 0 ? br > c_c : br < c_c)
+                        gea_on := true
+                        gea_sw := gED > 0 ? c_l : c_h
+                        gea_br := br
+                        gea_lv := lv_
+                        gea_v  := v
+                        gea_n  := 0
+                        break
+
+// ── Drawing at the last candle ──────────────────────────────────────────────
+var array<line>  g_dl = array.new<line>()
+var array<label> g_db = array.new<label>()
+var array<box>   g_dx = array.new<box>()
+f_aglvl(int t, float y, string txt, color c, string st, int w) =>
+    if not na(t) and not na(y)
+        array.push(g_dl, line.new(t, y, time, y, xloc = xloc.bar_time, extend = extend.right, color = c, style = f_agsty(st), width = w))
+        array.push(g_db, label.new(bar_index + 3, y, txt + "  " + str.tostring(y, format.mintick), style = label.style_label_left,
+             color = color.new(color.black, 100), textcolor = ag_lvx, size = f_agsz(ag_lvz)))
+// one book's levels on the side d inside a – b, formed from t_min; overlapping ones as one
+f_agbook(array<AgLv> bk, int d, float a, float b, int t_min, string tfn, color c, float tol) =>
+    array<int> cand = array.new<int>()
+    int n = array.size(bk)
+    if n > 0
+        for i = n - 1 to 0
+            AgLv v = array.get(bk, i)
+            if array.size(cand) < ag_max and v.bull == (d > 0) and f_agin(v, a, b) and v.t >= nz(t_min) and (not v.tch or v.hit)
+                array.push(cand, i)
+    int m = array.size(cand)
+    array<bool> done = array.new<bool>(m, false)
+    if m > 0
+        for g = 0 to m - 1
+            if not array.get(done, g)
+                array.set(done, g, true)
+                AgLv v0 = array.get(bk, array.get(cand, g))
+                float  gt   = v0.top
+                float  gb   = v0.bot
+                int    t0   = v0.t
+                bool   isbx = v0.kind == 3 or v0.kind == 4
+                bool   hit  = v0.hit
+                string nm   = f_agkn(v0.kind, v0.bull)
+                array<int> mem = array.from(array.get(cand, g))
+                if ag_merge
+                    for pass = 0 to 2
+                        for j = 0 to m - 1
+                            if not array.get(done, j)
+                                AgLv vj = array.get(bk, array.get(cand, j))
+                                if vj.top >= gb - tol and vj.bot <= gt + tol
+                                    array.set(done, j, true)
+                                    array.push(mem, array.get(cand, j))
+                                    gt := math.max(gt, vj.top)
+                                    gb := math.min(gb, vj.bot)
+                                    t0 := math.min(t0, vj.t)
+                                    isbx := isbx or vj.kind == 3 or vj.kind == 4
+                                    hit := hit or vj.hit
+                                    string kn = f_agkn(vj.kind, vj.bull)
+                                    if not str.contains(nm, kn)
+                                        nm := nm + " + " + kn
+                string lab = tfn + " " + nm + (hit ? " · reached" : "")
+                if isbx
+                    array.push(g_dx, box.new(t0, gt, time + 12 * 14400000, gb, xloc = xloc.bar_time, border_color = color.new(c, 30), bgcolor = color.new(c, 100 - ag_op),
+                         text = lab, text_size = f_agsz(ag_lvz), text_color = ag_lvx, text_halign = text.align_right, text_valign = text.align_center))
+                else
+                    for k in mem
+                        AgLv vk = array.get(bk, k)
+                        array.push(g_dl, line.new(vk.t, vk.top, time, vk.top, xloc = xloc.bar_time, extend = extend.right, color = c,
+                             style = f_agsty(vk.kind == 2 ? ag_oc_s : vk.kind == 5 ? ag_bk_s : ag_vs_s), width = 1))
+                    string px = gt - gb > syminfo.mintick ? str.tostring(gb, format.mintick) + " – " + str.tostring(gt, format.mintick) : str.tostring(gt, format.mintick)
+                    array.push(g_db, label.new(bar_index + 3, (gt + gb) / 2, lab + "  " + px, style = label.style_label_left,
+                         color = color.new(color.black, 100), textcolor = ag_lvx, size = f_agsz(ag_lvz)))
+
+if barstate.islast
+    for l in g_dl
+        line.delete(l)
+    for b in g_db
+        label.delete(b)
+    for x in g_dx
+        box.delete(x)
+    array.clear(g_dl)
+    array.clear(g_db)
+    array.clear(g_dx)
+    if g_h4
+        float gtol = close * 0.0003
+        if AG_D and gD != 0
+            string HI_ = gD > 0 ? "high" : "low"
+            string LO_ = gD > 0 ? "low" : "high"
+            if gph == 1 and not na(gtl)
+                f_aglvl(gtl_t, gtl, "pullback line: last H4 " + LO_ + " (an H4 close beyond it = the Daily pullback)", ag_tl_c, ag_tl_s, ag_tl_w)
+            if gph >= 2 and not na(grh) and not na(grl)
+                f_aglvl(grh_t, grh, "Daily range " + HI_ + " (target)", ag_rg_c, ag_rg_s, 2)
+                f_aglvl(grl_t, grl, "Daily range " + LO_, ag_rg_c, ag_rg_s, 2)
+                f_aglvl(math.min(grh_t, grl_t), greq, "Daily range 0.5", ag_eq_c, ag_eq_s, 1)
+                f_agbook(gk1, gD, grl, grh, grl_t, "Daily", gD > 0 ? ag_l1b : ag_l1s, gtol)
+            if gph == 3 and not na(ghl)
+                f_aglvl(ghl_t, ghl, "H4 range " + LO_ + " (an H4 close beyond it: H4 still against the Daily)", ag_hl_c, ag_hl_s, 2)
+        if AG_H and g_eon and gED != 0
+            f_agbook(gk2, gED, geb_lo, geb_hi, geb_t, "H4", gED > 0 ? ag_l2b : ag_l2s, gtol)
