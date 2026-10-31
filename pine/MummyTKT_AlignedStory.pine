@@ -71,7 +71,9 @@ color  tg_alb   = input.color(#00C853, "Aligned · buys", group = G_ST, inline =
 color  tg_als   = input.color(#FF1744, "sells", group = G_ST, inline = "ta")
 color  tg_en    = input.color(#7C4DFF, "Entry confirmed", group = G_ST, inline = "te")
 color  tg_tx    = input.color(color.white, "tag text", group = G_ST, inline = "te")
-int    tg_op    = input.int(100, "Tag opacity %", minval = 0, maxval = 100, group = G_ST)
+int    tg_op    = input.int(100, "Tag opacity %", minval = 0, maxval = 100, group = G_ST,
+     tooltip = "On top of the opacity picked in the colour boxes (100 = as picked).")
+bool   tg_new   = input.bool(true, "Keep only the newest aligned tag and the newest entry tag", group = G_ST)
 
 bool   t1x_on   = input.bool(true, "Top-timeframe external high / low (Daily in D → H4 → M15)", group = G_RG, inline = "tx")
 color  t1x_col  = input.color(#E0E0E0, "", group = G_RG, inline = "tx")
@@ -707,10 +709,16 @@ f_sline(int t1, int t2, float y, string txt, bool above) =>
         while array.size(sl_b) > st_n * 2
             label.delete(array.shift(sl_b))
 
-f_tag(string txt, bool above, color c) =>
+// slot 0 = aligned, 1 = entry: with "newest only" the previous tag of the slot is removed. The colour
+// keeps the opacity picked in its colour box (tg_op fades it further)
+var array<label> tg_last = array.new<label>(2, na)
+f_tag(int slot, string txt, bool above, color c) =>
     if chart_ok and tg_on
-        label.new(bar_index, above ? high : low, txt, style = above ? label.style_label_down : label.style_label_up,
-             color = color.new(c, 100 - tg_op), textcolor = tg_tx, size = f_sz(tg_sz))
+        if tg_new
+            label.delete(array.get(tg_last, slot))
+        color cc = color.new(c, 100 - (100 - color.t(c)) * tg_op / 100)
+        array.set(tg_last, slot, label.new(bar_index, above ? high : low, txt, style = above ? label.style_label_down : label.style_label_up,
+             color = cc, textcolor = tg_tx, size = f_sz(tg_sz)))
 
 var array<line> tl_seg = array.new<line>()
 f_seg(int t0, float y) =>
@@ -1173,7 +1181,7 @@ if D1 != 0 and x2_new and not conf_now
         tg_done := false
         ea_on := false
         f_sline(rx_xt, time, rx_a, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " External breakout", D1 > 0)
-        f_tag(N1 + " + " + N2 + " aligned", D1 > 0, D1 > 0 ? tg_alb : tg_als)
+        f_tag(0, N1 + " + " + N2 + " aligned", D1 > 0, D1 > 0 ? tg_alb : tg_als)
         f_story(time, D1 > 0 ? high : low, D1 > 0, "The reaction gives an " + N2 + " External breakout " + up + " (" + str.tostring(rx_a, format.mintick) + "): " + N1 + " + " + N2 + " aligned.\nTarget: the " + N1 + " range " + HI + " " + str.tostring(rh, format.mintick) + ". " + N2 + " range: " + str.tostring(rh, format.mintick) + " ↔ " + str.tostring(hl, format.mintick) + ".\nIf " + str.tostring(hl, format.mintick) + " breaks first, " + N2 + " is still " + (D1 > 0 ? "bearish" : "bullish") + " inside the " + N1 + ".\nEntries: an " + N3 + " sweep and break at the " + N2 + " levels in its range.")
     else if sph == 2 and sb_agst
         f_sline(a_blt, time, a_bl, N2 + " " + (D1 > 0 ? "bearish" : "bullish") + " External breakout", D1 < 0)
@@ -1211,7 +1219,7 @@ if ne > 0
                 just := true
                 if not na(ea_lv)
                     ea_lv.used := true
-                f_tag(N3 + " entry confirmed", D1 < 0, tg_en)
+                f_tag(1, N3 + " entry confirmed", D1 < 0, tg_en)
                 f_story(time, D1 > 0 ? low : high, D1 < 0, N3 + " sweep and break at the " + N2 + " level " + str.tostring(ea_lvl, format.mintick) + ": " + N3 + " entry confirmed.\nInvalid beyond the sweep (" + str.tostring(ea_sw, format.mintick) + "). Target: the " + N1 + " " + HI + " " + str.tostring(eb_hi, format.mintick) + ".")
         if not ea_on and not just and array.size(bk2) > 0
             for v in bk2
