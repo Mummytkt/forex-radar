@@ -74,8 +74,8 @@ string plan     = input.string("D → H4 → M15", "Plan (top → story → entr
 string cu_t1    = input.timeframe("D", "Custom: top", group = G_PL, inline = "cu")
 string cu_t2    = input.timeframe("240", "story", group = G_PL, inline = "cu")
 string cu_t3    = input.timeframe("15", "entry", group = G_PL, inline = "cu")
-bool   brk_wick = input.string("Wick", "Top-timeframe breakout confirmed by", options = ["Wick", "Body close"], group = G_PL,
-     tooltip = "Wick (default, as the Bias Pointer): a wick beyond the external level breaks it. Body close: the candle must close beyond it.") == "Wick"
+bool   brk_wick = input.string("Body close", "Top-timeframe breakout confirmed by", options = ["Body close", "Wick"], group = G_PL,
+     tooltip = "Body close (default, as the Bias Pointer): the candle must close beyond the external level. Wick: a wick beyond it breaks it.") == "Wick"
 bool   bos_wick = input.string("Body close", "Story-timeframe BOS confirmed by", options = ["Body close", "Wick"], group = G_PL,
      tooltip = "Body close (default): a story-timeframe breakout, the break of the tracked low and of its range low need a candle body to close beyond the level.") == "Wick"
 bool   d_body   = input.string("Wick", "Highs / lows / A / V-shapes from", options = ["Wick", "Body"], group = G_PL,
@@ -506,10 +506,8 @@ if a_new
         f_add(bk1, 4, false, z1hi, z1hb, z1ht)
     z1lo := na
     z1hi := na
-// The story. It starts on a top-timeframe external breakout (the Bias Pointer engine) when none
-// is running. While one runs, only ITS external levels move it: a break beyond its external low
-// (buys) = the breakout the other way (a new story); beyond the range high after the pullback =
-// a new breakout the same way. Structures that form inside the range don't change it.
+// The story starts on every top-timeframe external breakout of the Bias Pointer engine (a close
+// beyond its most recent external high / low by default, as the Bias Pointer).
 if x1_new and sph == 1 and D1 != 0
     if D1 > 0 ? x1h > nz(xt, x1h - 1) : x1l < nz(xt, x1l + 1)
         xt   := D1 > 0 ? x1h : x1l
@@ -525,37 +523,21 @@ float s_lo  = na
 int   s_lot = na
 float s_hi  = na
 int   s_hit = na
-if sph == 0 and a_new and not first_ and AD != 0
+if a_new and not first_ and AD != 0
     s_dir := AD
     s_lvl := a_blvl
     s_lvt := a_bt
-    s_lo  := AD > 0 ? a_clo : x1l
-    s_lot := AD > 0 ? a_clot : x1t
-    s_hi  := AD > 0 ? x1h : a_chi
-    s_hit := AD > 0 ? x1t : a_chit
-else if sph >= 1 and D1 != 0 and x1_new and not na(fl) and (D1 > 0 ? (brk_wick ? x1l : x1c) < fl : (brk_wick ? x1h : x1c) > fl)
-    float ox  = sph == 1 ? xt : rh
-    int   oxt = sph == 1 ? xt_t : rh_t
-    s_dir := -D1
-    s_lvl := fl
-    s_lvt := fl_t
-    s_lo  := D1 > 0 ? x1l : ox
-    s_lot := D1 > 0 ? x1t : oxt
-    s_hi  := D1 > 0 ? ox : x1h
-    s_hit := D1 > 0 ? oxt : x1t
-else if sph >= 2 and D1 != 0 and x1_new and not na(rh) and (D1 > 0 ? (brk_wick ? x1h : x1c) > rh : (brk_wick ? x1l : x1c) < rh)
-    float px  = nz(pb_x, rl)
-    int   pxt = na(pb_x) ? rl_t : pb_t
-    s_dir := D1
-    s_lvl := rh
-    s_lvt := rh_t
-    s_lo  := D1 > 0 ? px : x1l
-    s_lot := D1 > 0 ? pxt : x1t
-    s_hi  := D1 > 0 ? x1h : px
-    s_hit := D1 > 0 ? x1t : pxt
+    s_lo  := a_clo
+    s_lot := a_clot
+    s_hi  := a_chi
+    s_hit := a_chit
+    if AD > 0
+        s_hi  := x1h
+        s_hit := x1t
+    else
+        s_lo  := x1l
+        s_lot := x1t
 if s_dir != 0
-    if sph >= 1
-        f_add(bk1, 5, s_dir > 0, s_lvl, s_lvl, s_lvt)
     D1 := s_dir
     up := D1 > 0 ? "up" : "down"
     dn := D1 > 0 ? "down" : "up"
@@ -595,8 +577,8 @@ if D1 != 0 and x2_new
         conf_now := true
         rh   := xt
         rh_t := xt_t
-        rl   := fl
-        rl_t := fl_t
+        rl   := D1 > 0 ? nz(a_clo, fl) : nz(a_chi, fl)
+        rl_t := D1 > 0 ? (na(a_clo) ? fl_t : a_clot) : (na(a_chi) ? fl_t : a_chit)
         if na(rl) or (D1 > 0 ? rl >= rh : rl <= rh)
             rl   := D1 > 0 ? math.min(x1l, tl) : math.max(x1h, tl)
             rl_t := tl_t
@@ -825,33 +807,23 @@ if barstate.islast
     // the top timeframe's external high / low, on every chart and in every phase: the story's own
     // once a story runs (after the pullback they are also the range high / low), before that the
     // Bias Pointer engine's
-    // (each value falls back to the Bias Pointer engine's if the story's is missing, and a missing
-    // start time to 30 candles back, so the lines can never silently disappear)
-    int   t30  = time[math.min(bar_index, 30)]
-    bool  st_on = D1 != 0 and sph >= 1
-    int   xd   = st_on ? D1 : AD
-    float x_h  = st_on ? (D1 > 0 ? (sph == 1 ? xt : rh) : fl) : a_chi
-    int   x_ht = st_on ? (D1 > 0 ? (sph == 1 ? xt_t : rh_t) : fl_t) : a_chit
-    float x_l  = st_on ? (D1 > 0 ? fl : (sph == 1 ? xt : rh)) : a_clo
-    int   x_lt = st_on ? (D1 > 0 ? fl_t : (sph == 1 ? xt_t : rh_t)) : a_clot
-    x_h  := nz(x_h, a_chi)
-    x_l  := nz(x_l, a_clo)
-    x_ht := na(x_ht) or x_ht > time ? nz(a_chit, t30) : x_ht
-    x_lt := na(x_lt) or x_lt > time ? nz(a_clot, t30) : x_lt
-    if t1x_on and xd != 0
-        string xw  = xd > 0 ? "bullish" : "bearish"
-        string rg  = st_on and sph >= 2 ? (D1 > 0 ? " · range high (target)" : " · range high") : ""
-        string rl_ = st_on and sph >= 2 ? (D1 > 0 ? " · range low" : " · range low (target)") : ""
-        f_lvl(x_ht, x_h, N1 + " " + xw + " external high" + rg, t1x_col, f_sty(t1x_sty), t1x_w)
-        f_lvl(x_lt, x_l, N1 + " " + xw + " external low" + rl_, t1x_col, f_sty(t1x_sty), t1x_w)
+    // the external high / low exactly as the Bias Pointer draws them (its most recent structure)
+    float x_h = a_chi
+    float x_l = a_clo
+    if t1x_on and not na(a_chi) and not na(a_clo) and a_cdir != "none"
+        string xw = a_cdir == "bull" ? "bullish" : "bearish"
+        f_lvl(a_chit, a_chi, N1 + " " + xw + " external high" + (a_cdir == "bull" and not a_chif ? " (still forming)" : ""), t1x_col, f_sty(t1x_sty), t1x_w)
+        f_lvl(a_clot, a_clo, N1 + " " + xw + " external low" + (a_cdir == "bear" and not a_clof ? " (still forming)" : ""), t1x_col, f_sty(t1x_sty), t1x_w)
     if D1 != 0 and sph >= 1
         string dw = D1 > 0 ? "bullish" : "bearish"
         if sph == 1 and tl_on and not na(tl)
             f_lvl(tl_t, tl, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
         if sph >= 2 and not na(rh) and not na(rl)
-            if rg_on and not t1x_on
-                f_lvl(rh_t, rh, N1 + " range " + HI + " (target)", rg_col, line.style_solid, rg_w)
-                f_lvl(rl_t, rl, N1 + " range " + LO, rg_col, line.style_solid, rg_w)
+            if rg_on
+                if not t1x_on or math.abs(rh - (D1 > 0 ? x_h : x_l)) > tol
+                    f_lvl(rh_t, rh, N1 + " range " + HI + " (target)", rg_col, line.style_solid, rg_w)
+                if not t1x_on or math.abs(rl - (D1 > 0 ? x_l : x_h)) > tol
+                    f_lvl(rl_t, rl, N1 + " range " + LO, rg_col, line.style_solid, rg_w)
             if rg_on
                 f_lvl(math.min(rh_t, rl_t), req, N1 + " range 0.5 · " + (D1 > 0 ? "discount below" : "premium above"), eq_col, line.style_dashed, 1)
             if sh_on
