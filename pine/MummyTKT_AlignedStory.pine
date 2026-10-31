@@ -1158,8 +1158,8 @@ if x2_new and sph == 2 and not na(rx_t)
         rx_xt := x2t
 if D1 != 0 and x2_new and not conf_now
     if sph == 1 and sb_with
-        // a continuation: the pullback line moves up to the low that caused it
-        f_seg(tl_t, tl)
+        // a continuation: the pullback line moves up to the low that caused it (only the latest
+        // one is drawn: it is always the last low that is tracked)
         tl   := s_cx
         tl_t := s_cxt
         f_sline(s_blt, time, s_bl, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation", D1 > 0)
