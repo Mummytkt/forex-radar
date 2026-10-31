@@ -80,7 +80,6 @@ bool   bos_wick = input.string("Body close", "Story-timeframe BOS confirmed by",
      tooltip = "Body close (default): a story-timeframe breakout, the break of the tracked low and of its range low need a candle body to close beyond the level.") == "Wick"
 bool   d_body   = input.string("Wick", "Highs / lows / A / V-shapes from", options = ["Wick", "Body"], group = G_PL,
      tooltip = "Wick (default): external highs / lows, A-shapes and V-shapes on the candle wicks. Body: on the bodies.") == "Body"
-bool   show_int = input.bool(true, "Show breaks that don't move the story (Internal, or before a level is reached)", group = G_PL)
 
 string st_mode  = input.string("Dots only (hover)", "Story on the chart", options = ["Dots only (hover)", "Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_ST)
 int    st_n     = input.int(8, "N (notes or dots kept)", minval = 1, maxval = 40, group = G_ST)
@@ -354,6 +353,9 @@ var float req    = na
 var float hl     = na      // story-timeframe range low (buys) / high (sells), after aligned
 var int   hl_t   = na
 var int   rx_t   = na      // when price first reached a top-timeframe level in this pullback
+var float rx_a   = na      // its External level: the last story-timeframe A (sells: V) before that touch
+var float rx_x   = na      // the reaction's extreme since the touch (the story-timeframe range low)
+var int   rx_xt  = na
 var bool  tg_done = false
 var float lb_lvl = na      // the last story-timeframe breakout: the same one again is skipped
 var int   lb_dir = 0
@@ -386,6 +388,110 @@ if x2_new
         z2hi := x2h
         z2hb := math.min(x2o, x2c)
         z2ht := x2t
+
+// 1b. The story timeframe's External breaks, as the Bias Pointer: a BODY close above the last A-shape
+// (bullish candle then bearish; its body top) that formed BEFORE the low the leg pulled back to
+// (sells: below the last V-shape before the high). A-shapes formed after that low are Internal and
+// never break anything here. After a break only A-shapes formed after it count (recent breaks,
+// not old levels), and the low that caused it is the leg's external low.
+var array<float> xa_l = array.new<float>()   // A-shapes since the last break up (level, completion time)
+var array<int>   xa_t = array.new<int>()
+var array<float> xv_l = array.new<float>()   // V-shapes since the last break down
+var array<int>   xv_t = array.new<int>()
+var array<float> aa_l = array.new<float>()   // every recent A / V (for a reaction's External level)
+var array<int>   aa_t = array.new<int>()
+var array<float> vv_l = array.new<float>()
+var array<int>   vv_t = array.new<int>()
+var float u_hh  = na      // up side: highest high since the last break up, then the lowest low after it
+var float u_pl  = na
+var int   u_plt = na
+var float d_ll  = na      // down side: the mirror
+var float d_ph  = na
+var int   d_pht = na
+var float ub_pl  = na     // the low that caused the latest break up (its external low)
+var int   ub_plt = na
+var float db_ph  = na     // the high that caused the latest break down
+var int   db_pht = na
+bool  ub     = false
+float ub_lvl = na
+int   ub_lt  = na
+bool  db     = false
+float db_lvl = na
+int   db_lt  = na
+f_last(array<float> l, array<int> t, int maxt) =>
+    float v = na
+    int   vt = na
+    if array.size(l) > 0
+        for i = array.size(l) - 1 to 0
+            if array.get(t, i) <= maxt
+                v := array.get(l, i)
+                vt := array.get(t, i)
+                break
+    [v, vt]
+if x2_new
+    // a break up: the low it pulled back to may be this candle (then only A-shapes completed before it)
+    bool  nl  = na(u_pl) or x2l < u_pl
+    int   plt = nl ? x2t : u_plt
+    [ea, eat] = f_last(xa_l, xa_t, nl ? x2t - 1 : plt)
+    if not na(u_hh) and not na(ea) and x2c > ea
+        ub     := true
+        ub_lvl := ea
+        ub_lt  := eat
+        ub_pl  := nl ? x2l : u_pl
+        ub_plt := plt
+        array.clear(xa_l)
+        array.clear(xa_t)
+        u_hh := x2h
+        u_pl := na
+    bool  nh  = na(d_ph) or x2h > d_ph
+    int   pht = nh ? x2t : d_pht
+    [ev, evt] = f_last(xv_l, xv_t, nh ? x2t - 1 : pht)
+    if not na(d_ll) and not na(ev) and x2c < ev
+        db     := true
+        db_lvl := ev
+        db_lt  := evt
+        db_ph  := nh ? x2h : d_ph
+        db_pht := pht
+        array.clear(xv_l)
+        array.clear(xv_t)
+        d_ll := x2l
+        d_ph := na
+    // the new A / V completed by this candle (bodies, as the Bias Pointer's H4 A / V)
+    int n2h = array.size(h2o)
+    if n2h >= 2
+        float po = array.get(h2o, n2h - 2)
+        float pc = array.get(h2c, n2h - 2)
+        if pc > po and x2c < x2o
+            array.push(xa_l, math.max(po, pc))
+            array.push(xa_t, x2t)
+            array.push(aa_l, math.max(po, pc))
+            array.push(aa_t, x2t)
+        if pc < po and x2c > x2o
+            array.push(xv_l, math.min(po, pc))
+            array.push(xv_t, x2t)
+            array.push(vv_l, math.min(po, pc))
+            array.push(vv_t, x2t)
+        while array.size(aa_l) > 150
+            array.shift(aa_l)
+            array.shift(aa_t)
+        while array.size(vv_l) > 150
+            array.shift(vv_l)
+            array.shift(vv_t)
+    // the leg's extremes
+    if not ub
+        if na(u_hh) or x2h > u_hh
+            u_hh := x2h
+            u_pl := na
+        else if na(u_pl) or x2l < u_pl
+            u_pl  := x2l
+            u_plt := x2t
+    if not db
+        if na(d_ll) or x2l < d_ll
+            d_ll := x2l
+            d_ph := na
+        else if na(d_ph) or x2h > d_ph
+            d_ph  := x2h
+            d_pht := x2t
 
 // 2. the engine's breaks feed the levels (Breaker, demand / supply)
 bool a_new  = not na(a_bcnt) and a_bcnt != k1
@@ -460,8 +566,10 @@ if s_dir != 0
     fl_t := D1 > 0 ? s_lot : s_hit
     xt   := D1 > 0 ? s_hi : s_lo
     xt_t := D1 > 0 ? s_hit : s_lot
-    tl   := D2 == D1 ? (D1 > 0 ? b_clo : b_chi) : na
-    tl_t := D2 == D1 ? (D1 > 0 ? b_clot : b_chit) : na
+    tl   := D1 > 0 ? ub_pl : db_ph
+    tl_t := D1 > 0 ? ub_plt : db_pht
+    if not na(tl) and not na(fl) and (D1 > 0 ? tl < fl : tl > fl)
+        tl := na
     rh := na
     rl := na
     req := na
@@ -502,6 +610,7 @@ if D1 != 0 and x2_new
         sph := 2
         conf_now := true
         rx_t := na
+        rx_a := na
         ea_on := false
         f_sline(hl_t, time, hl, N2 + " BOS " + dn + " · " + N2 + " range " + LO + " broken", D1 < 0)
         f_story(time, D1 > 0 ? low : high, D1 < 0, "The " + N2 + " range " + LO + " " + str.tostring(hl, format.mintick) + " is broken (" + N2 + " close):\n" + N2 + " is still " + (D1 > 0 ? "bearish inside the bullish " : "bullish inside the bearish ") + N1 + " (a continuation " + dn + ").\nThe " + N1 + " pullback goes on: watch the " + N1 + " levels in the " + (D1 > 0 ? "discount." : "premium."))
@@ -516,9 +625,13 @@ if sph == 2 and D1 != 0 and array.size(bk1) > 0
     for v in bk1
         if v.bull == (D1 > 0) and not v.hit and f_kon(v.kind) and f_inz(v, rl, req) and (D1 > 0 ? low <= v.top : high >= v.bot)
             v.hit := true
-            if na(rx_t)
-                rx_t := time
-                f_story(time, D1 > 0 ? low : high, D1 < 0, "Price reached the " + N1 + " " + f_kname(v.kind, v.bull) + " " + str.tostring(D1 > 0 ? v.top : v.bot, format.mintick) + ".\nWatch for an " + N2 + " External breakout " + up + ": " + N1 + " + " + N2 + " aligned.")
+            rx_t := time
+            [ra1, rt1] = f_last(aa_l, aa_t, time - timeframe.in_seconds(T2) * 1000)
+            [ra2, rt2] = f_last(vv_l, vv_t, time - timeframe.in_seconds(T2) * 1000)
+            rx_a  := D1 > 0 ? ra1 : ra2
+            rx_x  := D1 > 0 ? low : high
+            rx_xt := time
+            f_story(time, D1 > 0 ? low : high, D1 < 0, "Price reached the " + N1 + " " + f_kname(v.kind, v.bull) + " " + str.tostring(D1 > 0 ? v.top : v.bot, format.mintick) + ".\nWatch for an " + N2 + " External breakout " + up + (na(rx_a) ? "" : " (a close beyond " + str.tostring(rx_a, format.mintick) + ")") + ": " + N1 + " + " + N2 + " aligned.")
 
 // 5. a story-timeframe breakout (the same one counted twice by the engine is skipped)
 bool b_dup = D2 == lb_dir and not na(lb_t) and not na(x2t) and ((not na(lb_lvl) and not na(b_blvl) and math.abs(b_blvl - lb_lvl) <= syminfo.mintick * 2) or x2t - lb_t <= timeframe.in_seconds(T2) * 1000)
@@ -537,41 +650,47 @@ if not na(b_bcnt) and b_bcnt != k2
         f_add(bk2, 4, false, z2hi, z2hb, z2ht)
     z2lo := na
     z2hi := na
-    if D1 != 0 and not conf_now
-        if D2 == D1
-            if sph == 1
-                // a continuation: the last low moves up to the low that caused it
-                f_seg(tl_t, tl)
-                tl   := D1 > 0 ? b_clo : b_chi
-                tl_t := D1 > 0 ? b_clot : b_chit
-                f_sline(b_bt, time, b_blvl, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation", D1 > 0)
-                f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation: still the " + N1 + " breakout, no pullback yet.\nThe last " + N2 + " " + LO + " moves to " + str.tostring(tl, format.mintick) + ": an " + N2 + " close beyond it = the " + N1 + " pullback.")
-            else if sph == 2
-                if not na(rx_t) and not na(b_bt) and b_bt < rx_t
-                    sph := 3
-                    hl   := D1 > 0 ? b_clo : b_chi
-                    hl_t := D1 > 0 ? b_clot : b_chit
-                    tg_done := false
-                    ea_on := false
-                    f_sline(b_bt, time, b_blvl, N2 + " BOS " + up + " · External", D1 > 0)
-                    f_tag(N1 + " + " + N2 + " aligned", D1 > 0, D1 > 0 ? tg_alb : tg_als)
-                    f_story(time, D1 > 0 ? high : low, D1 > 0, "The reaction gives an " + N2 + " External breakout " + up + ": " + N1 + " + " + N2 + " aligned.\nTarget: the " + N1 + " range " + HI + " " + str.tostring(rh, format.mintick) + ". " + N2 + " range: " + str.tostring(rh, format.mintick) + " ↔ " + str.tostring(hl, format.mintick) + ".\nIf " + str.tostring(hl, format.mintick) + " breaks first, " + N2 + " is still " + (D1 > 0 ? "bearish" : "bullish") + " inside the " + N1 + ".\nEntries: an " + N3 + " sweep and break at the " + N2 + " levels in its range.")
-                else if show_int
-                    string why = na(rx_t) ? "no " + N1 + " level reached yet" : "Internal: its level formed after price reached the " + N1 + " level"
-                    f_sline(b_bt, time, b_blvl, N2 + " BOS " + up + (na(rx_t) ? "" : " · Internal"), D1 > 0)
-                    f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + " (" + why + "):\nnot aligned yet. Waiting for an " + N2 + " External breakout " + up + " after a reaction.")
-            else if sph == 3
-                hl   := D1 > 0 ? b_clo : b_chi
-                hl_t := D1 > 0 ? b_clot : b_chit
-                f_sline(b_bt, time, b_blvl, N2 + " BOS " + up, D1 > 0)
-                f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " breakout " + up + ": a continuation, still aligned with the " + N1 + ".\nThe " + N2 + " range " + LO + " moves to " + str.tostring(hl, format.mintick) + "; new " + N2 + " levels in the range.")
-        else if D2 == -D1
-            if sph == 2
-                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn, D1 < 0)
-                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + ": the " + N1 + " pullback goes on.\nWatch the " + N1 + " levels in the " + (D1 > 0 ? "discount." : "premium."))
-            else if sph == 3 and show_int
-                f_sline(b_bt, time, b_blvl, N2 + " BOS " + dn + " · inside the range", D1 < 0)
-                f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " breakout " + dn + " inside the " + N2 + " range: the range " + LO + " " + str.tostring(hl, format.mintick) + " holds.\nOnly an " + N2 + " close beyond it puts " + N2 + " back against the " + N1 + ".")
+
+// 5. the story moves only on External story-timeframe breaks
+bool sb_with = D1 > 0 ? ub : db           // a break with the top timeframe
+bool sb_agst = D1 > 0 ? db : ub           // a break against it
+float s_bl   = D1 > 0 ? ub_lvl : db_lvl
+int   s_blt  = D1 > 0 ? ub_lt : db_lt
+float s_cx   = D1 > 0 ? ub_pl : db_ph     // the low that caused it (buys)
+int   s_cxt  = D1 > 0 ? ub_plt : db_pht
+float a_bl   = D1 > 0 ? db_lvl : ub_lvl
+int   a_blt  = D1 > 0 ? db_lt : ub_lt
+// the reaction's extreme since the touch
+if x2_new and sph == 2 and not na(rx_t)
+    if D1 > 0 ? x2l < nz(rx_x, x2l + 1) : x2h > nz(rx_x, x2h - 1)
+        rx_x  := D1 > 0 ? x2l : x2h
+        rx_xt := x2t
+if D1 != 0 and x2_new and not conf_now
+    if sph == 1 and sb_with
+        // a continuation: the pullback line moves up to the low that caused it
+        f_seg(tl_t, tl)
+        tl   := s_cx
+        tl_t := s_cxt
+        f_sline(s_blt, time, s_bl, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation", D1 > 0)
+        f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation: still the " + N1 + " breakout, no pullback yet.\nThe pullback line moves to " + str.tostring(tl, format.mintick) + " (the " + LO + " that caused it): an " + N2 + " close beyond it = the " + N1 + " pullback.")
+    else if sph == 2 and not na(rx_t) and not na(rx_a) and (D1 > 0 ? x2c > rx_a : x2c < rx_a)
+        // the reaction's External level broken (body close) = aligned
+        sph := 3
+        hl   := rx_x
+        hl_t := rx_xt
+        tg_done := false
+        ea_on := false
+        f_sline(rx_xt, time, rx_a, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " External breakout", D1 > 0)
+        f_tag(N1 + " + " + N2 + " aligned", D1 > 0, D1 > 0 ? tg_alb : tg_als)
+        f_story(time, D1 > 0 ? high : low, D1 > 0, "The reaction gives an " + N2 + " External breakout " + up + " (" + str.tostring(rx_a, format.mintick) + "): " + N1 + " + " + N2 + " aligned.\nTarget: the " + N1 + " range " + HI + " " + str.tostring(rh, format.mintick) + ". " + N2 + " range: " + str.tostring(rh, format.mintick) + " ↔ " + str.tostring(hl, format.mintick) + ".\nIf " + str.tostring(hl, format.mintick) + " breaks first, " + N2 + " is still " + (D1 > 0 ? "bearish" : "bullish") + " inside the " + N1 + ".\nEntries: an " + N3 + " sweep and break at the " + N2 + " levels in its range.")
+    else if sph == 2 and sb_agst
+        f_sline(a_blt, time, a_bl, N2 + " " + (D1 > 0 ? "bearish" : "bullish") + " External breakout", D1 < 0)
+        f_story(time, D1 > 0 ? low : high, D1 < 0, N2 + " External breakout " + dn + ": the " + N1 + " pullback goes on.\nWatch the " + N1 + " levels in the " + (D1 > 0 ? "discount." : "premium."))
+    else if sph == 3 and sb_with
+        hl   := s_cx
+        hl_t := s_cxt
+        f_sline(s_blt, time, s_bl, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation", D1 > 0)
+        f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation, still aligned with the " + N1 + ".\nThe " + N2 + " range " + LO + " moves to " + str.tostring(hl, format.mintick) + "; new " + N2 + " levels in the range.")
 
 // 6. entries: an entry-timeframe sweep of a story-timeframe level in its range, then a break
 if chart_ok and en_on and sph == 3 and D1 != 0 and e_new
