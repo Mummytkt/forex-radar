@@ -612,12 +612,13 @@ if barstate.islast
                         f_draw(v, N2, D1 > 0 ? l2_bull : l2_bear, l2_op, l2_w)
                         n2 += 1
     // the story table: the newest notes first, each with its time
-    // both tables in the same corner: TradingView shows only one, so the story goes under the status
-    bool  sk_same = tb_on and sk_pos == tb_pos
+    // both tables in the same corner (even with the status table off, its empty table holds that
+    // corner): TradingView shows only one, so the story goes into the status table, under it
+    bool  sk_same = sk_pos == tb_pos
     table st_tb   = sk_same ? tb : sk
-    int   so      = sk_same ? 8 : 0
+    int   so      = sk_same and tb_on ? 8 : 0
     table.clear(sk, 0, 0, 1, 10)
-    table.clear(tb, 0, 8, 1, 19)
+    table.clear(tb, 0, 0, 1, 19)
     if sk_on and chart_ok
         table.cell(st_tb, 0, so, "STORY", text_color = sk_tx, text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
         table.cell(st_tb, 1, so, PLAN, text_color = color.new(sk_tx, 40), text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
