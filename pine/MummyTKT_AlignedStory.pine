@@ -71,9 +71,10 @@ color  tg_en    = input.color(#7C4DFF, "Entry confirmed", group = G_ST, inline =
 color  tg_tx    = input.color(color.white, "tag text", group = G_ST, inline = "te")
 int    tg_op    = input.int(100, "Tag opacity %", minval = 0, maxval = 100, group = G_ST)
 
-bool   t1x_on   = input.bool(true, "Top-timeframe external high / low (until the pullback)", group = G_RG, inline = "tx")
+bool   t1x_on   = input.bool(true, "Top-timeframe external high / low (Daily in D → H4 → M15)", group = G_RG, inline = "tx")
 color  t1x_col  = input.color(#E0E0E0, "", group = G_RG, inline = "tx")
-int    t1x_w    = input.int(2, "width", minval = 1, maxval = 4, group = G_RG, inline = "tx")
+int    t1x_w    = input.int(2, "External high / low line width", minval = 1, maxval = 4, group = G_RG)
+string t1x_sty  = input.string("Solid", "External high / low line style", options = ["Solid", "Dashed", "Dotted"], group = G_RG)
 bool   tl_on    = input.bool(true, "Last story-timeframe low / high (pullback readiness)", group = G_RG, inline = "tl")
 color  tl_col   = input.color(#29B6F6, "", group = G_RG, inline = "tl")
 int    tl_w     = input.int(2, "width", minval = 1, maxval = 4, group = G_RG, inline = "tl")
@@ -1070,17 +1071,33 @@ if barstate.islast
     array.clear(cb)
     array.clear(cx)
     float tol = close * mg_pct / 100
+    // the top timeframe's external high / low, on every chart and in every phase: the story's own
+    // once a story runs (after the pullback they are also the range high / low), before that the
+    // Bias Pointer engine's
+    if t1x_on
+        if D1 != 0 and sph >= 1
+            string xw  = D1 > 0 ? "bullish" : "bearish"
+            float  x_h = D1 > 0 ? (sph == 1 ? xt : rh) : fl
+            int    x_ht = D1 > 0 ? (sph == 1 ? xt_t : rh_t) : fl_t
+            float  x_l = D1 > 0 ? fl : (sph == 1 ? xt : rh)
+            int    x_lt = D1 > 0 ? fl_t : (sph == 1 ? xt_t : rh_t)
+            string rg = sph >= 2 ? (D1 > 0 ? " · range high (target)" : " · range high") : ""
+            string rl_ = sph >= 2 ? (D1 > 0 ? " · range low" : " · range low (target)") : ""
+            f_lvl(x_ht, x_h, N1 + " " + xw + " external high" + rg, t1x_col, f_sty(t1x_sty), t1x_w)
+            f_lvl(x_lt, x_l, N1 + " " + xw + " external low" + rl_, t1x_col, f_sty(t1x_sty), t1x_w)
+        else if AD != 0 and not na(a_chi) and not na(a_clo)
+            string xw = AD > 0 ? "bullish" : "bearish"
+            f_lvl(a_chit, a_chi, N1 + " " + xw + " external high", t1x_col, f_sty(t1x_sty), t1x_w)
+            f_lvl(a_clot, a_clo, N1 + " " + xw + " external low", t1x_col, f_sty(t1x_sty), t1x_w)
     if D1 != 0 and sph >= 1
         string dw = D1 > 0 ? "bullish" : "bearish"
-        if sph == 1 and t1x_on
-            f_lvl(xt_t, xt, N1 + " " + dw + " external " + HI, t1x_col, line.style_solid, t1x_w)
-            f_lvl(fl_t, fl, N1 + " " + dw + " external " + LO, t1x_col, line.style_solid, t1x_w)
         if sph == 1 and tl_on and not na(tl)
             f_lvl(tl_t, tl, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
         if sph >= 2 and not na(rh) and not na(rl)
+            if rg_on and not t1x_on
+                f_lvl(rh_t, rh, N1 + " range " + HI + " (target)", rg_col, line.style_solid, rg_w)
+                f_lvl(rl_t, rl, N1 + " range " + LO, rg_col, line.style_solid, rg_w)
             if rg_on
-                f_lvl(rh_t, rh, N1 + " " + dw + " external " + HI + " · range " + HI + " (target)", rg_col, line.style_solid, rg_w)
-                f_lvl(rl_t, rl, N1 + " " + dw + " external " + LO + " · range " + LO, rg_col, line.style_solid, rg_w)
                 f_lvl(math.min(rh_t, rl_t), req, N1 + " range 0.5 · " + (D1 > 0 ? "discount below" : "premium above"), eq_col, line.style_dashed, 1)
             if sh_on
                 int r0 = math.min(rh_t, rl_t)
