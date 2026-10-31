@@ -44,7 +44,9 @@ bool   brk_wick = input.string("Body close", "Top-timeframe breakout confirmed b
      tooltip = "Body close (default, as the Bias Pointer): the candle must close beyond the external level. Wick: a wick beyond it breaks it.") == "Wick"
 bool   bos_wick = input.string("Body close", "Story-timeframe BOS confirmed by", options = ["Body close", "Wick"], group = G_PL,
      tooltip = "Body close (default): a story-timeframe breakout, the break of the tracked low and of its range low need a candle body to close beyond the level.") == "Wick"
-bool   d_body   = input.string("Wick", "Highs / lows / A / V-shapes from", options = ["Wick", "Body"], group = G_PL,
+bool   lv_body  = input.string("Body", "A / V-shape and OC levels from", options = ["Body", "Wick"], group = G_PL,
+     tooltip = "Body (default): A-shape / V-shape levels on the candle bodies.") == "Body"
+bool   d_body   = input.string("Wick", "External highs / lows from", options = ["Wick", "Body"], group = G_PL,
      tooltip = "Wick (default): external highs / lows, A-shapes and V-shapes on the candle wicks. Body: on the bodies.") == "Body"
 
 string st_mode  = input.string("Dots only (hover)", "Story on the chart", options = ["Dots only (hover)", "Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_ST)
@@ -62,6 +64,7 @@ color  sk_tx    = input.color(color.white, "text", group = G_ST, inline = "sc")
 bool   sl_on    = input.bool(true, "Break lines (BOS from the level to the candle that broke it)", group = G_ST)
 color  sl_col   = input.color(color.new(color.white, 20), "Break line colour", group = G_ST, inline = "sl")
 color  sl_tx    = input.color(color.white, "text", group = G_ST, inline = "sl")
+string sl_sty   = input.string("Solid", "Break line style", options = ["Solid", "Dashed", "Dotted"], group = G_ST)
 bool   tg_on    = input.bool(true, "Tags (aligned, entry confirmed)", group = G_ST, inline = "tg")
 string tg_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_ST, inline = "tg")
 color  tg_alb   = input.color(#00C853, "Aligned · buys", group = G_ST, inline = "ta")
@@ -77,14 +80,18 @@ string t1x_sty  = input.string("Solid", "External high / low line style", option
 bool   tl_on    = input.bool(true, "Last story-timeframe low / high (pullback readiness)", group = G_RG, inline = "tl")
 color  tl_col   = input.color(#29B6F6, "", group = G_RG, inline = "tl")
 int    tl_w     = input.int(2, "width", minval = 1, maxval = 4, group = G_RG, inline = "tl")
+string tl_sty   = input.string("Solid", "Pullback line style", options = ["Solid", "Dashed", "Dotted"], group = G_RG)
 bool   rg_on    = input.bool(true, "Top-timeframe range: high (target), low, 0.5", group = G_RG, inline = "rg")
 color  rg_col   = input.color(#E0E0E0, "", group = G_RG, inline = "rg")
 color  eq_col   = input.color(#9E9E9E, "0.5", group = G_RG, inline = "rg")
 int    rg_w     = input.int(2, "width", minval = 1, maxval = 4, group = G_RG, inline = "rg")
+string rg_sty   = input.string("Solid", "Range high / low line style", options = ["Solid", "Dashed", "Dotted"], group = G_RG)
+string eq_sty   = input.string("Dashed", "0.5 line style", options = ["Solid", "Dashed", "Dotted"], group = G_RG)
 bool   sh_on    = input.bool(true, "Shade discount / premium", group = G_RG, inline = "sh")
 int    sh_op    = input.int(5, "opacity %", minval = 0, maxval = 100, group = G_RG, inline = "sh")
 bool   hl_on    = input.bool(true, "Story-timeframe range low / high (after aligned)", group = G_RG, inline = "hl")
 color  hl_col   = input.color(#FFA726, "", group = G_RG, inline = "hl")
+string hl_sty   = input.string("Solid", "Story-timeframe range line style", options = ["Solid", "Dashed", "Dotted"], group = G_RG)
 color  lv_tx    = input.color(#E0E0E0, "Level label text", group = G_RG, inline = "lt")
 string lv_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_RG, inline = "lt")
 
@@ -94,6 +101,9 @@ color  l1_bear  = input.color(#EF5350, "sells", group = G_L1, inline = "l1")
 int    l1_op    = input.int(18, "Box opacity %", minval = 0, maxval = 100, group = G_L1, inline = "l1b")
 int    l1_w     = input.int(2, "line width", minval = 1, maxval = 4, group = G_L1, inline = "l1b")
 int    l1_max   = input.int(12, "Most shown", minval = 1, maxval = 40, group = G_L1)
+string vs_sty   = input.string("Solid", "V / A-shape line style (both timeframes)", options = ["Solid", "Dashed", "Dotted"], group = G_L1)
+string oc_sty   = input.string("Dashed", "OC line style", options = ["Solid", "Dashed", "Dotted"], group = G_L1)
+string bk_sty   = input.string("Dotted", "Breaker line style", options = ["Solid", "Dashed", "Dotted"], group = G_L1)
 float  mg_pct   = input.float(0.03, "Merge levels that overlap or are closer than (% of price)", minval = 0, maxval = 2, step = 0.01, group = G_L1,
      tooltip = "Overlapping levels on the same side are shown as one (e.g. Daily bullish FVG + demand). Each part still dies on its own close: if a candle closes through the demand but not the FVG, it shows as the FVG only.")
 bool   k_fvg    = input.bool(true, "FVGs (box)", group = G_L1, inline = "k1")
@@ -554,6 +564,7 @@ type Lv
     int   t
     bool  hit  = false
     bool  used = false
+    bool  tch  = false     // touched by a later candle of its timeframe: used (first touch uses it)
 
 f_kname(int k, bool bull) =>
     k == 1 ? (bull ? "V-shape" : "A-shape") : k == 2 ? (bull ? "bullish OC" : "bearish OC") : k == 3 ? (bull ? "bullish FVG" : "bearish FVG") : k == 4 ? (bull ? "demand" : "supply") : "Breaker"
@@ -576,6 +587,8 @@ f_feed(array<Lv> bk, array<float> ho, array<float> hh, array<float> hl_, array<f
         Lv v = array.get(bk, k)
         if v.bull ? c < v.bot : c > v.top
             array.remove(bk, k)
+        else if v.kind != 3 and not v.tch and (v.bull ? l <= v.top : h >= v.bot)
+            v.tch := true
         k -= 1
     array.push(ho, o)
     array.push(hh, h)
@@ -679,7 +692,7 @@ var array<line>  sl_l = array.new<line>()
 var array<label> sl_b = array.new<label>()
 f_sline(int t1, int t2, float y, string txt, bool above) =>
     if chart_ok and sl_on and not na(t1) and not na(t2) and not na(y)
-        array.push(sl_l, line.new(t1, y, t2, y, xloc = xloc.bar_time, color = sl_col, width = 1))
+        array.push(sl_l, line.new(t1, y, t2, y, xloc = xloc.bar_time, color = sl_col, style = f_sty(sl_sty), width = 1))
         array.push(sl_b, label.new(t1 + int((t2 - t1) / 2), y, txt, xloc = xloc.bar_time, style = above ? label.style_label_down : label.style_label_up,
              color = color.new(color.black, 100), textcolor = sl_tx, size = f_sz(lv_sz)))
         while array.size(sl_l) > st_n * 2
@@ -737,7 +750,7 @@ var Lv    ea_lv  = na
 
 // 1. feed each timeframe's levels with its closed candles
 if x1_new
-    f_feed(bk1, h1o, h1h, h1l, h1c, h1t, x1o, x1h, x1l, x1c, x1t, d_body)
+    f_feed(bk1, h1o, h1h, h1l, h1c, h1t, x1o, x1h, x1l, x1c, x1t, lv_body)
     if na(z1lo) or x1l < z1lo
         z1lo := x1l
         z1lt := math.max(x1o, x1c)
@@ -747,7 +760,7 @@ if x1_new
         z1hb := math.min(x1o, x1c)
         z1ht := x1t
 if x2_new
-    f_feed(bk2, h2o, h2h, h2l, h2c, h2t, x2o, x2h, x2l, x2c, x2t, d_body)
+    f_feed(bk2, h2o, h2h, h2l, h2c, h2t, x2o, x2h, x2l, x2c, x2t, lv_body)
     if na(z2lo) or x2l < z2lo
         z2lo := x2l
         z2lt := math.max(x2o, x2c)
@@ -891,20 +904,139 @@ float s_lo  = na
 int   s_lot = na
 float s_hi  = na
 int   s_hit = na
+// The top timeframe's external high / low of the CURRENT leg. A breakout of the Bias Pointer
+// engine starts it; the opposite side is the extreme that caused the break: after a break up, the
+// lowest low since the broken high first formed (the low before the breakout); after a break down,
+// the highest high since the broken low first formed. A close beyond that side is the breakout
+// the other way. The side in the move's direction follows price until the pullback is confirmed;
+// after that a close beyond it is a new breakout the same way.
+var array<float> q1h = array.new<float>()
+var array<float> q1l = array.new<float>()
+var array<int>   q1t = array.new<int>()
+if x1_new
+    array.push(q1h, x1h)
+    array.push(q1l, x1l)
+    array.push(q1t, x1t)
+    if array.size(q1t) > 800
+        array.shift(q1h)
+        array.shift(q1l)
+        array.shift(q1t)
+// lowSide: a broken LOW -> the highest high since it first formed (an equal low up to 15 candles
+// earlier counts as where it formed); else a broken HIGH -> the lowest low since it first formed
+f_since(bool lowSide, float lvl, int t0, float tol) =>
+    int   n  = array.size(q1t)
+    float v  = na
+    int   vt = na
+    if n > 0 and not na(lvl) and not na(t0)
+        int s0 = n - 1
+        while s0 > 0 and array.get(q1t, s0 - 1) >= t0
+            s0 -= 1
+        int k = s0 - 1
+        int stop_ = math.max(0, s0 - 15)
+        while k >= stop_
+            float kh = array.get(q1h, k)
+            float kl = array.get(q1l, k)
+            if lowSide ? kl < lvl - tol : kh > lvl + tol
+                break
+            if lowSide ? math.abs(kl - lvl) <= tol : math.abs(kh - lvl) <= tol
+                s0 := k
+            k -= 1
+        for j = s0 to n - 1
+            float x = lowSide ? array.get(q1h, j) : array.get(q1l, j)
+            if na(v) or (lowSide ? x > v : x < v)
+                v  := x
+                vt := array.get(q1t, j)
+    [v, vt]
+var int   xd  = 0
+var float xH  = na
+var int   xHt = na
+var float xL  = na
+var int   xLt = na
+int   x_ev  = 0
+float x_lv  = na
+int   x_lvt = na
+float tolx  = nz(x1c, close) * 0.0004
 if a_new and not first_ and AD != 0
-    s_dir := AD
-    s_lvl := a_blvl
-    s_lvt := a_bt
-    s_lo  := a_clo
-    s_lot := a_clot
-    s_hi  := a_chi
-    s_hit := a_chit
+    float bl  = a_blvl
+    int   bt0 = a_bt
     if AD > 0
-        s_hi  := x1h
-        s_hit := x1t
+        // our (lower) high is the one this close broke
+        if xd < 0 and not na(xH) and xH < a_blvl
+            bl  := xH
+            bt0 := xHt
+        [lo, lot] = f_since(false, bl, bt0, tolx)
+        xL  := nz(lo, a_clo)
+        xLt := na(lo) ? a_clot : lot
+        xH  := x1h
+        xHt := x1t
     else
-        s_lo  := x1l
-        s_lot := x1t
+        if xd > 0 and not na(xL) and xL > a_blvl
+            bl  := xL
+            bt0 := xLt
+        [hi, hit] = f_since(true, bl, bt0, tolx)
+        xH  := nz(hi, a_chi)
+        xHt := na(hi) ? a_chit : hit
+        xL  := x1l
+        xLt := x1t
+    xd    := AD
+    x_ev  := AD
+    x_lv  := bl
+    x_lvt := bt0
+else if x1_new and xd != 0
+    bool fixed_ = sph >= 2
+    if xd > 0 and not na(xL) and (brk_wick ? x1l : x1c) < xL
+        [hi, hit] = f_since(true, xL, xLt, tolx)
+        x_lv  := xL
+        x_lvt := xLt
+        xH  := nz(hi, x1h)
+        xHt := na(hi) ? x1t : hit
+        xL  := x1l
+        xLt := x1t
+        xd   := -1
+        x_ev := -1
+    else if xd < 0 and not na(xH) and (brk_wick ? x1h : x1c) > xH
+        [lo, lot] = f_since(false, xH, xHt, tolx)
+        x_lv  := xH
+        x_lvt := xHt
+        xL  := nz(lo, x1l)
+        xLt := na(lo) ? x1t : lot
+        xH  := x1h
+        xHt := x1t
+        xd   := 1
+        x_ev := 1
+    else if fixed_ and xd > 0 and not na(xH) and (brk_wick ? x1h : x1c) > xH
+        [lo, lot] = f_since(false, xH, xHt, tolx)
+        x_lv  := xH
+        x_lvt := xHt
+        xL  := nz(lo, x1l)
+        xLt := na(lo) ? x1t : lot
+        xH  := x1h
+        xHt := x1t
+        x_ev := 1
+    else if fixed_ and xd < 0 and not na(xL) and (brk_wick ? x1l : x1c) < xL
+        [hi, hit] = f_since(true, xL, xLt, tolx)
+        x_lv  := xL
+        x_lvt := xLt
+        xH  := nz(hi, x1h)
+        xHt := na(hi) ? x1t : hit
+        xL  := x1l
+        xLt := x1t
+        x_ev := -1
+    else if not fixed_
+        if xd > 0 and x1h > xH
+            xH  := x1h
+            xHt := x1t
+        if xd < 0 and x1l < xL
+            xL  := x1l
+            xLt := x1t
+if x_ev != 0
+    s_dir := x_ev
+    s_lvl := x_lv
+    s_lvt := x_lvt
+    s_lo  := xL
+    s_lot := xLt
+    s_hi  := xH
+    s_hit := xHt
 if s_dir != 0
     D1 := s_dir
     up := D1 > 0 ? "up" : "down"
@@ -945,8 +1077,8 @@ if D1 != 0 and x2_new
         conf_now := true
         rh   := xt
         rh_t := xt_t
-        rl   := D1 > 0 ? nz(a_clo, fl) : nz(a_chi, fl)
-        rl_t := D1 > 0 ? (na(a_clo) ? fl_t : a_clot) : (na(a_chi) ? fl_t : a_chit)
+        rl   := D1 > 0 ? nz(xL, fl) : nz(xH, fl)
+        rl_t := D1 > 0 ? (na(xL) ? fl_t : xLt) : (na(xH) ? fl_t : xHt)
         if na(rl) or (D1 > 0 ? rl >= rh : rl <= rh)
             rl   := D1 > 0 ? math.min(x1l, tl) : math.max(x1h, tl)
             rl_t := tl_t
@@ -973,7 +1105,7 @@ if D1 != 0 and x2_new
 // 4. price reaches a top-timeframe level in the discount (premium for sells)
 if sph == 2 and D1 != 0 and array.size(bk1) > 0
     for v in bk1
-        if v.bull == (D1 > 0) and not v.hit and f_kon(v.kind) and f_inz(v, rl, req) and (D1 > 0 ? low <= v.top : high >= v.bot)
+        if v.bull == (D1 > 0) and not v.hit and not v.tch and v.t >= nz(rl_t) and f_kon(v.kind) and f_inz(v, rl, rh) and (D1 > 0 ? low <= v.top : high >= v.bot)
             v.hit := true
             rx_t := time
             [ra1, rt1] = f_last(aa_l, aa_t, time - timeframe.in_seconds(T2) * 1000)
@@ -1058,7 +1190,7 @@ if chart_ok and en_on and sph == 3 and D1 != 0 and e_new
             f_story(time, D1 > 0 ? low : high, D1 < 0, N3 + " sweep and break at the " + N2 + " level " + str.tostring(ea_lvl, format.mintick) + ": " + N3 + " entry confirmed.\nInvalid beyond the sweep (" + str.tostring(ea_sw, format.mintick) + "). Target: the " + N1 + " range " + HI + " " + str.tostring(rh, format.mintick) + ".")
     if not ea_on and not just and array.size(bk2) > 0
         for v in bk2
-            if v.bull == (D1 > 0) and not v.used and f_kon(v.kind) and f_inz(v, hl, rh)
+            if v.bull == (D1 > 0) and not v.used and not v.tch and v.t >= nz(hl_t) and f_kon(v.kind) and f_inz(v, hl, rh)
                 float lv_ = na
                 if D1 > 0
                     if e3l < v.top and e3c > v.top
@@ -1100,13 +1232,13 @@ f_draw(Lv v, string tfn, color c, int op, int w) =>
 
 // the levels of one book on the story's side inside the band a – b; overlapping ones (or closer than
 // tol) are drawn as one: a box if any of them is a box, else their lines with one label
-f_book(array<Lv> bk, float a, float b, string tfn, color c, int op, int w, int mx, float tol) =>
+f_book(array<Lv> bk, float a, float b, int t_min, string tfn, color c, int op, int w, int mx, float tol) =>
     array<int> cand = array.new<int>()
     int n = array.size(bk)
     if n > 0
         for i = n - 1 to 0
             Lv v = array.get(bk, i)
-            if array.size(cand) < mx and v.bull == (D1 > 0) and f_kon(v.kind) and f_inz(v, a, b)
+            if array.size(cand) < mx and v.bull == (D1 > 0) and f_kon(v.kind) and f_inz(v, a, b) and v.t >= nz(t_min) and (not v.tch or v.hit)
                 array.push(cand, i)
     int m = array.size(cand)
     array<bool> done = array.new<bool>(m, false)
@@ -1148,7 +1280,7 @@ f_book(array<Lv> bk, float a, float b, string tfn, color c, int op, int w, int m
                     for k in mem
                         Lv vk = array.get(bk, k)
                         array.push(cl, line.new(vk.t, vk.top, time, vk.top, xloc = xloc.bar_time, extend = extend.right, color = c,
-                             style = vk.kind == 2 ? line.style_dashed : vk.kind == 5 ? line.style_dotted : line.style_solid, width = w))
+                             style = f_sty(vk.kind == 2 ? oc_sty : vk.kind == 5 ? bk_sty : vs_sty), width = w))
                     string px = gt - gb > syminfo.mintick ? str.tostring(gb, format.mintick) + " – " + str.tostring(gt, format.mintick) : str.tostring(gt, format.mintick)
                     array.push(cb, label.new(bar_index + 3, (gt + gb) / 2, lab + "  " + px, style = label.style_label_left,
                          color = color.new(color.black, 100), textcolor = lv_tx, size = f_sz(lv_sz)))
@@ -1175,25 +1307,25 @@ if barstate.islast
     // the top timeframe's external high / low, on every chart and in every phase: the story's own
     // once a story runs (after the pullback they are also the range high / low), before that the
     // Bias Pointer engine's
-    // the external high / low exactly as the Bias Pointer draws them (its most recent structure)
-    float x_h = a_chi
-    float x_l = a_clo
-    if t1x_on and not na(a_chi) and not na(a_clo) and a_cdir != "none"
-        string xw = a_cdir == "bull" ? "bullish" : "bearish"
-        f_lvl(a_chit, a_chi, N1 + " " + xw + " external high" + (a_cdir == "bull" and not a_chif ? " (still forming)" : ""), t1x_col, f_sty(t1x_sty), t1x_w)
-        f_lvl(a_clot, a_clo, N1 + " " + xw + " external low" + (a_cdir == "bear" and not a_clof ? " (still forming)" : ""), t1x_col, f_sty(t1x_sty), t1x_w)
+    // the external high / low of the current leg
+    float x_h = xH
+    float x_l = xL
+    if t1x_on and xd != 0 and not na(xH) and not na(xL)
+        string xw = xd > 0 ? "bullish" : "bearish"
+        f_lvl(xHt, xH, N1 + " " + xw + " external high" + (xd > 0 and sph <= 1 ? " (still forming)" : ""), t1x_col, f_sty(t1x_sty), t1x_w)
+        f_lvl(xLt, xL, N1 + " " + xw + " external low" + (xd < 0 and sph <= 1 ? " (still forming)" : ""), t1x_col, f_sty(t1x_sty), t1x_w)
     if D1 != 0 and sph >= 1
         string dw = D1 > 0 ? "bullish" : "bearish"
         if sph == 1 and tl_on and not na(tl)
-            f_lvl(tl_t, tl, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, line.style_solid, tl_w)
+            f_lvl(tl_t, tl, "pullback line: last " + N2 + " " + LO + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", tl_col, f_sty(tl_sty), tl_w)
         if sph >= 2 and not na(rh) and not na(rl)
             if rg_on
                 if not t1x_on or math.abs(rh - (D1 > 0 ? x_h : x_l)) > tol
-                    f_lvl(rh_t, rh, N1 + " range " + HI + " (target)", rg_col, line.style_solid, rg_w)
+                    f_lvl(rh_t, rh, N1 + " range " + HI + " (target)", rg_col, f_sty(rg_sty), rg_w)
                 if not t1x_on or math.abs(rl - (D1 > 0 ? x_l : x_h)) > tol
-                    f_lvl(rl_t, rl, N1 + " range " + LO, rg_col, line.style_solid, rg_w)
+                    f_lvl(rl_t, rl, N1 + " range " + LO, rg_col, f_sty(rg_sty), rg_w)
             if rg_on
-                f_lvl(math.min(rh_t, rl_t), req, N1 + " range 0.5 · " + (D1 > 0 ? "discount below" : "premium above"), eq_col, line.style_dashed, 1)
+                f_lvl(math.min(rh_t, rl_t), req, N1 + " range 0.5 · " + (D1 > 0 ? "discount below" : "premium above"), eq_col, f_sty(eq_sty), 1)
             if sh_on
                 int r0 = math.min(rh_t, rl_t)
                 array.push(cx, box.new(r0, math.max(rl, req), time, math.min(rl, req), xloc = xloc.bar_time, extend = extend.right,
@@ -1201,12 +1333,12 @@ if barstate.islast
                 array.push(cx, box.new(r0, math.max(rh, req), time, math.min(rh, req), xloc = xloc.bar_time, extend = extend.right,
                      border_color = color.new(color.black, 100), bgcolor = color.new(D1 > 0 ? l1_bear : l1_bull, 100 - sh_op)))
             if l1_on
-                f_book(bk1, rl, req, N1, D1 > 0 ? l1_bull : l1_bear, l1_op, l1_w, l1_max, tol)
+                f_book(bk1, rl, rh, rl_t, N1, D1 > 0 ? l1_bull : l1_bear, l1_op, l1_w, l1_max, tol)
         if chart_ok and sph == 3 and not na(hl)
             if hl_on
-                f_lvl(hl_t, hl, N2 + " range " + LO + " (an " + N2 + " close beyond it: " + N2 + " still against the " + N1 + ")", hl_col, line.style_solid, 2)
+                f_lvl(hl_t, hl, N2 + " range " + LO + " (an " + N2 + " close beyond it: " + N2 + " still against the " + N1 + ")", hl_col, f_sty(hl_sty), 2)
             if l2_on
-                f_book(bk2, hl, rh, N2, D1 > 0 ? l2_bull : l2_bear, l2_op, l2_w, l2_max, tol)
+                f_book(bk2, hl, rh, hl_t, N2, D1 > 0 ? l2_bull : l2_bear, l2_op, l2_w, l2_max, tol)
     // the story table: the newest notes first, each with its time
     // both tables in the same corner (even with the status table off, its empty table holds that
     // corner): TradingView shows only one, so the story goes into the status table, under it
