@@ -289,10 +289,6 @@ if g2_new
             gd_ph  := g2h
             gd_pht := g2t
 
-// the Bias Pointer's H4 Breaker after its confirmation is an H4 level too (for the M15 entries)
-if not na(h4_breaker_lvl) and h4_breaker_lvl != nz(h4_breaker_lvl[1]) and not na(bo_dir)
-    f_agadd(gk2, 5, bo_dir == "bullish", h4_breaker_lvl, h4_breaker_lvl, time)
-
 // ── The story: 0 none · 1 Daily breakout, H4 continuations · 2 Daily pullback (range, levels) ·
 // 3 aligned (H4 range). Starts on every Bias Pointer Daily breakout.
 var int   gph   = 0
@@ -457,14 +453,22 @@ var float gea_br = na
 var float gea_lv = na
 var int   gea_n  = 0
 var AgLv  gea_v  = na
-var int   g_bpt  = na
-if not na(bk_origin) and bk_origin != nz(bk_origin[1])
-    g_bpt := time
-int   gED   = AG_D ? gD : (bo_dir == "bullish" ? 1 : bo_dir == "bearish" ? -1 : 0)
-bool  g_eon = AG_D ? (gph == 1 or gph == 3) : (h4_aligned and not na(h4_invalid_lvl))
-float geb_lo = AG_D ? (gph == 1 ? gtl : ghl) : (gED > 0 ? h4_invalid_lvl : -1e12)
-float geb_hi = AG_D ? (gph == 1 ? gxt : grh) : (gED > 0 ? 1e12 : h4_invalid_lvl)
-int   geb_t  = AG_D ? (gph == 1 ? gtl_t : ghl_t) : g_bpt
+// with choice 1 = Bias Pointer: entries after each H4 External break with the Daily, at the H4
+// levels from the low that caused it (until an H4 close beyond that low)
+var float gbp_lo = na
+var int   gbp_t  = na
+if g_anew
+    gbp_lo := na
+if gD != 0 and g2_new and g_with
+    gbp_lo := g_cx
+    gbp_t  := g_cxt
+else if g2_new and not na(gbp_lo) and (gD > 0 ? g2c < gbp_lo : g2c > gbp_lo)
+    gbp_lo := na
+int   gED   = gD
+bool  g_eon = AG_D ? (gph == 1 or gph == 3) : not na(gbp_lo)
+float geb_lo = AG_D ? (gph == 1 ? gtl : ghl) : (gED > 0 ? gbp_lo : -1e12)
+float geb_hi = AG_D ? (gph == 1 ? gxt : grh) : (gED > 0 ? 1e12 : gbp_lo)
+int   geb_t  = AG_D ? (gph == 1 ? gtl_t : ghl_t) : gbp_t
 int   gne    = 0
 if g_h4 and AG_H and g_eon and gED != 0 and barstate.isconfirmed
     gne := array.size(g3c)
