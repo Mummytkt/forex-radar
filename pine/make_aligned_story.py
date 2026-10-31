@@ -204,6 +204,13 @@ f_c3d(simple int n) =>
 [x2o, x2h, x2l, x2c, x2t] = request.security(syminfo.tickerid, T2, f_cnd(), lookahead = barmerge.lookahead_on)
 [q3o, q3h, q3l, q3c, q3t, q3fh, q3fl] = request.security(syminfo.tickerid, T3, f_c3d(fr_n), lookahead = barmerge.lookahead_on)
 [d3o, d3h, d3l, d3c, d3t, d3fh, d3fl] = f_c3(fr_n)
+// on a chart above the entry timeframe: every entry-timeframe candle inside the chart candle
+f_c3b(simple int n) =>
+    [o_, h_, l_, c_, t_, fh_, fl_] = f_c3(n)
+    [h_, l_, c_, t_, fh_, fl_]
+bool   lo_tf = timeframe.in_seconds() > timeframe.in_seconds(T3)
+string T3L   = lo_tf ? T3 : timeframe.period
+[l3h, l3l, l3c, l3t, l3fh, l3fl] = request.security_lower_tf(syminfo.tickerid, T3L, f_c3b(fr_n))
 // on the entry timeframe itself, its own candles (no one-candle delay)
 bool  e_own = timeframe.in_seconds() == timeframe.in_seconds(T3)
 float e3h  = e_own ? d3h : q3h
@@ -469,6 +476,16 @@ if x2_new
         array.clear(xv_t)
         d_ll := x2l
         d_ph := na
+    // each External break leaves its Breaker and demand / supply on the story timeframe
+    if ub
+        f_add(bk2, 5, true, ub_lvl, ub_lvl, x2t)        // the Breaker: from its breakout candle
+        f_add(bk2, 4, true, z2lt, z2lo, z2t)
+    if db
+        f_add(bk2, 5, false, db_lvl, db_lvl, x2t)
+        f_add(bk2, 4, false, z2hi, z2hb, z2ht)
+    if ub or db
+        z2lo := na
+        z2hi := na
     // the new A / V completed by this candle (bodies, as the Bias Pointer's H4 A / V)
     int n2h = array.size(h2o)
     if n2h >= 2
@@ -756,14 +773,6 @@ if not na(b_bcnt) and b_bcnt != k2
     lb_lvl := b_blvl
     lb_dir := D2
     lb_t   := x2t
-    if D2 > 0
-        f_add(bk2, 5, true, b_blvl, b_blvl, b_bt)
-        f_add(bk2, 4, true, z2lt, z2lo, z2t)
-    else if D2 < 0
-        f_add(bk2, 5, false, b_blvl, b_blvl, b_bt)
-        f_add(bk2, 4, false, z2hi, z2hb, z2ht)
-    z2lo := na
-    z2hi := na
 
 // 5. the story moves only on External story-timeframe breaks
 bool sb_with = D1 > 0 ? ub : db           // a break with the top timeframe
@@ -792,6 +801,7 @@ if D1 != 0 and x2_new and not conf_now
         sph := 3
         hl   := rx_x
         hl_t := rx_xt
+        f_add(bk2, 5, D1 > 0, rx_a, rx_a, x2t)
         tg_done := false
         ea_on := false
         f_sline(rx_xt, time, rx_a, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " External breakout", D1 > 0)
@@ -806,43 +816,58 @@ if D1 != 0 and x2_new and not conf_now
         f_sline(s_blt, time, s_bl, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation", D1 > 0)
         f_story(time, D1 > 0 ? high : low, D1 > 0, N2 + " " + (D1 > 0 ? "bullish" : "bearish") + " continuation, still aligned with the " + N1 + ".\nThe " + N2 + " range " + LO + " moves to " + str.tostring(hl, format.mintick) + "; new " + N2 + " levels in the range.")
 
-// 6. entries: an entry-timeframe sweep of a story-timeframe level in its range, then a break
-if chart_ok and en_on and sph == 3 and D1 != 0 and e_new
-    bool just = false
-    if ea_on
-        ea_n += 1
-        if (D1 > 0 ? e3c < ea_sw : e3c > ea_sw) or ea_n > en_win
-            ea_on := false
-        else if D1 > 0 ? e3c > ea_br : e3c < ea_br
-            ea_on := false
-            just := true
-            if not na(ea_lv)
-                ea_lv.used := true
-            f_tag(N3 + " entry confirmed", D1 < 0, tg_en)
-            f_story(time, D1 > 0 ? low : high, D1 < 0, N3 + " sweep and break at the " + N2 + " level " + str.tostring(ea_lvl, format.mintick) + ": " + N3 + " entry confirmed.\nInvalid beyond the sweep (" + str.tostring(ea_sw, format.mintick) + "). Target: the " + N1 + " range " + HI + " " + str.tostring(rh, format.mintick) + ".")
-    if not ea_on and not just and array.size(bk2) > 0
-        for v in bk2
-            if v.bull == (D1 > 0) and not v.used and not v.tch and v.t >= nz(hl_t) and f_kon(v.kind) and f_inz(v, hl, rh)
-                float lv_ = na
-                if D1 > 0
-                    if e3l < v.top and e3c > v.top
-                        lv_ := v.top
-                    else if v.top != v.bot and e3l < v.bot and e3c > v.bot
-                        lv_ := v.bot
-                else
-                    if e3h > v.bot and e3c < v.bot
-                        lv_ := v.bot
-                    else if v.top != v.bot and e3h > v.top and e3c < v.top
-                        lv_ := v.top
-                float br = D1 > 0 ? e3fh : e3fl
-                if not na(lv_) and not na(br) and (D1 > 0 ? br > e3c : br < e3c)
-                    ea_on  := true
-                    ea_sw  := D1 > 0 ? e3l : e3h
-                    ea_br  := br
-                    ea_lvl := lv_
-                    ea_lv  := v
-                    ea_n   := 0
-                    break
+// 6. entries: at every H4 continuation (with the Daily breakout) and once Daily + H4 are aligned,
+// an entry-timeframe candle sweeps one of the story-timeframe levels of the current leg (wick
+// through the level, close back) and price then closes beyond the last entry-timeframe high (sells:
+// low) = entry confirmed. On a chart above the entry timeframe each of its candles is checked.
+float eb_lo = sph == 1 ? tl : hl          // the leg: from the low that caused the last break ...
+float eb_hi = sph == 1 ? xt : rh          // ... to the high (target)
+int   eb_t  = sph == 1 ? tl_t : hl_t
+int   ne    = 0
+if chart_ok and en_on and (sph == 1 or sph == 3) and D1 != 0
+    ne := lo_tf ? (barstate.isconfirmed ? array.size(l3t) : 0) : (e_new ? 1 : 0)
+if ne > 0
+    for ii = 0 to ne - 1
+        float c_h  = lo_tf ? array.get(l3h, ii) : e3h
+        float c_l  = lo_tf ? array.get(l3l, ii) : e3l
+        float c_c  = lo_tf ? array.get(l3c, ii) : e3c
+        float c_fh = lo_tf ? array.get(l3fh, ii) : e3fh
+        float c_fl = lo_tf ? array.get(l3fl, ii) : e3fl
+        bool just = false
+        if ea_on
+            ea_n += 1
+            if (D1 > 0 ? c_c < ea_sw : c_c > ea_sw) or ea_n > en_win
+                ea_on := false
+            else if D1 > 0 ? c_c > ea_br : c_c < ea_br
+                ea_on := false
+                just := true
+                if not na(ea_lv)
+                    ea_lv.used := true
+                f_tag(N3 + " entry confirmed", D1 < 0, tg_en)
+                f_story(time, D1 > 0 ? low : high, D1 < 0, N3 + " sweep and break at the " + N2 + " level " + str.tostring(ea_lvl, format.mintick) + ": " + N3 + " entry confirmed.\nInvalid beyond the sweep (" + str.tostring(ea_sw, format.mintick) + "). Target: the " + N1 + " " + HI + " " + str.tostring(eb_hi, format.mintick) + ".")
+        if not ea_on and not just and array.size(bk2) > 0
+            for v in bk2
+                if v.bull == (D1 > 0) and not v.used and not v.tch and v.t >= nz(eb_t) and f_kon(v.kind) and f_inz(v, eb_lo, eb_hi)
+                    float lv_ = na
+                    if D1 > 0
+                        if c_l < v.top and c_c > v.top
+                            lv_ := v.top
+                        else if v.top != v.bot and c_l < v.bot and c_c > v.bot
+                            lv_ := v.bot
+                    else
+                        if c_h > v.bot and c_c < v.bot
+                            lv_ := v.bot
+                        else if v.top != v.bot and c_h > v.top and c_c < v.top
+                            lv_ := v.top
+                    float br = D1 > 0 ? c_fh : c_fl
+                    if not na(lv_) and not na(br) and (D1 > 0 ? br > c_c : br < c_c)
+                        ea_on  := true
+                        ea_sw  := D1 > 0 ? c_l : c_h
+                        ea_br  := br
+                        ea_lvl := lv_
+                        ea_lv  := v
+                        ea_n   := 0
+                        break
 
 // ── The levels at the last candle ────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
@@ -966,6 +991,8 @@ if barstate.islast
                      border_color = color.new(color.black, 100), bgcolor = color.new(D1 > 0 ? l1_bear : l1_bull, 100 - sh_op)))
             if l1_on
                 f_book(bk1, rl, rh, rl_t, N1, D1 > 0 ? l1_bull : l1_bear, l1_op, l1_w, l1_max, tol)
+        if chart_ok and sph == 1 and l2_on and not na(tl)
+            f_book(bk2, tl, xt, tl_t, N2, D1 > 0 ? l2_bull : l2_bear, l2_op, l2_w, l2_max, tol)
         if chart_ok and sph == 3 and not na(hl)
             if hl_on
                 f_lvl(hl_t, hl, N2 + " range " + LO + " (an " + N2 + " close beyond it: " + N2 + " still against the " + N1 + ")", hl_col, f_sty(hl_sty), 2)
@@ -1008,7 +1035,7 @@ if barstate.islast
                 f_row(4, N1 + " range", str.tostring(rl, format.mintick) + " – " + str.tostring(rh, format.mintick) + " · 0.5 " + str.tostring(req, format.mintick) + " · target " + str.tostring(rh, format.mintick))
             if sph == 3 and not na(hl)
                 f_row(5, N2 + " range", str.tostring(hl, format.mintick) + " – " + str.tostring(rh, format.mintick))
-            f_row(6, "Entries", en_on ? N3 + " sweep and break at the " + N2 + " levels" + (timeframe.in_seconds() <= timeframe.in_seconds(T3) ? "" : " (put the chart on " + N3 + ")") : "off")
+            f_row(6, "Entries", en_on ? N3 + " sweep and break at the " + N2 + " levels" + (lo_tf ? " (checked on each " + N3 + " candle)" : "") : "off")
 '''
 
 NOTES = NOTES.replace('    if not na(t) and not na(y)', '    if chart_ok and not na(t) and not na(y)').replace('    if sl_on and not na(t1)', '    if chart_ok and sl_on and not na(t1)')
