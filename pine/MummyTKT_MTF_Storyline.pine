@@ -920,6 +920,11 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             // after the Daily continued out of an H4 range, its range high (the high that broke the low) stays as the range high
             float rlo  = na(rg_op) ? tk_ext : rg_op
             int   rlot = na(rg_op) ? tk_et : rg_opt
+            // the H4 range sits inside the Daily range: a forming high above the Daily external high (sells; buys: a
+            // low below the Daily external low) gives the Daily external high as the H4 range high
+            if f_gt(rlo, D > 0 ? XL : XH, -D)
+                rlo  := D > 0 ? XL : XH
+                rlot := D > 0 ? XLt : XHt
             sph := 3
             p3_ln := na
             rg_op := na
