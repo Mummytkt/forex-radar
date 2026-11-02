@@ -407,7 +407,9 @@ f_structure(bool bd, bool bw) =>
                     break
                 blo := L.lo
                 bhi := L.hi
-        if not broke and array.size(stack) < 30
+        // a new structure inside only after the current one's forming side is fixed (a real pullback)
+        bool cfix = array.size(stack) > 0 ? (array.last(stack).dir == "bull" ? array.last(stack).hi_fixed : array.last(stack).lo_fixed) : (e_dir == "bull" ? e_hif : e_lof)
+        if not broke and array.size(stack) < 30 and cfix
             Layer nl = Layer.new()
             [nev, nlvl, nlt] = nl.step(blo, bhi, lastA, lastA_bar, lastA_ok, lastV, lastV_bar, lastV_ok, bd, bw)
             if nev
