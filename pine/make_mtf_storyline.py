@@ -537,8 +537,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             rg_hi   := na
         else if not na(tk_ln) and f_gt(c2_with, tk_ln, D)
             // the story timeframe takes out its last high: its pullback, back in alignment
-            float rlo  = tk_ext
-            int   rlot = tk_et
+            // after the Daily continued out of an H4 range, its range high (the high that broke the low) stays as the range high
+            float rlo  = na(rg_op) ? tk_ext : rg_op
+            int   rlot = na(rg_op) ? tk_et : rg_opt
             sph := 3
             rg_op := na
             f_brk(tk_lt, tk_ln, N2 + " pullback", D > 0, br_wcol)
