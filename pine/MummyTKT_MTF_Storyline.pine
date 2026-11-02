@@ -14,8 +14,8 @@
 //   5. A close above that high = "pullback": back in alignment. Range low = the leg's low.
 //   6. A close below that range low = bearish cont again; the range high = the high that took out
 //      the low (not an inner high of the leg).
-//   7. A top-timeframe close above its range high = it continues; below its range low = it turns,
-//      and the same story runs mirrored.
+//   7. The top timeframe's external high / low are always the Bias Pointer's (its most recent
+//      structure). Each new breakout of it starts the story again, in its direction.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT — MTF Storyline", overlay = true, behind_chart = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 100, max_bars_back = 5000)
@@ -729,58 +729,16 @@ bool  a_new  = not na(a_bcnt) and a_bcnt != k1
 bool  first_ = k1 == 0
 if a_new
     k1 := a_bcnt
-// 1. the first story starts on a top-timeframe breakout of the engine; after that only the story's
-//    own levels move it (top-timeframe closes)
-if sph == 0 and a_new and not first_ and AD != 0
-    [sx, sxt] = f_since(AD < 0, a_blvl, a_bt, tol1)
+// 1. the top timeframe's external high / low are ALWAYS the Bias Pointer's (its most recent structure:
+//    a new one forms on a close beyond the latest A / V-shape inside the range, or beyond the external
+//    high / low). Every breakout of it starts the story again, in its direction.
+if a_new and not first_ and AD != 0
     ns_d   := AD
     ns_lvl := a_blvl
-    ns_lo  := AD > 0 ? nz(sx, a_clo) : x1l
-    ns_lot := AD > 0 ? (na(sx) ? a_clot : sxt) : x1t
-    ns_hi  := AD > 0 ? x1h : nz(sx, a_chi)
-    ns_hit := AD > 0 ? x1t : (na(sx) ? a_chit : sxt)
-else if sph >= 1 and x1_new and D != 0
-    float c1u = t1_wick ? (D > 0 ? x1h : x1l) : x1c
-    float c1d = t1_wick ? (D > 0 ? x1l : x1h) : x1c
-    float FX  = D > 0 ? XL : XH          // the external low (buys)
-    float TX  = D > 0 ? XH : XL          // the range high (buys)
-    if not na(FX) and f_gt(FX, c1d, D)
-        // a close below the external low: the top timeframe turns. Its new external high = the high
-        // that took out the low: the tracked last high that made a new low (phase 2), else the
-        // highest high since the story timeframe's last low
-        float th  = na
-        int   tht = na
-        if sph == 2 and not na(tk_ln)
-            th  := tk_ln
-            tht := tk_lt
-        else
-            [h_, ht_] = f_ext2(nz(tk_lt, XLt), D > 0)
-            th  := h_
-            tht := ht_
-        ns_d   := -D
-        ns_lvl := FX
-        ns_lo  := D > 0 ? x1l : nz(th, XL)
-        ns_lot := D > 0 ? x1t : (na(th) ? XLt : tht)
-        ns_hi  := D > 0 ? nz(th, XH) : x1h
-        ns_hit := D > 0 ? (na(th) ? XHt : tht) : x1t
-    else if sph >= 2 and not na(TX) and f_gt(c1u, TX, D)
-        // a close above the range high: the top timeframe continues; the new external low = the low that
-        // took out the high (the story timeframe's range low, else its lowest low since the high)
-        float tl_  = na
-        int   tlt_ = na
-        if sph == 3 and not na(tk_ln)
-            tl_  := tk_ln
-            tlt_ := tk_lt
-        else
-            [l_, lt_] = f_ext2(D > 0 ? XHt : XLt, D < 0)
-            tl_  := l_
-            tlt_ := lt_
-        ns_d   := D
-        ns_lvl := TX
-        ns_lo  := D > 0 ? nz(tl_, XL) : x1l
-        ns_lot := D > 0 ? (na(tl_) ? XLt : tlt_) : x1t
-        ns_hi  := D > 0 ? x1h : nz(tl_, XH)
-        ns_hit := D > 0 ? x1t : (na(tl_) ? XHt : tlt_)
+    ns_lo  := a_clo
+    ns_lot := a_clot
+    ns_hi  := a_chi
+    ns_hit := a_chit
 if ns_d != 0
     t1_ev := true
     D   := ns_d
@@ -810,6 +768,13 @@ if ns_d != 0
     f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, N1 + " " + DW + " breakout", D > 0, tg_boc)
     f_story(time, D > 0 ? high : low, D > 0, N1 + " " + DW + " breakout (" + (t1_wick ? "wick" : "body close") + " beyond " + str.tostring(ns_lvl, format.mintick) + ").\nEvery External " + N2 + " break " + up + " is a continuation. Pullback line: the last " + N2 + " " + LO + " that made a new " + HI + ";\nan " + N2 + " close beyond it = the " + N1 + " pullback.")
 
+// the external high / low follow the Bias Pointer's every candle (a side forms until it is fixed)
+if D != 0 and not na(a_chi) and not na(a_clo)
+    XH  := a_chi
+    XHt := a_chit
+    XL  := a_clo
+    XLt := a_clot
+
 // 2. the story timeframe, candle by candle
 if D != 0 and x2_new and not t1_ev and sph >= 1
     // the tracker: a new extreme in direction w moves the line to the dip before it
@@ -828,14 +793,6 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     float c2_with = D > 0 ? c2u : c2d       // the close, read in the top timeframe's direction
     float c2_agst = D > 0 ? c2d : c2u
     if sph == 1
-        // the top timeframe's high forms with the story timeframe
-        if D > 0 ? x2h > nz(XH, x2h - 1) : x2l < nz(XL, x2l + 1)
-            if D > 0
-                XH  := x2h
-                XHt := x2t
-            else
-                XL  := x2l
-                XLt := x2t
         if (D > 0 ? ub : db) and br_with
             f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
         if not na(tk_ln) and f_gt(tk_ln, c2_agst, D)
@@ -923,8 +880,8 @@ if barstate.islast
         f_lvl(a_clot, a_clo, N1 + " " + ew + " external low", x_col, x_sty, x_w)
     if chart_ok and D != 0 and sph >= 1
         if x_on
-            f_lvl(XHt, XH, N1 + " " + DW + " external high" + (sph == 1 and D > 0 ? " (forming)" : sph >= 2 ? " · " + N1 + " range high" + (D > 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
-            f_lvl(XLt, XL, N1 + " " + DW + " external low" + (sph == 1 and D < 0 ? " (forming)" : sph >= 2 ? " · " + N1 + " range low" + (D < 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
+            f_lvl(XHt, XH, N1 + " " + DW + " external high" + (D > 0 and not a_chif ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range high" + (D > 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
+            f_lvl(XLt, XL, N1 + " " + DW + " external low" + (D < 0 and not a_clof ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range low" + (D < 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
         if sph >= 2 and not na(XH) and not na(XL)
             float req = (XH + XL) / 2
             int   r0  = math.min(XHt, XLt)
