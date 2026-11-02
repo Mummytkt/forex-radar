@@ -298,6 +298,10 @@ float ub_lvl = na
 int   ub_lt  = na
 bool  db     = false
 float db_lvl = na
+float ub_pl  = na      // at an External break up: the last low that broke the high (sells: db_ph, the last high that broke the low)
+int   ub_plt = na
+float db_ph  = na
+int   db_pht = na
 int   db_lt  = na
 f_last(array<float> l, array<int> t, int maxt) =>
     float v = na
@@ -319,6 +323,8 @@ if x2_new
         ub     := true
         ub_lvl := ea
         ub_lt  := eat
+        ub_pl  := na(u_pl) ? x2l : u_pl
+        ub_plt := na(u_pl) ? x2t : u_plt
         array.clear(xa_l)
         array.clear(xa_t)
         u_hh := x2h
@@ -330,6 +336,8 @@ if x2_new
         db     := true
         db_lvl := ev
         db_lt  := evt
+        db_ph  := na(d_ph) ? x2h : d_ph
+        db_pht := na(d_ph) ? x2t : d_pht
         array.clear(xv_l)
         array.clear(xv_t)
         d_ll := x2l
@@ -488,11 +496,12 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     float ce = w > 0 ? x2h : x2l
     float co = w > 0 ? x2l : x2h
     if sph <= 2
-        // a new extreme counts (moves the line) only on a body close beyond it; a wick only extends it
+        // the line moves only at an External break in the tracker's direction (the "cont" breaks, as the
+        // Bias Pointer): to the last low that broke the high (sells: the last high that broke the low)
+        if w > 0 ? ub : db
+            tk_ln := w > 0 ? ub_pl : db_ph
+            tk_lt := w > 0 ? ub_plt : db_pht
         if na(tk_ext) or f_gt(x2c, tk_ext, w)
-            if not na(tk_dip)
-                tk_ln := tk_dip
-                tk_lt := tk_dt
             tk_ext := ce
             tk_et  := x2t
             tk_dip := na
