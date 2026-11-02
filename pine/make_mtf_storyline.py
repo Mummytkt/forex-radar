@@ -182,6 +182,7 @@ var array<int>   q1t = array.new<int>()
 var array<float> q2h = array.new<float>()
 var array<float> q2l = array.new<float>()
 var array<int>   q2t = array.new<int>()
+var array<float> q2c = array.new<float>()
 if x1_new
     array.push(q1h, x1h)
     array.push(q1l, x1l)
@@ -194,7 +195,9 @@ if x2_new
     array.push(q2h, x2h)
     array.push(q2l, x2l)
     array.push(q2t, x2t)
+    array.push(q2c, x2c)
     if array.size(q2t) > 1500
+        array.shift(q2c)
         array.shift(q2h)
         array.shift(q2l)
         array.shift(q2t)
@@ -229,13 +232,21 @@ f_replay(int t0, int w_) =>
         for j = k to n - 1
             float ce = w_ > 0 ? array.get(q2h, j) : array.get(q2l, j)
             float co = w_ > 0 ? array.get(q2l, j) : array.get(q2h, j)
-            if na(ex) or (w_ > 0 ? ce > ex : ce < ex)
+            float cc = array.get(q2c, j)
+            // a new extreme counts (moves the line) only on a body close beyond it; a wick only extends it
+            if na(ex) or (w_ > 0 ? cc > ex : cc < ex)
                 if not na(dp)
                     ln  := dp
                     lnt := dpt
                 ex  := ce
                 ext := array.get(q2t, j)
                 dp  := na
+            else if w_ > 0 ? ce > ex : ce < ex
+                ex  := ce
+                ext := array.get(q2t, j)
+                if na(dp) or (w_ > 0 ? co < dp : co > dp)
+                    dp  := co
+                    dpt := array.get(q2t, j)
             else if na(dp) or (w_ > 0 ? co < dp : co > dp)
                 dp  := co
                 dpt := array.get(q2t, j)
@@ -477,13 +488,20 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     float ce = w > 0 ? x2h : x2l
     float co = w > 0 ? x2l : x2h
     if sph <= 2
-        if na(tk_ext) or f_gt(ce, tk_ext, w)
+        // a new extreme counts (moves the line) only on a body close beyond it; a wick only extends it
+        if na(tk_ext) or f_gt(x2c, tk_ext, w)
             if not na(tk_dip)
                 tk_ln := tk_dip
                 tk_lt := tk_dt
             tk_ext := ce
             tk_et  := x2t
             tk_dip := na
+        else if f_gt(ce, tk_ext, w)
+            tk_ext := ce
+            tk_et  := x2t
+            if na(tk_dip) or f_gt(tk_dip, co, w)
+                tk_dip := co
+                tk_dt  := x2t
         else if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
             tk_dt  := x2t
