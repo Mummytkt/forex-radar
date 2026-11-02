@@ -510,7 +510,23 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     else if sph == 2
         if (D > 0 ? db : ub) and br_agst
             f_brk(D > 0 ? db_lt : ub_lt, D > 0 ? db_lvl : ub_lvl, N2 + " " + AW + " cont", D < 0, br_acol)
-        if not na(tk_ln) and f_gt(c2_with, tk_ln, D)
+        if not na(rg_hi) and f_gt(c2_with, rg_hi, D)
+            // the story-timeframe range high broken on the top timeframe's side: the top timeframe continues. Back to the top timeframe-trend part:
+            // the pullback line = the last opposite extreme that made a new extreme, from t_from on
+            sph := 1
+            f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
+            f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.\nPullback line: the last " + N2 + " " + LO + " that made a new " + HI + "; an " + N2 + " close beyond it = the " + N1 + " pullback.")
+            [c_ex, c_ext, c_dp, c_dpt, c_ln, c_lnt] = f_replay(tk_et, D)
+            w       := D
+            tk_ext  := c_ex
+            tk_et   := c_ext
+            tk_dip  := c_dp
+            tk_dt   := c_dpt
+            tk_ln   := c_ln
+            tk_lt   := c_lnt
+            tk_conf := false
+            rg_hi   := na
+        else if not na(tk_ln) and f_gt(c2_with, tk_ln, D)
             // the story timeframe takes out its last high: its pullback, back in alignment
             float rlo  = tk_ext
             int   rlot = tk_et
@@ -527,13 +543,26 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ln  := rlo
             tk_lt  := rlot
     else if sph == 3
-        if not rg_out and not na(rg_hi) and f_gt(c2_with, rg_hi, D)
-            rg_out := true
-            f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken", D > 0, br_wcol)
-            f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " story continues.\nThe next " + N1 + " breakout starts the story again.")
-        if (D > 0 ? ub : db) and br_with
-            f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
-        if not na(tk_ln) and f_gt(tk_ln, c2_agst, D)
+        if not na(rg_hi) and f_gt(c2_with, rg_hi, D)
+            // the story-timeframe range high broken on the top timeframe's side: the top timeframe continues. Back to the top timeframe-trend part:
+            // the pullback line = the last opposite extreme that made a new extreme, from t_from on
+            sph := 1
+            f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
+            f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.\nPullback line: the last " + N2 + " " + LO + " that made a new " + HI + "; an " + N2 + " close beyond it = the " + N1 + " pullback.")
+            [c_ex, c_ext, c_dp, c_dpt, c_ln, c_lnt] = f_replay(tk_lt, D)
+            w       := D
+            tk_ext  := c_ex
+            tk_et   := c_ext
+            tk_dip  := c_dp
+            tk_dt   := c_dpt
+            tk_ln   := c_ln
+            tk_lt   := c_lnt
+            tk_conf := false
+            rg_hi   := na
+        else
+            if (D > 0 ? ub : db) and br_with
+                f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
+        if sph == 3 and not na(tk_ln) and f_gt(tk_ln, c2_agst, D)
             // the story-timeframe range low broken: bearish cont again; the range high = the high that
             // took out the low (the highest high since that low), not an inner high
             [h1, h1t] = f_ext2(tk_lt, D > 0)
@@ -541,13 +570,15 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             if br_agst
                 f_brk(tk_lt, tk_ln, N2 + " " + AW + " cont", D < 0, br_acol)
             f_story(time, D > 0 ? low : high, D < 0, N2 + " " + AW + " cont: the " + N2 + " range " + LO + " " + str.tostring(tk_ln, format.mintick) + " is broken.\nThe " + N2 + " range " + HI + " is now " + str.tostring(h1, format.mintick) + ", the " + HI + " that took out the " + LO + ":\nit has to go for " + N2 + " not to be " + AW + ".")
+            [b_ex, b_ext, b_dp, b_dpt, b_ln, b_lnt] = f_replay(h1t, -D)
             w      := -D
-            tk_ext := D > 0 ? x2l : x2h
-            tk_et  := x2t
-            tk_dip := na
+            tk_ext := b_ex
+            tk_et  := b_ext
+            tk_dip := b_dp
+            tk_dt  := b_dpt
             tk_conf := false
-            tk_ln  := h1
-            tk_lt  := h1t
+            tk_ln  := nz(b_ln, h1)
+            tk_lt  := na(b_ln) ? h1t : b_lnt
             rg_hi  := h1
             rg_hit := h1t
             rg_out := false
