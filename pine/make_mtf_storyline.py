@@ -28,15 +28,7 @@ def cut(start, stop):
 
 
 ENGINE = cut('f_sz(string s) =>', '// ── Top timeframe: the reaction levels')
-# A new (inner) structure forms only once the current structure's forming side is fixed (after a real
-# pullback of the top timeframe). While the high is still forming, breaking a small A-shape inside the leg
-# is the same leg, so the external low stays (user, EURUSD 2 Jan 2020: 1.09812 must not jump to 1.11816).
-_old = "        if not broke and array.size(stack) < 30\n"
-assert ENGINE.count(_old) == 1
-ENGINE = ENGINE.replace(_old, """        // a new structure inside only after the current one's forming side is fixed (a real pullback)
-        bool cfix = array.size(stack) > 0 ? (array.last(stack).dir == "bull" ? array.last(stack).hi_fixed : array.last(stack).lo_fixed) : (e_dir == "bull" ? e_hif : e_lof)
-        if not broke and array.size(stack) < 30 and cfix
-""")
+# The Daily external high / low: the Bias Pointer's engine exactly as it is (no changes).
 NOTES = cut('var array<label> st_l', 'var array<line>  sl_l')
 NOTES = NOTES.replace('    if not na(t) and not na(y)\n        array.set(st_last', '    if chart_ok and not na(t) and not na(y)\n        array.set(st_last')
 assert NOTES.count('if chart_ok and') == 1
