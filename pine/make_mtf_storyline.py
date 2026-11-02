@@ -392,6 +392,9 @@ var int   tk_et  = na
 var float tk_dip = na
 var int   tk_dt  = na
 var float tk_ln  = na
+var float rg_hi  = na      // the H4 range high (buys; sells: its low): fixed. Set at the Daily pullback (the top)
+var int   rg_hit = na      // and, after a break of the H4 range low, the high that broke the low
+var bool  rg_out = false   // the H4 range high broken (the Daily continues)
 var bool  tk_conf = false   // story-timeframe range: its extreme is confirmed external (a pullback broke the other way)
 var int   tk_lt  = na
 string up = D > 0 ? "up" : "down"
@@ -500,6 +503,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_dip := na
             tk_conf := false
             tk_ln  := h0
+            rg_hi  := h0
+            rg_hit := h0t
+            rg_out := false
             tk_lt  := h0t
     else if sph == 2
         if (D > 0 ? db : ub) and br_agst
@@ -511,7 +517,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             sph := 3
             f_brk(tk_lt, tk_ln, N2 + " pullback", D > 0, br_wcol)
             f_tag(tg_al_, time, D > 0 ? high : low, N2 + " pullback · back in alignment with " + N1, D > 0, tg_alc)
-            f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: an " + N2 + " close beyond its last " + HI + " " + str.tostring(tk_ln, format.mintick) + ".\n" + N2 + " is back in alignment with the " + N1 + ". " + N2 + " range: " + LO + " " + str.tostring(rlo, format.mintick) + " · " + HI + " " + str.tostring(D > 0 ? XH : XL, format.mintick) + ".")
+            f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: an " + N2 + " close beyond its last " + HI + " " + str.tostring(tk_ln, format.mintick) + ".\n" + N2 + " is back in alignment with the " + N1 + ". " + N2 + " range: " + LO + " " + str.tostring(rlo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ".\nWe work inside it until its " + HI + " (the " + N1 + " continues) or its " + LO + " (" + N2 + " " + AW + " cont) breaks.")
             [e0, e0t] = f_ext2(rlot, D > 0)
             w      := D
             tk_ext := e0
@@ -521,6 +527,10 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ln  := rlo
             tk_lt  := rlot
     else if sph == 3
+        if not rg_out and not na(rg_hi) and f_gt(c2_with, rg_hi, D)
+            rg_out := true
+            f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken", D > 0, br_wcol)
+            f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " story continues.\nThe next " + N1 + " breakout starts the story again.")
         if (D > 0 ? ub : db) and br_with
             f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
         if not na(tk_ln) and f_gt(tk_ln, c2_agst, D)
@@ -538,6 +548,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_conf := false
             tk_ln  := h1
             tk_lt  := h1t
+            rg_hi  := h1
+            rg_hit := h1t
+            rg_out := false
 
 // ── The lines at the last candle ─────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
@@ -587,11 +600,12 @@ if barstate.islast
             f_lvl(tk_lt, tk_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", pl_col, pl_sty, pl_w)
         if sph == 2 and rh_on and rx_on and not na(tk_ext)
             f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
-        if sph == 2 and rh_on and not na(tk_ln)
-            f_lvl(tk_lt, tk_ln, N2 + " last " + HI + " that made a new " + LO + " (an " + N2 + " close beyond it = " + N2 + " pullback)", rh_col, rh_sty, rh_w)
+        if sph >= 2 and rh_on and not na(rg_hi)
+            f_lvl(rg_hit, rg_hi, N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
+        if sph == 2 and pl_on and not na(tk_ln)
+            f_lvl(tk_lt, tk_ln, N2 + " pullback line: the last " + N2 + " " + HI + " that made a new " + LO + " (an " + N2 + " close beyond it = " + N2 + " pullback)", pl_col, pl_sty, pl_w)
         if sph == 3 and rh_on and not na(tk_ln)
-            f_lvl(tk_lt, tk_ln, N2 + " range " + LO + " (an " + N2 + " close beyond it = " + N2 + " " + AW + " cont)", rh_col, rh_sty, rh_w)
-            f_lvl(D > 0 ? XHt : XLt, D > 0 ? XH : XL, N2 + " range " + HI + " (beyond it the " + N1 + " " + DW + " story continues)", rh_col, rh_sty, rh_w)
+            f_lvl(tk_lt, tk_ln, N2 + " range " + LO + " (a close beyond it: " + N2 + " " + AW + " cont)", rh_col, rh_sty, rh_w)
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
     bool  sk_same = sk_pos == tb_pos
     table st_tb   = sk_same ? tb : sk
@@ -620,7 +634,9 @@ if barstate.islast
             if sph >= 1 and not na(XH) and not na(XL)
                 f_row(3, N1 + " range", str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick))
             if sph >= 1 and not na(tk_ln)
-                f_row(4, sph == 1 ? "Pullback line" : sph == 2 ? N2 + " last " + HI : N2 + " range", sph == 3 ? str.tostring(tk_ln, format.mintick) + " – " + str.tostring(D > 0 ? XH : XL, format.mintick) : str.tostring(tk_ln, format.mintick))
+                f_row(4, sph == 1 ? "Pullback line" : sph == 2 ? N2 + " pullback line" : N2 + " range", sph == 3 ? str.tostring(tk_ln, format.mintick) + " – " + str.tostring(rg_hi, format.mintick) : str.tostring(tk_ln, format.mintick))
+            if sph == 2 and not na(rg_hi)
+                f_row(5, N2 + " range " + HI, str.tostring(rg_hi, format.mintick))
 '''
 
 body = HEAD + ENGINE + BODY + NOTES + STORY
