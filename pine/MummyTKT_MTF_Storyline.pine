@@ -762,7 +762,9 @@ var float rg_hi  = na      // the H4 range high (buys; sells: its low): fixed. S
 var int   rg_hit = na      // and, after a break of the H4 range low, the high that broke the low
 var bool  rg_out = false   // the H4 range high broken (the Daily continues)
 var float rg_op  = na      // after the Daily continues out of the H4 range: the high that broke the low (sells;
-var int   rg_opt = na      // buys: the low that broke the high). It stays until it is broken or a new range replaces it
+var int   rg_opt = na
+var float p3_ln  = na      // inside the H4 range: the pullback line keeps trailing the cont breaks with the Daily
+var int   p3_lt  = na      // buys: the low that broke the high). It stays until it is broken or a new range replaces it
 var bool  tk_conf = false   // story-timeframe range: its extreme is confirmed external (a pullback broke the other way)
 var int   tk_lt  = na
 string up = D > 0 ? "up" : "down"
@@ -916,6 +918,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             float rlo  = na(rg_op) ? tk_ext : rg_op
             int   rlot = na(rg_op) ? tk_et : rg_opt
             sph := 3
+            p3_ln := na
             rg_op := na
             f_brk(tk_lt, tk_ln, N2 + " pullback", D > 0, br_wcol)
             f_tag(tg_al_, time, D > 0 ? high : low, N2 + " pullback · back in alignment with " + N1, D > 0, tg_alc)
@@ -951,6 +954,10 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         else
             if (D > 0 ? ub : db) and br_with
                 f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
+            // inside the H4 range the pullback line trails each cont break with the Daily (as in the Daily-trend part)
+            if D > 0 ? ub : db
+                p3_ln := D > 0 ? ub_pl : db_ph
+                p3_lt := D > 0 ? ub_plt : db_pht
         if sph == 3 and not na(tk_ln) and f_gt(tk_ln, c2_agst, D)
             // the story-timeframe range low broken: bearish cont again; the range high = the high that
             // took out the low (the highest high since that low), not an inner high
@@ -1016,6 +1023,8 @@ if barstate.islast
             if sh_on
                 array.push(cx, box.new(r0, req, time, XL, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(color.black, 100), bgcolor = color.new(sh_bull, 100 - sh_op)))
                 array.push(cx, box.new(r0, XH, time, req, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(color.black, 100), bgcolor = color.new(sh_bear, 100 - sh_op)))
+        if sph == 3 and pl_on and not na(p3_ln)
+            f_lvl(p3_lt, p3_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (inside the " + N2 + " range)", pl_col, pl_sty, pl_w)
         if sph == 1 and pl_on and not na(tk_ln)
             f_lvl(tk_lt, tk_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", pl_col, pl_sty, pl_w)
         if sph == 2 and rh_on and rx_on and not na(tk_ext)
