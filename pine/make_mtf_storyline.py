@@ -395,6 +395,8 @@ var float tk_ln  = na
 var float rg_hi  = na      // the H4 range high (buys; sells: its low): fixed. Set at the Daily pullback (the top)
 var int   rg_hit = na      // and, after a break of the H4 range low, the high that broke the low
 var bool  rg_out = false   // the H4 range high broken (the Daily continues)
+var float rg_op  = na      // after the Daily continues out of the H4 range: the high that broke the low (sells;
+var int   rg_opt = na      // buys: the low that broke the high). It stays until it is broken or a new range replaces it
 var bool  tk_conf = false   // story-timeframe range: its extreme is confirmed external (a pullback broke the other way)
 var int   tk_lt  = na
 string up = D > 0 ? "up" : "down"
@@ -438,6 +440,7 @@ if ns_d != 0
     DW  := D > 0 ? "bullish" : "bearish"
     AW  := D > 0 ? "bearish" : "bullish"
     sph := 1
+    rg_op := na
     XL  := ns_lo
     XLt := ns_lot
     XH  := ns_hi
@@ -485,6 +488,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_dt  := x2t
     float c2_with = D > 0 ? c2u : c2d       // the close, read in the top timeframe's direction
     float c2_agst = D > 0 ? c2d : c2u
+    if sph <= 2 and not na(rg_op) and f_gt(rg_op, c2_agst, D)
+        f_brk(rg_opt, rg_op, N2 + " range " + LO + " broken", D < 0, br_acol)
+        rg_op := na
     if sph == 1
         if (D > 0 ? ub : db) and br_with
             f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
@@ -525,12 +531,16 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ln   := c_ln
             tk_lt   := c_lnt
             tk_conf := false
+            [o_, ot_] = f_ext2(rg_hit, D < 0)
+            rg_op   := o_
+            rg_opt  := ot_
             rg_hi   := na
         else if not na(tk_ln) and f_gt(c2_with, tk_ln, D)
             // the story timeframe takes out its last high: its pullback, back in alignment
             float rlo  = tk_ext
             int   rlot = tk_et
             sph := 3
+            rg_op := na
             f_brk(tk_lt, tk_ln, N2 + " pullback", D > 0, br_wcol)
             f_tag(tg_al_, time, D > 0 ? high : low, N2 + " pullback · back in alignment with " + N1, D > 0, tg_alc)
             f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: an " + N2 + " close beyond its last " + HI + " " + str.tostring(tk_ln, format.mintick) + ".\n" + N2 + " is back in alignment with the " + N1 + ". " + N2 + " range: " + LO + " " + str.tostring(rlo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ".\nWe work inside it until its " + HI + " (the " + N1 + " continues) or its " + LO + " (" + N2 + " " + AW + " cont) breaks.")
@@ -558,6 +568,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ln   := c_ln
             tk_lt   := c_lnt
             tk_conf := false
+            [o_, ot_] = f_ext2(rg_hit, D < 0)
+            rg_op   := o_
+            rg_opt  := ot_
             rg_hi   := na
         else
             if (D > 0 ? ub : db) and br_with
@@ -631,6 +644,8 @@ if barstate.islast
             f_lvl(tk_lt, tk_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", pl_col, pl_sty, pl_w)
         if sph == 2 and rh_on and rx_on and not na(tk_ext)
             f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
+        if sph <= 2 and rh_on and not na(rg_op)
+            f_lvl(rg_opt, rg_op, N2 + " range " + LO + ": the " + LO + " that broke the " + HI + " (stays until a pullback confirms a new " + HI + ")", rh_col, rh_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
             f_lvl(rg_hit, rg_hi, N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
         if sph == 2 and pl_on and not na(tk_ln)
