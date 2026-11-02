@@ -533,6 +533,8 @@ f_highest(int from_bar, bool bd) =>
 
 f_bt(int b) =>
     time[bar_index - b]
+// keep enough history of time for f_bt (a structure point can be far back on Daily replays)
+max_bars_back(time, 2000)
 
 type Layer
     string dir = "none"
