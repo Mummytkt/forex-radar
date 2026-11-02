@@ -480,6 +480,9 @@ if D != 0 and not na(a_chi) and not na(a_clo)
     XHt := a_chit
     XL  := a_clo
     XLt := a_clot
+// the H4 range high / low is always inside the Daily range: one outside it (from an earlier Daily range) is dropped
+if D != 0 and not na(rg_op) and f_gt(rg_op, D > 0 ? XL : XH, -D)
+    rg_op := na
 
 // 2. the story timeframe, candle by candle
 if D != 0 and x2_new and not t1_ev and sph >= 1
