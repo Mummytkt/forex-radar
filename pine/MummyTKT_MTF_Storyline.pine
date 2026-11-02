@@ -528,6 +528,34 @@ f_ext2(int t0, bool hiSide) =>
                 vt := array.get(q2t, k)
             k -= 1
     [v, vt]
+// the tracker replayed over the story-timeframe candles from time t0, in direction w: the running
+// extreme, the opposite extreme since it, and the last opposite extreme that made a new extreme
+f_replay(int t0, int w_) =>
+    float ex = na
+    int   ext = na
+    float dp = na
+    int   dpt = na
+    float ln = na
+    int   lnt = na
+    int   n = array.size(q2t)
+    if n > 0 and not na(t0)
+        int k = n - 1
+        while k > 0 and array.get(q2t, k - 1) >= t0
+            k -= 1
+        for j = k to n - 1
+            float ce = w_ > 0 ? array.get(q2h, j) : array.get(q2l, j)
+            float co = w_ > 0 ? array.get(q2l, j) : array.get(q2h, j)
+            if na(ex) or (w_ > 0 ? ce > ex : ce < ex)
+                if not na(dp)
+                    ln  := dp
+                    lnt := dpt
+                ex  := ce
+                ext := array.get(q2t, j)
+                dp  := na
+            else if na(dp) or (w_ > 0 ? co < dp : co > dp)
+                dp  := co
+                dpt := array.get(q2t, j)
+    [ex, ext, dp, dpt, ln, lnt]
 // the top timeframe: lowSide = a broken LOW -> the highest high since it first formed; else a broken
 // HIGH -> the lowest low since it first formed (an equal level up to 15 candles earlier counts)
 f_since(bool lowSide, float lvl, int t0, float tol) =>
@@ -755,18 +783,17 @@ if ns_d != 0
     XLt := ns_lot
     XH  := ns_hi
     XHt := ns_hit
-    // the tracker with the top timeframe: the pullback line starts at the low that caused the latest
-    // External story-timeframe break with it (if it is inside the story)
+    // the tracker with the top timeframe, replayed over the story-timeframe candles of this leg (from the
+    // external low's time for buys, the external high's for sells): the pullback line = the last low that
+    // made a new high (sells: the last high that made a new low)
+    [r_ex, r_ext, r_dp, r_dpt, r_ln, r_lnt] = f_replay(D > 0 ? XLt : XHt, D)
     w      := D
-    tk_ext := D > 0 ? XH : XL
-    tk_et  := D > 0 ? XHt : XLt
-    tk_dip := na
-    tk_ln  := na
-    tk_lt  := na
-    float pl0 = D > 0 ? u_pl : d_ph
-    if not na(pl0) and not f_gt(D > 0 ? XL : XH, pl0, D) and not f_gt(pl0, tk_ext, D)
-        tk_ln := pl0
-        tk_lt := D > 0 ? u_plt : d_pht
+    tk_ext := r_ex
+    tk_et  := r_ext
+    tk_dip := r_dp
+    tk_dt  := r_dpt
+    tk_ln  := r_ln
+    tk_lt  := r_lnt
     f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, N1 + " " + DW + " breakout", D > 0, tg_boc)
     f_story(time, D > 0 ? high : low, D > 0, N1 + " " + DW + " breakout (" + (t1_wick ? "wick" : "body close") + " beyond " + str.tostring(ns_lvl, format.mintick) + ").\nEvery External " + N2 + " break " + up + " is a continuation. Pullback line: the last " + N2 + " " + LO + " that made a new " + HI + ";\nan " + N2 + " close beyond it = the " + N1 + " pullback.")
 
