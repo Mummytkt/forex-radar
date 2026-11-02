@@ -810,15 +810,13 @@ if D != 0 and not na(a_chi) and not na(a_clo)
 
 // 2. the story timeframe, candle by candle
 if D != 0 and x2_new and not t1_ev and sph >= 1
-    // the tracker. Phase 1, the pullback line: every new extreme moves it to the dip before it.
-    // Phases 2 / 3, the story-timeframe range: its edge moves only after a real pullback. An External
-    // break against the move confirms its extreme as external; a close beyond that extreme then moves
-    // the edge to that pullback's opposite extreme (the high that took out the low). Until then the
-    // extreme just forms and the edge stays.
+    // the tracker, in phases 1 and 2: every new extreme moves the line to the last opposite extreme that
+    // made it (phase 1: the pullback line = the last low that made a new high; phase 2: the last high
+    // that made a new low). Phase 3 is the story-timeframe range: its low and high are fixed until price
+    // breaks out of it either way.
     float ce = w > 0 ? x2h : x2l
     float co = w > 0 ? x2l : x2h
-    float cc = w > 0 ? c2u : c2d
-    if sph == 1
+    if sph <= 2
         if na(tk_ext) or f_gt(ce, tk_ext, w)
             if not na(tk_dip)
                 tk_ln := tk_dip
@@ -826,24 +824,6 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ext := ce
             tk_et  := x2t
             tk_dip := na
-        else if na(tk_dip) or f_gt(tk_dip, co, w)
-            tk_dip := co
-            tk_dt  := x2t
-    else
-        if not tk_conf and (w > 0 ? db : ub)
-            tk_conf := true
-        if tk_conf and not na(tk_dip) and f_gt(cc, tk_ext, w)
-            tk_ln   := tk_dip
-            tk_lt   := tk_dt
-            tk_conf := false
-            tk_ext  := ce
-            tk_et   := x2t
-            tk_dip  := na
-        else if na(tk_ext) or f_gt(ce, tk_ext, w)
-            if not tk_conf
-                tk_ext := ce
-                tk_et  := x2t
-                tk_dip := na
         else if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
             tk_dt  := x2t
@@ -952,13 +932,13 @@ if barstate.islast
                 array.push(cx, box.new(r0, XH, time, req, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(color.black, 100), bgcolor = color.new(sh_bear, 100 - sh_op)))
         if sph == 1 and pl_on and not na(tk_ln)
             f_lvl(tk_lt, tk_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", pl_col, pl_sty, pl_w)
-        if sph >= 2 and rh_on and rx_on and not na(tk_ext)
-            string ed = sph == 2 ? LO : HI
-            f_lvl(tk_et, tk_ext, N2 + " range " + ed + (tk_conf ? " (external: a pullback confirmed it; a close beyond it moves the range)" : " (forming)"), rh_col, rx_sty, rh_w)
+        if sph == 2 and rh_on and rx_on and not na(tk_ext)
+            f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
         if sph == 2 and rh_on and not na(tk_ln)
-            f_lvl(tk_lt, tk_ln, N2 + " range " + HI + ": the last " + N2 + " " + HI + " that made a new " + LO + " (an " + N2 + " close beyond it = " + N2 + " pullback)", rh_col, rh_sty, rh_w)
+            f_lvl(tk_lt, tk_ln, N2 + " last " + HI + " that made a new " + LO + " (an " + N2 + " close beyond it = " + N2 + " pullback)", rh_col, rh_sty, rh_w)
         if sph == 3 and rh_on and not na(tk_ln)
-            f_lvl(tk_lt, tk_ln, N2 + " range " + LO + ": the last " + N2 + " " + LO + " that made a new " + HI + " (an " + N2 + " close beyond it = " + N2 + " " + AW + " cont)", rh_col, rh_sty, rh_w)
+            f_lvl(tk_lt, tk_ln, N2 + " range " + LO + " (an " + N2 + " close beyond it = " + N2 + " " + AW + " cont)", rh_col, rh_sty, rh_w)
+            f_lvl(D > 0 ? XHt : XLt, D > 0 ? XH : XL, N2 + " range " + HI + " (beyond it the " + N1 + " " + DW + " story continues)", rh_col, rh_sty, rh_w)
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
     bool  sk_same = sk_pos == tb_pos
     table st_tb   = sk_same ? tb : sk
@@ -980,11 +960,11 @@ if barstate.islast
         if not chart_ok
             f_row(0, PLAN, "On this chart: the " + N1 + " external high / low. Put the chart on " + N2 + " or lower for the story")
         else
-            string phs = sph == 0 ? "waiting for a " + N1 + " breakout" : sph == 1 ? N1 + " " + DW + " breakout: " + N2 + " with it; a close beyond the pullback line = the " + N1 + " pullback" : sph == 2 ? N1 + " pullback: " + N2 + " " + AW + "; a close beyond its last " + HI + " = " + N2 + " pullback" : N2 + " back in alignment with the " + N1 + "; a close beyond the " + N2 + " range " + LO + " = " + N2 + " " + AW + " cont"
+            string phs = sph == 0 ? "waiting for a " + N1 + " breakout" : sph == 1 ? N1 + " " + DW + " breakout: " + N2 + " with it; a close beyond the pullback line = the " + N1 + " pullback" : sph == 2 ? N1 + " pullback: " + N2 + " " + AW + "; a close beyond its last " + HI + " = " + N2 + " pullback" : "inside the " + N2 + " range: beyond its " + HI + " the " + N1 + " " + DW + " story continues; a close beyond its " + LO + " = " + N2 + " " + AW + " cont"
             f_row(0, "Plan", PLAN + " · breaks: " + N1 + " " + (t1_wick ? "wick" : "body close") + ", " + N2 + " " + (t2_wick ? "wick" : "body close"))
             f_row(1, N1, D > 0 ? "bullish" : D < 0 ? "bearish" : "—")
             f_row(2, "Story", phs)
             if sph >= 1 and not na(XH) and not na(XL)
                 f_row(3, N1 + " range", str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick))
             if sph >= 1 and not na(tk_ln)
-                f_row(4, sph == 1 ? "Pullback line" : sph == 2 ? N2 + " range " + HI : N2 + " range " + LO, str.tostring(tk_ln, format.mintick))
+                f_row(4, sph == 1 ? "Pullback line" : sph == 2 ? N2 + " last " + HI : N2 + " range", sph == 3 ? str.tostring(tk_ln, format.mintick) + " – " + str.tostring(D > 0 ? XH : XL, format.mintick) : str.tostring(tk_ln, format.mintick))
