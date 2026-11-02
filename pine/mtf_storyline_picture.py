@@ -100,7 +100,8 @@ def build(bull):
     iA1 = HI_(14, 16); iL1 = LO_(16, 18); iC1 = first(iL1 + 1, lambda c: c > hh(iA1))
     iA2 = HI_(19, 21); iL2 = LO_(21, 23); iC2 = first(iL2 + 1, lambda c: c > hh(iA2))
     iTOP = HI_(28, 31); TOP = hh(iTOP)
-    iPB = first(iTOP + 1, lambda c: c < ll(iL2))
+    iL0 = LO_(26, 28)                      # the last low that made a new high (the dip before the top)
+    iPB = first(iTOP + 1, lambda c: c < ll(iL0))
     iL3 = LO_(36, 38); iH3 = HI_(38, 40); iC3 = first(iH3 + 1, lambda c: c < ll(iL3))
     iRL = LO_(iC3, 43); iP1 = first(iRL + 1, lambda c: c > hh(iH3))
     iH4 = HI_(iP1, 46); iIN = HI_(47, 49); iC4 = first(iIN + 1, lambda c: c < ll(iRL))
@@ -137,17 +138,17 @@ def build(bull):
     brk(iA1, iC1, hh(iA1), "H4 bullish cont", WITH)
     brk(iA2, iC2, hh(iA2), "H4 bullish cont", WITH)
     hline(iL1, iL2, ll(iL1), BL, "", 2, 0.3)
-    hline(iL2, iPB, ll(iL2), BL, "", 2.6)
-    txt(X(iL2) + 4, Y(ll(iL2)) + (16 if bull else -8), "pullback line: the last H4 low that made a new low", BL, 11.5)
+    hline(iL2, iL0, ll(iL2), BL, "", 2, 0.3)
+    hline(iL0, iPB, ll(iL0), BL, "", 2.6)
+    txt(X(iL0) + 6, Y(ll(iL0)) + (16 if bull else -8), "pullback line: the last H4 low that made a new high", BL, 11.5)
     step(iC2 + 1, hh(iA2) + 4.5, 2)
     # 3 Pullback break
-    brk(iL2, iPB, ll(iL2), "", AGAINST)
+    brk(iL0, iPB, ll(iL0), "", AGAINST)
     tag(iPB - 7, ll(iL2) - 1.2, "Pullback break · Daily pullback confirmed", AGAINST, below=True)
     step(iPB + 1, ll(iPB + 1) - 1.6, 3)
     # 4 H4 bearish cont; the last H4 high is tracked
     brk(iL3, iC3, ll(iL3), "H4 bearish cont", AGAINST, above=False)
     hline(iH3, iP1, hh(iH3), OR, "", 2.2)
-    txt(X(iH3) - 4, Y(hh(iH3)) + (-8 if bull else 18), "last H4 high (the high that took out the low)", OR, 11, "end")
     step(iC3, ll(iC3) - 1.8, 4)
     # 5 H4 pullback -> H4 range
     brk(iH3, iP1, hh(iH3), "H4 pullback", WITH)
@@ -178,9 +179,9 @@ def build(bull):
     txt(PX, 128, "THE STORY (BUYS)", "#4c1d95", 18)
     notes = [
         "Daily breakout: a Daily body close beyond the Daily external high. The label sits where the breakout happened.",
-        "Until the Daily pulls back, every External H4 break up is labelled H4 bullish cont. The pullback line follows the last H4 low that made a new low (one line).",
+        "Until the Daily pulls back, every External H4 break up is labelled H4 bullish cont. In a bullish move lows take out highs: the pullback line is the last H4 low that made a new high (one line, it moves up with each new high).",
         "An H4 body close below the pullback line = Pullback break: the Daily pullback is confirmed. Daily range: high (also the H4 range high), low, 0.5.",
-        "H4 is now bearish inside the bullish Daily: each External H4 break down = H4 bearish cont (the Daily pullback goes on). The last H4 high is tracked.",
+        "H4 is now bearish inside the bullish Daily: each External H4 break down = H4 bearish cont (the Daily pullback goes on). In a bearish move highs take out lows: the last H4 high that made a new low is tracked.",
         "An H4 close above the last H4 high = H4 pullback (Daily continuation / bullish alignment). H4 range: the H4 low up to the Daily range high.",
         "If H4 breaks the H4 range low again = H4 bearish cont. The new H4 range high is the high that took out the low, not an inner high of the leg. It has to go for H4 not to be bearish.",
         "H4 takes out that high = H4 pullback, H4 back in alignment with the Daily. New H4 range low.",
@@ -205,8 +206,8 @@ def build(bull):
     LY = 960
     items = [(WITH, "3 3", "H4 bullish cont / H4 pullback (break line to the candle that broke it)"),
              (AGAINST, "3 3", "H4 bearish cont / Pullback break"),
-             (BL, "", "pullback line: the last H4 low that made a new low (only the latest)"),
-             (OR, "", "last H4 high / H4 range high and low"),
+             (BL, "", "pullback line: the last H4 low that made a new high (only the latest)"),
+             (OR, "", "last H4 high that made a new low / H4 range high and low"),
              ("#111", "", "Daily external high / low, Daily range"), ("#888", "6 6", "Daily range 0.5")]
     for j, (c, d, s_) in enumerate(items):
         x0, y0 = L + (j % 2) * 820, LY + (j // 2) * 34
