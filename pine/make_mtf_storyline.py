@@ -123,6 +123,8 @@ bool   rh_on    = input.bool(true, "Story-timeframe range high / low", group = G
 color  rh_col   = input.color(#FFA726, "", group = G_T2, inline = "rh")
 string rh_sty   = input.string("Solid", "", ''' + STY + ''', group = G_T2, inline = "rh")
 int    rh_w     = input.int(2, "width", minval = 1, maxval = 4, group = G_T2, inline = "rh")
+bool   rx_on    = input.bool(true, "Show the forming edge of the story-timeframe range", group = G_T2, inline = "rx")
+string rx_sty   = input.string("Dashed", "style", options = ["Solid", "Dashed", "Dotted"], group = G_T2, inline = "rx")
 
 bool   br_with  = input.bool(true, "Cont breaks with the top timeframe", group = G_BR, inline = "bw")
 color  br_wcol  = input.color(#26A69A, "", group = G_BR, inline = "bw")
@@ -390,6 +392,7 @@ var int   tk_et  = na
 var float tk_dip = na
 var int   tk_dt  = na
 var float tk_ln  = na
+var bool  tk_conf = false   // story-timeframe range: its extreme is confirmed external (a pullback broke the other way)
 var int   tk_lt  = na
 string up = D > 0 ? "up" : "down"
 string dn = D > 0 ? "down" : "up"
@@ -444,6 +447,7 @@ if ns_d != 0
     tk_ext := r_ex
     tk_et  := r_ext
     tk_dip := r_dp
+    tk_conf := false
     tk_dt  := r_dpt
     tk_ln  := r_ln
     tk_lt  := r_lnt
@@ -459,19 +463,43 @@ if D != 0 and not na(a_chi) and not na(a_clo)
 
 // 2. the story timeframe, candle by candle
 if D != 0 and x2_new and not t1_ev and sph >= 1
-    // the tracker: a new extreme in direction w moves the line to the dip before it
+    // the tracker. Phase 1, the pullback line: every new extreme moves it to the dip before it.
+    // Phases 2 / 3, the story-timeframe range: its edge moves only after a real pullback. An External
+    // break against the move confirms its extreme as external; a close beyond that extreme then moves
+    // the edge to that pullback's opposite extreme (the high that took out the low). Until then the
+    // extreme just forms and the edge stays.
     float ce = w > 0 ? x2h : x2l
     float co = w > 0 ? x2l : x2h
-    if na(tk_ext) or f_gt(ce, tk_ext, w)
-        if not na(tk_dip)
-            tk_ln := tk_dip
-            tk_lt := tk_dt
-        tk_ext := ce
-        tk_et  := x2t
-        tk_dip := na
-    else if na(tk_dip) or f_gt(tk_dip, co, w)
-        tk_dip := co
-        tk_dt  := x2t
+    float cc = w > 0 ? c2u : c2d
+    if sph == 1
+        if na(tk_ext) or f_gt(ce, tk_ext, w)
+            if not na(tk_dip)
+                tk_ln := tk_dip
+                tk_lt := tk_dt
+            tk_ext := ce
+            tk_et  := x2t
+            tk_dip := na
+        else if na(tk_dip) or f_gt(tk_dip, co, w)
+            tk_dip := co
+            tk_dt  := x2t
+    else
+        if not tk_conf and (w > 0 ? db : ub)
+            tk_conf := true
+        if tk_conf and not na(tk_dip) and f_gt(cc, tk_ext, w)
+            tk_ln   := tk_dip
+            tk_lt   := tk_dt
+            tk_conf := false
+            tk_ext  := ce
+            tk_et   := x2t
+            tk_dip  := na
+        else if na(tk_ext) or f_gt(ce, tk_ext, w)
+            if not tk_conf
+                tk_ext := ce
+                tk_et  := x2t
+                tk_dip := na
+        else if na(tk_dip) or f_gt(tk_dip, co, w)
+            tk_dip := co
+            tk_dt  := x2t
     float c2_with = D > 0 ? c2u : c2d       // the close, read in the top timeframe's direction
     float c2_agst = D > 0 ? c2d : c2u
     if sph == 1
@@ -490,6 +518,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ext := D > 0 ? x2l : x2h
             tk_et  := x2t
             tk_dip := na
+            tk_conf := false
             tk_ln  := h0
             tk_lt  := h0t
     else if sph == 2
@@ -508,6 +537,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ext := e0
             tk_et  := e0t
             tk_dip := na
+            tk_conf := false
             tk_ln  := rlo
             tk_lt  := rlot
     else if sph == 3
@@ -525,6 +555,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_ext := D > 0 ? x2l : x2h
             tk_et  := x2t
             tk_dip := na
+            tk_conf := false
             tk_ln  := h1
             tk_lt  := h1t
 
@@ -574,6 +605,9 @@ if barstate.islast
                 array.push(cx, box.new(r0, XH, time, req, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(color.black, 100), bgcolor = color.new(sh_bear, 100 - sh_op)))
         if sph == 1 and pl_on and not na(tk_ln)
             f_lvl(tk_lt, tk_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", pl_col, pl_sty, pl_w)
+        if sph >= 2 and rh_on and rx_on and not na(tk_ext)
+            string ed = sph == 2 ? LO : HI
+            f_lvl(tk_et, tk_ext, N2 + " range " + ed + (tk_conf ? " (external: a pullback confirmed it; a close beyond it moves the range)" : " (forming)"), rh_col, rx_sty, rh_w)
         if sph == 2 and rh_on and not na(tk_ln)
             f_lvl(tk_lt, tk_ln, N2 + " range " + HI + ": the last " + N2 + " " + HI + " that made a new " + LO + " (an " + N2 + " close beyond it = " + N2 + " pullback)", rh_col, rh_sty, rh_w)
         if sph == 3 and rh_on and not na(tk_ln)
