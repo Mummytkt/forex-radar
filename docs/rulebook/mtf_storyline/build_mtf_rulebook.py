@@ -6,7 +6,7 @@ import os
 import random
 import re
 
-VERSION = "Version 1 · 3 November 2026"
+VERSION = "Version 2 · 3 November 2026"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 esc = html.escape
 
@@ -287,25 +287,25 @@ RULES = [
      "A Daily candle body closes beyond the Daily external high (the wick level). The Daily external high and low are the Bias Pointer's, always. Every new Daily breakout starts the story again in its direction.",
      "Daily bullish breakout"),
     ("2", "Continuation: trade the breakout direction", "f_cont", (iDB, iTOP + 1),
-     "Each H4 External break up is a continuation. The pullback line is the last H4 low that made a new high. It moves only at a continuation break, never on a tiny candle with no pullback.",
-     "H4 bullish cont · pullback line: the last H4 low that made a new high"),
+     "In a bullish move lows break highs. The pullback line is the low that broke the last high. Until that high breaks, the low stands and everything inside it is ignored. A high counts once price really pulled back from it (a candle body closed below the body of the candle that made it). When an H4 body closes above it, the line moves to the lowest point of that pullback.",
+     "H4 bullish cont · pullback line: the H4 low that broke the last high"),
     ("3", "Pullback break: the Daily pulls back", "f_pullback_break", (iTOP - 2, iPB + 2),
-     "An H4 body closes below the pullback line. The Daily pullback is confirmed and H4 is now against the Daily. The top becomes the H4 range high and stays fixed.",
+     "An H4 body closes below the pullback line. The Daily pullback is confirmed, the Daily range prints its premium and discount, and H4 is now against the Daily. The new pullback line is the high that broke that low: the top of the leg, which is also the H4 range high.",
      "Pullback break · Daily pullback confirmed"),
     ("4", "Trade the pullback's continuation, mind the discount", "f_against", (iPB, iRL + 1),
-     "While H4 is against the Daily, each H4 External break down is an H4 bearish cont. The H4 pullback line is the last H4 high that made a new low. Selling deep in the Daily discount (below 0.5) is where the Daily may take over again.",
-     "H4 bearish cont · H4 pullback line: the last H4 high that made a new low"),
+     "While H4 is against the Daily, each close below a real low is an H4 bearish cont, and the H4 pullback line moves to the highest point of the leg that broke that low. Selling deep in the Daily discount (below 0.5) is where the Daily may take over again.",
+     "H4 bearish cont · H4 pullback line: the H4 high that broke the last low"),
     ("5", "The level that must hold", "f_hold", (iHPL - 2, iHP),
      "After a pullback, the last high created before it is expected to hold. It holds: H4 is still in play against the Daily. It breaks on an H4 body close: the H4 pullback is over.",
      "(the decision point, no label of its own)"),
     ("6", "H4 pullback: back in alignment, the H4 range", "f_aligned", (iRL - 1, iHP + 6),
-     "An H4 body close above the H4 pullback line is the H4 pullback. H4 is back in alignment with the Daily. The H4 range runs from the leg's low up to the H4 range high, always inside the Daily range.",
+     "An H4 body close above the H4 pullback line is the H4 pullback. H4 is back in alignment with the Daily. The new pullback line is the low that broke that high, which is also the H4 range low. The H4 range runs from it up to the top of the leg, always inside the Daily range.",
      "H4 pullback · back in alignment with Daily"),
     ("7", "Inside the H4 range the pullback line keeps trailing", "f_trail", (iHP, iDC - 1),
-     "Inside the range, each H4 cont with the Daily moves the pullback line to the last low that broke a high. Nothing else moves until one edge of the range breaks.",
-     "pullback line: the last H4 low that made a new high (inside the H4 range)"),
+     "Inside the range the same rule goes on: each real high broken moves the pullback line up to the low that broke it. Everything else inside is ignored.",
+     "pullback line: the H4 low that broke the last high (inside the H4 range)"),
     ("8", "The range breaks: the Daily continues (or H4 keeps going against)", "f_continues", (iP3, N - 1),
-     "A close above the H4 range high is the last H4 high inside the Daily range taken: now you can be convinced you are with the Daily. A close below the H4 range low instead means H4 is still against the Daily: the high that broke that low becomes the new H4 range high and stays until the next pullback confirms a new low.",
+     "A close above the H4 range high is the last H4 high inside the Daily range taken: now you can be convinced you are with the Daily. A close below the H4 range low instead means H4 is against the Daily again: the pullback line and the new H4 range high are the high that broke that low.",
      "H4 range high broken · Daily continues  /  H4 range low broken"),
 ]
 
@@ -503,7 +503,7 @@ def page():
     <li>The Daily levels (OC, A / V-shapes, FVG, Breaker) inside the Daily range. Next build.</li>
     <li>Entry-timeframe confirmation (M15 sweep and break on the H4 levels). After the levels.</li>
     <li>Discount and premium are drawn (0.5 line and shading) but do not block anything.</li>
-    <li>Open question: should an H4 close beyond the pullback line inside the H4 range also print a Pullback break?</li>
+    <li>Inside the H4 range, a close below a pullback line that has moved up (above the range low) flips H4 against the Daily as a Pullback break inside the range; the range high stays. Check this in replay.</li>
   </ul>
 </section>
 

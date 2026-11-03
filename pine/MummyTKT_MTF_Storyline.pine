@@ -759,31 +759,33 @@ f_story(int t, float y, bool above, string txt) =>
 
 // ── The story ────────────────────────────────────────────────────────────────
 // phase: 0 none · 1 top-timeframe breakout, story timeframe with it · 2 pullback break (the story
-// timeframe against it) · 3 story-timeframe pullback (back in alignment)
+// timeframe against it) · 3 story-timeframe pullback (back in alignment, the story-timeframe range)
 var int   sph  = 0
 var int   D    = 0
 var int   k1   = 0
-var float XH   = na      // the top timeframe's external high / low (buys: XH forms until the pullback)
+var float XH   = na      // the top timeframe's external high / low (the Bias Pointer's)
 var int   XHt  = na
 var float XL   = na
 var int   XLt  = na
-// the tracker in direction w: tk_ext = the running extreme, tk_dip = the opposite extreme since it,
-// tk_line = the last opposite extreme that made a new extreme (pullback line / range high or low)
+// ONE pullback line (user rule, 2026-11-03, picture Documents/Pullback_Flow.png). Direction w:
+// buys (w > 0): the line = the low that broke the last high. tk_ext = the leg's high, tk_fm = price really
+// pulled back from it (a body closed beyond the far side of the body of the candle that made it), tk_dip =
+// the lowest point since that high. A close above a REAL high = continuation: the line moves to tk_dip
+// (the low that broke the high). A close below the line = the direction flips: the line = the highest
+// point since the line (the high that broke the low). Sells mirror. Nothing else moves the line.
 var int   w      = 0
+var float tk_ln  = na
+var int   tk_lt  = na
 var float tk_ext = na
 var int   tk_et  = na
+var float tk_eo  = na      // the far side of the body of the candle that made tk_ext
+var bool  tk_fm  = false
 var float tk_dip = na
 var int   tk_dt  = na
-var float tk_ln  = na
-var float rg_hi  = na      // the H4 range high (buys; sells: its low): fixed. Set at the Daily pullback (the top)
-var int   rg_hit = na      // and, after a break of the H4 range low, the high that broke the low
-var bool  rg_out = false   // the H4 range high broken (the Daily continues)
-var float rg_op  = na      // after the Daily continues out of the H4 range: the high that broke the low (sells;
-var int   rg_opt = na
-var float p3_ln  = na      // inside the H4 range: the pullback line keeps trailing the cont breaks with the Daily
-var int   p3_lt  = na      // buys: the low that broke the high). It stays until it is broken or a new range replaces it
-var bool  tk_conf = false   // story-timeframe range: its extreme is confirmed external (a pullback broke the other way)
-var int   tk_lt  = na
+var float rg_hi  = na      // the story-timeframe range high (buys; sells: its low): the top of the leg
+var int   rg_hit = na
+var float rg_lo  = na      // the story-timeframe range low (buys; sells: its high): the low that broke the high
+var int   rg_lot = na
 string up = D > 0 ? "up" : "down"
 string dn = D > 0 ? "down" : "up"
 string HI = D > 0 ? "high" : "low"
@@ -791,8 +793,61 @@ string LO = D > 0 ? "low" : "high"
 string DW = D > 0 ? "bullish" : "bearish"
 string AW = D > 0 ? "bearish" : "bullish"
 
-// a new story in direction d: external low (buys) lo / lot, the high forming from hi / hit,
-// the pullback line pl / plt (na: none yet)
+// the rule run over the story-timeframe candles from time t0 in direction w_ (continuations only):
+// [line, line time, leg extreme, its time, its body's far side, real pullback, dip, dip time]
+f_seed(int t0, int w_) =>
+    float ln = na
+    int   lt = na
+    float ex = na
+    int   et = na
+    float eo = na
+    bool  fm = false
+    float dp = na
+    int   dt = na
+    int   n = array.size(q2t)
+    if n > 0 and not na(t0)
+        int k = n - 1
+        while k > 0 and array.get(q2t, k - 1) >= t0
+            k -= 1
+        for j = k to n - 1
+            float ce = w_ > 0 ? array.get(q2h, j) : array.get(q2l, j)
+            float co = w_ > 0 ? array.get(q2l, j) : array.get(q2h, j)
+            float cc = array.get(q2c, j)
+            int   tj = array.get(q2t, j)
+            if na(ex)
+                ex := ce
+                et := tj
+                eo := co
+                ln := co
+                lt := tj
+            else if fm and f_gt(cc, ex, w_)
+                if na(dp) or f_gt(dp, co, w_)
+                    dp := co
+                    dt := tj
+                ln := dp
+                lt := dt
+                ex := ce
+                et := tj
+                eo := co
+                fm := false
+                dp := na
+                dt := na
+            else if f_gt(ce, ex, w_)
+                ex := ce
+                et := tj
+                eo := co
+                fm := false
+                dp := na
+                dt := na
+            else
+                if f_gt(eo, cc, w_)
+                    fm := true
+                if na(dp) or f_gt(dp, co, w_)
+                    dp := co
+                    dt := tj
+    [ln, lt, ex, et, eo, fm, dp, dt]
+
+// a new story in direction d
 int   ns_d   = 0
 float ns_lo  = na
 int   ns_lot = na
@@ -800,14 +855,12 @@ float ns_hi  = na
 int   ns_hit = na
 float ns_lvl = na
 bool  t1_ev  = false
-float tol1   = nz(x1c, close) * 0.0004
 bool  a_new  = not na(a_bcnt) and a_bcnt != k1
 bool  first_ = k1 == 0
 if a_new
     k1 := a_bcnt
-// 1. the top timeframe's external high / low are ALWAYS the Bias Pointer's (its most recent structure:
-//    a new one forms on a close beyond the latest A / V-shape inside the range, or beyond the external
-//    high / low). Every breakout of it starts the story again, in its direction.
+// 1. the top timeframe's external high / low are ALWAYS the Bias Pointer's (its most recent structure).
+//    Every breakout of it starts the story again, in its direction.
 if a_new and not first_ and AD != 0
     ns_d   := AD
     ns_lvl := a_blvl
@@ -817,8 +870,6 @@ if a_new and not first_ and AD != 0
     ns_hit := a_chit
 if ns_d != 0
     t1_ev := true
-    if ns_d != D
-        rg_op := na        // a Daily breakout the other way clears it; a breakout the same way keeps it
     D   := ns_d
     up  := D > 0 ? "up" : "down"
     dn  := D > 0 ? "down" : "up"
@@ -831,20 +882,21 @@ if ns_d != 0
     XLt := ns_lot
     XH  := ns_hi
     XHt := ns_hit
-    // the tracker with the top timeframe, replayed over the story-timeframe candles of this leg (from the
-    // external low's time for buys, the external high's for sells): the pullback line = the last low that
-    // made a new high (sells: the last high that made a new low)
-    [r_ex, r_ext, r_dp, r_dpt, r_ln, r_lnt] = f_replay(D > 0 ? XLt : XHt, D)
+    rg_hi := na
+    rg_lo := na
+    // the rule run over this leg (from the external low's time for buys, the high's for sells)
+    [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt] = f_seed(D > 0 ? XLt : XHt, D)
     w      := D
-    tk_ext := r_ex
-    tk_et  := r_ext
-    tk_dip := r_dp
-    tk_conf := false
-    tk_dt  := r_dpt
-    tk_ln  := r_ln
-    tk_lt  := r_lnt
+    tk_ln  := s_ln
+    tk_lt  := s_lt
+    tk_ext := s_ex
+    tk_et  := s_et
+    tk_eo  := s_eo
+    tk_fm  := s_fm
+    tk_dip := s_dp
+    tk_dt  := s_dt
     f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, N1 + " " + DW + " breakout", D > 0, tg_boc)
-    f_story(time, D > 0 ? high : low, D > 0, N1 + " " + DW + " breakout (" + (t1_wick ? "wick" : "body close") + " beyond " + str.tostring(ns_lvl, format.mintick) + ").\nEvery External " + N2 + " break " + up + " is a continuation. Pullback line: the last " + N2 + " " + LO + " that made a new " + HI + ";\nan " + N2 + " close beyond it = the " + N1 + " pullback.")
+    f_story(time, D > 0 ? high : low, D > 0, N1 + " " + DW + " breakout (" + (t1_wick ? "wick" : "body close") + " beyond " + str.tostring(ns_lvl, format.mintick) + ").\nPullback line: the " + N2 + " " + LO + " that broke the last " + HI + "; it moves only when that " + HI + " breaks.\nAn " + N2 + " close beyond it = the " + N1 + " pullback.")
 
 // the external high / low follow the Bias Pointer's every candle (a side forms until it is fixed)
 if D != 0 and not na(a_chi) and not na(a_clo)
@@ -852,163 +904,97 @@ if D != 0 and not na(a_chi) and not na(a_clo)
     XHt := a_chit
     XL  := a_clo
     XLt := a_clot
-// the H4 range high / low is always inside the Daily range: one outside it (from an earlier Daily range) is dropped
-if D != 0 and not na(rg_op) and f_gt(rg_op, D > 0 ? XL : XH, -D)
-    rg_op := na
 
 // 2. the story timeframe, candle by candle
 if D != 0 and x2_new and not t1_ev and sph >= 1
-    // the tracker, in phases 1 and 2: every new extreme moves the line to the last opposite extreme that
-    // made it (phase 1: the pullback line = the last low that made a new high; phase 2: the last high
-    // that made a new low). Phase 3 is the story-timeframe range: its low and high are fixed until price
-    // breaks out of it either way.
     float ce = w > 0 ? x2H : x2L
     float co = w > 0 ? x2L : x2H
-    if sph <= 2
-        // the line moves only at an External break in the tracker's direction (the "cont" breaks, as the
-        // Bias Pointer): to the last low that broke the high (sells: the last high that broke the low)
-        if w > 0 ? ub : db
-            tk_ln := w > 0 ? ub_pl : db_ph
-            tk_lt := w > 0 ? ub_plt : db_pht
-        if na(tk_ext) or f_gt(x2c, tk_ext, w)
-            tk_ext := ce
-            tk_et  := x2t
-            tk_dip := na
-        else if f_gt(ce, tk_ext, w)
-            tk_ext := ce
-            tk_et  := x2t
-            if na(tk_dip) or f_gt(tk_dip, co, w)
-                tk_dip := co
-                tk_dt  := x2t
-        else if na(tk_dip) or f_gt(tk_dip, co, w)
+    string WW = w > 0 ? "bullish" : "bearish"
+    if not na(tk_ext) and tk_fm and f_gt(x2c, tk_ext, w)
+        // a REAL high broken: continuation; the line moves to the low that broke it
+        if (w == D ? br_with : br_agst)
+            f_brk(tk_et, tk_ext, N2 + " " + WW + " cont", w > 0, w == D ? br_wcol : br_acol)
+        if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
             tk_dt  := x2t
-    float c2_with = D > 0 ? c2u : c2d       // the close, read in the top timeframe's direction
-    float c2_agst = D > 0 ? c2d : c2u
-    if sph <= 2 and not na(rg_op) and f_gt(rg_op, c2_agst, D)
-        f_brk(rg_opt, rg_op, N2 + " range " + LO + " broken", D < 0, br_acol)
-        rg_op := na
-    if sph == 1
-        if (D > 0 ? ub : db) and br_with
-            f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
-        if not na(tk_ln) and f_gt(tk_ln, c2_agst, D)
-            // Pullback break: the top timeframe's pullback is confirmed
+        tk_ln  := tk_dip
+        tk_lt  := tk_dt
+        tk_ext := ce
+        tk_et  := x2t
+        tk_eo  := co
+        tk_fm  := false
+        tk_dip := na
+        tk_dt  := na
+    else if na(tk_ext) or f_gt(ce, tk_ext, w)
+        // a new high without a real pullback: the same leg goes on
+        tk_ext := ce
+        tk_et  := x2t
+        tk_eo  := co
+        tk_fm  := false
+        tk_dip := na
+        tk_dt  := na
+    else
+        if f_gt(tk_eo, x2c, w)
+            tk_fm := true
+        if na(tk_dip) or f_gt(tk_dip, co, w)
+            tk_dip := co
+            tk_dt  := x2t
+    if not na(tk_ln) and f_gt(tk_ln, x2c, w)
+        // a close beyond the line: the direction flips; the line = the high that broke the low
+        [f0, f0t] = f_ext2(tk_lt, w > 0)
+        float old_ln = tk_ln
+        int   old_lt = tk_lt
+        int   ph0 = sph
+        w      := -w
+        tk_ln  := f0
+        tk_lt  := f0t
+        tk_ext := w > 0 ? x2H : x2L
+        tk_et  := x2t
+        tk_eo  := w > 0 ? x2L : x2H
+        tk_fm  := false
+        tk_dip := na
+        tk_dt  := na
+        if w != D
+            // the story timeframe turns against the top timeframe
+            bool rl_brk = ph0 == 3 and not na(rg_lo) and f_gt(rg_lo, x2c, D)
             sph := 2
-            f_brk(tk_lt, tk_ln, "Pullback break", D < 0, br_acol)
-            f_tag(tg_pl, time, D > 0 ? low : high, "Pullback break · " + N1 + " pullback confirmed", D < 0, tg_pbc)
-            f_story(time, D > 0 ? low : high, D < 0, "Pullback break: an " + N2 + " close beyond the pullback line " + str.tostring(tk_ln, format.mintick) + ".\nThe " + N1 + " pullback is confirmed. " + N1 + " range: " + HI + " " + str.tostring(D > 0 ? XH : XL, format.mintick) + " (also the " + N2 + " range " + HI + ") · " + LO + " " + str.tostring(D > 0 ? XL : XH, format.mintick) + ".\n" + N2 + " is now " + AW + ": it goes on with " + N2 + " " + AW + " cont, or takes out its last " + HI + " (" + N2 + " pullback).")
-            // the tracker against: the last high that made a new low, starting at the highest high since
-            // the pullback line's low
-            [h0, h0t] = f_ext2(tk_lt, D > 0)
-            w      := -D
-            tk_ext := D > 0 ? x2L : x2H
-            tk_et  := x2t
-            tk_dip := na
-            tk_conf := false
-            tk_ln  := h0
-            rg_hi  := h0
-            rg_hit := h0t
-            rg_out := false
-            tk_lt  := h0t
-    else if sph == 2
-        if (D > 0 ? db : ub) and br_agst
-            f_brk(D > 0 ? db_lt : ub_lt, D > 0 ? db_lvl : ub_lvl, N2 + " " + AW + " cont", D < 0, br_acol)
-        if not na(rg_hi) and f_gt(c2_with, rg_hi, D)
-            // the story-timeframe range high broken on the top timeframe's side: the top timeframe continues. Back to the top timeframe-trend part:
-            // the pullback line = the last opposite extreme that made a new extreme, from t_from on
-            sph := 1
+            if ph0 == 1
+                f_brk(old_lt, old_ln, "Pullback break", D < 0, br_acol)
+                f_tag(tg_pl, time, D > 0 ? low : high, "Pullback break · " + N1 + " pullback confirmed", D < 0, tg_pbc)
+            else if rl_brk
+                f_brk(rg_lot, rg_lo, N2 + " range " + LO + " broken", D < 0, br_acol)
+            else
+                f_brk(old_lt, old_ln, "Pullback break (inside the " + N2 + " range)", D < 0, br_acol)
+            if ph0 == 1 or rl_brk or na(rg_hi)
+                // the range high = the top of the leg: the high that broke the low (inside the top-timeframe range)
+                rg_hi  := tk_ln
+                rg_hit := tk_lt
+                if f_gt(rg_hi, D > 0 ? XH : XL, D)
+                    rg_hi  := D > 0 ? XH : XL
+                    rg_hit := D > 0 ? XHt : XLt
+            f_story(time, D > 0 ? low : high, D < 0, (ph0 == 1 ? "Pullback break: the " + N1 + " pullback is confirmed. " + N1 + " range " + str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick) : rl_brk ? "The " + N2 + " range " + LO + " " + str.tostring(rg_lo, format.mintick) + " is broken: " + N2 + " is " + AW + " again" : "Pullback break inside the " + N2 + " range: " + N2 + " is " + AW) + ".\n" + N2 + " pullback line: the " + HI + " that broke the " + LO + " " + str.tostring(tk_ln, format.mintick) + "; " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + ".")
+        else if not na(rg_hi) and f_gt(x2c, rg_hi, D)
+            // straight through the range high: the top timeframe continues
+            sph   := 1
             f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
-            f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.\nPullback line: the last " + N2 + " " + LO + " that made a new " + HI + "; an " + N2 + " close beyond it = the " + N1 + " pullback.")
-            [c_ex, c_ext, c_dp, c_dpt, c_ln, c_lnt] = f_replay(tk_et, D)
-            w       := D
-            tk_ext  := c_ex
-            tk_et   := c_ext
-            tk_dip  := c_dp
-            tk_dt   := c_dpt
-            tk_ln   := c_ln
-            tk_lt   := c_lnt
-            tk_conf := false
-            [o_, ot_] = f_ext2(rg_hit, D < 0)
-            rg_op   := o_
-            rg_opt  := ot_
-            rg_hi   := na
-        else if not na(tk_ln) and f_gt(c2_with, tk_ln, D)
-            // the story timeframe takes out its last high: its pullback, back in alignment
-            // after the Daily continued out of an H4 range, its range high (the high that broke the low) stays as the range high
-            float rlo  = na(rg_op) ? tk_ext : rg_op
-            int   rlot = na(rg_op) ? tk_et : rg_opt
-            // the H4 range sits inside the Daily range: a forming high above the Daily external high (sells; buys: a
-            // low below the Daily external low) gives the Daily external high as the H4 range high
-            if f_gt(rlo, D > 0 ? XL : XH, -D)
-                rlo  := D > 0 ? XL : XH
-                rlot := D > 0 ? XLt : XHt
-            sph := 3
-            p3_ln := na
-            rg_op := na
-            f_brk(tk_lt, tk_ln, N2 + " pullback", D > 0, br_wcol)
-            f_tag(tg_al_, time, D > 0 ? high : low, N2 + " pullback · back in alignment with " + N1, D > 0, tg_alc)
-            f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: an " + N2 + " close beyond its last " + HI + " " + str.tostring(tk_ln, format.mintick) + ".\n" + N2 + " is back in alignment with the " + N1 + ". " + N2 + " range: " + LO + " " + str.tostring(rlo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ".\nWe work inside it until its " + HI + " (the " + N1 + " continues) or its " + LO + " (" + N2 + " " + AW + " cont) breaks.")
-            [e0, e0t] = f_ext2(rlot, D > 0)
-            w      := D
-            tk_ext := e0
-            tk_et  := e0t
-            tk_dip := na
-            tk_conf := false
-            tk_ln  := rlo
-            tk_lt  := rlot
-    else if sph == 3
-        if not na(rg_hi) and f_gt(c2_with, rg_hi, D)
-            // the story-timeframe range high broken on the top timeframe's side: the top timeframe continues. Back to the top timeframe-trend part:
-            // the pullback line = the last opposite extreme that made a new extreme, from t_from on
-            sph := 1
-            f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
-            f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.\nPullback line: the last " + N2 + " " + LO + " that made a new " + HI + "; an " + N2 + " close beyond it = the " + N1 + " pullback.")
-            [c_ex, c_ext, c_dp, c_dpt, c_ln, c_lnt] = f_replay(tk_lt, D)
-            w       := D
-            tk_ext  := c_ex
-            tk_et   := c_ext
-            tk_dip  := c_dp
-            tk_dt   := c_dpt
-            tk_ln   := c_ln
-            tk_lt   := c_lnt
-            // out of the H4 range: the pullback line = the last cont break's high that broke the low (this
-            // candle's, or the one that trailed inside the range), not a tiny candle at the bottom
-            bool c_xb = D > 0 ? ub : db
-            if c_xb or not na(p3_ln)
-                tk_ln := c_xb ? (D > 0 ? ub_pl : db_ph) : p3_ln
-                tk_lt := c_xb ? (D > 0 ? ub_plt : db_pht) : p3_lt
-            tk_conf := false
-            [o_, ot_] = f_ext2(rg_hit, D < 0)
-            rg_op   := o_
-            rg_opt  := ot_
-            rg_hi   := na
+            f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.\nPullback line: the " + LO + " that broke the " + HI + " " + str.tostring(tk_ln, format.mintick) + ".")
+            rg_hi := na
+            rg_lo := na
         else
-            if (D > 0 ? ub : db) and br_with
-                f_brk(D > 0 ? ub_lt : db_lt, D > 0 ? ub_lvl : db_lvl, N2 + " " + DW + " cont", D > 0, br_wcol)
-            // inside the H4 range the pullback line trails each cont break with the Daily (as in the Daily-trend part)
-            if D > 0 ? ub : db
-                p3_ln := D > 0 ? ub_pl : db_ph
-                p3_lt := D > 0 ? ub_plt : db_pht
-        if sph == 3 and not na(tk_ln) and f_gt(tk_ln, c2_agst, D)
-            // the story-timeframe range low broken: bearish cont again; the range high = the high that
-            // took out the low (the highest high since that low), not an inner high
-            [h1, h1t] = f_ext2(tk_lt, D > 0)
-            sph := 2
-            if br_agst
-                f_brk(tk_lt, tk_ln, N2 + " " + AW + " cont", D < 0, br_acol)
-            f_story(time, D > 0 ? low : high, D < 0, N2 + " " + AW + " cont: the " + N2 + " range " + LO + " " + str.tostring(tk_ln, format.mintick) + " is broken.\nThe " + N2 + " range " + HI + " is now " + str.tostring(h1, format.mintick) + ", the " + HI + " that took out the " + LO + ":\nit has to go for " + N2 + " not to be " + AW + ".")
-            [b_ex, b_ext, b_dp, b_dpt, b_ln, b_lnt] = f_replay(h1t, -D)
-            w      := -D
-            tk_ext := b_ex
-            tk_et  := b_ext
-            tk_dip := b_dp
-            tk_dt  := b_dpt
-            tk_conf := false
-            tk_ln  := nz(b_ln, h1)
-            tk_lt  := na(b_ln) ? h1t : b_lnt
-            rg_hi  := h1
-            rg_hit := h1t
-            rg_out := false
+            // the story-timeframe pullback: back in alignment, the story-timeframe range
+            sph    := 3
+            rg_lo  := tk_ln
+            rg_lot := tk_lt
+            f_brk(old_lt, old_ln, N2 + " pullback", D > 0, br_wcol)
+            f_tag(tg_al_, time, D > 0 ? high : low, N2 + " pullback · back in alignment with " + N1, D > 0, tg_alc)
+            f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
+    else if sph == 3 and not na(rg_hi) and f_gt(x2c, rg_hi, D)
+        // the range high broken: the top timeframe continues (the line has already followed the rule)
+        sph := 1
+        f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
+        f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.")
+        rg_hi := na
+        rg_lo := na
 
 // ── The lines at the last candle ─────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
@@ -1054,20 +1040,16 @@ if barstate.islast
             if sh_on
                 array.push(cx, box.new(r0, req, time, XL, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(color.black, 100), bgcolor = color.new(sh_bull, 100 - sh_op)))
                 array.push(cx, box.new(r0, XH, time, req, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(color.black, 100), bgcolor = color.new(sh_bear, 100 - sh_op)))
-        if sph == 3 and pl_on and not na(p3_ln)
-            f_lvl(p3_lt, p3_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (inside the " + N2 + " range)", pl_col, pl_sty, pl_w)
-        if sph == 1 and pl_on and not na(tk_ln)
-            f_lvl(tk_lt, tk_ln, "pullback line: the last " + N2 + " " + LO + " that made a new " + HI + " (an " + N2 + " close beyond it = the " + N1 + " pullback)", pl_col, pl_sty, pl_w)
+        if pl_on and not na(tk_ln)
+            string lw = w > 0 ? "low" : "high"
+            string hw = w > 0 ? "high" : "low"
+            f_lvl(tk_lt, tk_ln, (sph == 2 ? N2 + " pullback line" : "pullback line") + ": the " + N2 + " " + lw + " that broke the last " + hw + (sph == 1 ? " (an " + N2 + " close beyond it = the " + N1 + " pullback)" : sph == 2 ? " (an " + N2 + " close beyond it = " + N2 + " pullback)" : " (inside the " + N2 + " range)"), pl_col, pl_sty, pl_w)
         if sph == 2 and rh_on and rx_on and not na(tk_ext)
             f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
-        if sph <= 2 and rh_on and not na(rg_op)
-            f_lvl(rg_opt, rg_op, N2 + " range " + LO + ": the " + LO + " that broke the " + HI + " (stays until a pullback confirms a new " + HI + ")", rh_col, rh_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
             f_lvl(rg_hit, rg_hi, N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
-        if sph == 2 and pl_on and not na(tk_ln)
-            f_lvl(tk_lt, tk_ln, N2 + " pullback line: the last " + N2 + " " + HI + " that made a new " + LO + " (an " + N2 + " close beyond it = " + N2 + " pullback)", pl_col, pl_sty, pl_w)
-        if sph == 3 and rh_on and not na(tk_ln)
-            f_lvl(tk_lt, tk_ln, N2 + " range " + LO + " (a close beyond it: " + N2 + " " + AW + " cont)", rh_col, rh_sty, rh_w)
+        if sph == 3 and rh_on and not na(rg_lo)
+            f_lvl(rg_lot, rg_lo, N2 + " range " + LO + " (a close beyond it: " + N2 + " " + AW + " again)", rh_col, rh_sty, rh_w)
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
     bool  sk_same = sk_pos == tb_pos
     table st_tb   = sk_same ? tb : sk
@@ -1096,6 +1078,6 @@ if barstate.islast
             if sph >= 1 and not na(XH) and not na(XL)
                 f_row(3, N1 + " range", str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick))
             if sph >= 1 and not na(tk_ln)
-                f_row(4, sph == 1 ? "Pullback line" : sph == 2 ? N2 + " pullback line" : N2 + " range", sph == 3 ? str.tostring(tk_ln, format.mintick) + " – " + str.tostring(rg_hi, format.mintick) : str.tostring(tk_ln, format.mintick))
-            if sph == 2 and not na(rg_hi)
-                f_row(5, N2 + " range " + HI, str.tostring(rg_hi, format.mintick))
+                f_row(4, sph == 2 ? N2 + " pullback line" : "Pullback line", str.tostring(tk_ln, format.mintick))
+            if sph >= 2 and not na(rg_hi)
+                f_row(5, N2 + " range", (sph == 3 and not na(rg_lo) ? str.tostring(rg_lo, format.mintick) + " – " : HI + " ") + str.tostring(rg_hi, format.mintick))
