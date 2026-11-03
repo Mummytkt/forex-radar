@@ -423,6 +423,8 @@ var float tk_ext = na
 var int   tk_et  = na
 var float tk_eo  = na      // the far side of the body of the candle that made tk_ext
 var bool  tk_fm  = false
+var int   tk_cn  = 0
+var float tk_pc  = na
 var float tk_dip = na
 var int   tk_dt  = na
 var float rg_hi  = na      // the story-timeframe range high (buys; sells: its low): the top of the leg
@@ -449,6 +451,8 @@ f_inner(int t0, int w_) =>
     float ex = na
     float eo = na
     bool  fm = false
+    float pc = na
+    int   cn = 0
     float dp = na
     int   dt = na
     int   n = array.size(q2t)
@@ -475,20 +479,25 @@ f_inner(int t0, int w_) =>
                 ex := ce
                 eo := co
                 fm := false
+                cn := 0
                 dp := na
                 dt := na
             else if f_gt(ce, ex, w_)
                 ex := ce
                 eo := co
                 fm := false
+                cn := 0
                 dp := na
                 dt := na
             else
-                if f_gt(eo, cc, w_)
+                // a real pullback: a body close back beyond the body of the extreme candle, or 2+ closes in a row against the move
+                cn := not na(pc) and f_gt(pc, cc, w_) ? cn + 1 : 0
+                if f_gt(eo, cc, w_) or cn >= 2
                     fm := true
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
+            pc := cc
     [ln, lt]
 
 f_seed(int t0, int w_) =>
@@ -498,6 +507,8 @@ f_seed(int t0, int w_) =>
     int   et = na
     float eo = na
     bool  fm = false
+    float pc = na
+    int   cn = 0
     float dp = na
     int   dt = na
     float pv = na
@@ -535,6 +546,7 @@ f_seed(int t0, int w_) =>
                 et := tj
                 eo := co
                 fm := false
+                cn := 0
                 dp := na
                 dt := na
             else if f_gt(ce, ex, w_)
@@ -542,14 +554,18 @@ f_seed(int t0, int w_) =>
                 et := tj
                 eo := co
                 fm := false
+                cn := 0
                 dp := na
                 dt := na
             else
-                if f_gt(eo, cc, w_)
+                // a real pullback: a body close back beyond the body of the extreme candle, or 2+ closes in a row against the move
+                cn := not na(pc) and f_gt(pc, cc, w_) ? cn + 1 : 0
+                if f_gt(eo, cc, w_) or cn >= 2
                     fm := true
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
+            pc := cc
     [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt]
 
 // a new story in direction d
@@ -602,6 +618,7 @@ if ns_d != 0
     tk_et  := s_et
     tk_eo  := s_eo
     tk_fm  := s_fm
+    tk_cn  := 0
     tk_dip := s_dp
     tk_dt  := s_dt
     f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, N1 + " " + DW + " breakout", D > 0, tg_boc)
@@ -642,6 +659,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_et  := x2t
         tk_eo  := co
         tk_fm  := false
+        tk_cn  := 0
         tk_dip := na
         tk_dt  := na
     else if na(tk_ext) or f_gt(ce, tk_ext, w)
@@ -650,10 +668,12 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_et  := x2t
         tk_eo  := co
         tk_fm  := false
+        tk_cn  := 0
         tk_dip := na
         tk_dt  := na
     else
-        if f_gt(tk_eo, x2c, w)
+        tk_cn := not na(tk_pc) and f_gt(tk_pc, x2c, w) ? tk_cn + 1 : 0
+        if f_gt(tk_eo, x2c, w) or tk_cn >= 2
             tk_fm := true
         if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
@@ -676,6 +696,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_et  := x2t
         tk_eo  := w > 0 ? x2L : x2H
         tk_fm  := false
+        tk_cn  := 0
         tk_dip := na
         tk_dt  := na
         if w != D
@@ -736,6 +757,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         if rg_lf and not na(tk_ext) and f_gt(rg_lo, tk_ext, D)
             rg_lo  := tk_ext
             rg_lot := tk_et
+
+if x2_new
+    tk_pc := x2c
 
 // ── The lines at the last candle ─────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
