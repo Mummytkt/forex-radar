@@ -63,6 +63,8 @@ const string G_T1 = "3 · Top-timeframe lines"
 const string G_T2 = "4 · Story-timeframe lines"
 const string G_BR = "5 · Break lines (cont / pullback)"
 const string G_TG = "6 · Tags"
+const string G_AL = "7 · Alerts (each one also marked on the chart)"
+const string G_RZ = "8 · Reaction zones in the breakout leg"
 
 string plan     = input.string("D → H4 → M15", "Plan (top → story → entry)", options = ["W → D → H4", "D → H4 → M15", "H4 → M15 → M5", "Custom"], group = G_PL,
      tooltip = "Weekly story: W → D → H4. The top timeframe sets the direction, the story timeframe tells it. Put the chart on the story timeframe or lower.")
@@ -140,6 +142,27 @@ color  tg_tx    = input.color(color.white, "Tag text", group = G_TG, inline = "t
 string tg_sz    = input.string("Small", "size", ''' + SZ + ''', group = G_TG, inline = "tt")
 int    tg_op    = input.int(100, "Tag opacity % (on top of the colour box's own opacity)", minval = 0, maxval = 100, group = G_TG)
 int    tg_n     = input.int(1, "Tags kept of each kind (1 = only the newest)", minval = 1, maxval = 20, group = G_TG)
+bool   al_cw    = input.bool(true, "Story-timeframe continuation with the top timeframe (after its breakout / in alignment)", group = G_AL)
+bool   al_pb    = input.bool(true, "Pullback confirmed (top-timeframe pullback)", group = G_AL)
+bool   al_ca    = input.bool(true, "Story-timeframe continuation in the pullback direction", group = G_AL)
+bool   al_rl    = input.bool(true, "Story-timeframe pullback: back in alignment (the range)", group = G_AL)
+bool   al_dc    = input.bool(true, "Range high broken: the top timeframe continues", group = G_AL)
+bool   al_lb    = input.bool(true, "Range low broken / pullback break inside the range", group = G_AL)
+bool   al_mk    = input.bool(true, "Mark every alert point on the chart", group = G_AL, inline = "am")
+int    al_n     = input.int(40, "kept", minval = 1, maxval = 200, group = G_AL, inline = "am")
+color  al_cwc   = input.color(color.new(#00C853, 15), "With", group = G_AL, inline = "ac")
+color  al_cac   = input.color(color.new(#E53935, 15), "Against", group = G_AL, inline = "ac")
+color  al_tx    = input.color(color.white, "Text", group = G_AL, inline = "ac")
+bool   rz_on    = input.bool(true, "Show the reaction zones of the current breakout leg", group = G_RZ)
+bool   rz_fvg   = input.bool(true, "FVG", group = G_RZ, inline = "z1")
+color  rz_fvc   = input.color(color.new(#7E57C2, 80), "", group = G_RZ, inline = "z1")
+bool   rz_oc    = input.bool(true, "OC", group = G_RZ, inline = "z2")
+color  rz_occ   = input.color(#26A69A, "", group = G_RZ, inline = "z2")
+bool   rz_av    = input.bool(true, "V-shape (sells: A-shape)", group = G_RZ, inline = "z3")
+color  rz_avc   = input.color(#FFB300, "", group = G_RZ, inline = "z3")
+string rz_sty   = input.string("Dotted", "Line style", ''' + STY + ''', group = G_RZ, inline = "z4")
+int    rz_w     = input.int(1, "width", minval = 1, maxval = 4, group = G_RZ, inline = "z4")
+int    rz_n     = input.int(8, "Zones shown (newest first)", minval = 1, maxval = 30, group = G_RZ)
 
 string T1 = plan == "W → D → H4" ? "W" : plan == "D → H4 → M15" ? "D" : plan == "H4 → M15 → M5" ? "240" : cu_t1
 string T2 = plan == "W → D → H4" ? "D" : plan == "D → H4 → M15" ? "240" : plan == "H4 → M15 → M5" ? "15" : cu_t2
@@ -180,6 +203,7 @@ var array<float> q2h = array.new<float>()
 var array<float> q2l = array.new<float>()
 var array<int>   q2t = array.new<int>()
 var array<float> q2c = array.new<float>()
+var array<float> q2o = array.new<float>()
 var array<float> q2hw = array.new<float>()   // wick high / low (where the pullback line is drawn)
 var array<float> q2lw = array.new<float>()
 if x1_new
@@ -195,10 +219,12 @@ if x2_new
     array.push(q2l, x2L)
     array.push(q2t, x2t)
     array.push(q2c, x2c)
+    array.push(q2o, x2o)
     array.push(q2hw, x2h)
     array.push(q2lw, x2l)
     if array.size(q2t) > 1500
         array.shift(q2c)
+        array.shift(q2o)
         array.shift(q2hw)
         array.shift(q2lw)
         array.shift(q2h)
@@ -654,6 +680,18 @@ if D != 0 and not na(a_chi) and not na(a_clo)
     XL  := a_clo
     XLt := a_clot
 
+// alerts: one per event, each also marked on the chart (the on-chart preview of what would be sent)
+var array<label> al_l = array.new<label>()
+f_al(bool on, string ev, string txt, int dir, float lvl, bool with_) =>
+    if on
+        if barstate.isrealtime
+            alert('{"source":"mtf_storyline","symbol":"' + syminfo.ticker + '","tf":"' + T2 + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + str.tostring(lvl) + ',"text":"' + txt + '"}', alert.freq_once_per_bar)
+        if al_mk and chart_ok
+            array.push(al_l, label.new(time, dir > 0 ? high : low, "ALERT · " + txt, xloc = xloc.bar_time, style = dir > 0 ? label.style_label_down : label.style_label_up,
+                 color = with_ ? al_cwc : al_cac, textcolor = al_tx, size = size.tiny))
+            while array.size(al_l) > al_n
+                label.delete(array.shift(al_l))
+
 // 2. the story timeframe, candle by candle
 if D != 0 and x2_new and not t1_ev and sph >= 1
     float ce = w > 0 ? x2H : x2L
@@ -663,6 +701,10 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         // a REAL high broken: continuation; the line moves to the low that broke it
         if (w == D ? br_with : br_agst)
             f_brk(tk_et, tk_ext, N2 + " " + WW + " cont", w > 0, w == D ? br_wcol : br_acol)
+        if w == D
+            f_al(al_cw, sph == 3 ? "cont_aligned" : "cont_after_breakout", N2 + " " + WW + " continuation" + (sph == 3 ? " (in alignment with the " + N1 + ")" : " after the " + N1 + " breakout"), w, tk_ext, true)
+        else
+            f_al(al_ca, "cont_pullback", N2 + " " + WW + " continuation (" + N1 + " pullback still in play)", w, tk_ext, false)
         if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
             tk_dt  := x2t
@@ -727,6 +769,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             // the story timeframe turns against the top timeframe
             bool rl_brk = ph0 == 3 and not na(rg_lo) and f_gt(rg_lo, x2c, D)
             sph := 2
+            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, old_ln, false)
             if ph0 == 1
                 rg_lo  := nz(rl_x, D > 0 ? XL : XH)
                 rg_lot := na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
@@ -750,6 +793,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             f_story(time, D > 0 ? low : high, D < 0, (ph0 == 1 ? "Pullback break: the " + N1 + " pullback is confirmed. " + N1 + " range " + str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick) : rl_brk ? "The " + N2 + " range " + LO + " " + str.tostring(rg_lo, format.mintick) + " is broken: " + N2 + " is " + AW + " again" : "Pullback break inside the " + N2 + " range: " + N2 + " is " + AW) + ".\n" + N2 + " pullback line: the " + HI + " that broke the " + LO + " " + str.tostring(tk_ln, format.mintick) + "; " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + ".")
         else if not na(rg_hi) and f_gt(x2c, rg_hi, D)
             // straight through the range high: the top timeframe continues
+            f_al(al_dc, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true)
             sph   := 1
             f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
             [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
@@ -760,6 +804,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             rg_lo := na
         else
             // the story-timeframe pullback: back in alignment, the story-timeframe range
+            f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, old_ln, true)
             sph    := 3
             [b0, b0t] = f_ext2(rg_hit, D < 0)
             rg_lo  := nz(b0, tk_ln)
@@ -770,6 +815,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
     else if sph == 3 and not na(rg_hi) and f_gt(x2c, rg_hi, D)
         // the range high broken: the top timeframe continues (the line has already followed the rule)
+        f_al(al_dc, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true)
         sph := 1
         f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
         [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
@@ -849,6 +895,60 @@ if barstate.islast
             f_lvl(rl_xt, rl_x, N2 + " range " + LO + " if the pullback line breaks (the extreme " + LO + " of the breakout leg)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_lo)
             f_lvl(rg_lot, rg_lo, N2 + " range " + LO + (rg_lf ? " (forming)" : sph == 3 ? " (a close beyond it: " + N2 + " " + AW + " again)" : ""), rh_col, rg_lf ? rx_sty : rh_sty, rh_w)
+    // reaction zones inside the current breakout leg (from the pullback line to now), in the leg's direction:
+    // FVG (3-candle gap), OC (two candles the same way: first close / second open), V-shape (sells: A-shape,
+    // body level). A zone is gone once a story-timeframe candle closes through it.
+    if chart_ok and rz_on and D != 0 and sph >= 1 and not na(tk_lt)
+        int nq = array.size(q2t)
+        int k0 = nq - 1
+        while k0 > 0 and array.get(q2t, k0 - 1) >= tk_lt
+            k0 -= 1
+        k0 := math.max(k0, nq - 300)
+        int shown = 0
+        if nq > 3 and nq - 1 >= math.max(k0 + 1, 2)
+            for j = nq - 1 to math.max(k0 + 1, 2)
+                if shown >= rz_n
+                    break
+                float o1 = array.get(q2o, j - 1)
+                float c1 = array.get(q2c, j - 1)
+                float o2 = array.get(q2o, j)
+                float c2 = array.get(q2c, j)
+                float z_lo = na
+                float z_hi = na
+                string zk = ""
+                color zc = na
+                if rz_fvg and j >= k0 + 2 and (w > 0 ? array.get(q2lw, j) > array.get(q2hw, j - 2) : array.get(q2hw, j) < array.get(q2lw, j - 2))
+                    z_lo := w > 0 ? array.get(q2hw, j - 2) : array.get(q2hw, j)
+                    z_hi := w > 0 ? array.get(q2lw, j) : array.get(q2lw, j - 2)
+                    zk   := N2 + " FVG"
+                    zc   := rz_fvc
+                else if rz_oc and (w > 0 ? (c1 > o1 and c2 > o2) : (c1 < o1 and c2 < o2))
+                    z_lo := c1
+                    z_hi := c1
+                    zk   := N2 + " OC"
+                    zc   := rz_occ
+                else if rz_av and (w > 0 ? (c1 < o1 and c2 > o2) : (c1 > o1 and c2 < o2))
+                    z_lo := c1
+                    z_hi := c1
+                    zk   := N2 + (w > 0 ? " V-shape" : " A-shape")
+                    zc   := rz_avc
+                if zk != ""
+                    // still alive: no later close through it
+                    bool dead = false
+                    float edge = w > 0 ? z_lo : z_hi
+                    if j < nq - 1
+                        for m = j + 1 to nq - 1
+                            if f_gt(edge, array.get(q2c, m), w)
+                                dead := true
+                                break
+                    if not dead
+                        int zt = array.get(q2t, j - 1)
+                        if z_hi != z_lo
+                            array.push(cx, box.new(zt, z_hi, time, z_lo, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(zc, 100), bgcolor = zc))
+                            array.push(cb, label.new(bar_index + 3, (z_hi + z_lo) / 2, zk, style = label.style_label_left, color = color.new(color.black, 100), textcolor = lv_tx, size = f_sz(lv_sz)))
+                        else
+                            f_lvl(zt, z_lo, zk, zc, rz_sty, rz_w)
+                        shown += 1
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
     bool  sk_same = sk_pos == tb_pos
     table st_tb   = sk_same ? tb : sk
