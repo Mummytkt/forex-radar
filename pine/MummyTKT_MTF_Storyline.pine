@@ -882,11 +882,12 @@ f_seed(int t0, int w_) =>
                 // the range low waiting = the low the breaking move came from; the pullback line = the last
                 // low inside that move that broke a high, or (none) the broken high itself
                 [il, ilt] = f_inner(dt, w_)
-                pv  := dp
-                pvt := dt
                 bool inner = not na(ilt) and ilt > dt
-                ln := inner ? il : ex
-                lt := inner ? ilt : et
+                bool newlo = not na(ln) and f_gt(dp, ln, w_)
+                pv  := ln
+                pvt := lt
+                ln := inner ? il : newlo ? dp : ex
+                lt := inner ? ilt : newlo ? dt : et
                 ex := ce
                 et := tj
                 eo := co
@@ -984,13 +985,16 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_dt  := x2t
         // the range low waiting = the low the breaking move came from; the pullback line = the last low
         // inside that move that broke a high, or (none: a straight run) the broken high itself
+        // a NEW low (above the current line) that broke the high = the line; the move from the current line
+        // itself (no new low) = the last low inside the move, or the broken high itself
         [i_ln, i_lt] = f_inner(tk_dt, w)
         bool inner_ = not na(i_lt) and i_lt > tk_dt
-        tk_pv  := tk_dip
-        tk_pvt := tk_dt
-        tk_ln  := inner_ ? i_ln : tk_ext
-        tk_lt  := inner_ ? i_lt : tk_et
-        tk_bk  := not inner_
+        bool newlo_ = not na(tk_ln) and f_gt(tk_dip, tk_ln, w)
+        tk_pv  := tk_ln
+        tk_pvt := tk_lt
+        tk_ln  := inner_ ? i_ln : newlo_ ? tk_dip : tk_ext
+        tk_lt  := inner_ ? i_lt : newlo_ ? tk_dt : tk_et
+        tk_bk  := not inner_ and not newlo_
         tk_ext := ce
         tk_et  := x2t
         tk_eo  := co
@@ -1143,7 +1147,7 @@ if barstate.islast
         if sph >= 2 and rh_on and not na(rg_hi)
             f_lvl(rg_hit, rg_hi, N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
         if sph == 1 and rh_on and not na(tk_pv)
-            f_lvl(tk_pvt, tk_pv, N2 + " range " + LO + " if the pullback line breaks (the " + LO + " the breaking move came from)", rh_col, rx_sty, rh_w)
+            f_lvl(tk_pvt, tk_pv, N2 + " range " + LO + " if the pullback line breaks (the pullback line before it)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_lo)
             f_lvl(rg_lot, rg_lo, N2 + " range " + LO + (rg_lf ? " (forming)" : sph == 3 ? " (a close beyond it: " + N2 + " " + AW + " again)" : ""), rh_col, rg_lf ? rx_sty : rh_sty, rh_w)
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
