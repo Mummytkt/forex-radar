@@ -787,6 +787,7 @@ var int   rg_hit = na
 var float rg_lo  = na      // the story-timeframe range low (buys; sells: its high)
 var int   rg_lot = na
 var bool  rg_lf  = false   // the range low is still forming (price closed below the one set at the pullback)
+var bool  tk_bk  = false   // the pullback line is a broken high (sells: low): no low inside the move that broke it
 var float tk_pv  = na      // the pullback line BEFORE the current one (the range low if the line breaks)
 var int   tk_pvt = na
 string up = D > 0 ? "up" : "down"
@@ -948,6 +949,7 @@ if ns_d != 0
     [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt] = f_seed(D > 0 ? XLt : XHt, D)
     tk_pv  := s_pv
     tk_pvt := s_pvt
+    tk_bk  := false
     rg_lf  := false
     w      := D
     tk_ln  := s_ln
@@ -988,6 +990,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_pvt := tk_dt
         tk_ln  := inner_ ? i_ln : tk_ext
         tk_lt  := inner_ ? i_lt : tk_et
+        tk_bk  := not inner_
         tk_ext := ce
         tk_et  := x2t
         tk_eo  := co
@@ -1018,6 +1021,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         int   ph0 = sph
         tk_pv  := na
         tk_pvt := na
+        tk_bk  := false
         w      := -w
         tk_ln  := f0
         tk_lt  := f0t
@@ -1133,13 +1137,13 @@ if barstate.islast
         if pl_on and not na(tk_ln)
             string lw = w > 0 ? "low" : "high"
             string hw = w > 0 ? "high" : "low"
-            f_lvl(tk_lt, tk_ln, (sph == 2 ? N2 + " pullback line" : "pullback line") + ": the " + N2 + " " + lw + " that broke the last " + hw + (sph == 1 ? " (an " + N2 + " close beyond it = the " + N1 + " pullback)" : sph == 2 ? " (an " + N2 + " close beyond it = " + N2 + " pullback)" : " (inside the " + N2 + " range)"), pl_col, pl_sty, pl_w)
+            f_lvl(tk_lt, tk_ln, (sph == 2 ? N2 + " pullback line" : "pullback line") + ": " + (tk_bk ? "the broken " + N2 + " " + hw + " (no " + lw + " inside the move that broke it)" : "the " + N2 + " " + lw + " that broke the last " + hw) + (sph == 1 ? " (an " + N2 + " close beyond it = the " + N1 + " pullback)" : sph == 2 ? " (an " + N2 + " close beyond it = " + N2 + " pullback)" : " (inside the " + N2 + " range)"), pl_col, pl_sty, pl_w)
         if sph == 2 and rh_on and rx_on and not na(tk_ext)
             f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
             f_lvl(rg_hit, rg_hi, N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
         if sph == 1 and rh_on and not na(tk_pv)
-            f_lvl(tk_pvt, tk_pv, N2 + " range " + LO + " if the pullback line breaks (the pullback line before it)", rh_col, rx_sty, rh_w)
+            f_lvl(tk_pvt, tk_pv, N2 + " range " + LO + " if the pullback line breaks (the " + LO + " the breaking move came from)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_lo)
             f_lvl(rg_lot, rg_lo, N2 + " range " + LO + (rg_lf ? " (forming)" : sph == 3 ? " (a close beyond it: " + N2 + " " + AW + " again)" : ""), rh_col, rg_lf ? rx_sty : rh_sty, rh_w)
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
