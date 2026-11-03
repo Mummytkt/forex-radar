@@ -798,6 +798,55 @@ string AW = D > 0 ? "bearish" : "bullish"
 
 // the rule run over the story-timeframe candles from time t0 in direction w_ (continuations only):
 // [line, line time, leg extreme, its time, its body's far side, real pullback, dip, dip time]
+// inside the move from t0 on: the last low that broke a high (sells: high that broke a low), and its time
+f_inner(int t0, int w_) =>
+    float ln = na
+    int   lt = na
+    float ex = na
+    float eo = na
+    bool  fm = false
+    float dp = na
+    int   dt = na
+    int   n = array.size(q2t)
+    if n > 0 and not na(t0)
+        int k = n - 1
+        while k > 0 and array.get(q2t, k - 1) >= t0
+            k -= 1
+        for j = k to n - 1
+            float ce = w_ > 0 ? array.get(q2h, j) : array.get(q2l, j)
+            float co = w_ > 0 ? array.get(q2l, j) : array.get(q2h, j)
+            float cc = array.get(q2c, j)
+            int   tj = array.get(q2t, j)
+            if na(ex)
+                ex := ce
+                eo := co
+                ln := co
+                lt := tj
+            else if fm and f_gt(cc, ex, w_)
+                if na(dp) or f_gt(dp, co, w_)
+                    dp := co
+                    dt := tj
+                ln := dp
+                lt := dt
+                ex := ce
+                eo := co
+                fm := false
+                dp := na
+                dt := na
+            else if f_gt(ce, ex, w_)
+                ex := ce
+                eo := co
+                fm := false
+                dp := na
+                dt := na
+            else
+                if f_gt(eo, cc, w_)
+                    fm := true
+                if na(dp) or f_gt(dp, co, w_)
+                    dp := co
+                    dt := tj
+    [ln, lt]
+
 f_seed(int t0, int w_) =>
     float ln = na
     int   lt = na
@@ -829,10 +878,14 @@ f_seed(int t0, int w_) =>
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
-                pv  := ln
-                pvt := lt
-                ln := dp
-                lt := dt
+                // the range low waiting = the low the breaking move came from; the pullback line = the last
+                // low inside that move that broke a high, or (none) the broken high itself
+                [il, ilt] = f_inner(dt, w_)
+                pv  := dp
+                pvt := dt
+                bool inner = not na(ilt) and ilt > dt
+                ln := inner ? il : ex
+                lt := inner ? ilt : et
                 ex := ce
                 et := tj
                 eo := co
@@ -927,10 +980,14 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
             tk_dt  := x2t
-        tk_pv  := tk_ln
-        tk_pvt := tk_lt
-        tk_ln  := tk_dip
-        tk_lt  := tk_dt
+        // the range low waiting = the low the breaking move came from; the pullback line = the last low
+        // inside that move that broke a high, or (none: a straight run) the broken high itself
+        [i_ln, i_lt] = f_inner(tk_dt, w)
+        bool inner_ = not na(i_lt) and i_lt > tk_dt
+        tk_pv  := tk_dip
+        tk_pvt := tk_dt
+        tk_ln  := inner_ ? i_ln : tk_ext
+        tk_lt  := inner_ ? i_lt : tk_et
         tk_ext := ce
         tk_et  := x2t
         tk_eo  := co
