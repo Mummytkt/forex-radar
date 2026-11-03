@@ -125,7 +125,7 @@ bool   rz_av    = input.bool(true, "V-shape (sells: A-shape)", group = G_RZ, inl
 color  rz_avc   = input.color(#FFB300, "", group = G_RZ, inline = "z3")
 string rz_sty   = input.string("Dotted", "Line style", options = ["Solid", "Dashed", "Dotted"], group = G_RZ, inline = "z4")
 int    rz_w     = input.int(1, "width", minval = 1, maxval = 4, group = G_RZ, inline = "z4")
-int    rz_n     = input.int(8, "Zones shown (newest first)", minval = 1, maxval = 30, group = G_RZ)
+int    rz_n     = input.int(12, "Zones shown (newest first)", minval = 1, maxval = 30, group = G_RZ)
 
 string T1 = plan == "W → D → H4" ? "W" : plan == "D → H4 → M15" ? "D" : plan == "H4 → M15 → M5" ? "240" : cu_t1
 string T2 = plan == "W → D → H4" ? "D" : plan == "D → H4 → M15" ? "240" : plan == "H4 → M15 → M5" ? "15" : cu_t2
@@ -1257,9 +1257,12 @@ if barstate.islast
     // body level). A zone is gone once a story-timeframe candle closes through it. Zones that touch or sit
     // within a few pips of each other are merged into one ("H4 FVG + OC + V-shape").
     if chart_ok and rz_on and D != 0 and sph >= 1 and not na(tk_lt)
+        // the whole move price is trading in: against the top timeframe from the top of the leg (the range
+        // high), in alignment from the range low, else from the pullback line
+        int zt0 = sph == 2 and not na(rg_hit) ? rg_hit : sph == 3 and not na(rg_lot) ? rg_lot : tk_lt
         int nq = array.size(q2t)
         int k0 = nq - 1
-        while k0 > 0 and array.get(q2t, k0 - 1) >= tk_lt
+        while k0 > 0 and array.get(q2t, k0 - 1) >= zt0
             k0 -= 1
         k0 := math.max(k0, nq - 300)
         array<float>  mz_lo = array.new<float>()
