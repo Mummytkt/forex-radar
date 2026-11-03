@@ -273,6 +273,8 @@ method on_new_V(Layer s, float v) =>
         s.pb_lo := v
 
 f_structure(bool bd, bool bw) =>
+    // reserve 2000 candles of time history in the requested (Daily / Weekly) context for f_bt
+    int t_keep = time[2000]
     // Outer structure
     var string e_dir = "none"
     var float  e_hi = na
@@ -476,7 +478,7 @@ f_structure(bool bd, bool bw) =>
     // [1] + lookahead_on = state after the last COMPLETED daily candle (no repaint)
     [c_dir[1], c_hi[1], c_lo[1], c_hif[1], c_lof[1], c_hit[1], c_lot[1],
      b_cnt[1], b_dir[1], b_lvl[1], b_opp[1],
-     da[1], da_t[1], dv[1], dv_t[1], b_t[1]]
+     da[1], da_t[1], dv[1], dv_t[1], b_t[1] + 0 * nz(t_keep)]
 
 
 // ── Top timeframe: the reaction levels (where a pullback may start) ──────────
