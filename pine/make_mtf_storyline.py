@@ -180,6 +180,8 @@ var array<float> q2h = array.new<float>()
 var array<float> q2l = array.new<float>()
 var array<int>   q2t = array.new<int>()
 var array<float> q2c = array.new<float>()
+var array<float> q2hw = array.new<float>()   // wick high / low (where the pullback line is drawn)
+var array<float> q2lw = array.new<float>()
 if x1_new
     array.push(q1h, x1h)
     array.push(q1l, x1l)
@@ -193,8 +195,12 @@ if x2_new
     array.push(q2l, x2L)
     array.push(q2t, x2t)
     array.push(q2c, x2c)
+    array.push(q2hw, x2h)
+    array.push(q2lw, x2l)
     if array.size(q2t) > 1500
         array.shift(q2c)
+        array.shift(q2hw)
+        array.shift(q2lw)
         array.shift(q2h)
         array.shift(q2l)
         array.shift(q2t)
@@ -212,6 +218,17 @@ f_ext2(int t0, bool hiSide) =>
                 vt := array.get(q2t, k)
             k -= 1
     [v, vt]
+// the wick high (hiSide) / low of the story-timeframe candle that opened at time t
+f_wk(int t, bool hiSide) =>
+    float v = na
+    int   n = array.size(q2t)
+    if n > 0 and not na(t)
+        int k = n - 1
+        while k >= 0 and array.get(q2t, k) > t
+            k -= 1
+        if k >= 0 and array.get(q2t, k) == t
+            v := hiSide ? array.get(q2hw, k) : array.get(q2lw, k)
+    v
 // the tracker replayed over the story-timeframe candles from time t0, in direction w: the running
 // extreme, the opposite extreme since it, and the last opposite extreme that made a new extreme
 f_replay(int t0, int w_) =>
@@ -495,12 +512,13 @@ f_inner(int t0, int w_) =>
                 dt := na
             else
                 // a real pullback: a candle took out the previous candle's low (sells: high)
-                if not na(pc) and f_gt(pc, co, w_)
+                float cw = w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
+                if not na(pc) and f_gt(pc, cw, w_)
                     fm := true
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
-            pc := co
+            pc := w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
     [ln, lt]
 
 f_seed(int t0, int w_) =>
@@ -562,12 +580,13 @@ f_seed(int t0, int w_) =>
                 dt := na
             else
                 // a real pullback: a candle took out the previous candle's low (sells: high)
-                if not na(pc) and f_gt(pc, co, w_)
+                float cw = w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
+                if not na(pc) and f_gt(pc, cw, w_)
                     fm := true
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
-            pc := co
+            pc := w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
     [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt]
 
 // a new story in direction d
@@ -678,7 +697,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     else
         // a real pullback: a candle took out the previous candle's low (sells: high)
         float pco = w > 0 ? tk_pl2 : tk_ph2
-        if not na(pco) and f_gt(pco, co, w)
+        if not na(pco) and f_gt(pco, w > 0 ? x2l : x2h, w)
             tk_fm := true
         if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
@@ -771,8 +790,8 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
 
 if x2_new
     tk_pc  := x2c
-    tk_ph2 := x2H
-    tk_pl2 := x2L
+    tk_ph2 := x2h
+    tk_pl2 := x2l
 
 // ── The lines at the last candle ─────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
@@ -821,7 +840,7 @@ if barstate.islast
         if pl_on and not na(tk_ln)
             string lw = w > 0 ? "low" : "high"
             string hw = w > 0 ? "high" : "low"
-            f_lvl(tk_lt, tk_ln, (sph == 2 ? N2 + " pullback line" : "pullback line") + ": " + (tk_bk ? "the broken " + N2 + " " + hw + " (no " + lw + " inside the move that broke it)" : "the " + N2 + " " + lw + " that broke the last " + hw) + (sph == 1 ? " (an " + N2 + " close beyond it = the " + N1 + " pullback)" : sph == 2 ? " (an " + N2 + " close beyond it = " + N2 + " pullback)" : " (inside the " + N2 + " range)"), pl_col, pl_sty, pl_w)
+            f_lvl(tk_lt, nz(f_wk(tk_lt, w < 0), tk_ln), (sph == 2 ? N2 + " pullback line" : "pullback line") + ": " + (tk_bk ? "the broken " + N2 + " " + hw + " (no " + lw + " inside the move that broke it)" : "the " + N2 + " " + lw + " that broke the last " + hw) + (sph == 1 ? " (an " + N2 + " close beyond it = the " + N1 + " pullback)" : sph == 2 ? " (an " + N2 + " close beyond it = " + N2 + " pullback)" : " (inside the " + N2 + " range)"), pl_col, pl_sty, pl_w)
         if sph == 2 and rh_on and rx_on and not na(tk_ext)
             f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
@@ -858,7 +877,7 @@ if barstate.islast
             if sph >= 1 and not na(XH) and not na(XL)
                 f_row(3, N1 + " range", str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick))
             if sph >= 1 and not na(tk_ln)
-                f_row(4, sph == 2 ? N2 + " pullback line" : "Pullback line", str.tostring(tk_ln, format.mintick))
+                f_row(4, sph == 2 ? N2 + " pullback line" : "Pullback line", str.tostring(nz(f_wk(tk_lt, w < 0), tk_ln), format.mintick))
             if sph >= 2 and not na(rg_hi)
                 f_row(5, N2 + " range", (not na(rg_lo) ? str.tostring(rg_lo, format.mintick) + (rg_lf ? " (forming)" : "") + " – " : HI + " ") + str.tostring(rg_hi, format.mintick))
 '''
