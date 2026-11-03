@@ -614,6 +614,12 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_dt   := c_dpt
             tk_ln   := c_ln
             tk_lt   := c_lnt
+            // out of the H4 range: the pullback line = the last cont break's high that broke the low (this
+            // candle's, or the one that trailed inside the range), not a tiny candle at the bottom
+            bool c_xb = D > 0 ? ub : db
+            if c_xb or not na(p3_ln)
+                tk_ln := c_xb ? (D > 0 ? ub_pl : db_ph) : p3_ln
+                tk_lt := c_xb ? (D > 0 ? ub_plt : db_pht) : p3_lt
             tk_conf := false
             [o_, ot_] = f_ext2(rg_hit, D < 0)
             rg_op   := o_
