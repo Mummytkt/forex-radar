@@ -1110,9 +1110,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         // the range high broken: the top timeframe continues (the line has already followed the rule)
         sph := 1
         f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
-            [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
-            rl_x  := x0_
-            rl_xt := x0t_
+        [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
+        rl_x  := x0_
+        rl_xt := x0t_
         f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.")
         rg_hi := na
         rg_lo := na
