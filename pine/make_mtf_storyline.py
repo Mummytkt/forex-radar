@@ -427,8 +427,11 @@ var float tk_dip = na
 var int   tk_dt  = na
 var float rg_hi  = na      // the story-timeframe range high (buys; sells: its low): the top of the leg
 var int   rg_hit = na
-var float rg_lo  = na      // the story-timeframe range low (buys; sells: its high): the low that broke the high
+var float rg_lo  = na      // the story-timeframe range low (buys; sells: its high)
 var int   rg_lot = na
+var bool  rg_lf  = false   // the range low is still forming (price closed below the one set at the pullback)
+var float tk_pv  = na      // the pullback line BEFORE the current one (the range low if the line breaks)
+var int   tk_pvt = na
 string up = D > 0 ? "up" : "down"
 string dn = D > 0 ? "down" : "up"
 string HI = D > 0 ? "high" : "low"
@@ -447,6 +450,8 @@ f_seed(int t0, int w_) =>
     bool  fm = false
     float dp = na
     int   dt = na
+    float pv = na
+    int   pvt = na
     int   n = array.size(q2t)
     if n > 0 and not na(t0)
         int k = n - 1
@@ -467,6 +472,8 @@ f_seed(int t0, int w_) =>
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
+                pv  := ln
+                pvt := lt
                 ln := dp
                 lt := dt
                 ex := ce
@@ -488,7 +495,7 @@ f_seed(int t0, int w_) =>
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
-    [ln, lt, ex, et, eo, fm, dp, dt]
+    [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt]
 
 // a new story in direction d
 int   ns_d   = 0
@@ -528,7 +535,10 @@ if ns_d != 0
     rg_hi := na
     rg_lo := na
     // the rule run over this leg (from the external low's time for buys, the high's for sells)
-    [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt] = f_seed(D > 0 ? XLt : XHt, D)
+    [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt] = f_seed(D > 0 ? XLt : XHt, D)
+    tk_pv  := s_pv
+    tk_pvt := s_pvt
+    rg_lf  := false
     w      := D
     tk_ln  := s_ln
     tk_lt  := s_lt
@@ -560,6 +570,8 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
             tk_dt  := x2t
+        tk_pv  := tk_ln
+        tk_pvt := tk_lt
         tk_ln  := tk_dip
         tk_lt  := tk_dt
         tk_ext := ce
@@ -587,7 +599,11 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         [f0, f0t] = f_ext2(tk_lt, w > 0)
         float old_ln = tk_ln
         int   old_lt = tk_lt
+        float old_pv = tk_pv
+        int   old_pvt = tk_pvt
         int   ph0 = sph
+        tk_pv  := na
+        tk_pvt := na
         w      := -w
         tk_ln  := f0
         tk_lt  := f0t
@@ -602,10 +618,16 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             bool rl_brk = ph0 == 3 and not na(rg_lo) and f_gt(rg_lo, x2c, D)
             sph := 2
             if ph0 == 1
+                rg_lo  := na(old_pv) ? (D > 0 ? XL : XH) : old_pv
+                rg_lot := na(old_pv) ? (D > 0 ? XLt : XHt) : old_pvt
+                rg_lf  := false
                 f_brk(old_lt, old_ln, "Pullback break", D < 0, br_acol)
                 f_tag(tg_pl, time, D > 0 ? low : high, "Pullback break · " + N1 + " pullback confirmed", D < 0, tg_pbc)
             else if rl_brk
                 f_brk(rg_lot, rg_lo, N2 + " range " + LO + " broken", D < 0, br_acol)
+                rg_lf  := true
+                rg_lo  := tk_ext
+                rg_lot := tk_et
             else
                 f_brk(old_lt, old_ln, "Pullback break (inside the " + N2 + " range)", D < 0, br_acol)
             if ph0 == 1 or rl_brk or na(rg_hi)
@@ -626,8 +648,10 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         else
             // the story-timeframe pullback: back in alignment, the story-timeframe range
             sph    := 3
-            rg_lo  := tk_ln
-            rg_lot := tk_lt
+            [b0, b0t] = f_ext2(rg_hit, D < 0)
+            rg_lo  := nz(b0, tk_ln)
+            rg_lot := na(b0) ? tk_lt : b0t
+            rg_lf  := false
             f_brk(old_lt, old_ln, N2 + " pullback", D > 0, br_wcol)
             f_tag(tg_al_, time, D > 0 ? high : low, N2 + " pullback · back in alignment with " + N1, D > 0, tg_alc)
             f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
@@ -638,6 +662,15 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.")
         rg_hi := na
         rg_lo := na
+
+    // while the story timeframe is against the top timeframe: a close beyond the range low makes it form again
+    // (it follows the leg's extreme until the story-timeframe pullback fixes it at the bottom)
+    if sph == 2 and not na(rg_lo)
+        if not rg_lf and f_gt(rg_lo, x2c, D)
+            rg_lf := true
+        if rg_lf and not na(tk_ext) and f_gt(rg_lo, tk_ext, D)
+            rg_lo  := tk_ext
+            rg_lot := tk_et
 
 // ── The lines at the last candle ─────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
@@ -691,8 +724,10 @@ if barstate.islast
             f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
             f_lvl(rg_hit, rg_hi, N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
-        if sph == 3 and rh_on and not na(rg_lo)
-            f_lvl(rg_lot, rg_lo, N2 + " range " + LO + " (a close beyond it: " + N2 + " " + AW + " again)", rh_col, rh_sty, rh_w)
+        if sph == 1 and rh_on and not na(tk_pv)
+            f_lvl(tk_pvt, tk_pv, N2 + " range " + LO + " if the pullback line breaks (the pullback line before it)", rh_col, rx_sty, rh_w)
+        if sph >= 2 and rh_on and not na(rg_lo)
+            f_lvl(rg_lot, rg_lo, N2 + " range " + LO + (rg_lf ? " (forming)" : sph == 3 ? " (a close beyond it: " + N2 + " " + AW + " again)" : ""), rh_col, rg_lf ? rx_sty : rh_sty, rh_w)
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
     bool  sk_same = sk_pos == tb_pos
     table st_tb   = sk_same ? tb : sk
@@ -723,7 +758,7 @@ if barstate.islast
             if sph >= 1 and not na(tk_ln)
                 f_row(4, sph == 2 ? N2 + " pullback line" : "Pullback line", str.tostring(tk_ln, format.mintick))
             if sph >= 2 and not na(rg_hi)
-                f_row(5, N2 + " range", (sph == 3 and not na(rg_lo) ? str.tostring(rg_lo, format.mintick) + " – " : HI + " ") + str.tostring(rg_hi, format.mintick))
+                f_row(5, N2 + " range", (not na(rg_lo) ? str.tostring(rg_lo, format.mintick) + (rg_lf ? " (forming)" : "") + " – " : HI + " ") + str.tostring(rg_hi, format.mintick))
 '''
 
 body = HEAD + ENGINE + BODY + NOTES + STORY
