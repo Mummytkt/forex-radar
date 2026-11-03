@@ -36,6 +36,8 @@ bool   t1_wick  = input.string("Body close", "Top-timeframe break by", options =
      tooltip = "Body close (default): the top-timeframe candle must close beyond its external level (the level is on the wick).") == "Wick"
 bool   t2_wick  = input.string("Body close", "Story-timeframe break by", options = ["Body close", "Wick"], group = G_PL) == "Wick"
 bool   d_body   = input.string("Wick", "External highs / lows from", options = ["Wick", "Body"], group = G_PL) == "Body"
+bool   h2_body  = input.string("Body", "Story-timeframe levels from", options = ["Body", "Wick"], group = G_PL,
+     tooltip = "Body: the story-timeframe lines (pullback lines, H4 range high / low) sit on the candle bodies, so a break is a body close beyond a body. Wick: they sit on the wicks.") == "Body"
 
 string st_mode  = input.string("Dots only (hover)", "Story on the chart", options = ["Dots only (hover)", "Latest note + dots (hover)", "Latest note only", "Last N notes", "Off"], group = G_ST)
 int    st_n     = input.int(8, "N (notes or dots kept)", minval = 1, maxval = 40, group = G_ST)
@@ -484,6 +486,9 @@ f_cnd() =>
 [a_cdir, a_chi, a_clo, a_chif, a_clof, a_chit, a_clot, a_bcnt, a_bdir, a_blvl, a_bopp, a_da, a_dat, a_dv, a_dvt, a_bt] = request.security(syminfo.tickerid, T1, f_structure(d_body, t1_wick), lookahead = barmerge.lookahead_on)
 [x1o, x1h, x1l, x1c, x1t] = request.security(syminfo.tickerid, T1, f_cnd(), lookahead = barmerge.lookahead_on)
 [x2o, x2h, x2l, x2c, x2t] = request.security(syminfo.tickerid, T2, f_cnd(), lookahead = barmerge.lookahead_on)
+// the story-timeframe candle's high / low for the story lines (body or wick, per "Story-timeframe levels from")
+float x2H = h2_body ? math.max(x2o, x2c) : x2h
+float x2L = h2_body ? math.min(x2o, x2c) : x2l
 bool x1_new  = not na(x1t) and x1t != nz(x1t[1])
 bool x2_new  = not na(x2t) and x2t != nz(x2t[1])
 bool chart_ok = timeframe.in_seconds() <= timeframe.in_seconds(T2)
@@ -510,8 +515,8 @@ if x1_new
         array.shift(q1l)
         array.shift(q1t)
 if x2_new
-    array.push(q2h, x2h)
-    array.push(q2l, x2l)
+    array.push(q2h, x2H)
+    array.push(q2l, x2L)
     array.push(q2t, x2t)
     array.push(q2c, x2c)
     if array.size(q2t) > 1500
@@ -609,6 +614,8 @@ var int   u_plt = na
 var float d_ll  = na
 var float d_ph  = na
 var int   d_pht = na
+var float u_plb = na      // the same pullback low / high read on the story-line side (body or wick)
+var float d_phb = na
 var float p2o   = na
 var float p2c   = na
 bool  ub     = false
@@ -641,12 +648,13 @@ if x2_new
         ub     := true
         ub_lvl := ea
         ub_lt  := eat
-        ub_pl  := na(u_pl) ? x2l : u_pl
+        ub_pl  := na(u_pl) ? x2L : u_plb
         ub_plt := na(u_pl) ? x2t : u_plt
         array.clear(xa_l)
         array.clear(xa_t)
         u_hh := x2h
         u_pl := na
+        u_plb := na
     bool  nh  = na(d_ph) or x2h > d_ph
     int   pht = nh ? x2t : d_pht
     [ev, evt] = f_last(xv_l, xv_t, nh ? x2t - 1 : pht)
@@ -654,12 +662,13 @@ if x2_new
         db     := true
         db_lvl := ev
         db_lt  := evt
-        db_ph  := na(d_ph) ? x2h : d_ph
+        db_ph  := na(d_ph) ? x2H : d_phb
         db_pht := na(d_ph) ? x2t : d_pht
         array.clear(xv_l)
         array.clear(xv_t)
         d_ll := x2l
         d_ph := na
+        d_phb := na
     if not na(p2o)
         if p2c > p2o and x2c < x2o
             array.push(xa_l, math.max(p2o, p2c))
@@ -671,16 +680,22 @@ if x2_new
         if na(u_hh) or x2h > u_hh
             u_hh := x2h
             u_pl := na
-        else if na(u_pl) or x2l < u_pl
-            u_pl  := x2l
-            u_plt := x2t
+            u_plb := na
+        else
+            if na(u_pl) or x2l < u_pl
+                u_pl  := x2l
+                u_plt := x2t
+            u_plb := na(u_plb) ? x2L : math.min(u_plb, x2L)
     if not db
         if na(d_ll) or x2l < d_ll
             d_ll := x2l
             d_ph := na
-        else if na(d_ph) or x2h > d_ph
-            d_ph  := x2h
-            d_pht := x2t
+            d_phb := na
+        else
+            if na(d_ph) or x2h > d_ph
+                d_ph  := x2h
+                d_pht := x2t
+            d_phb := na(d_phb) ? x2H : math.max(d_phb, x2H)
     p2o := x2o
     p2c := x2c
 
@@ -845,8 +860,8 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     // made it (phase 1: the pullback line = the last low that made a new high; phase 2: the last high
     // that made a new low). Phase 3 is the story-timeframe range: its low and high are fixed until price
     // breaks out of it either way.
-    float ce = w > 0 ? x2h : x2l
-    float co = w > 0 ? x2l : x2h
+    float ce = w > 0 ? x2H : x2L
+    float co = w > 0 ? x2L : x2H
     if sph <= 2
         // the line moves only at an External break in the tracker's direction (the "cont" breaks, as the
         // Bias Pointer): to the last low that broke the high (sells: the last high that broke the low)
@@ -884,7 +899,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             // the pullback line's low
             [h0, h0t] = f_ext2(tk_lt, D > 0)
             w      := -D
-            tk_ext := D > 0 ? x2l : x2h
+            tk_ext := D > 0 ? x2L : x2H
             tk_et  := x2t
             tk_dip := na
             tk_conf := false
