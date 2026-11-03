@@ -6,7 +6,7 @@ import html
 import random
 
 esc = html.escape
-W, H = 2200, 1250
+W, H = 2200, 1560
 L, R, T, B = 60, 1500, 120, 1010
 G, RD, BL, OR, GR, INK = "#16a34a", "#dc2626", "#0284c7", "#ea580c", "#6b7280", "#111827"
 
@@ -46,6 +46,7 @@ OLD_HI = 98.8                    # the Daily external high that breaks (Daily br
 D_LO = min(cs[i][2] for i in range(3))
 w, ext, ext_i, formed = 1, bh(0), 0, False
 line, line_i = bl(0), 0
+desc = "the low the breakout came from"
 segs, events = [], []            # segs: (i0, i1, price, kind)  events: (i, kind, price)
 flips = 0
 for i in range(1, n):
@@ -55,8 +56,9 @@ for i in range(1, n):
     if gt(cl(i), ext) and formed:
         # continuation: the low that broke the high becomes the line
         k = min(range(ext_i + 1, i + 1), key=low_body) if w > 0 else max(range(ext_i + 1, i + 1), key=low_body)
-        segs.append((line_i, i, line, 'line'))
+        segs.append((line_i, i, line, desc, 'the high broke: the line moves up' if w > 0 else 'the low broke: the line moves down'))
         line, line_i = low_body(k), k
+        desc = "the low that broke the high" if w > 0 else "the high that broke the low"
         events.append((i, 'cont', ext, ext_i))
         ext, ext_i, formed = top_body(i), i, False
         continue
@@ -66,14 +68,15 @@ for i in range(1, n):
         formed = True            # a body closed back beyond the body of the top candle: a real pullback
     if gt(line, cl(i)):
         # flip: the high that broke the low becomes the line
-        segs.append((line_i, i, line, 'line'))
         flips += 1
+        segs.append((line_i, i, line, desc, 'closed below: Pullback break' if flips == 1 else 'closed above: H4 pullback'))
         events.append((i, 'flip%d' % flips, line, line_i))
         k = max(range(line_i, i + 1), key=top_body) if w > 0 else min(range(line_i, i + 1), key=top_body)
         w = -w
         line, line_i = (bh(k) if w < 0 else bl(k)), k
+        desc = "the high that broke the low (top of the leg)" if w < 0 else "the low that broke the high (H4 range low)"
         ext, ext_i, formed = (bl(i) if w < 0 else bh(i)), i, False
-segs.append((line_i, n - 1, line, 'line'))
+segs.append((line_i, n - 1, line, desc, ''))
 
 # ── drawing ──────────────────────────────────────────────────────────────────────────────────────
 lo, hi = 93.5, 117.5
@@ -112,9 +115,11 @@ for i, (op, h, l, c) in enumerate(cs):
     o.append(f'<line x1="{X(i):.1f}" x2="{X(i):.1f}" y1="{Y(h):.1f}" y2="{Y(l):.1f}" stroke="{col}" stroke-width="1.4"/>')
     o.append(f'<rect x="{X(i) - dx * .32:.1f}" y="{y1:.1f}" width="{dx * .64:.1f}" height="{max(y2 - y1, 1.5):.1f}" fill="{col}" rx="1"/>')
 # the pullback line, step by step
-for i0, i1, p, _ in segs:
+PL_LABELS = []
+for k_, (i0, i1, p, d_, end) in enumerate(segs, 1):
     o.append(f'<line x1="{X(i0):.1f}" x2="{X(i1):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{BL}" stroke-width="3"/>')
     o.append(f'<circle cx="{X(i0):.1f}" cy="{Y(p):.1f}" r="6" fill="#fff" stroke="{BL}" stroke-width="2.4"/>')
+    PL_LABELS.append((k_, i0, i1, p, d_, end))
 
 
 def tag(i, p, tx, col, below=False):
@@ -138,14 +143,14 @@ for (i, kind, lvl, li) in events:
         o.append(f'<line x1="{X(li):.1f}" x2="{X(i):.1f}" y1="{Y(lvl):.1f}" y2="{Y(lvl):.1f}" stroke="{G if i < flip1[0] or (flip2 and i > flip2[0]) else RD}" stroke-width="1.4" stroke-dasharray="4 4"/>')
         up = not (flip1[0] < i < (flip2[0] if flip2 else n))
         o.append(f'<text x="{(X(li) + X(i)) / 2:.1f}" y="{Y(lvl) + (-8 if up else 20):.1f}" font-size="13" font-weight="700" fill="{G if up else RD}" text-anchor="middle">{"H4 bullish cont" if up else "H4 bearish cont"}</text>')
-tag(flip1[0], cs[flip1[0]][2], "Pullback break · Daily pullback confirmed", RD, below=True)
+tag(flip1[0] + 3, flip1[2] + 0.2, "PL3 broken: Pullback break · Daily pullback confirmed", RD, below=True)
 if flip2:
-    tag(flip2[0], cs[flip2[0]][1], "H4 pullback · back in alignment with Daily", G)
+    tag(flip2[0] - 3, flip2[2] - 0.2, "PL6 broken: H4 pullback · back in alignment", G)
 
 # numbered steps on the chart
 first_cont = next(e for e in events if e[1] == 'cont')
 num(first_cont[0] + 1, first_cont[2] + 3.0, 2)
-num(flip1[0] + 2, flip1[2] - 2.6, 3)
+num(flip1[0] - 3, flip1[2] - 1.6, 3)
 bear_conts = [e for e in events if e[1] == 'cont' and flip1[0] < e[0] < (flip2[0] if flip2 else n)]
 if bear_conts:
     num(bear_conts[0][0] + 1, bear_conts[0][2] - 3.2, 4)
@@ -155,9 +160,17 @@ if flip2:
     if after:
         num(after[0][0] + 1, after[0][2] + 3.0, 6)
 
+for k_, i0, i1, p, d_, end in PL_LABELS:
+    t1 = f"PL{k_} {p:.2f}"
+    wb = 14 + len(t1) * 8.2
+    o.append(f'<rect x="{X(i0) + 10:.1f}" y="{Y(p) - 26:.1f}" width="{wb:.1f}" height="21" rx="5" fill="{BL}"/>')
+    o.append(f'<text x="{X(i0) + 17:.1f}" y="{Y(p) - 10.5:.1f}" font-size="14" font-weight="800" fill="#fff">{t1}</text>')
+    if end:
+        o.append(f'<text x="{X(i1) - 6:.1f}" y="{Y(p) + 19:.1f}" font-size="12.5" font-weight="700" fill="{BL}" text-anchor="end">{esc(end)}</text>')
+
 # the story panel
 PX = 1700
-o.append(f'<rect x="{PX - 24}" y="110" width="{W - PX + 4}" height="1110" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>')
+o.append(f'<rect x="{PX - 24}" y="110" width="{W - PX + 4}" height="1420" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>')
 o.append(f'<text x="{PX}" y="148" font-size="20" font-weight="800" fill="#111">THE RULE</text>')
 notes = [
     ("1", "Daily breakout. H4 runs with it."),
@@ -168,6 +181,9 @@ notes = [
     ("6", "From here it repeats: each high broken moves the line up to the low that broke it."),
     ("?", "A tiny pause in a run is not a high: a high counts once a candle body closes back below the body of the candle that made it (a real pullback). Is that right?"),
 ]
+notes = notes + [("PL", "The pullback lines, in order:")]
+for k_, i0, i1, p, d_, end in PL_LABELS:
+    notes.append(("·", f"PL{k_} {p:.2f} = {d_}" + (f"; {end}" if end else "; still standing")))
 yy = 186
 for kk, s in notes:
     q = kk == "?"
