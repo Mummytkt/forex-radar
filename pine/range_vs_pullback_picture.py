@@ -9,9 +9,10 @@ W, H = 2200, 1300
 L, R, T, B = 60, 1560, 130, 1060
 BL, OR, G, RD, GR, INK = "#0284c7", "#ea580c", "#16a34a", "#dc2626", "#6b7280", "#111827"
 
-WAY = [(0, 100.0), (3, 104.2), (4, 103.6), (6, 102.4), (9, 106.2), (10, 105.6), (12, 104.8), (15, 108.3),
-       (16, 107.8), (18, 107.0), (21, 110.2), (23, 108.4), (25, 109.2), (28, 106.4), (30, 107.6), (33, 104.4),
-       (35, 105.6), (38, 103.0), (40, 105.9), (43, 108.2), (44, 107.6), (46, 106.7), (50, 111.6)]
+WAY = [(0, 100.0), (3, 103.0), (5, 101.5), (7, 104.0), (9, 102.5), (11, 105.2), (13, 103.7), (15, 106.6),
+       (17, 105.0), (19, 108.0), (21, 106.4), (24, 110.4), (26, 108.3), (28, 109.6), (30, 107.0), (31, 107.4),
+       (33, 105.2), (35, 106.9), (37, 104.0), (39, 105.6), (41, 102.6), (44, 106.6), (46, 105.0), (49, 108.6),
+       (51, 107.2), (54, 111.4)]
 
 
 def candles(way, seed=4, noise=0.10, wick=0.35):
@@ -29,7 +30,7 @@ def candles(way, seed=4, noise=0.10, wick=0.35):
     return out
 
 
-cs = candles(WAY)
+cs = candles(WAY)[:47]
 n = len(cs)
 bh = lambda i: max(cs[i][0], cs[i][3])
 bl = lambda i: min(cs[i][0], cs[i][3])
@@ -68,6 +69,7 @@ w = 1
 leg0 = 0
 pl, pli = seed(0, 0, 1)
 edge, edgei = pl, pli          # the trailing range edge (buys: range low)
+edge_from = 0
 prev_pl, prev_pli = None, None
 fixed = []                     # range edges fixed at a pullback confirmation: (i0, value, side, from_i)
 i = 1
@@ -77,13 +79,13 @@ while i < n:
     if nli > pli:
         pl_segs.append((pli, i, pl))
         # the old pullback line becomes the trailing range edge
-        rg_segs.append((edgei, i, edge, 'lo' if w > 0 else 'hi'))
-        edge, edgei = pl, pli
+        rg_segs.append((edge_from, i, edge, 'lo' if w > 0 else 'hi'))
+        edge, edgei, edge_from = pl, pli, i
         pl, pli = nl, nli
         ev.append((i, 'step', w))
     if gtw(pl, cl(i)):
         pl_segs.append((pli, i, pl))
-        rg_segs.append((edgei, i, edge, 'lo' if w > 0 else 'hi'))
+        rg_segs.append((edge_from, i, edge, 'lo' if w > 0 else 'hi'))
         k = max(range(pli, i + 1), key=bh) if w > 0 else min(range(pli, i + 1), key=bl)
         far = bh(k) if w > 0 else bl(k)
         ev.append((i, 'pb%d' % w, pl, far, edge, k, edgei))
@@ -92,13 +94,13 @@ while i < n:
         w = -w
         leg0 = k
         pl, pli = seed(leg0, i, w)
-        edge, edgei = far, k     # the new leg's trailing edge starts at the extreme
+        edge, edgei, edge_from = far, k, i     # the new leg's trailing edge starts at the extreme
     i += 1
 pl_segs.append((pli, n - 1, pl))
-rg_segs.append((edgei, n - 1, edge, 'lo' if w > 0 else 'hi'))
+rg_segs.append((edge_from, n - 1, edge, 'lo' if w > 0 else 'hi'))
 
 # ── drawing ──────────────────────────────────────────────────────────────────────────────────────
-lo, hi = 98.5, 113.0
+lo, hi = 98.8, 112.6
 dx = (R - L) / (n + 2)
 X = lambda i: L + dx * (i + 0.5)
 Y = lambda p: B - (p - lo) / (hi - lo) * (B - T)
@@ -121,8 +123,16 @@ def label(x, y, txt, col, above=True):
     o.append(f'<text x="{x + 7:.1f}" y="{yy + 16:.1f}" font-size="14" font-weight="800" fill="#fff">{esc(txt)}</text>')
 
 
+PLV = {}
+for i, (a_, b_, p) in enumerate(pl_segs):
+    PLV.setdefault(round(p, 5), i)
 for i0, i1, p, side in rg_segs:
-    o.append(f'<line x1="{X(i0):.1f}" x2="{X(i1):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{OR}" stroke-width="2" stroke-dasharray="8 5"/>')
+    o.append(f'<line x1="{X(i0):.1f}" x2="{X(i1):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{OR}" stroke-width="2.4" stroke-dasharray="8 5"/>')
+    k_ = PLV.get(round(p, 5))
+    nm = ("PL%d" % k_) if k_ else "the top" if side == 'hi' else "the start"
+    dy_ = 18 if side == "lo" else -8
+    txt = "range " + ("high" if side == "hi" else "low") + " = " + nm
+    o.append(f'<text x="{X(i0) + 4:.1f}" y="{Y(p) + dy_:.1f}" font-size="12.5" font-weight="700" fill="{OR}">{esc(txt)}</text>')
 for k0, i1, p, side in fixed:
     o.append(f'<line x1="{X(i1):.1f}" x2="{X(n):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{OR}" stroke-width="3.4"/>')
     label(X(n) - 190, Y(p), f"range {'high' if side == 'hi' else 'low'} {p:.2f}", OR, above=side == 'hi')
@@ -143,9 +153,9 @@ def tag(i, p, txt, col, below=False):
 
 for e in ev:
     if e[1] == 'pb1':
-        tag(e[0], cs[e[0]][2], "PL3 broken: pullback confirmed · range = PL2 ... the top", RD, below=True)
+        tag(e[0], cs[e[0]][2], "PL%d broken: pullback confirmed · range = PL%d ... the top" % (PLV.get(round(e[2], 5)), PLV.get(round(e[4], 5))), RD, below=True)
     elif e[1] == 'pb-1':
-        tag(e[0], cs[e[0]][1] + 0.4, "PL6 broken (sells mirror?): range = the bottom ... PL5", G)
+        tag(e[0], cs[e[0]][1] + 0.4, "PL%d broken: pullback over · range = the bottom ... PL%d" % (PLV.get(round(e[2], 5)), PLV.get(round(e[4], 5))), G)
 o.append(f'<text x="{X(n) + 10:.1f}" y="{Y(lo + 0.6):.1f}" font-size="13" fill="{GR}">PL0 = the start</text>')
 
 # the rule panel
@@ -153,11 +163,11 @@ PX = 1700
 o.append(f'<rect x="{PX - 24}" y="120" width="{W - PX + 4}" height="1140" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>')
 notes = [
     ("AS I UNDERSTAND IT (buys)", None),
-    ("Pullback line (blue)", "The LAST low that broke a high. Every new high made from a new low moves it to that low (PL1, PL2, PL3). Internal lows that broke a high count too, so the line steps faster when there are some."),
+    ("Pullback line (blue)", "The LAST low that broke a high. Every new high made from a new low moves it to that low (PL1 ... PL5). Internal lows that broke a high count too, so the line steps faster when there are some."),
     ("Range low waiting (orange dashed)", "The pullback line BEFORE the last one. When PL2 makes a new high, PL1 becomes the range low. When PL3 makes a new high, PL2 becomes the range low."),
     ("Why", "Once the pullback line is taken out, the high before that break is the range high, and the range low is the low price must take next: the previous pullback line."),
-    ("Pullback confirmed", "A body close below PL3 = the pullback is confirmed: range high = the immediate high before the break (the top), range low = PL2."),
-    ("Sells (mirror)", "The same in the bearish leg: pullback line = the last high that broke a low (PL4, PL5, PL6), the one before it waits as the range high. I drew the bearish leg this way too: please check that part."),
+    ("Pullback confirmed", "PL1 to PL5 are internal lows that broke highs; each new one moves the range low up to the one before it. A body close below PL5 = the pullback is confirmed: range high = the immediate high before the break (the top 110.34), range low = PL4 105.01."),
+    ("Sells (mirror)", "Mirror in the bearish leg: PL6, PL7, PL8 are highs that broke lows; the one before the last waits as the range high (the top, then PL6, then PL7). A body close above PL8 = the pullback is over: range = the bottom 102.58 ... PL7 106.81."),
 ]
 yy = 160
 for head, body in notes:
