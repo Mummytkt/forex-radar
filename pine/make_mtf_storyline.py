@@ -425,6 +425,10 @@ var float tk_eo  = na      // the far side of the body of the candle that made t
 var bool  tk_fm  = false
 var int   tk_cn  = 0
 var float tk_pc  = na
+var float tk_ph2 = na      // the previous story-timeframe candle's high / low (story-line side)
+var float tk_pl2 = na
+var float rl_x   = na      // the range low waiting: the extreme low of the leg that broke the last range high
+var int   rl_xt  = na
 var float tk_dip = na
 var int   tk_dt  = na
 var float rg_hi  = na      // the story-timeframe range high (buys; sells: its low): the top of the leg
@@ -490,14 +494,13 @@ f_inner(int t0, int w_) =>
                 dp := na
                 dt := na
             else
-                // a real pullback: a body close back beyond the body of the extreme candle, or 2+ closes in a row against the move
-                cn := not na(pc) and f_gt(pc, cc, w_) ? cn + 1 : 0
-                if f_gt(eo, cc, w_) or cn >= 2
+                // a real pullback: a candle took out the previous candle's low (sells: high)
+                if not na(pc) and f_gt(pc, co, w_)
                     fm := true
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
-            pc := cc
+            pc := co
     [ln, lt]
 
 f_seed(int t0, int w_) =>
@@ -558,14 +561,13 @@ f_seed(int t0, int w_) =>
                 dp := na
                 dt := na
             else
-                // a real pullback: a body close back beyond the body of the extreme candle, or 2+ closes in a row against the move
-                cn := not na(pc) and f_gt(pc, cc, w_) ? cn + 1 : 0
-                if f_gt(eo, cc, w_) or cn >= 2
+                // a real pullback: a candle took out the previous candle's low (sells: high)
+                if not na(pc) and f_gt(pc, co, w_)
                     fm := true
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
-            pc := cc
+            pc := co
     [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt]
 
 // a new story in direction d
@@ -609,6 +611,8 @@ if ns_d != 0
     [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt] = f_seed(D > 0 ? XLt : XHt, D)
     tk_pv  := s_pv
     tk_pvt := s_pvt
+    rl_x   := D > 0 ? XL : XH
+    rl_xt  := D > 0 ? XLt : XHt
     tk_bk  := false
     rg_lf  := false
     w      := D
@@ -672,8 +676,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_dip := na
         tk_dt  := na
     else
-        tk_cn := not na(tk_pc) and f_gt(tk_pc, x2c, w) ? tk_cn + 1 : 0
-        if f_gt(tk_eo, x2c, w) or tk_cn >= 2
+        // a real pullback: a candle took out the previous candle's low (sells: high)
+        float pco = w > 0 ? tk_pl2 : tk_ph2
+        if not na(pco) and f_gt(pco, co, w)
             tk_fm := true
         if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
@@ -704,8 +709,8 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             bool rl_brk = ph0 == 3 and not na(rg_lo) and f_gt(rg_lo, x2c, D)
             sph := 2
             if ph0 == 1
-                rg_lo  := na(old_pv) ? (D > 0 ? XL : XH) : old_pv
-                rg_lot := na(old_pv) ? (D > 0 ? XLt : XHt) : old_pvt
+                rg_lo  := nz(rl_x, D > 0 ? XL : XH)
+                rg_lot := na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
                 rg_lf  := false
                 f_brk(old_lt, old_ln, "Pullback break", D < 0, br_acol)
                 f_tag(tg_pl, time, D > 0 ? low : high, "Pullback break · " + N1 + " pullback confirmed", D < 0, tg_pbc)
@@ -728,6 +733,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             // straight through the range high: the top timeframe continues
             sph   := 1
             f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
+            [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
+            rl_x  := x0_
+            rl_xt := x0t_
             f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.\nPullback line: the " + LO + " that broke the " + HI + " " + str.tostring(tk_ln, format.mintick) + ".")
             rg_hi := na
             rg_lo := na
@@ -745,6 +753,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         // the range high broken: the top timeframe continues (the line has already followed the rule)
         sph := 1
         f_brk(rg_hit, rg_hi, N2 + " range " + HI + " broken · " + N1 + " continues", D > 0, br_wcol)
+            [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
+            rl_x  := x0_
+            rl_xt := x0t_
         f_story(time, D > 0 ? high : low, D > 0, "The " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + " is broken: the " + N1 + " " + DW + " trend continues.")
         rg_hi := na
         rg_lo := na
@@ -759,7 +770,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             rg_lot := tk_et
 
 if x2_new
-    tk_pc := x2c
+    tk_pc  := x2c
+    tk_ph2 := x2H
+    tk_pl2 := x2L
 
 // ── The lines at the last candle ─────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
@@ -813,8 +826,8 @@ if barstate.islast
             f_lvl(tk_et, tk_ext, N2 + " " + LO + " (forming)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
             f_lvl(rg_hit, rg_hi, N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
-        if sph == 1 and rh_on and not na(tk_pv)
-            f_lvl(tk_pvt, tk_pv, N2 + " range " + LO + " if the pullback line breaks (the pullback line before it)", rh_col, rx_sty, rh_w)
+        if sph == 1 and rh_on and not na(rl_x)
+            f_lvl(rl_xt, rl_x, N2 + " range " + LO + " if the pullback line breaks (the extreme " + LO + " of the breakout leg)", rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_lo)
             f_lvl(rg_lot, rg_lo, N2 + " range " + LO + (rg_lf ? " (forming)" : sph == 3 ? " (a close beyond it: " + N2 + " " + AW + " again)" : ""), rh_col, rg_lf ? rx_sty : rh_sty, rh_w)
     // the story table and the status table (one table per corner: in the same corner the story goes under the status)
