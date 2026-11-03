@@ -59,46 +59,43 @@ def seed(i0, i1, w):
     return ln, li
 
 
-# run it: pullback line (internal, the last level of the leg) + range (external)
+# run it. Each leg keeps its list of pullback lines (every low that broke a high, sells: every high that
+# broke a low). The pullback line = the LAST one; the trailing range edge = the one BEFORE it (the low price
+# must take after the pullback line to confirm the range). A body close beyond the pullback line = pullback
+# confirmed: range edge on the far side = the extreme before the break (the top), the near side = the one before.
 pl_segs, rg_segs, ev = [], [], []
 w = 1
+leg0 = 0
 pl, pli = seed(0, 0, 1)
-pl_start = 0
-rlo, rloi = bl(0), 0          # the range low: the low the move came from (the low that broke the last external high)
-rhi, rhii = None, None        # the range high: set when a pullback confirms the top
-leg0 = 0                      # first candle of the current leg
+edge, edgei = pl, pli          # the trailing range edge (buys: range low)
+prev_pl, prev_pli = None, None
+fixed = []                     # range edges fixed at a pullback confirmation: (i0, value, side, from_i)
 i = 1
 while i < n:
     gtw = (lambda a, b: a > b) if w > 0 else (lambda a, b: a < b)
     nl, nli = seed(leg0, i, w)
     if nli > pli:
         pl_segs.append((pli, i, pl))
+        # the old pullback line becomes the trailing range edge
+        rg_segs.append((edgei, i, edge, 'lo' if w > 0 else 'hi'))
+        edge, edgei = pl, pli
         pl, pli = nl, nli
-        ev.append((i, 'cont', w))
-    # external breaks of the range
-    if rhi is not None and cl(i) > rhi:
-        rg_segs.append((rloi, i, rlo, 'lo'))
-        rg_segs.append((rhii, i, rhi, 'hi'))
-        k = min(range(rhii, i + 1), key=bl)
-        rlo, rloi = bl(k), k
-        ev.append((i, 'rh_broken', rhi))
-        rhi, rhii = None, None
-    # the pullback line broken by a body close: the leg reverses
+        ev.append((i, 'step', w))
     if gtw(pl, cl(i)):
         pl_segs.append((pli, i, pl))
-        ev.append((i, 'pb%d' % w, pl))
+        rg_segs.append((edgei, i, edge, 'lo' if w > 0 else 'hi'))
         k = max(range(pli, i + 1), key=bh) if w > 0 else min(range(pli, i + 1), key=bl)
-        if w > 0 and rhi is None:
-            rhi, rhii = bh(k), k                 # the top becomes the range high: we have a range
-            ev.append((i, 'range', rhi))
+        far = bh(k) if w > 0 else bl(k)
+        ev.append((i, 'pb%d' % w, pl, far, edge, k, edgei))
+        fixed.append((k, i, far, 'hi' if w > 0 else 'lo'))
+        fixed.append((edgei, i, edge, 'lo' if w > 0 else 'hi'))
         w = -w
         leg0 = k
         pl, pli = seed(leg0, i, w)
+        edge, edgei = far, k     # the new leg's trailing edge starts at the extreme
     i += 1
 pl_segs.append((pli, n - 1, pl))
-if rhi is not None:
-    rg_segs.append((rhii, n - 1, rhi, 'hi'))
-rg_segs.append((rloi, n - 1, rlo, 'lo'))
+rg_segs.append((edgei, n - 1, edge, 'lo' if w > 0 else 'hi'))
 
 # ── drawing ──────────────────────────────────────────────────────────────────────────────────────
 lo, hi = 98.5, 113.0
@@ -107,9 +104,9 @@ X = lambda i: L + dx * (i + 0.5)
 Y = lambda p: B - (p - lo) / (hi - lo) * (B - T)
 o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="Segoe UI, Arial, sans-serif">',
      f'<rect width="{W}" height="{H}" fill="#fff"/>',
-     '<text x="60" y="52" font-size="29" font-weight="800" fill="#111">RANGE LOW / HIGH  vs  PULLBACK LINE · buys (sells mirror) · my reading, please confirm</text>',
-     f'<text x="60" y="88" font-size="18" fill="#444"><tspan fill="{OR}" font-weight="800">Orange = range low / high</tspan> (moves only when an external high or low breaks).   '
-     f'<tspan fill="{BL}" font-weight="800">Blue = pullback line</tspan> (the last level of the current leg).</text>']
+     '<text x="60" y="52" font-size="29" font-weight="800" fill="#111">PULLBACK LINE AND RANGE LOW · your explanation, as I understand it</text>',
+     f'<text x="60" y="88" font-size="18" fill="#444"><tspan fill="{OR}" font-weight="800">Orange dashed = the range low waiting</tspan> (the pullback line BEFORE the last one).   '
+     f'<tspan fill="{BL}" font-weight="800">Blue = pullback line</tspan> (the LAST low that broke a high).  Thick orange = the range once the pullback is confirmed.</text>']
 for i, (op, h, l, c) in enumerate(cs):
     col = "#2563eb" if c >= op else "#6b7280"
     y1, y2 = sorted((Y(op), Y(c)))
@@ -125,8 +122,10 @@ def label(x, y, txt, col, above=True):
 
 
 for i0, i1, p, side in rg_segs:
-    o.append(f'<line x1="{X(i0):.1f}" x2="{X(i1):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{OR}" stroke-width="3"/>')
-    label(X(i0) + 6, Y(p), f"range {'high' if side == 'hi' else 'low'} {p:.2f}", OR, above=side == 'hi')
+    o.append(f'<line x1="{X(i0):.1f}" x2="{X(i1):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{OR}" stroke-width="2" stroke-dasharray="8 5"/>')
+for k0, i1, p, side in fixed:
+    o.append(f'<line x1="{X(i1):.1f}" x2="{X(n):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{OR}" stroke-width="3.4"/>')
+    label(X(n) - 190, Y(p), f"range {'high' if side == 'hi' else 'low'} {p:.2f}", OR, above=side == 'hi')
 for k, (i0, i1, p) in enumerate(pl_segs, 1):
     o.append(f'<line x1="{X(i0):.1f}" x2="{X(i1):.1f}" y1="{Y(p):.1f}" y2="{Y(p):.1f}" stroke="{BL}" stroke-width="2.6"/>')
     o.append(f'<circle cx="{X(i0):.1f}" cy="{Y(p):.1f}" r="5.5" fill="#fff" stroke="{BL}" stroke-width="2.2"/>')
@@ -142,26 +141,23 @@ def tag(i, p, txt, col, below=False):
     o.append(f'<text x="{x0 + w_ / 2:.1f}" y="{y0 + 19:.1f}" font-size="14.5" font-weight="800" fill="#fff" text-anchor="middle">{esc(txt)}</text>')
 
 
-for i, kind, val in ev:
-    if kind == 'pb1':
-        tag(i, cs[i][2], "PL broken: pullback confirmed · we have a range", RD, below=True)
-    elif kind == 'pb-1':
-        tag(i, cs[i][1], "PL broken: pullback over · back with the Daily", G)
-    elif kind == 'rh_broken':
-        tag(i, cs[i][1] + 0.9, "range high broken (external) · range low moves up", G)
+for e in ev:
+    if e[1] == 'pb1':
+        tag(e[0], cs[e[0]][2], "PL3 broken: pullback confirmed · range = PL2 ... the top", RD, below=True)
+    elif e[1] == 'pb-1':
+        tag(e[0], cs[e[0]][1] + 0.4, "PL6 broken (sells mirror?): range = the bottom ... PL5", G)
 o.append(f'<text x="{X(n) + 10:.1f}" y="{Y(lo + 0.6):.1f}" font-size="13" fill="{GR}">PL0 = the start</text>')
 
 # the rule panel
 PX = 1700
 o.append(f'<rect x="{PX - 24}" y="120" width="{W - PX + 4}" height="1140" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>')
 notes = [
-    ("THE TWO LEVELS", None),
-    ("Range low (orange)", "The low that broke the last EXTERNAL high. It stays while we keep breaking highs inside the leg. It moves only when the range high (an external high) breaks: then to the low that broke it."),
-    ("Range high (orange)", "The top of the leg, once a pullback confirms it. Price plays inside the range until one side breaks."),
-    ("Pullback line (blue)", "The last level formed in the current leg: the last low that broke a high inside the leg (sells: the last high that broke a low). It steps with every high broken in the leg."),
-    ("A real pullback", "The level only counts after a proper reversal (a body closed back beyond the body of the candle that made the high). One small candle is not a pullback."),
-    ("Pullback confirmed", "A body close beyond the pullback line = a proper break of structure: the pullback is confirmed and we have the range."),
-    ("Inside the bearish pullback", "The pullback line is the last high that broke a low: the candle that broke the low pulled back first. A close above it = the pullback is over, back with the Daily."),
+    ("AS I UNDERSTAND IT (buys)", None),
+    ("Pullback line (blue)", "The LAST low that broke a high. Every new high made from a new low moves it to that low (PL1, PL2, PL3). Internal lows that broke a high count too, so the line steps faster when there are some."),
+    ("Range low waiting (orange dashed)", "The pullback line BEFORE the last one. When PL2 makes a new high, PL1 becomes the range low. When PL3 makes a new high, PL2 becomes the range low."),
+    ("Why", "Once the pullback line is taken out, the high before that break is the range high, and the range low is the low price must take next: the previous pullback line."),
+    ("Pullback confirmed", "A body close below PL3 = the pullback is confirmed: range high = the immediate high before the break (the top), range low = PL2."),
+    ("Sells (mirror)", "The same in the bearish leg: pullback line = the last high that broke a low (PL4, PL5, PL6), the one before it waits as the range high. I drew the bearish leg this way too: please check that part."),
 ]
 yy = 160
 for head, body in notes:
