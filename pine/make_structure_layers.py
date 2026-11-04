@@ -1,5 +1,5 @@
 """Builds MummyTKT_Structure_Layers_TEST.pine from the live script's structure engine."""
-SRC = 'C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine'
+SRC = 'C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer_v13.pine'
 OUT = 'C:/Users/u/forex-radar/pine/MummyTKT_Structure_Layers_TEST.pine'
 N = 6   # depths shown
 

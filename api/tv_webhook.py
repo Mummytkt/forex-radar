@@ -31,7 +31,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from alerts.formatter import format_alert, format_entry_alert, short_text, with_data_source
+from alerts.formatter import STORY_EVENTS, format_alert, format_entry_alert, format_story_alert, short_text, story_title, with_data_source
 from config import SYMBOL_ALIASES, is_synthetic, fmt_price, normalize_symbol, tagged
 from state.instruments import register_synthetic
 from state.candles import upsert as upsert_candles, tf_name as candles_tf_name
@@ -230,12 +230,17 @@ class TVWebhookPayload(BaseModel):
     dbar: Optional[list] = None        # PRICE_UPDATE: the last completed Daily candle
     tf: Optional[str] = None           # HISTORY: "D" or "240"
     bars: Optional[list] = None        # HISTORY: candles, oldest first
+    event: Optional[str] = None        # STORY: daily_breakout | cont_after_breakout | pullback_confirmed | cont_pullback | ...
+    top: Optional[str] = None          # STORY: the Daily direction
+    pullback_line: Optional[float] = None  # STORY: the line after this event
+    ext_hi: Optional[float] = None     # STORY: the Daily external high / low
+    ext_lo: Optional[float] = None
 
 
 # Bias Pointer events are only meaningful from the 4H chart. Alerts created on any
 # other timeframe run the H4 logic on the wrong candles, so they are ignored.
 BIAS_EVENTS = {"BREAKOUT", "RETEST", "RETEST_CANCELLED", "CONFIRMED", "INVALIDATED",
-               "H4_CONTINUATION", "PRICE_UPDATE", "HISTORY"}
+               "H4_CONTINUATION", "STORY", "PRICE_UPDATE", "HISTORY"}
 BIAS_TIMEFRAME = "240"
 
 
@@ -348,6 +353,8 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
         _handle_invalidated(conn, instrument)
     elif event_type == "H4_CONTINUATION":
         await _handle_h4_continuation(conn, config, instrument, payload)
+    elif event_type == "STORY":
+        await _handle_story(conn, config, instrument, payload)
     elif event_type == "ENTRY_CONFIRMATION":
         await _handle_entry_confirmation(conn, config, instrument, payload)
     elif event_type == "PRICE_UPDATE":
@@ -828,6 +835,53 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
                                       engulf_wick=alert_record.eng_wick,
                                       engulf_key="pref_d_engulf_mode" if cont_type == "d_engulfing" else "pref_engulf_mode",
                                       after_retest=payload.after_retest if cont_type in ("oc_cont", "h4_oc_formed") else None))
+
+
+# The notification-list type and the Alert Filters switch of each story event
+_STORY_TYPE = {"daily_breakout": "daily_breakout", "cont_after_breakout": "story_cont", "cont_aligned": "story_cont",
+               "range_high_broken": "story_cont", "pullback_confirmed": "story_pullback", "pullback_in_range": "story_pullback",
+               "cont_pullback": "story_against", "range_low_broken": "story_against", "back_in_alignment": "story_cont"}
+_STORY_PREF = {"daily_breakout": "daily_breakout", "cont_after_breakout": "story_cont",
+               "pullback_confirmed": "story_pullback", "cont_pullback": "story_against"}
+
+
+async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
+    """An MTF story event: stored, then sent to everyone whose Alert Filters allow it."""
+    event = payload.event
+    if event not in STORY_EVENTS or payload.direction not in ("bullish", "bearish") or payload.top not in ("bullish", "bearish"):
+        logger.warning("%s STORY ignored: event=%s direction=%s top=%s", instrument, event, payload.direction, payload.top)
+        return
+    direction = Direction(payload.direction)
+    top = Direction(payload.top)
+
+    if event == "daily_breakout":
+        await _handle_breakout(conn, config, instrument, payload)
+    breakout = _ensure_breakout(conn, config, instrument, top, payload.breakout_level or payload.level, "STORY")
+
+    alert_text = format_story_alert(instrument, event, direction, top, payload.level, payload.pullback_line,
+                                    payload.ext_hi, payload.ext_lo)
+    if event == "daily_breakout":
+        alert_text = with_data_source(alert_text, payload.exchange)
+    alert_record = AlertRecord(
+        instrument=instrument,
+        direction=direction,
+        daily_breakout=breakout,
+        reaction_source=None,
+        h4_event=None,
+        fired_at=datetime.utcnow(),
+        classification=AlertClassification.STORY,
+        h4_breaker_level=payload.level,
+        daily_level_context="external",
+        alert_type=_STORY_TYPE[event],
+    )
+    alert_id = insert_alert(conn, alert_record, breakout.db_id, None, None, alert_text)
+    title = story_title(event, direction, top)
+    _save_chart_levels(conn, instrument, alert_id, direction, breakout.broken_level,
+                       h4=(payload.level, title), subtitle=title)
+    logger.info("%s STORY %s %s @ %s: alert stored", instrument, event, direction.value, payload.level)
+
+    if config.telegram_enabled:
+        _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id, pref=_STORY_PREF.get(event)))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

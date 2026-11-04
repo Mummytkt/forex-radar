@@ -873,7 +873,8 @@ sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class=
 check("switching Origin off stops Origins", "chatS" not in sent)
 c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": True, "contOc": True, "contEngulfing": True})
 _switches = [("alertOrigin", "origin", "external"), ("contInline", "cont_inline", None), ("contBreaker", "cont_breaker", None),
-             ("contOc", "cont_oc", None), ("contRealign", "cont_realign", "external"), ("contEngulfing", "engulfing", None)]
+             ("contOc", "cont_oc", None), ("contRealign", "cont_realign", "external"), ("contEngulfing", "engulfing", None),
+             ("dailyBreakout", "daily_breakout", None), ("storyCont", "story_cont", None), ("storyPullback", "story_pullback", None), ("storyAgainst", "story_against", None)]
 for field, pref_key, cls in _switches:
     c.patch("/api/preferences", headers=H(ts_), json={field: False})
     sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class=cls, pref=pref_key))
@@ -1157,6 +1158,29 @@ check("an unknown formation is refused",
       c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD", "direction": "bullish", "price": 1.1, "watches": ["H4:sweep"]}).status_code == 400)
 _eb = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD", "direction": "bullish", "price": 1.1000,
              "tolerance_pips": 10, "watches": ["M5:sweep_break"], "keep_open": True}).json()
+# MTF story events: stored with their own message, type and Alert Filters switch
+def _story(event, direction, level, **kw):
+    tv(type="STORY", instrument="GBPUSD", event=event, direction=direction, top="bullish", level=level, timeframe="240",
+       breakout_level=1.3300, pullback_line=1.3381, ext_hi=1.3448, ext_lo=1.3288, exchange="FOREXCOM", **kw)
+    return conn.execute("SELECT alert_type, alert_text, alert_classification, direction FROM alerts WHERE instrument = 'GBPUSD' ORDER BY id DESC LIMIT 1").fetchone()
+_r = _story("daily_breakout", "bullish", 1.3300)
+check("Daily breakout: headline, type, level, line and data source",
+      _r["alert_type"] == "daily_breakout" and _r["alert_classification"] == "story" and _r["alert_text"].startswith("BUY GBPUSD (Forex)\nDaily bullish breakout\n")
+      and "Daily external high broken @ 1.33000" in _r["alert_text"] and "Pullback line: 1.33810" in _r["alert_text"] and "FOREX.com" in _r["alert_text"])
+_r = _story("cont_after_breakout", "bullish", 1.3420)
+check("H4 continuation after the breakout", _r["alert_type"] == "story_cont" and "H4 bullish continuation after the Daily breakout" in _r["alert_text"] and "H4 high broken @ 1.34200" in _r["alert_text"])
+_r = _story("pullback_confirmed", "bearish", 1.3381)
+check("pullback confirmed gives the Daily range and its 0.5", _r["alert_type"] == "story_pullback" and _r["alert_text"].startswith("DAILY PULLBACK") and "H4 pullback confirmed" in _r["alert_text"]
+      and "Pullback line broken @ 1.33810" in _r["alert_text"] and "closed below it" in _r["alert_text"] and "(0.5 = 1.33680)" in _r["alert_text"])
+_r = _story("cont_pullback", "bearish", 1.3350)
+check("continuation after the pullback warns in the Daily discount", _r["alert_type"] == "story_against" and "H4 low broken @ 1.33500" in _r["alert_text"] and "Careful: price is in the Daily discount" in _r["alert_text"])
+_r = _story("cont_pullback", "bearish", 1.3400)
+check("no discount warning above the 0.5", "Careful" not in _r["alert_text"])
+from alerts.formatter import short_text as _st
+check("Short style keeps the levels and drops the explanation", "Level:" in _st(_r["alert_text"]) and "H4 key level:" in _st(_r["alert_text"]) and "An H4 candle closed" not in _st(_r["alert_text"]))
+_n = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+_story("not_an_event", "bullish", 1.33)
+check("an unknown story event is ignored", conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == _n)
 _old = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD", "direction": "bullish", "price": 1.1000, "tolerance_pips": 10}).json()
 _ent = lambda: {a["id"]: a for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"]}
 # an M5 sweep and break: its close is far above the level, the sweep wick is at it

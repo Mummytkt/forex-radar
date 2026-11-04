@@ -11,11 +11,11 @@
   2. Daily reaction + H4 breakout shows as: Bias Pointer CONFIRMED | Daily + H4 aligned.
   3. At the H4 levels confirm with: Bias Pointer H4 key-level reactions | M15 sweep and break.
   4. Alert: Daily pullback confirmed.
-The live MummyTKT_BiasPointer.pine is not touched. Picture: Documents/Merged_Plan_*.png.
+The live MummyTKT_BiasPointer_v13.pine is not touched. Picture: Documents/Merged_Plan_*.png.
 """
 import re
 
-SRC = 'C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine'
+SRC = 'C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer_v13.pine'
 OUT = 'C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer_MergeTEST.pine'
 OUT2 = 'C:/Users/u/forex-radar/pine/MummyTKT_AlignedCompanion_TEST.pine'
 src = open(SRC, encoding='utf-8').read()

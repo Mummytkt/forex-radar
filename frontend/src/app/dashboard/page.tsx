@@ -62,7 +62,7 @@ export default function OverviewPage() {
   const stages = (board?.pairs ?? []).map(p => p.snapshot?.stage)
   const pairCount = board ? board.pairs.length : null
   const activeCount = board ? stages.filter(s => s && s !== 'idle').length : null
-  const retestCount = board ? stages.filter(s => s === 'retest').length : null
+  const retestCount = board ? stages.filter(s => s === 'retest' || s === 'story_against').length : null
 
   const isOwner = user?.role === 'OWNER'
   // This user's own Telegram link (not the platform's), so a subscriber who hasn't
@@ -172,7 +172,7 @@ export default function OverviewPage() {
         <div className="grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
           <StatCard label="Instruments" value={pairCount ?? '—'} icon={BarChart2} iconColor="var(--info)" sub="Under surveillance" />
           <StatCard label="Active Breakouts" value={activeCount ?? '—'} icon={Activity} iconColor="var(--accent)" sub="Live bias setups" />
-          <StatCard label="Retests In Progress" value={retestCount ?? '—'} icon={Zap} iconColor="var(--warning)" sub="Awaiting H4 confirm" />
+          <StatCard label="Daily Pullbacks" value={retestCount ?? '—'} icon={Zap} iconColor="var(--warning)" sub="H4 against the Daily" />
           <StatCard label="Alerts Fired" value={stats?.total_alerts ?? '—'} icon={Bell} iconColor="var(--bullish)" sub={stats ? `${stats.alerts_today} today` : undefined} />
         </div>
 

@@ -24,30 +24,21 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled?: 
   )
 }
 
-type Key = 'alertExternal' | 'alertInternal' | 'newsAlerts' | 'alertOrigin' | 'contInline' | 'contBreaker' | 'contOc' | 'contRealign' | 'contEngulfing' | 'dailyEngulfing' | 'h4Fvg' | 'h4OcFormed' | 'dailyOcFormed' | 'ocAfterRetest'
+type Key = 'newsAlerts' | 'dailyBreakout' | 'storyCont' | 'storyPullback' | 'storyAgainst'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
 const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
-  { key: 'alertOrigin', group: 'Origin', label: 'Origin alerts', desc: 'The first confirmation of a Daily setup: a Daily reaction followed by an H4 break. External / Internal below choose which kinds.' },
-  { key: 'alertExternal', label: 'External breakouts', desc: 'Bias confirmed by an H4 close beyond the last structure formed before price reached the daily level. The standard alert.' },
-  { key: 'alertInternal', label: 'Internal breakouts', desc: 'Earlier confirmation from an H4 structure formed after price reacted at the daily level. Off by default. While it is off you also get no continuations of an Internal setup.' },
-  { key: 'contInline', group: 'Continuations', label: 'H4 breakout in line', desc: 'A new H4 breakout in the Daily direction while H4 is in line with the Daily.' },
-  { key: 'contBreaker', label: 'H4 Breaker retest', desc: 'The first time price comes back to the H4 Breaker, touches it exactly and closes beyond it. Only the first touch counts; after that the Breaker is used.' },
-  { key: 'contOc', label: 'H4 OC reaction', desc: 'Price rejects an H4 OC level in the Daily direction.' },
-  { key: 'h4OcFormed', label: 'H4 OC formed', desc: 'Only the pair and "H4 OC has formed": the last two H4 candles both closed in the Daily direction, after the Origin while H4 is in line. A notification, not a buy or sell signal. Off unless you switch it on.' },
-  { key: 'ocAfterRetest', label: 'H4 OC only after a retest that held', desc: 'Applies to the two above (H4 OC reaction and H4 OC formed). On: after each H4 breakout in line they wait until an H4 candle has touched the H4 Breaker or an H4 V-shape (A-shape for sells) of the breakout leg and closed back beyond it. From then on every one comes, until the next H4 breakout in line, which waits for its own retest. Off (default): every one, as before.' },
-  { key: 'contRealign', label: 'Daily reaction + H4 breakout', desc: 'Every fresh reaction at a Daily level followed by an H4 breakout: while H4 is aligned, and when it brings H4 back in line.' },
-  { key: 'contEngulfing', label: 'H4 engulfing', desc: 'An H4 candle that covers the previous opposite candle, in the Daily direction. Choose which kind below.' },
-  { key: 'dailyEngulfing', label: 'Daily engulfing', desc: 'Only the pair and "Daily buy engulfing candle has formed" (or "Daily sell ..."): a Daily candle covered the previous opposite Daily candle, in the current Daily direction. A notification, not an entry signal. Sent at the Daily close. Choose which kind below.' },
-  { key: 'dailyOcFormed', label: 'Daily OC formed', desc: 'Only the pair and "Daily OC has formed": the last two Daily candles both closed in the current Daily direction. A notification, not a buy or sell signal. Sent at the Daily close. Off unless you switch it on.' },
-  { key: 'h4Fvg', group: 'Liquidity', label: 'H4 FVG after breakout', desc: 'Only the pair and "H4 FVG candle after breakout has formed": the H4 candle right after an H4 breakout in line with the Daily left a fair value gap. A liquidity marker, not a buy or sell signal. Off unless you switch it on.' },
-  { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each release.' },
+  { key: 'dailyBreakout', group: 'Bias alerts', label: 'Daily breakout', desc: 'A Daily candle closed beyond the Daily external high or low. This sets the Daily direction.' },
+  { key: 'storyCont', label: 'H4 continuation after the Daily breakout', desc: 'Each H4 continuation in the Daily direction, until the pullback is confirmed.' },
+  { key: 'storyPullback', label: 'H4 pullback confirmed', desc: 'An H4 candle closed beyond the pullback line, so H4 is now against the Daily.' },
+  { key: 'storyAgainst', label: 'H4 continuation after the pullback', desc: 'Each H4 continuation against the Daily after the pullback, until H4 reverses into the H4 range.' },
+  { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each one.' },
 ]
 
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
-  const [status, setStatus] = useState<Record<Key, Status>>({ alertExternal: 'idle', alertInternal: 'idle', newsAlerts: 'idle', alertOrigin: 'idle', contInline: 'idle', contBreaker: 'idle', contOc: 'idle', contRealign: 'idle', contEngulfing: 'idle', dailyEngulfing: 'idle', h4Fvg: 'idle', h4OcFormed: 'idle', dailyOcFormed: 'idle', ocAfterRetest: 'idle' })
+  const [status, setStatus] = useState<Record<Key, Status>>({ newsAlerts: 'idle', dailyBreakout: 'idle', storyCont: 'idle', storyPullback: 'idle', storyAgainst: 'idle' })
 
   const { user } = useAuth()
   useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
@@ -55,10 +46,8 @@ export default function PreferencesPage() {
   useEffect(() => {
     fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })
       .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setPrefs({ alertExternal: !!d.alertExternal, alertInternal: !!d.alertInternal, newsAlerts: d.newsAlerts !== false,
-        alertOrigin: d.alertOrigin !== false, contInline: d.contInline !== false, contBreaker: d.contBreaker !== false,
-        contOc: d.contOc !== false, contRealign: d.contRealign !== false, contEngulfing: d.contEngulfing !== false, dailyEngulfing: d.dailyEngulfing !== false, h4Fvg: d.h4Fvg === true,
-        h4OcFormed: d.h4OcFormed === true, dailyOcFormed: d.dailyOcFormed === true, ocAfterRetest: d.ocAfterRetest === true }))
+      .then(d => setPrefs({ newsAlerts: d.newsAlerts !== false, dailyBreakout: d.dailyBreakout !== false, storyCont: d.storyCont !== false,
+        storyPullback: d.storyPullback !== false, storyAgainst: d.storyAgainst !== false }))
       .catch(() => setLoadError(true))
   }, [])
 
@@ -81,37 +70,6 @@ export default function PreferencesPage() {
       setPrefs(p => (p ? { ...p, [key]: previous } : p))
       setStatus(s => ({ ...s, [key]: 'error' }))
     }
-  }
-
-  const bothOff = prefs && prefs.alertOrigin && !prefs.alertExternal && !prefs.alertInternal
-
-  // Which H4 engulfings: covers the wick (default), covers the body only, or both
-  const [engulf, setEngulf] = useState<'wick' | 'body' | 'both'>('wick')
-  const [dEngulf, setDEngulf] = useState<'wick' | 'body' | 'both'>('wick')   // the same choice for the Daily engulfing
-  useEffect(() => {
-    fetch(`${API_BASE}/api/preferences`, { headers: authHeaders() })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (d && ['wick', 'body', 'both'].includes(d.engulfMode)) setEngulf(d.engulfMode)
-        if (d && ['wick', 'body', 'both'].includes(d.dEngulfMode)) setDEngulf(d.dEngulfMode)
-      })
-      .catch(() => {})
-  }, [])
-  const chooseEngulf = async (v: 'wick' | 'body' | 'both') => {
-    const previous = engulf
-    setEngulf(v)
-    try {
-      const r = await fetch(`${API_BASE}/api/preferences`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ engulfMode: v }) })
-      if (!r.ok) throw new Error()
-    } catch { setEngulf(previous) }
-  }
-  const chooseDEngulf = async (v: 'wick' | 'body' | 'both') => {
-    const previous = dEngulf
-    setDEngulf(v)
-    try {
-      const r = await fetch(`${API_BASE}/api/preferences`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ dEngulfMode: v }) })
-      if (!r.ok) throw new Error()
-    } catch { setDEngulf(previous) }
   }
 
   // Message style: the full explanation, or Short (headlines only)
@@ -140,7 +98,7 @@ export default function PreferencesPage() {
 
   return (
     <>
-      <TopBar title="Alert Filters" subtitle="Choose which bias confirmations reach your Telegram" />
+      <TopBar title="Alert Filters" subtitle="Choose which alerts reach your Telegram" />
       <main className="page-padded" style={{ flex: 1, width: '100%', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Message style */}
@@ -153,8 +111,8 @@ export default function PreferencesPage() {
           </div>
           <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {([
-              ['full', 'Full', 'Every part explained: the Daily breakout, the reaction, the H4 confirmation and why.'],
-              ['short', 'Short', 'Straight to the point: alert type, Daily breakout, reaction, H4 confirmation and reason.'],
+              ['full', 'Full', 'Every part explained: what broke, what it means and the level to watch next.'],
+              ['short', 'Short', 'Straight to the point: alert type and the levels, without the explanations.'],
             ] as const).map(([v, name, desc]) => (
               <button key={v} onClick={() => chooseStyle(v)} disabled={styleStatus === 'saving'}
                 style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
@@ -220,44 +178,11 @@ export default function PreferencesPage() {
                   </div>
                   <Toggle checked={prefs[key]} disabled={status[key] === 'saving'} onChange={v => change(key, v)} />
                 </div>
-                {key === 'contEngulfing' && prefs.contEngulfing && (
-                  <div style={{ padding: '0 20px 14px', display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
-                    {([['wick', 'Covers the wick'], ['body', 'Covers the body only'], ['both', 'Both']] as const).map(([v, name]) => (
-                      <button key={v} onClick={() => chooseEngulf(v)}
-                        style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                          border: `1px solid ${engulf === v ? 'var(--accent)' : 'var(--border)'}`,
-                          background: engulf === v ? 'var(--accent-bg)' : 'transparent',
-                          color: engulf === v ? 'var(--accent-hover)' : 'var(--text-secondary)' }}>
-                        {engulf === v ? '✓ ' : ''}{name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {key === 'dailyEngulfing' && prefs.dailyEngulfing && (
-                  <div style={{ padding: '0 20px 14px', display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
-                    {([['wick', 'Covers the wick'], ['body', 'Covers the body only'], ['both', 'Both']] as const).map(([v, name]) => (
-                      <button key={v} onClick={() => chooseDEngulf(v)}
-                        style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                          border: `1px solid ${dEngulf === v ? 'var(--accent)' : 'var(--border)'}`,
-                          background: dEngulf === v ? 'var(--accent-bg)' : 'transparent',
-                          color: dEngulf === v ? 'var(--accent-hover)' : 'var(--text-secondary)' }}>
-                        {dEngulf === v ? '✓ ' : ''}{name}
-                      </button>
-                    ))}
-                  </div>
-                )}
                 </div>
               ))}
 
-              {bothOff && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '12px 20px', background: 'var(--warning-bg)', fontSize: 12, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }}>
-                  <AlertTriangle size={14} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span>Both are off, so you won&apos;t receive new Origin confirmations. Continuation alerts still come through.</span>
-                </div>
-              )}
-
               <div style={{ padding: '12px 20px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Continuation alerts follow the setup's latest H4 confirmation (its Origin, or a later "H4 back in line"): you get them only if you received that confirmation's type, External or Internal.
+                Inside the H4 range no bias alert is sent. Set the levels you are watching on the <Link href="/price-alerts" style={{ color: 'var(--accent-hover)' }}>Price Alerts</Link> page and tick the entry formations you want to hear about.
               </div>
             </div>
           )}

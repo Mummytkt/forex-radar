@@ -111,7 +111,7 @@ def _drop_level_line(text: str) -> str:
 
 # Lines kept in the Short message style: the headline of each part, no explanations
 _SHORT_KEEP = ("Daily breakout:", "Weekly", "Daily reaction source:", "H4 confirmation:", "Reason:",
-               "⚠️", "📊")
+               "Level:", "Pullback line:", "H4 key level:", "Daily range:", "Careful:", "⚠️", "📊")
 
 
 def _h4_break_line(alert: AlertRecord, level_str: str) -> str:
@@ -828,6 +828,80 @@ def _reason_origin(
         f"The reaction produced a qualifying {classification_lower} "
         f"{direction_lower} H4 breakout, aligning the Daily and H4 directions."
     )
+
+
+# ── MTF story alerts ─────────────────────────────────────────────────────────
+
+STORY_EVENTS = ("daily_breakout", "cont_after_breakout", "pullback_confirmed", "cont_pullback", "cont_aligned",
+                "back_in_alignment", "range_high_broken", "range_low_broken", "pullback_in_range")
+
+
+def story_title(event: str, direction: Direction, top: Direction) -> str:
+    """The alert's type line, also used as the chart picture's subtitle."""
+    move = "bullish" if direction == Direction.BULLISH else "bearish"
+    daily = "bullish" if top == Direction.BULLISH else "bearish"
+    against = "bearish" if top == Direction.BULLISH else "bullish"
+    hi, lo = ("high", "low") if top == Direction.BULLISH else ("low", "high")
+    return {
+        "daily_breakout": f"Daily {daily} breakout",
+        "cont_after_breakout": f"H4 {move} continuation after the Daily breakout",
+        "pullback_confirmed": "H4 pullback confirmed",
+        "cont_pullback": f"H4 {move} continuation after the pullback",
+        "cont_aligned": f"H4 {move} continuation, in alignment with the Daily",
+        "back_in_alignment": "H4 pullback: back in alignment with the Daily",
+        "range_high_broken": f"H4 range {hi} broken: the Daily {daily} move continues",
+        "range_low_broken": f"H4 range {lo} broken: H4 {against} again",
+        "pullback_in_range": "Pullback break inside the H4 range",
+    }[event]
+
+
+def format_story_alert(instrument: str, event: str, direction: Direction, top: Direction, level: float | None,
+                       pullback_line: float | None, ext_hi: float | None, ext_lo: float | None) -> str:
+    """The Telegram message for a story event. Sells are the mirror of buys."""
+    px = lambda v: _fmt_level(instrument, v) if v is not None else "—"
+    bull = top == Direction.BULLISH
+    daily = "bullish" if bull else "bearish"
+    against = "bearish" if bull else "bullish"
+    # the side H4 closes on: with the event's own direction
+    beyond = "above" if direction == Direction.BULLISH else "below"
+    title = story_title(event, direction, top)
+    rng = (f"Daily range: {px(ext_lo)} – {px(ext_hi)} (0.5 = {px((ext_hi + ext_lo) / 2)})"
+           if ext_hi is not None and ext_lo is not None else None)
+    line_watch = [f"Pullback line: {px(pullback_line)}",
+                  f"An H4 close {'below' if bull else 'above'} it confirms the Daily pullback."]
+    key_watch = [f"H4 key level: {px(pullback_line)}",
+                 f"An H4 close {'above' if bull else 'below'} it is the reversal into the H4 range."]
+
+    if event == "daily_breakout":
+        head = _headline(direction, instrument, continuation=False)
+        body = [f"Level: Daily external {'high' if bull else 'low'} broken @ {px(level)}",
+                f"A Daily candle closed {beyond} it. The Daily is now {daily}.", ""] + line_watch
+    elif event in ("cont_after_breakout", "cont_aligned", "range_high_broken"):
+        head = _headline(direction, instrument, continuation=True)
+        name = f"H4 {'high' if bull else 'low'}" if event != "range_high_broken" else f"H4 range {'high' if bull else 'low'}"
+        body = [f"Level: {name} broken @ {px(level)}",
+                f"An H4 candle closed {beyond} it, in the Daily {daily} direction.", ""] + line_watch
+    elif event in ("pullback_confirmed", "pullback_in_range"):
+        head = f"DAILY PULLBACK — {tagged(instrument)}"
+        body = [f"Level: Pullback line broken @ {px(level)}",
+                f"An H4 candle closed {beyond} it. H4 is now against the Daily {daily} direction.", ""]
+        body += ([rng, ""] if rng else []) + key_watch
+    elif event in ("cont_pullback", "range_low_broken"):
+        head = _headline(direction, instrument, continuation=True)
+        name = f"H4 {'low' if bull else 'high'}" if event == "cont_pullback" else f"H4 range {'low' if bull else 'high'}"
+        body = [f"Level: {name} broken @ {px(level)}",
+                f"An H4 candle closed {beyond} it. The Daily pullback is in play, against the Daily {daily} direction.",
+                ""] + key_watch
+        if level is not None and ext_hi is not None and ext_lo is not None:
+            mid = (ext_hi + ext_lo) / 2
+            if (bull and level < mid) or (not bull and level > mid):
+                body += ["", f"Careful: price is in the Daily {'discount' if bull else 'premium'}."]
+    else:   # back_in_alignment
+        head = _headline(direction, instrument, continuation=True)
+        body = [f"Level: {against.capitalize()} H4 line broken @ {px(level)}",
+                f"An H4 candle closed {beyond} it. H4 is back in alignment with the Daily {daily} direction."]
+    return "\n".join([head, title, ""] + body + [
+        "", "⚠️ Directional bias only — not an entry signal. Wait for the entry model.", "", _signature()])
 
 
 # ── Entry confirmation alert (PCL / Engulfing Sweep) ──────────────────────────

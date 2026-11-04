@@ -7,13 +7,13 @@
   T3 (entry) confirms at the T2 POIs (sweep / sweep and break).
   Plans: W → D → H4 · D → H4 → M15 · H4 → M15 → M5.
 
-The external structure engine is copied from MummyTKT_BiasPointer.pine (most recent
+The external structure engine is copied from MummyTKT_BiasPointer_v13.pine (most recent
 external high / low); its breaks go through f_cu / f_cd so a break can be a wick
 (default) or a body close.
 """
 import re
 
-SRC = 'C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine'
+SRC = 'C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer_v13.pine'
 OUT = 'C:/Users/u/forex-radar/pine/MummyTKT_PullbackStory.pine'
 
 src = open(SRC, encoding='utf-8').read().split('\n')

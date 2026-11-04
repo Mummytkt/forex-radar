@@ -64,11 +64,11 @@ export default function HubPage() {
   const { data: board } = useSWR<{ pairs: { snapshot: { stage: string } | null }[] }>('/api/chart-board', fetcher, { refreshInterval: 60000 })
   const stages = (board?.pairs ?? []).map(p => p.snapshot?.stage)
   const activeN = stages.filter(s => s && s !== 'idle').length
-  const reactingN = stages.filter(s => s === 'retest').length
+  const reactingN = stages.filter(s => s === 'retest' || s === 'story_against').length
 
   const lastAlert = alerts?.items?.[0]
   const details: Record<string, string | null> = {
-    '/dashboard': board ? `${activeN} active setup${activeN === 1 ? '' : 's'} · ${reactingN} reacting now` : null,
+    '/dashboard': board ? `${activeN} active setup${activeN === 1 ? '' : 's'} · ${reactingN} in a Daily pullback` : null,
     '/alerts': lastAlert ? `Last signal ${timeAgo(lastAlert.fired_at)} · ${lastAlert.instrument}` : alerts ? 'No signals yet' : null,
     '/price-alerts': levels ? `${levels.items.length} level${levels.items.length === 1 ? '' : 's'} watched` : null,
     '/strategy': unread > 0 ? `${unread} new update${unread === 1 ? '' : 's'}` : null,

@@ -5,6 +5,10 @@ import { useEffect, useState } from 'react'
 // alert types to show. Remembered in this browser (mbp_alert_types); empty = all.
 // Telegram delivery is set separately in Alert Filters.
 export const ALERT_TYPES: { key: string; label: string }[] = [
+  { key: 'daily_breakout', label: 'Daily breakout' },
+  { key: 'story_cont', label: 'H4 continuation' },
+  { key: 'story_pullback', label: 'H4 pullback' },
+  { key: 'story_against', label: 'H4 cont after pullback' },
   { key: 'origin', label: 'Origin' },
   { key: 'daily_react', label: 'Daily reaction + H4' },
   { key: 'realign', label: 'Back in line' },

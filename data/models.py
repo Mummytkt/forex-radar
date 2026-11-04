@@ -45,6 +45,7 @@ class AlertClassification(str, Enum):
     D_ENGULFING = "d_engulfing"   # a Daily candle engulfed the previous one, in the Daily direction
     D_OC_FORMED = "d_oc_formed"   # two Daily candles in a row in the Daily direction (notification)
     H4_OC_FORMED = "h4_oc_formed"  # two H4 candles in a row in the Daily direction, H4 in line (notification)
+    STORY = "story"   # MTF story events: Daily breakout, H4 continuation, pullback confirmed
 
 
 class ReactionSourceType(str, Enum):

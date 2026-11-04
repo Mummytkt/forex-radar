@@ -46,36 +46,23 @@ COMMANDS = [
 
 HELP_TEXT = """📖 What the words in an alert mean
 
-BUY / SELL <pair> (Origin): the first 4H confirmation after a Daily breakout. Look for an entry in that direction with your entry model.
+BUY / SELL <pair> (Daily breakout): a Daily candle closed beyond the Daily external high (buys) or low (sells). This sets the Daily direction.
 
-BUY / SELL CONTINUATION: the Daily direction is still on and 4H confirmed again (in-line breakout, first Breaker retest, OC reaction, back in line, H4 or Daily engulfing). A used level is used: only its first touch counts.
+BUY / SELL CONTINUATION, H4 continuation after the Daily breakout: 4H closed beyond its last high (sells: low), in the Daily direction, after a real pullback.
 
-📊 The line under an Origin alert says whose chart and prices it was read from; your broker's prices can differ slightly.
+Pullback line: the last 4H low that broke a high (sells: high that broke a low). It moves as 4H continues.
 
-Daily breakout: a Daily candle closed beyond the last Daily high or low. This sets the direction.
+DAILY PULLBACK, H4 pullback confirmed: 4H closed beyond the pullback line, so 4H is now against the Daily.
 
-Reaction: price came back to a Daily level (Breaker, OC, V/A-shape, FVG, or a level inside the range) and held.
+H4 continuation after the pullback: 4H keeps breaking against the Daily and has not reversed into the H4 range yet.
 
-Daily FVG: a gap left by three Daily candles. 4H dipping into the gap (from above for buys, below for sells) is a reaction; only a Daily close through the gap ends it. If price goes on into a deeper FVG, that one takes over.
+H4 key level: the last 4H high that broke a low (sells: low that broke a high). A 4H close beyond it is the reversal into the H4 range.
 
-External / Internal: whether the 4H structure that broke formed before (External) or after (Internal) price reached the Daily level.
+Daily range: the Daily external low to high, with its 0.5. Discount is below the 0.5, premium above. Be careful selling in the discount or buying in the premium.
 
-Breaker: the level that was broken. A retest of it from the other side is a Breaker reaction.
+Entry alerts: inside the range, set your own levels on the Price Alerts page and tick the formations you want to hear about.
 
-OC: two candles in the same direction; the level is where the first closed and the second opened.
-
-H4 back in line: 4H had gone against the Daily, then broke back in the Daily direction after a fresh Daily reaction.
-
-H4 engulfing: a 4H candle covered the previous opposite candle, in the Daily direction.
-Daily buy / sell engulfing: a notification that a Daily candle covered the previous opposite Daily candle, in the Daily direction.
-
-H4 OC only after a retest that held (Alert Filters option, off by default): H4 OC rejections and "H4 OC has formed" only start after the H4 Breaker or a 4H V-shape (A-shape for sells) of the breakout leg was touched and held.
-
-H4 OC has formed / Daily OC has formed: a notification only (no buy / sell) that the last two 4H (Daily) candles both closed in the Daily direction; for 4H, only after the Origin while 4H is in line (off unless you switch it on in Alert Filters).
-
-H4 FVG candle after breakout has formed: the 4H candle right after an in-line 4H breakout left a gap. A liquidity marker, not a buy or sell signal (off unless you switch it on in Alert Filters).
-
-Weekly — in line / AGAINST: whether the Daily direction agrees with the Weekly reaction.
+📊 The line under a Daily breakout alert says whose chart and prices it was read from; your broker's prices can differ slightly.
 
 📊 View chart under an alert shows the levels on a Daily and 4H picture."""
 

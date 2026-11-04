@@ -23,7 +23,10 @@ _KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal",
          "h4_fvg": "pref_alert_h4_fvg", "d_engulfing": "pref_alert_d_engulfing",
          "d_oc_formed": "pref_alert_d_oc_formed", "h4_oc_formed": "pref_alert_h4_oc_formed",
          # H4 OC rejection / OC formed only after a retest of the breakout that held (off = every one)
-         "oc_after_retest": "pref_alert_oc_after_retest"}
+         "oc_after_retest": "pref_alert_oc_after_retest",
+         # The MTF story alerts
+         "daily_breakout": "pref_alert_daily_breakout", "story_cont": "pref_alert_story_cont",
+         "story_pullback": "pref_alert_story_pullback", "story_against": "pref_alert_story_against"}
 
 
 # Everything is on until switched off, except Internal H4 breakouts: External

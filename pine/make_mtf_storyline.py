@@ -37,7 +37,7 @@ STY = 'options = ["Solid", "Dashed", "Dotted"]'
 SZ = 'options = ["Tiny", "Small", "Normal"]'
 HEAD = r'''//@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT — MTF Storyline (display only, no alerts) · 2026-11-02
+// MummyTKT's Bias Pointer v14: the MTF Storyline with alerts · 2026-11-04
 //
 // The story of the top timeframe told on the story timeframe (pick the plan: W → D → H4,
 // D → H4 → M15, H4 → M15 → M5 or your own). Buys; sells are the mirror. Breaks are body closes.
@@ -145,12 +145,15 @@ color  tg_tx    = input.color(color.white, "Tag text", group = G_TG, inline = "t
 string tg_sz    = input.string("Small", "size", ''' + SZ + ''', group = G_TG, inline = "tt")
 int    tg_op    = input.int(100, "Tag opacity % (on top of the colour box's own opacity)", minval = 0, maxval = 100, group = G_TG)
 int    tg_n     = input.int(1, "Tags kept of each kind (1 = only the newest)", minval = 1, maxval = 20, group = G_TG)
-bool   al_cw    = input.bool(true, "Story-timeframe continuation with the top timeframe (after its breakout / in alignment)", group = G_AL)
-bool   al_pb    = input.bool(true, "Pullback confirmed (top-timeframe pullback)", group = G_AL)
-bool   al_ca    = input.bool(true, "Story-timeframe continuation in the pullback direction", group = G_AL)
-bool   al_rl    = input.bool(true, "Story-timeframe pullback: back in alignment (the range)", group = G_AL)
-bool   al_dc    = input.bool(true, "Range high broken: the top timeframe continues", group = G_AL)
-bool   al_lb    = input.bool(true, "Range low broken / pullback break inside the range", group = G_AL)
+bool   al_bo    = input.bool(true, "Top-timeframe breakout", group = G_AL)
+bool   al_cw    = input.bool(true, "Story-timeframe continuation after the top-timeframe breakout", group = G_AL)
+bool   al_pb    = input.bool(true, "Pullback confirmed (a close beyond the pullback line)", group = G_AL)
+bool   al_ca    = input.bool(true, "Story-timeframe continuation after the pullback (no reversal to the story-timeframe range yet)", group = G_AL)
+bool   al_ci    = input.bool(false, "Inside the range: continuation in alignment", group = G_AL)
+bool   al_rl    = input.bool(false, "Inside the range: story-timeframe pullback, back in alignment", group = G_AL)
+bool   al_dc    = input.bool(false, "Inside the range: range high broken, the top timeframe continues", group = G_AL)
+bool   al_lb    = input.bool(false, "Inside the range: range low broken / pullback break inside the range", group = G_AL)
+string wh_secret = input.string("", "Webhook secret", group = G_AL)
 bool   al_mk    = input.bool(true, "Mark every alert point on the chart", group = G_AL, inline = "am")
 int    al_n     = input.int(40, "kept", minval = 1, maxval = 200, group = G_AL, inline = "am")
 color  al_cwc   = input.color(color.new(#00C853, 15), "With", group = G_AL, inline = "ac")
@@ -496,6 +499,7 @@ string DW = D > 0 ? "bullish" : "bearish"
 string AW = D > 0 ? "bearish" : "bullish"
 string HC = D > 0 ? "H" : "L"
 string LC = D > 0 ? "L" : "H"
+string BW = D > 0 ? "Bull" : "Bear"
 
 // the rule run over the story-timeframe candles from time t0 in direction w_ (continuations only):
 // [line, line time, leg extreme, its time, its body's far side, real pullback, dip, dip time]
@@ -635,6 +639,24 @@ bool  a_new  = not na(a_bcnt) and a_bcnt != k1
 bool  first_ = k1 == 0
 if a_new
     k1 := a_bcnt
+// alerts: one per event, each also marked on the chart. Only Daily -> H4 on a 4H chart reaches the server.
+bool al_ok = T1 == "D" and T2 == "240" and timeframe.period == "240"
+f_hdr(string t) =>
+    '{"secret":"' + wh_secret + '","type":"' + t + '","timeframe":"' + timeframe.period + '","exchange":"' + syminfo.prefix + '","instrument":"' + syminfo.ticker
+f_num(float x) =>
+    na(x) ? "null" : str.tostring(x)
+var array<label> al_l = array.new<label>()
+var bool al_rev = false   // the reversal to the story-timeframe range has happened: no more continuations against until its low breaks
+f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>
+    if on
+        if barstate.isrealtime and al_ok
+            alert(f_hdr("STORY") + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + f_num(lvl) + ',"breakout_level":' + f_num(a_blvl) + ',"pullback_line":' + f_num(nz(f_wk(tk_lt, w < 0), tk_ln)) + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"price":' + str.tostring(x2c) + '}', alert.freq_once_per_bar)
+        if al_mk and chart_ok
+            array.push(al_l, label.new(time, dir > 0 ? high : low, ab_on ? "! " + ab : "ALERT · " + txt, xloc = xloc.bar_time, style = dir > 0 ? label.style_label_down : label.style_label_up,
+                 color = with_ ? al_cwc : al_cac, textcolor = al_tx, size = size.tiny))
+            while array.size(al_l) > al_n
+                label.delete(array.shift(al_l))
+
 // 1. the top timeframe's external high / low are ALWAYS the Bias Pointer's (its most recent structure).
 //    Every breakout of it starts the story again, in its direction.
 if a_new and not first_ and AD != 0
@@ -653,6 +675,9 @@ if ns_d != 0
     LO  := D > 0 ? "low" : "high"
     DW  := D > 0 ? "bullish" : "bearish"
     AW  := D > 0 ? "bearish" : "bullish"
+    HC  := D > 0 ? "H" : "L"
+    LC  := D > 0 ? "L" : "H"
+    BW  := D > 0 ? "Bull" : "Bear"
     sph := 1
     XL  := ns_lo
     XLt := ns_lot
@@ -679,6 +704,8 @@ if ns_d != 0
     tk_dip := s_dp
     tk_dt  := s_dt
     f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, f_ab(N1 + " " + DW + " breakout", A1 + ".BO"), D > 0, tg_boc)
+    al_rev := false
+    f_al(al_bo, "daily_breakout", N1 + " " + DW + " breakout", D, ns_lvl, true, A1 + ".BO")
     f_story(time, D > 0 ? high : low, D > 0, N1 + " " + DW + " breakout (" + (t1_wick ? "wick" : "body close") + " beyond " + str.tostring(ns_lvl, format.mintick) + ").\nPullback line: the " + N2 + " " + LO + " that broke the last " + HI + "; it moves only when that " + HI + " breaks.\nAn " + N2 + " close beyond it = the " + N1 + " pullback.")
 
 // the external high / low follow the Bias Pointer's every candle (a side forms until it is fixed)
@@ -687,18 +714,6 @@ if D != 0 and not na(a_chi) and not na(a_clo)
     XHt := a_chit
     XL  := a_clo
     XLt := a_clot
-
-// alerts: one per event, each also marked on the chart (the on-chart preview of what would be sent)
-var array<label> al_l = array.new<label>()
-f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>
-    if on
-        if barstate.isrealtime
-            alert('{"source":"mtf_storyline","symbol":"' + syminfo.ticker + '","tf":"' + T2 + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + str.tostring(lvl) + ',"text":"' + txt + '"}', alert.freq_once_per_bar)
-        if al_mk and chart_ok
-            array.push(al_l, label.new(time, dir > 0 ? high : low, ab_on ? "! " + ab : "ALERT · " + txt, xloc = xloc.bar_time, style = dir > 0 ? label.style_label_down : label.style_label_up,
-                 color = with_ ? al_cwc : al_cac, textcolor = al_tx, size = size.tiny))
-            while array.size(al_l) > al_n
-                label.delete(array.shift(al_l))
 
 // 2. the story timeframe, candle by candle
 if D != 0 and x2_new and not t1_ev and sph >= 1
@@ -709,10 +724,6 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         // a REAL high broken: continuation; the line moves to the low that broke it
         if (w == D ? br_with : br_agst)
             f_brk(tk_et, tk_ext, f_ab(N2 + " " + WW + " cont", N2 + ".C"), w > 0, w == D ? br_wcol : br_acol)
-        if w == D
-            f_al(al_cw, sph == 3 ? "cont_aligned" : "cont_after_breakout", N2 + " " + WW + " continuation" + (sph == 3 ? " (in alignment with the " + N1 + ")" : " after the " + N1 + " breakout"), w, tk_ext, true, N2 + ".C" + (sph == 3 ? " al" : ""))
-        else
-            f_al(al_ca, "cont_pullback", N2 + " " + WW + " continuation (" + N1 + " pullback still in play)", w, tk_ext, false, N2 + ".C pb")
         if na(tk_dip) or f_gt(tk_dip, co, w)
             tk_dip := co
             tk_dt  := x2t
@@ -728,6 +739,13 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_ln  := inner_ ? i_ln : newlo_ ? tk_dip : tk_ext
         tk_lt  := inner_ ? i_lt : newlo_ ? tk_dt : tk_et
         tk_bk  := not inner_ and not newlo_
+        if w == D
+            f_al(sph == 3 ? al_ci : al_cw, sph == 3 ? "cont_aligned" : "cont_after_breakout", N2 + " " + WW + " continuation" + (sph == 3 ? " (in alignment with the " + N1 + ")" : " after the " + N1 + " breakout"), w, tk_ext, true, N2 + ".C" + (sph == 3 ? " al" : ""))
+        else
+            // after the reversal to the range only a close beyond its low brings these back
+            if al_rev and not na(rg_lo) and f_gt(rg_lo, x2c, D)
+                al_rev := false
+            f_al(al_ca and not al_rev, "cont_pullback", N2 + " " + WW + " continuation (" + N1 + " pullback still in play)", w, tk_ext, false, N2 + ".C pb")
         tk_ext := ce
         tk_et  := x2t
         tk_eo  := co
@@ -777,7 +795,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             // the story timeframe turns against the top timeframe
             bool rl_brk = ph0 == 3 and not na(rg_lo) and f_gt(rg_lo, x2c, D)
             sph := 2
-            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, old_ln, false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
+            if ph0 == 1 or rl_brk
+                al_rev := false
+            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, nz(f_wk(old_lt, w > 0), old_ln), false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
             if ph0 == 1
                 rg_lo  := nz(rl_x, D > 0 ? XL : XH)
                 rg_lot := na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
@@ -812,6 +832,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             rg_lo := na
         else
             // the story-timeframe pullback: back in alignment, the story-timeframe range
+            al_rev := true
             f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, old_ln, true, N2 + ".P · BIA")
             sph    := 3
             [b0, b0t] = f_ext2(rg_hit, D < 0)
@@ -847,6 +868,55 @@ if x2_new
     tk_ph2 := x2h
     tk_pl2 := x2l
 
+// Price feed + chart snapshot + candle history for the server (price-level alerts, Live Chart Board, chart
+// pictures). Sent when the story reads a closed H4 candle, so the snapshot agrees with the alerts.
+[dr_t, dr_o, dr_h, dr_l, dr_c] = request.security(syminfo.tickerid, "D", [time[1], open[1], high[1], low[1], close[1]], lookahead = barmerge.lookahead_on)
+const int HIST_N = 40
+var array<int>   dh_t = array.new<int>()
+var array<float> dh_o = array.new<float>()
+var array<float> dh_h = array.new<float>()
+var array<float> dh_l = array.new<float>()
+var array<float> dh_c = array.new<float>()
+if timeframe.change("D") and not na(dr_t)
+    array.push(dh_t, dr_t)
+    array.push(dh_o, dr_o)
+    array.push(dh_h, dr_h)
+    array.push(dh_l, dr_l)
+    array.push(dh_c, dr_c)
+    if array.size(dh_t) > HIST_N
+        array.shift(dh_t)
+        array.shift(dh_o)
+        array.shift(dh_h)
+        array.shift(dh_l)
+        array.shift(dh_c)
+f_bar(int t, float o, float h, float l, float c) =>
+    na(t) or na(c) ? "null" : '[' + str.tostring(t) + ',' + str.tostring(o, format.mintick) + ',' + str.tostring(h, format.mintick) + ',' + str.tostring(l, format.mintick) + ',' + str.tostring(c, format.mintick) + ']'
+if x2_new and barstate.isrealtime and al_ok
+    string _stage = sph == 1 ? "story_with" : sph == 2 ? "story_against" : sph == 3 ? "story_range" : "idle"
+    alert(f_hdr("PRICE_UPDATE") + '","price":' + str.tostring(close[1])
+         + ',"snapshot":{"stage":"' + _stage + '","bias":' + (D == 0 ? "null" : D > 0 ? '"bullish"' : '"bearish"') + ',"retest_source":null'
+         + ',"breakout_level":' + f_num(a_blvl) + ',"level_type":"external"'
+         + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"d_oc":null,"d_oc_count":0'
+         + ',"pl":' + f_num(sph >= 1 ? nz(f_wk(tk_lt, w < 0), tk_ln) : na) + ',"rg_hi":' + f_num(sph >= 2 ? rg_hi : na) + ',"rg_lo":' + f_num(sph >= 2 ? rg_lo : na) + '}'
+         + ',"bar":' + f_bar(time[1], open[1], high[1], low[1], close[1])
+         + ',"dbar":' + f_bar(dr_t, dr_o, dr_h, dr_l, dr_c) + '}', alert.freq_once_per_bar)
+// Once per alert: the first H4 close sends the last Daily candles, the second the last H4 candles
+var int hist_step = 0
+if x2_new and barstate.isrealtime and al_ok and hist_step < 2
+    string js = ""
+    if hist_step == 0
+        int nd = array.size(dh_t)
+        if nd > 0
+            for i = 0 to nd - 1
+                js := js + (i > 0 ? "," : "") + f_bar(array.get(dh_t, i), array.get(dh_o, i), array.get(dh_h, i), array.get(dh_l, i), array.get(dh_c, i))
+            alert(f_hdr("HISTORY") + '","tf":"D","bars":[' + js + ']}', alert.freq_once_per_bar)
+    else
+        int nh = math.min(HIST_N, bar_index)
+        for i = nh to 1
+            js := js + (i < nh ? "," : "") + f_bar(time[i], open[i], high[i], low[i], close[i])
+        alert(f_hdr("HISTORY") + '","tf":"' + timeframe.period + '","bars":[' + js + ']}', alert.freq_once_per_bar)
+    hist_step += 1
+
 // ── The lines at the last candle ─────────────────────────────────────────────
 var array<line>  cl = array.new<line>()
 var array<label> cb = array.new<label>()
@@ -881,12 +951,12 @@ if barstate.islast
     if not chart_ok and AD != 0 and x_on and not na(a_chi) and not na(a_clo)
         // on the top timeframe's own chart: its external high / low (the story needs the story timeframe)
         string ew = a_cdir == "bull" ? "bullish" : "bearish"
-        f_lvl(a_chit, a_chi, f_ab(N1 + " " + ew + " external high", A1 + ".XH"), x_col, x_sty, x_w)
-        f_lvl(a_clot, a_clo, f_ab(N1 + " " + ew + " external low", A1 + ".XL"), x_col, x_sty, x_w)
+        f_lvl(a_chit, a_chi, f_ab(N1 + " " + ew + " external high", A1 + (a_cdir == "bull" ? ".Bull" : ".Bear") + " XH"), x_col, x_sty, x_w)
+        f_lvl(a_clot, a_clo, f_ab(N1 + " " + ew + " external low", A1 + (a_cdir == "bull" ? ".Bull" : ".Bear") + " XL"), x_col, x_sty, x_w)
     if chart_ok and D != 0 and sph >= 1
         if x_on
-            f_lvl(XHt, XH, ab_on ? A1 + ".XH" + (D > 0 and not a_chif ? " f" : "") : N1 + " " + DW + " external high" + (D > 0 and not a_chif ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range high" + (D > 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
-            f_lvl(XLt, XL, ab_on ? A1 + ".XL" + (D < 0 and not a_clof ? " f" : "") : N1 + " " + DW + " external low" + (D < 0 and not a_clof ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range low" + (D < 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
+            f_lvl(XHt, XH, ab_on ? A1 + "." + BW + " XH" + (D > 0 and not a_chif ? " f" : "") : N1 + " " + DW + " external high" + (D > 0 and not a_chif ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range high" + (D > 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
+            f_lvl(XLt, XL, ab_on ? A1 + "." + BW + " XL" + (D < 0 and not a_clof ? " f" : "") : N1 + " " + DW + " external low" + (D < 0 and not a_clof ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range low" + (D < 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
         if sph >= 2 and not na(XH) and not na(XL)
             float req = (XH + XL) / 2
             int   r0  = math.min(XHt, XLt)
@@ -999,7 +1069,7 @@ if barstate.islast
     table.clear(ky, 0, 0, 1, 14)
     if ky_on and ab_on and chart_ok and D != 0
         f_key(0, "KEY", "")
-        f_key(1, A1 + ".XH / " + A1 + ".XL", N1 + " external high / low (f = still forming); after the pullback: the " + N1 + " range")
+        f_key(1, A1 + "." + BW + " XH / XL", N1 + " " + DW + " external high / low (f = still forming); after the pullback: the " + N1 + " range")
         f_key(2, A1 + ".EQ", N1 + " range 0.5 (premium above / discount below)")
         f_key(3, A1 + ".BO", N1 + " breakout")
         f_key(4, "PL / " + N2 + ".PL", "pullback line: the " + N2 + " " + LO + " that broke the last " + HI + " (b = the broken " + HI + " itself)")
@@ -1042,4 +1112,8 @@ if barstate.islast
 
 body = HEAD + ENGINE + BODY + NOTES + STORY
 open(OUT, 'w', encoding='utf-8', newline='\n').write(body)
+TITLE = 'indicator("MummyTKT — MTF Storyline", overlay = true,'
+assert body.count(TITLE) == 1
+open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(
+    body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,'))
 print(OUT, body.count('\n'), 'lines')

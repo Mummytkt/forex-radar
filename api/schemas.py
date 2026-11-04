@@ -56,6 +56,10 @@ class AlertPreferences(BaseModel):
     dailyOcFormed: bool = False
     h4OcFormed: bool = False
     ocAfterRetest: bool = False
+    dailyBreakout: bool = True
+    storyCont: bool = True
+    storyPullback: bool = True
+    storyAgainst: bool = True
     alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
     engulfMode: str = "wick"            # "wick" | "body" | "both"
     dEngulfMode: str = "wick"           # Daily engulfing: "wick" | "body" | "both"
@@ -76,6 +80,10 @@ class AlertPreferencesUpdate(BaseModel):
     dailyOcFormed: bool | None = None
     h4OcFormed: bool | None = None
     ocAfterRetest: bool | None = None
+    dailyBreakout: bool | None = None
+    storyCont: bool | None = None
+    storyPullback: bool | None = None
+    storyAgainst: bool | None = None
     alertStyle: str | None = None
     engulfMode: str | None = None
     dEngulfMode: str | None = None

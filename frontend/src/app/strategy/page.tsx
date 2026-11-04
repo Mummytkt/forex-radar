@@ -373,19 +373,19 @@ function StrategyContent() {
     <>
       <StrategyDocs />
 
-      <Card title="The 4-Step Confirmation Chain">
+      <Card title="The Story, Step by Step">
         {data.chain.map(s => <Step key={s.n} n={s.n} title={s.title} body={s.body} />)}
       </Card>
 
-      <Card title="Formation Types">
+      <Card title="The Lines">
         {data.formations.map(f => <Def key={f.term} term={f.term} def={f.body} />)}
       </Card>
 
-      <Card title="H4 Breakout Classification">
+      <Card title="Where H4 Stands">
         <BoxGrid items={data.h4_classification} />
       </Card>
 
-      <Card title="Daily Level Context">
+      <Card title="The Ranges">
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 16 }}>{data.daily_context.intro}</p>
         <BoxGrid items={data.daily_context.items} />
       </Card>
@@ -394,7 +394,7 @@ function StrategyContent() {
         {data.alert_classifications.map(a => <Def key={a.term} term={a.term} def={a.body} />)}
       </Card>
 
-      <Card title="Reaction Source Types">
+      <Card title="Reaction Zones">
         {data.reaction_sources.map(r => <Def key={r.term} term={r.term} def={r.body} />)}
       </Card>
 

@@ -7,7 +7,7 @@
 import os
 
 R = os.path.dirname(os.path.abspath(__file__))
-s = open(os.path.join(R, 'MummyTKT_BiasPointer.pine'), encoding='utf-8').read()
+s = open(os.path.join(R, 'MummyTKT_BiasPointer_v13.pine'), encoding='utf-8').read()
 
 a = 'indicator("MummyTKT Bias Pointer", overlay=true'
 assert s.count(a) == 1

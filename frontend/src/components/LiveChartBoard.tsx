@@ -10,7 +10,10 @@ import { useAuth } from '@/lib/auth'
 // script at every H4 close. Subscribers only receive the pairs they get alerts on.
 
 interface Snapshot {
-  stage: 'idle' | 'breakout' | 'retest' | 'confirmed_aligned' | 'confirmed_realigning'
+  stage: 'idle' | 'breakout' | 'retest' | 'confirmed_aligned' | 'confirmed_realigning' | 'story_with' | 'story_against' | 'story_range'
+  pl?: number | null
+  rg_hi?: number | null
+  rg_lo?: number | null
   bias: 'bullish' | 'bearish' | null
   retest_source: string | null
   breakout_level: number | null
@@ -56,6 +59,9 @@ const STAGE: Record<Snapshot['stage'], string> = {
   retest: 'Retest in progress',
   confirmed_aligned: 'Confirmed · Aligned',
   confirmed_realigning: 'NOT ALIGNED · H4 paused',
+  story_with: 'Daily breakout · H4 with it',
+  story_against: 'Daily pullback · H4 against it',
+  story_range: 'Inside the H4 range · aligned',
 }
 const SOURCE: Record<string, string> = {
   post_breakout_oc: 'Post-breakout OC', daily_breaker: 'Daily Breaker', inside_range: 'Inside Range',
@@ -65,11 +71,9 @@ const LEVEL_TYPE: Record<string, string> = {
 }
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'retest', label: 'Retest' },
-  { key: 'breakout', label: 'Awaiting retest' },
-  { key: 'confirmed', label: 'Confirmed' },
-  { key: 'out', label: 'Not aligned' },
-  { key: 'wkconf', label: 'Weekly-confirmed' },
+  { key: 'story_with', label: 'H4 with the Daily' },
+  { key: 'story_against', label: 'Daily pullback' },
+  { key: 'story_range', label: 'Inside the H4 range' },
   { key: 'bullish', label: 'Buys' },
   { key: 'bearish', label: 'Sells' },
 ]
@@ -181,9 +185,9 @@ export default function LiveChartBoard() {
       return s.stage === filter
     })
     .sort((a, b) => {
-      const order = { retest: 0, breakout: 1, confirmed_aligned: 2, confirmed_realigning: 3, idle: 4 }
-      const oa = a.snapshot ? order[a.snapshot.stage] : 5
-      const ob = b.snapshot ? order[b.snapshot.stage] : 5
+      const order = { story_range: 0, story_against: 1, story_with: 2, retest: 3, breakout: 4, confirmed_aligned: 5, confirmed_realigning: 6, idle: 7 }
+      const oa = a.snapshot ? order[a.snapshot.stage] : 8
+      const ob = b.snapshot ? order[b.snapshot.stage] : 8
       return oa - ob || a.instrument.localeCompare(b.instrument)
     })
   const reporting = (data?.pairs ?? []).filter(r => r.snapshot).length
@@ -273,6 +277,9 @@ export default function LiveChartBoard() {
                     })()}
                     <Level name="Ext.H" v={fmt(i, s.ext_hi ?? null)} />
                     <Level name="Ext.L" v={fmt(i, s.ext_lo ?? null)} />
+                    <Level name="PL" v={fmt(i, s.pl ?? null)} />
+                    <Level name="H4.RH" v={fmt(i, s.rg_hi ?? null)} />
+                    <Level name="H4.RL" v={fmt(i, s.rg_lo ?? null)} />
                     <Level name="Int.H" v={fmt(i, s.int_hi ?? null)} />
                     <Level name="Int.L" v={fmt(i, s.int_lo ?? null)} />
                     <Level name="Inn.H" v={fmt(i, s.inn_hi ?? null)} />
