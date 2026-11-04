@@ -1125,16 +1125,6 @@ body = HEAD + ENGINE + BODY + NOTES + STORY
 open(OUT, 'w', encoding='utf-8', newline='\n').write(body)
 TITLE = 'indicator("MummyTKT — MTF Storyline", overlay = true,'
 assert body.count(TITLE) == 1
-# TRIAL, MTF Storyline only until the user confirms it in replay (one candle takes out the previous low and
-# closes beyond the high, EURUSD 3-4 Nov 2026). The live Bias Pointer keeps the old test: remove this loop to port it.
 live = body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,')
-for new, old, n in [
-    ("            float cw0 = w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)\n", "", 2),
-    ("(fm or (not na(pc) and f_gt(pc, cw0, w_))) and f_gt(cc, ex, w_)", "fm and f_gt(cc, ex, w_)", 2),
-    ("    // one candle can do both: its wick takes out the previous candle's low (sells: high), then it closes beyond the high\n", "", 1),
-    ("(tk_fm or (not na(w > 0 ? tk_pl2 : tk_ph2) and f_gt(w > 0 ? tk_pl2 : tk_ph2, w > 0 ? x2l : x2h, w)))", "tk_fm", 1),
-]:
-    assert live.count(new) == n, new
-    live = live.replace(new, old)
 open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(live)
 print(OUT, body.count('\n'), 'lines')

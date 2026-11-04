@@ -385,6 +385,7 @@ def chapters():
             "Not every stop is a real rest. Sometimes Pip just pauses for a breath, and that doesn't count at all.",
             "It is only a <b>real rest</b> when her toes reach lower than the toes of the candle before her.",
             "Only after a real rest does a new high spot ring the encore bell. <i>Toes can tell us she rested, but only a coat can jump.</i>",
+            "And sometimes Pip is so quick that she does both in one turn: her toes dip below the toes before her, and her coat still stops above the high spot. <b>DING!</b> That counts too, and her rope moves up to those toes.",
         ]),
         ("The Rope Snaps", RED_D, "snap", [
             "One evening Pip got tired and started to slide. Down, down, down she went, until her <b>coat</b> stopped below her rope.",
