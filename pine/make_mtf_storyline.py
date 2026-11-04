@@ -525,12 +525,13 @@ f_inner(int t0, int w_) =>
             float co = w_ > 0 ? array.get(q2l, j) : array.get(q2h, j)
             float cc = array.get(q2c, j)
             int   tj = array.get(q2t, j)
+            float cw0 = w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
             if na(ex)
                 ex := ce
                 eo := co
                 ln := co
                 lt := tj
-            else if fm and f_gt(cc, ex, w_)
+            else if (fm or (not na(pc) and f_gt(pc, cw0, w_))) and f_gt(cc, ex, w_)
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
@@ -583,13 +584,14 @@ f_seed(int t0, int w_) =>
             float co = w_ > 0 ? array.get(q2l, j) : array.get(q2h, j)
             float cc = array.get(q2c, j)
             int   tj = array.get(q2t, j)
+            float cw0 = w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
             if na(ex)
                 ex := ce
                 et := tj
                 eo := co
                 ln := co
                 lt := tj
-            else if fm and f_gt(cc, ex, w_)
+            else if (fm or (not na(pc) and f_gt(pc, cw0, w_))) and f_gt(cc, ex, w_)
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
@@ -726,7 +728,8 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     float ce = w > 0 ? x2H : x2L
     float co = w > 0 ? x2L : x2H
     string WW = w > 0 ? "bullish" : "bearish"
-    if not na(tk_ext) and tk_fm and f_gt(x2c, tk_ext, w)
+    // one candle can do both: its wick takes out the previous candle's low (sells: high), then it closes beyond the high
+    if not na(tk_ext) and (tk_fm or (not na(w > 0 ? tk_pl2 : tk_ph2) and f_gt(w > 0 ? tk_pl2 : tk_ph2, w > 0 ? x2l : x2h, w))) and f_gt(x2c, tk_ext, w)
         // a REAL high broken: continuation; the line moves to the low that broke it
         if (w == D ? br_with : br_agst)
             f_brk(tk_et, tk_ext, f_ab(N2 + " " + WW + " cont", N2 + ".C"), w > 0, w == D ? br_wcol : br_acol)
@@ -1122,6 +1125,16 @@ body = HEAD + ENGINE + BODY + NOTES + STORY
 open(OUT, 'w', encoding='utf-8', newline='\n').write(body)
 TITLE = 'indicator("MummyTKT — MTF Storyline", overlay = true,'
 assert body.count(TITLE) == 1
-open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(
-    body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,'))
+# TRIAL, MTF Storyline only until the user confirms it in replay (one candle takes out the previous low and
+# closes beyond the high, EURUSD 3-4 Nov 2026). The live Bias Pointer keeps the old test: remove this loop to port it.
+live = body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,')
+for new, old, n in [
+    ("            float cw0 = w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)\n", "", 2),
+    ("(fm or (not na(pc) and f_gt(pc, cw0, w_))) and f_gt(cc, ex, w_)", "fm and f_gt(cc, ex, w_)", 2),
+    ("    // one candle can do both: its wick takes out the previous candle's low (sells: high), then it closes beyond the high\n", "", 1),
+    ("(tk_fm or (not na(w > 0 ? tk_pl2 : tk_ph2) and f_gt(w > 0 ? tk_pl2 : tk_ph2, w > 0 ? x2l : x2h, w)))", "tk_fm", 1),
+]:
+    assert live.count(new) == n, new
+    live = live.replace(new, old)
+open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(live)
 print(OUT, body.count('\n'), 'lines')
