@@ -999,6 +999,11 @@ if a_new
     k1 := a_bcnt
 // alerts: one per event, each also marked on the chart. Only Daily -> H4 on a 4H chart reaches the server.
 bool al_ok = T1 == "D" and T2 == "240" and timeframe.period == "240"
+// a candle already open when the script went live is not news: only candles that open after it can send
+varip int rt_first = na
+if barstate.isrealtime and na(rt_first)
+    rt_first := time
+bool al_live = barstate.isrealtime and not na(rt_first) and time > rt_first
 f_hdr(string t) =>
     '{"secret":"' + wh_secret + '","type":"' + t + '","timeframe":"' + timeframe.period + '","exchange":"' + syminfo.prefix + '","instrument":"' + syminfo.ticker
 f_num(float x) =>
@@ -1007,7 +1012,7 @@ var array<label> al_l = array.new<label>()
 var bool al_rev = false   // the reversal to the story-timeframe range has happened: no more continuations against until its low breaks
 f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>
     if on
-        if barstate.isrealtime and al_ok
+        if al_live and al_ok
             alert(f_hdr("STORY") + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + f_num(lvl) + ',"breakout_level":' + f_num(a_blvl) + ',"pullback_line":' + f_num(nz(f_wk(tk_lt, w < 0), tk_ln)) + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"range_hi":' + f_num(rg_hi) + ',"range_lo":' + f_num(rg_lo) + ',"price":' + str.tostring(x2c) + '}', alert.freq_once_per_bar)
         if al_mk and chart_ok
             array.push(al_l, label.new(time, dir > 0 ? high : low, ab_on ? "! " + ab : "ALERT · " + txt, xloc = xloc.bar_time, style = dir > 0 ? label.style_label_down : label.style_label_up,
@@ -1251,7 +1256,7 @@ if timeframe.change("D") and not na(dr_t)
         array.shift(dh_c)
 f_bar(int t, float o, float h, float l, float c) =>
     na(t) or na(c) ? "null" : '[' + str.tostring(t) + ',' + str.tostring(o, format.mintick) + ',' + str.tostring(h, format.mintick) + ',' + str.tostring(l, format.mintick) + ',' + str.tostring(c, format.mintick) + ']'
-if x2_new and barstate.isrealtime and al_ok
+if x2_new and al_live and al_ok
     string _stage = sph == 1 ? "story_with" : sph == 2 ? "story_against" : sph == 3 ? "story_range" : "idle"
     alert(f_hdr("PRICE_UPDATE") + '","price":' + str.tostring(close[1])
          + ',"snapshot":{"stage":"' + _stage + '","bias":' + (D == 0 ? "null" : D > 0 ? '"bullish"' : '"bearish"') + ',"retest_source":null'
@@ -1262,7 +1267,7 @@ if x2_new and barstate.isrealtime and al_ok
          + ',"dbar":' + f_bar(dr_t, dr_o, dr_h, dr_l, dr_c) + '}', alert.freq_once_per_bar)
 // Once per alert: the first H4 close sends the last Daily candles, the second the last H4 candles
 var int hist_step = 0
-if x2_new and barstate.isrealtime and al_ok and hist_step < 2
+if x2_new and al_live and al_ok and hist_step < 2
     string js = ""
     if hist_step == 0
         int nd = array.size(dh_t)
