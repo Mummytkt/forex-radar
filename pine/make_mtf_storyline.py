@@ -149,10 +149,11 @@ bool   al_bo    = input.bool(true, "Top-timeframe breakout", group = G_AL)
 bool   al_cw    = input.bool(true, "Story-timeframe continuation after the top-timeframe breakout", group = G_AL)
 bool   al_pb    = input.bool(true, "Pullback confirmed (a close beyond the pullback line)", group = G_AL)
 bool   al_ca    = input.bool(true, "Story-timeframe continuation after the pullback (no reversal to the story-timeframe range yet)", group = G_AL)
-bool   al_ci    = input.bool(false, "Inside the range: continuation in alignment", group = G_AL)
-bool   al_rl    = input.bool(false, "Inside the range: story-timeframe pullback, back in alignment", group = G_AL)
-bool   al_dc    = input.bool(false, "Inside the range: range high broken, the top timeframe continues", group = G_AL)
-bool   al_lb    = input.bool(false, "Inside the range: range low broken / pullback break inside the range", group = G_AL)
+bool   al_rl    = input.bool(true, "Story-timeframe pullback: back in alignment", group = G_AL)
+bool   al_ci    = input.bool(true, "Story-timeframe continuation in alignment", group = G_AL)
+bool   al_dc    = input.bool(true, "Range high broken: the top timeframe continues", group = G_AL)
+bool   al_lb    = input.bool(true, "Range low broken / pullback break inside the range", group = G_AL)
+bool   al_cr    = input.bool(true, "Story-timeframe continuation against the top timeframe, inside the range", group = G_AL)
 string wh_secret = input.string("", "Webhook secret", group = G_AL)
 bool   al_mk    = input.bool(true, "Mark every alert point on the chart", group = G_AL, inline = "am")
 int    al_n     = input.int(40, "kept", minval = 1, maxval = 200, group = G_AL, inline = "am")
@@ -650,7 +651,7 @@ var bool al_rev = false   // the reversal to the story-timeframe range has happe
 f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>
     if on
         if barstate.isrealtime and al_ok
-            alert(f_hdr("STORY") + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + f_num(lvl) + ',"breakout_level":' + f_num(a_blvl) + ',"pullback_line":' + f_num(nz(f_wk(tk_lt, w < 0), tk_ln)) + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"price":' + str.tostring(x2c) + '}', alert.freq_once_per_bar)
+            alert(f_hdr("STORY") + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + f_num(lvl) + ',"breakout_level":' + f_num(a_blvl) + ',"pullback_line":' + f_num(nz(f_wk(tk_lt, w < 0), tk_ln)) + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"range_hi":' + f_num(rg_hi) + ',"range_lo":' + f_num(rg_lo) + ',"price":' + str.tostring(x2c) + '}', alert.freq_once_per_bar)
         if al_mk and chart_ok
             array.push(al_l, label.new(time, dir > 0 ? high : low, ab_on ? "! " + ab : "ALERT · " + txt, xloc = xloc.bar_time, style = dir > 0 ? label.style_label_down : label.style_label_up,
                  color = with_ ? al_cwc : al_cac, textcolor = al_tx, size = size.tiny))
@@ -742,10 +743,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         if w == D
             f_al(sph == 3 ? al_ci : al_cw, sph == 3 ? "cont_aligned" : "cont_after_breakout", N2 + " " + WW + " continuation" + (sph == 3 ? " (in alignment with the " + N1 + ")" : " after the " + N1 + " breakout"), w, tk_ext, true, N2 + ".C" + (sph == 3 ? " al" : ""))
         else
-            // after the reversal to the range only a close beyond its low brings these back
-            if al_rev and not na(rg_lo) and f_gt(rg_lo, x2c, D)
-                al_rev := false
-            f_al(al_ca and not al_rev, "cont_pullback", N2 + " " + WW + " continuation (" + N1 + " pullback still in play)", w, tk_ext, false, N2 + ".C pb")
+            // after the reversal to the range these are inside it; a close beyond its low alerts below instead
+            if not (al_rev and not na(rg_lo) and f_gt(rg_lo, x2c, D))
+                f_al(al_rev ? al_cr : al_ca, al_rev ? "cont_in_range" : "cont_pullback", N2 + " " + WW + " continuation" + (al_rev ? " (inside the " + N2 + " range)" : " (" + N1 + " pullback still in play)"), w, tk_ext, false, N2 + (al_rev ? ".C in" : ".C pb"))
         tk_ext := ce
         tk_et  := x2t
         tk_eo  := co
@@ -797,7 +797,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             sph := 2
             if ph0 == 1 or rl_brk
                 al_rev := false
-            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, nz(f_wk(old_lt, w > 0), old_ln), false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
+            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, rl_brk ? rg_lo : nz(f_wk(old_lt, w > 0), old_ln), false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
             if ph0 == 1
                 rg_lo  := nz(rl_x, D > 0 ? XL : XH)
                 rg_lot := na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
@@ -833,12 +833,12 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         else
             // the story-timeframe pullback: back in alignment, the story-timeframe range
             al_rev := true
-            f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, old_ln, true, N2 + ".P · BIA")
             sph    := 3
             [b0, b0t] = f_ext2(rg_hit, D < 0)
             rg_lo  := nz(b0, tk_ln)
             rg_lot := na(b0) ? tk_lt : b0t
             rg_lf  := false
+            f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P · BIA")
             f_brk(old_lt, old_ln, f_ab(N2 + " pullback", N2 + ".P"), D > 0, br_wcol)
             f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback · back in alignment with " + N1, N2 + ".P · BIA"), D > 0, tg_alc)
             f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
@@ -859,6 +859,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     if sph == 2 and not na(rg_lo)
         if not rg_lf and f_gt(rg_lo, x2c, D)
             rg_lf := true
+            if al_rev
+                al_rev := false
+                f_al(al_lb, "range_low_broken", N2 + " range " + LO + " broken · " + N2 + " " + AW + " again", -D, rg_lo, false, N2 + ".R" + LC + "B")
         if rg_lf and not na(tk_ext) and f_gt(rg_lo, tk_ext, D)
             rg_lo  := tk_ext
             rg_lot := tk_et
@@ -1073,7 +1076,7 @@ if barstate.islast
         f_key(2, A1 + ".EQ", N1 + " range 0.5 (premium above / discount below)")
         f_key(3, A1 + ".BO", N1 + " breakout")
         f_key(4, "PL / " + N2 + ".PL", "pullback line: the " + N2 + " " + LO + " that broke the last " + HI + " (b = the broken " + HI + " itself)")
-        f_key(5, N2 + ".C", N2 + " continuation (al = in alignment, pb = in the pullback direction)")
+        f_key(5, N2 + ".C", N2 + " continuation (al = in alignment, pb = in the pullback, in = against the " + N1 + " inside the " + N2 + " range)")
         f_key(6, "PB / PB.in", "pullback break: " + N2 + " close beyond the pullback line (in = inside the " + N2 + " range)")
         f_key(7, A1 + ".PC", N1 + " pullback confirmed")
         f_key(8, N2 + ".P · BIA", N2 + " pullback: back in alignment with the " + N1)

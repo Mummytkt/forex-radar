@@ -235,6 +235,8 @@ class TVWebhookPayload(BaseModel):
     pullback_line: Optional[float] = None  # STORY: the line after this event
     ext_hi: Optional[float] = None     # STORY: the Daily external high / low
     ext_lo: Optional[float] = None
+    range_hi: Optional[float] = None   # STORY: the H4 range, in the Daily's own terms (for sells its "high" is the lower price)
+    range_lo: Optional[float] = None
 
 
 # Bias Pointer events are only meaningful from the 4H chart. Alerts created on any
@@ -837,12 +839,11 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
                                       after_retest=payload.after_retest if cont_type in ("oc_cont", "h4_oc_formed") else None))
 
 
-# The notification-list type and the Alert Filters switch of each story event
-_STORY_TYPE = {"daily_breakout": "daily_breakout", "cont_after_breakout": "story_cont", "cont_aligned": "story_cont",
-               "range_high_broken": "story_cont", "pullback_confirmed": "story_pullback", "pullback_in_range": "story_pullback",
-               "cont_pullback": "story_against", "range_low_broken": "story_against", "back_in_alignment": "story_cont"}
-_STORY_PREF = {"daily_breakout": "daily_breakout", "cont_after_breakout": "story_cont",
-               "pullback_confirmed": "story_pullback", "cont_pullback": "story_against"}
+# The notification-list type of each story event; it is also the name of its Alert Filters switch
+_STORY_TYPE = {"daily_breakout": "daily_breakout", "cont_after_breakout": "story_cont", "pullback_confirmed": "story_pullback",
+               "cont_pullback": "story_against", "back_in_alignment": "story_align", "cont_aligned": "story_aligned",
+               "range_high_broken": "story_range_high", "range_low_broken": "story_range_low",
+               "pullback_in_range": "story_in_range", "cont_in_range": "story_in_range"}
 
 
 async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload) -> None:
@@ -859,7 +860,7 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
     breakout = _ensure_breakout(conn, config, instrument, top, payload.breakout_level or payload.level, "STORY")
 
     alert_text = format_story_alert(instrument, event, direction, top, payload.level, payload.pullback_line,
-                                    payload.ext_hi, payload.ext_lo)
+                                    payload.ext_hi, payload.ext_lo, payload.range_hi, payload.range_lo)
     if event == "daily_breakout":
         alert_text = with_data_source(alert_text, payload.exchange)
     alert_record = AlertRecord(
@@ -881,7 +882,7 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
     logger.info("%s STORY %s %s @ %s: alert stored", instrument, event, direction.value, payload.level)
 
     if config.telegram_enabled:
-        _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id, pref=_STORY_PREF.get(event)))
+        _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id, pref=_STORY_TYPE[event]))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

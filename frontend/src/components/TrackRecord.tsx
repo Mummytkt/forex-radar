@@ -31,7 +31,7 @@ function Stat({ value, label, color }: { value: string; label: string; color: st
   )
 }
 
-/** Landing-page section: outcomes of Origin bias calls, published once each is 5 days old. */
+/** Landing-page section: outcomes of Daily breakout alerts, published once each is 5 days old. */
 export default function TrackRecord() {
   const [data, setData] = useState<TrackRecordData | null>(null)
 
@@ -50,7 +50,7 @@ export default function TrackRecord() {
       <div style={{ textAlign: 'center', marginBottom: 30 }}>
         <h2 style={{ fontSize: 'clamp(26px, 4vw, 34px)', fontWeight: 800, marginBottom: 10, letterSpacing: '-0.02em' }}>Every call, measured in public.</h2>
         <p style={{ fontSize: 15, color: 'var(--text-secondary)', maxWidth: 620, margin: '0 auto', lineHeight: 1.65 }}>
-          We check every Origin bias call against the market: where price was 24 hours and 5 days later, in the direction we called.
+          We check every Daily breakout alert against the market: where price was 24 hours and 5 days later, in the direction we called.
           Nothing is hand-picked.
         </p>
       </div>

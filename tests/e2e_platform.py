@@ -874,7 +874,9 @@ check("switching Origin off stops Origins", "chatS" not in sent)
 c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": True, "contOc": True, "contEngulfing": True})
 _switches = [("alertOrigin", "origin", "external"), ("contInline", "cont_inline", None), ("contBreaker", "cont_breaker", None),
              ("contOc", "cont_oc", None), ("contRealign", "cont_realign", "external"), ("contEngulfing", "engulfing", None),
-             ("dailyBreakout", "daily_breakout", None), ("storyCont", "story_cont", None), ("storyPullback", "story_pullback", None), ("storyAgainst", "story_against", None)]
+             ("dailyBreakout", "daily_breakout", None), ("storyCont", "story_cont", None), ("storyPullback", "story_pullback", None), ("storyAgainst", "story_against", None),
+             ("storyAlign", "story_align", None), ("storyAligned", "story_aligned", None), ("storyRangeHigh", "story_range_high", None),
+             ("storyRangeLow", "story_range_low", None), ("storyInRange", "story_in_range", None)]
 for field, pref_key, cls in _switches:
     c.patch("/api/preferences", headers=H(ts_), json={field: False})
     sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class=cls, pref=pref_key))
@@ -1161,7 +1163,7 @@ _eb = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURUSD"
 # MTF story events: stored with their own message, type and Alert Filters switch
 def _story(event, direction, level, **kw):
     tv(type="STORY", instrument="GBPUSD", event=event, direction=direction, top="bullish", level=level, timeframe="240",
-       breakout_level=1.3300, pullback_line=1.3381, ext_hi=1.3448, ext_lo=1.3288, exchange="FOREXCOM", **kw)
+       breakout_level=1.3300, pullback_line=1.3381, ext_hi=1.3448, ext_lo=1.3288, range_hi=1.3448, range_lo=1.3350, exchange="FOREXCOM", **kw)
     return conn.execute("SELECT alert_type, alert_text, alert_classification, direction FROM alerts WHERE instrument = 'GBPUSD' ORDER BY id DESC LIMIT 1").fetchone()
 _r = _story("daily_breakout", "bullish", 1.3300)
 check("Daily breakout: headline, type, level, line and data source",
@@ -1178,6 +1180,39 @@ _r = _story("cont_pullback", "bearish", 1.3400)
 check("no discount warning above the 0.5", "Careful" not in _r["alert_text"])
 from alerts.formatter import short_text as _st
 check("Short style keeps the levels and drops the explanation", "Level:" in _st(_r["alert_text"]) and "H4 key level:" in _st(_r["alert_text"]) and "An H4 candle closed" not in _st(_r["alert_text"]))
+_r = _story("back_in_alignment", "bullish", 1.3410)
+check("back in alignment gives the H4 range", _r["alert_type"] == "story_align" and "H4 key level broken @ 1.34100" in _r["alert_text"] and "H4 range: 1.33500 – 1.34480" in _r["alert_text"])
+_r = _story("cont_aligned", "bullish", 1.3420)
+check("continuation in alignment", _r["alert_type"] == "story_aligned" and "inside the H4 range and in the Daily bullish direction" in _r["alert_text"])
+_r = _story("range_high_broken", "bullish", 1.3448)
+check("range high broken: the Daily continues", _r["alert_type"] == "story_range_high" and "H4 range high broken @ 1.34480" in _r["alert_text"] and "The Daily bullish move continues" in _r["alert_text"])
+_r = _story("range_low_broken", "bearish", 1.3350)
+check("range low broken: H4 against again", _r["alert_type"] == "story_range_low" and "H4 range low broken @ 1.33500" in _r["alert_text"] and "against the Daily bullish direction again" in _r["alert_text"])
+_r = _story("pullback_in_range", "bearish", 1.3385)
+check("pullback break inside the range", _r["alert_type"] == "story_in_range" and _r["alert_text"].startswith("INSIDE THE H4 RANGE") and "H4 range: 1.33500" in _r["alert_text"])
+_r = _story("cont_in_range", "bearish", 1.3370)
+check("continuation inside the range", _r["alert_type"] == "story_in_range" and "H4 bearish continuation inside the H4 range" in _r["alert_text"])
+tv(type="STORY", instrument="GBPUSD", event="cont_after_breakout", direction="bearish", top="bearish", level=1.3200, timeframe="240",
+   pullback_line=1.3250, ext_hi=1.3400, ext_lo=1.3210, exchange="FOREXCOM")
+_r = conn.execute("SELECT alert_text FROM alerts WHERE instrument = 'GBPUSD' ORDER BY id DESC LIMIT 1").fetchone()
+check("sells mirror: low broken, close below, the line breaks above", "H4 low broken @ 1.32000" in _r[0] and "closed below it" in _r[0] and "An H4 close above it confirms the Daily pullback" in _r[0])
+# the public track record measures Daily breakouts only
+from analysis.track_record import compute_track_record as _ctr
+_t0 = datetime.utcnow() - timedelta(days=6)
+_fm = "%Y-%m-%dT%H:%M:%S"
+_before = _ctr(conn)["evaluated"]
+_id = conn.execute("SELECT id FROM alerts WHERE instrument = 'GBPUSD' AND alert_type = 'daily_breakout' ORDER BY id DESC LIMIT 1").fetchone()[0]
+conn.execute("UPDATE alerts SET fired_at = ? WHERE id = ?", (_t0.strftime(_fm), _id))
+_cont = conn.execute("SELECT id FROM alerts WHERE instrument = 'GBPUSD' AND alert_type = 'story_cont' ORDER BY id DESC LIMIT 1").fetchone()[0]
+conn.execute("UPDATE alerts SET fired_at = ? WHERE id = ?", (_t0.strftime(_fm), _cont))
+_ticks = [(_t0 + timedelta(hours=h)).strftime(_fm) for h in (0, 24, 120)]
+for _ts, _pr in zip(_ticks, (1.33, 1.34, 1.35)):
+    conn.execute("INSERT INTO price_ticks (instrument, ts, price) VALUES ('GBPUSD', ?, ?)", (_ts, _pr))
+_rec = _ctr(conn)
+check("the track record counts the Daily breakout and not the continuation", _rec["evaluated"] == _before + 1)
+for _ts in _ticks:
+    conn.execute("DELETE FROM price_ticks WHERE instrument = 'GBPUSD' AND ts = ?", (_ts,))
+conn.commit()
 _n = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
 _story("not_an_event", "bullish", 1.33)
 check("an unknown story event is ignored", conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == _n)

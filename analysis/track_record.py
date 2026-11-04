@@ -1,7 +1,7 @@
 """
-Public track record of Origin bias confirmations.
+Public track record of Daily breakout alerts.
 
-Each Origin alert is measured against TradingView H4 closing prices recorded from
+Each Daily breakout alert is measured against TradingView H4 closing prices recorded from
 PRICE_UPDATE webhooks (the same data the signals come from):
 
   entry  = the H4 close nearest the alert time (within 45 minutes)
@@ -100,7 +100,7 @@ def compute_track_record(conn, now: Optional[datetime] = None) -> dict:
     if since:
         for inst, direction, fired_at in conn.execute(
             "SELECT instrument, direction, fired_at FROM alerts "
-            "WHERE alert_classification = 'origin' AND fired_at >= ? AND fired_at <= ? ORDER BY fired_at DESC",
+            "WHERE alert_type = 'daily_breakout' AND fired_at >= ? AND fired_at <= ? ORDER BY fired_at DESC",
             (since, cutoff),
         ).fetchall():
             out = evaluate_alert(conn, inst, direction, fired_at)
@@ -110,7 +110,7 @@ def compute_track_record(conn, now: Optional[datetime] = None) -> dict:
     # Only calls made after price recording began can ever be measured, so only
     # those count as "running" (still inside their 5-day window).
     running = conn.execute(
-        "SELECT COUNT(*) FROM alerts WHERE alert_classification = 'origin' AND fired_at > ? AND fired_at >= ?",
+        "SELECT COUNT(*) FROM alerts WHERE alert_type = 'daily_breakout' AND fired_at > ? AND fired_at >= ?",
         (cutoff, since),
     ).fetchone()[0] if since else 0
 

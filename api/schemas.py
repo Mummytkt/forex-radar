@@ -60,6 +60,11 @@ class AlertPreferences(BaseModel):
     storyCont: bool = True
     storyPullback: bool = True
     storyAgainst: bool = True
+    storyAlign: bool = True
+    storyAligned: bool = True
+    storyRangeHigh: bool = True
+    storyRangeLow: bool = True
+    storyInRange: bool = True
     alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
     engulfMode: str = "wick"            # "wick" | "body" | "both"
     dEngulfMode: str = "wick"           # Daily engulfing: "wick" | "body" | "both"
@@ -84,6 +89,11 @@ class AlertPreferencesUpdate(BaseModel):
     storyCont: bool | None = None
     storyPullback: bool | None = None
     storyAgainst: bool | None = None
+    storyAlign: bool | None = None
+    storyAligned: bool | None = None
+    storyRangeHigh: bool | None = None
+    storyRangeLow: bool | None = None
+    storyInRange: bool | None = None
     alertStyle: str | None = None
     engulfMode: str | None = None
     dEngulfMode: str | None = None

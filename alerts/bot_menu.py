@@ -60,7 +60,15 @@ H4 key level: the last 4H high that broke a low (sells: low that broke a high). 
 
 Daily range: the Daily external low to high, with its 0.5. Discount is below the 0.5, premium above. Be careful selling in the discount or buying in the premium.
 
-Entry alerts: inside the range, set your own levels on the Price Alerts page and tick the formations you want to hear about.
+H4 pullback, back in alignment: 4H closed beyond the key level, so 4H is with the Daily again. The H4 range is now set, from its low to the top of the leg.
+
+H4 continuation in alignment: 4H keeps breaking in the Daily direction inside the H4 range.
+
+H4 range high broken: the Daily continues. H4 range low broken: 4H is against the Daily again.
+
+Pullback break inside the H4 range: 4H broke the pullback line but is still inside the range. Later 4H breaks against the Daily there are called continuations inside the H4 range.
+
+Entry alerts: set your own levels on the Price Alerts page and tick the formations you want to hear about.
 
 📊 The line under a Daily breakout alert says whose chart and prices it was read from; your broker's prices can differ slightly.
 

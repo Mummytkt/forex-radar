@@ -301,6 +301,41 @@ def make_images():
         bubbles=[(2, 9.75, "I jumped the CASTLE WALL!\nSame way: the game goes on!", (-1.9, 1.3)),
                  (3, 8.95, "A new trampoline!\nPip bounces here: ENCORE!", (2.0, -1.8))],
         ylim=(4.6, 12.2), xpad=(1.5, 3.8), speed=[3])
+    # ── The story (v14): Pip's path, drawn from real open / high / low / close values ──
+    P_ = lambda *c: tuple((v - 99) * 0.8 for v in c) + (L,)
+    F = lambda v: (v - 99) * 0.8
+    im["rest"] = scene("rest", [P_(102.6, 105, 102.2, 104.6), P_(104.6, 104.9, 102, 103), P_(103, 103.6, 101.8, 102.4), P_(102.4, 105.2, 102.1, 104.9)], sx=1.7,
+        levels=[(F(101.8), "Pip's rope", RED_D, 2, 3)],
+        bubbles=[(1, F(102), "My toes went below\nthe toes before me:\na REAL rest!", (-1.5, -0.1)), (3, F(105.2), "Over the top!\nDING!", (1.2, 0.9))],
+        ylim=(1.2, 6.6), xpad=(2.4, 3.6), floors=False)
+    im["rope"] = scene("rope", [P_(100.8, 103, 100.5, 102.6), P_(102.6, 105, 102.2, 104.6), P_(103, 103.6, 101.8, 102.4), P_(102.4, 105.2, 102.1, 104.9), P_(104.9, 107.4, 104.6, 107.1), P_(107.1, 107.3, 104.4, 105.6), P_(105.6, 108.4, 105.3, 108.1)], sx=1.25,
+        levels=[(F(101.8), "the rope, first", MUTED, 2, 4), (F(104.4), "the rope moves up!", RED_D, 5, 6)],
+        bubbles=[(6, F(108.4), "DING! My rope\ncomes with me.", (-2.2, 0.5))],
+        ylim=(0.6, 9), xpad=(1.0, 3.4), floors=False)
+    im["snap"] = scene("snap", [P_(108.1, 110.6, 107.8, 110.2), P_(110.2, 110.5, 107.5, 108), P_(108, 108.4, 105.6, 106), P_(106, 106.3, 103.6, 104), P_(104, 104.6, 102.2, 102.6)], sx=1.6,
+        levels=[(F(104.4), "Pip's rope", RED_D), (F(106.9), "the middle floor", MUTED, 1)],
+        bubbles=[(3, F(104), "My COAT stopped below\nthe rope. SNAP!", (-3.4, -1.1))],
+        ylim=(1.6, 10), xpad=(1.2, 3.2), floors=False)
+    im["other"] = scene("other", [P_(106, 106.3, 103.6, 104), P_(104, 104.6, 102.2, 102.6), P_(102.6, 104.9, 102.3, 103.8), P_(103.8, 105, 103.4, 104.6), P_(104.6, 104.8, 101.4, 101.8), P_(101.8, 102, 100, 100.4)], sx=1.45,
+        levels=[(F(105), "the new rope, up high", RED_D, 3)],
+        bubbles=[(4, F(101.4), "Down I go! DING!\nCareful, this is the cellar.", (-3.8, -0.3))],
+        ylim=(0.2, 6.4), xpad=(1.2, 3.4), floors=False)
+    im["playground"] = scene("playground", [P_(103.8, 105, 103.4, 104.6), P_(104.6, 104.8, 101.4, 101.8), P_(101.8, 102, 100, 100.4), P_(100.4, 102.6, 100.1, 102.2), P_(102.2, 105.6, 102, 105.3), P_(105.3, 107.2, 105, 106.9)], sx=1.45,
+        levels=[(F(110.2), "the playground roof", SKY), (F(105), "the rope", RED_D, 0, 4), (F(100), "the playground floor", SKY, 2)],
+        bubbles=[(4, F(105.6), "Back with Papa!", (-2.2, 1.0))],
+        ylim=(0.2, 9.8), xpad=(1.2, 3.8), floors=False)
+    im["toys"] = scene("toys", [P_(101, 102.2, 100.6, 102), P_(102, 105.2, 101.8, 104.8), P_(104.8, 107, 104.5, 106.6), P_(106.6, 107.4, 105.5, 106), P_(106, 108.6, 105.8, 108.3)], sx=1.6,
+        mats=[(F(102.2), F(104.5), "a soft cushion (FVG)")],
+        levels=[(F(104.8), "a stepping stone (OC)", GREEN_D, 1), (F(106), "a little dip (V-shape)", SKY, 3)],
+        ylim=(0.8, 8.4), xpad=(1.2, 3.8), floors=False)
+    im["roofbreak"] = scene("roofbreak", [P_(105.3, 107.2, 105, 106.9), P_(105.2, 108.2, 105, 107.9), P_(107.9, 108, 106.6, 107), P_(107, 111.4, 106.8, 111)], sx=1.8,
+        levels=[(F(110.2), "the playground roof", SKY)],
+        bubbles=[(3, F(111.4), "Over the roof!\nPapa goes on!", (-3, -0.3))],
+        ylim=(3.8, 10.6), xpad=(1.4, 3.6), floors=False)
+    im["floorbreak"] = scene("floorbreak", [P_(102.2, 105.6, 102, 105.3), P_(105.3, 105.6, 103, 103.4), P_(103.4, 103.7, 101, 101.4), P_(101.4, 102.8, 101.1, 102.5), P_(102.5, 102.7, 99.2, 99.6)], sx=1.6,
+        levels=[(F(100.4), "the playground floor", SKY)],
+        bubbles=[(4, F(99.2), "Through the floor!\nPip walks away again.", (-3.4, 0.1))],
+        ylim=(-0.4, 6.2), xpad=(1.4, 3.8), floors=False)
     return im
 
 
@@ -330,9 +365,8 @@ def chapters():
             "<b>Grandma Wendy</b> was the biggest of them all. She is wise and she is slow: one of her steps takes a <b>whole week</b>.",
             "<b>Papa Dan</b> is big and strong. One of his steps takes a <b>whole day</b>.",
             "And <b>little Pip</b>, Papa's daughter, is quick as a mouse. She takes <b>six small steps every day</b>.",
-            "Pip had one big dream. On the roof of the tower hung the shiny <b>Golden Bell</b>, and Pip wanted to ring it more than anything.",
-            "But the Golden Bell has a rule: <b>it only rings when the family is going the same way, in the right order.</b> "
-            "Let's find out how Pip did it!",
+            "On the roof of the tower hangs the shiny <b>Golden Bell</b>. It rings whenever the family's story moves on, so nobody in the kingdom misses a thing.",
+            "Let's find out how it goes!",
         ]),
         ("Fences and Jumps", SUN, "breakout", [
             "Whenever a candle person climbs up (green) and the very next one slides down (red), they leave a little <b>fence</b> "
@@ -342,96 +376,67 @@ def chapters():
             "(Remember: coats count, arms don't.)",
             "When Papa Dan jumps one of his fences, everyone shouts: <b>\"BREAKOUT!\"</b>",
         ]),
-        ("Grandma Wendy Decides", "#e67700", "grandma", [
-            "One week, Grandma Wendy did something she hadn't done for a long, long time. She jumped right over her big old garden fence!",
-            "<b>\"This year,\"</b> she announced, <b>\"we are going UP!\"</b>",
-            "But Grandma never rushes. After a big jump she always comes back to rest on a <b>bench</b>: her old fence, a soft cushion, "
-            "or one of her favourite resting spots.",
-            "And who do you think watches Grandma's bench very, very carefully? <b>Papa Dan.</b>",
+        ("Pip Runs After Papa", GREEN_D, "rope", [
+            "<b>DING!</b> Papa's jump rings the Golden Bell for the very first time. Now everybody knows which way the family is going.",
+            "Little Pip runs the same way. Each time her coat stops above her last high spot, the bell gives a small <b>encore: DING!</b>",
+            "Pip is careful. She ties a <b>safety rope</b> to the lowest spot she pushed off from, and each time she climbs higher, her rope comes up with her.",
         ]),
-        ("Papa Touches Grandma's Bench", RED_D, "papa_bench", [
-            "Papa Dan had been sliding <b>down</b>, red day after red day. On the way down, he stopped for a moment and built a little <b>fence</b>.",
-            "Then one evening, Papa's foot touched <b>Grandma's bench</b>... and he did <b>not</b> fall through!",
-            "Grandma smiled. <b>\"Remember this moment, Papa. This is your first touch.\"</b>",
-            "Papa started to climb. Up, up, up... until his coat stopped <b>above the fence he had built on the way down</b>.",
-            "<b>\"PROPER JUMP!\"</b> cheered Grandma. <b>\"That fence was there before you touched my bench.\"</b>",
-            "If Papa had jumped a brand-new fence, one he built <b>after</b> touching the bench, Grandma would only have nodded: "
-            "\"That's nice, Papa, but that's a baby fence. I'll keep waiting for a proper jump.\" Papa's jump still counts. It just isn't Grandma's proper jump.",
+        ("A Real Rest", SKY, "rest", [
+            "Not every stop is a real rest. Sometimes Pip just pauses for a breath, and that doesn't count at all.",
+            "It is only a <b>real rest</b> when her toes reach lower than the toes of the candle before her.",
+            "Only after a real rest does a new high spot ring the encore bell. <i>Toes can tell us she rested, but only a coat can jump.</i>",
         ]),
-        ("The Trampoline", SKY, "trampoline", [
-            "Something magical happened to the fence Papa jumped. It turned into a <b>trampoline</b>!",
-            "But first, Papa had to go out to play: his coat had to stop clearly above the trampoline's <b>wiggle mat</b>.",
-            "Now it was <b>Pip's turn</b>. Her job was to come back down, touch the trampoline, and <b>not fall through</b>. That's called a <b>bounce</b>.",
-            "Papa has other safe spots too: little <b>stepping stones</b> he left as he climbed, his old <b>dips and steps</b> inside the house he "
-            "jumped out of, and his <b>soft cushions</b>. Pip may bounce on any of them.",
+        ("The Rope Snaps", RED_D, "snap", [
+            "One evening Pip got tired and started to slide. Down, down, down she went, until her <b>coat</b> stopped below her rope.",
+            "<b>SNAP! DING!</b> The rope was broken. \"Papa is resting too,\" she said. \"This is his pullback.\"",
+            "Now everyone looks at <b>Papa's house</b>. It has a roof, a floor and a <b>middle floor</b>. Below the middle floor is the bargain <b>cellar</b>, and above it is the fancy <b>attic</b>.",
         ]),
-        ("The Soft Cushions", "#8a5cf6", "cushions", [
-            "Sometimes Papa climbs so fast that he leaves a gap. Three Papas stand in a row, and the third one's feet don't reach the first one's head. "
-            "That empty space becomes a <b>soft cushion</b>.",
-            "Cushions have their own rules:",
-            "<b>1.</b> You may only land on a cushion by <b>dropping in from above</b>.",
-            "<b>2.</b> If you fall right through it into a <b>lower cushion</b>, the lower one is where you bounce.",
-            "<b>3.</b> Climbing back up into a cushion <b>from underneath</b> never counts.",
-            "<b>4.</b> A cushion only <b>pops</b> when Papa's coat stops below the whole cushion.",
+        ("Pip Walks the Other Way", "#8a5cf6", "other", [
+            "Now Pip walks down, the opposite way to Papa. Each time her coat stops below her last low spot, the bell rings an encore.",
+            "She ties a <b>new rope</b> up high, at the last high spot that sent her lower.",
+            "But Pip is careful in the cellar. \"Down here,\" she whispers, \"Papa might wake up at any time.\"",
         ]),
-        ("Pip Rings the Golden Bell", SUN, "goldbell", [
-            "While Pip bounced, she built little fences of her own.",
-            "The fence that matters is Pip's <b>outside fence</b>: the one she built <b>before</b> she first touched Papa's safe spot.",
-            "Pip took a deep breath. She climbed... and climbed... and her coat stopped <b>above her outside fence</b>.",
-            "<b>DING! DING! DING!</b> The <b>Golden Bell</b> rang across Candle Kingdom!",
-            "<b>Papa jumped. Pip bounced. Pip jumped. The family was going UP!</b>",
-            "Grown-ups call this ring the <b>Origin</b>. It's the most important bell of all.",
+        ("Pip Turns Back: The Playground", SKY, "playground", [
+            "One morning Pip's coat stopped <b>above</b> her new rope. <b>DING!</b> She was going Papa's way again!",
+            "And now she has a <b>playground</b>. Its floor is the lowest place she went, and its roof is the top of her climb. The playground is always inside Papa's house.",
+            "Inside it she still ties her rope. If her coat stops higher, the bell rings. If her coat stops below the rope, the bell rings too, because she is still deciding.",
         ]),
-        ("Outside Fences and Inside Fences", "#8a5cf6", "inout", [
-            "Fences Pip builds <b>after</b> she touches the safe spot are <b>inside fences</b>.",
-            "Jumping an inside fence doesn't ring the Golden Bell. Pip just keeps waiting for her <b>outside fence</b>. "
-            "(Grown-ups can switch inside bells on if they want them.)",
+        ("The Toys in the Playground", SUN, "toys", [
+            "On the way up, Pip left <b>toys</b> behind her, and these are the places grown-ups watch: <b>soft cushions</b> (FVGs), <b>stepping stones</b> (OCs) and <b>little dips</b> (V-shapes).",
+            "When toys sit right next to each other, Pip piles them together into one big heap, to keep the playground tidy.",
+            "If a coat ever stops right through a toy, that toy is gone.",
         ]),
-        ("Encore! Encore!", GREEN_D, "encore1", [
-            "After the Golden Bell, Pip kept climbing, and the bells kept ringing!",
-            "Every new fence she jumped, every bounce on her own little trampoline or step, every <b>big hug</b>: <b>ENCORE!</b>",
-            "And every time she went back to bounce on one of Papa's safe spots and jumped her outside fence again: <b>ENCORE!</b>",
-            "Right after a big jump, if Pip's very next step left a <b>little gap</b> behind her, a tiny bell tinkled: "
-            "<i>\"A little gap was left behind!\"</i>",
-            "And Papa gave hugs too! When one of Papa's big day-steps went his way and wrapped right around the step before it, "
-            "that was <b>Papa's big hug</b>, and a deep bell rang at the end of the day: <i>\"Papa hugged it all!\"</i>",
+        ("Over the Roof", GREEN_D, "roofbreak", [
+            "One day Pip's coat stopped above the playground roof. <b>DING!</b>",
+            "<b>\"Papa is going on!\"</b> she shouted. Off she ran with a brand-new rope, and the whole story started climbing again.",
         ]),
-        ("Papa Jumps the Castle Wall", "#8a5cf6", "castle", [
-            "One day, Papa climbed so high that his coat stopped above the <b>great castle wall</b> at the very top of the old house.",
-            "<b>\"Do we have to start all over again?\"</b> asked Pip.",
-            "<b>\"No!\"</b> laughed Papa. <b>\"We're still going UP. The game goes on!\"</b>",
-            "There was no new Golden Bell. Instead, the castle wall became a <b>brand-new trampoline</b>, and when Pip bounced on it and "
-            "jumped her fence: <b>ENCORE!</b>",
-            "Grandma just nodded from her bench. \"Still going my way.\"",
-        ]),
-        ("The Wobble", "#ff7a59", "wobble", [
-            "Sometimes, even clever Pip slips. Her coat stops <b>below her newest little dip</b>. <b>Wobble!</b>",
-            "While Pip wobbles, no bells ring at all.",
-            "To get back in line, she must <b>bounce on Papa's safe spot again</b> and <b>jump her fence</b>. Then: ENCORE! The climb is back on.",
+        ("Through the Floor", RED_D, "floorbreak", [
+            "But some days it goes the other way. Pip's coat stops below the playground floor. <b>DING!</b>",
+            "\"I am walking away from Papa again,\" she says. And she walks on down until the day she turns back.",
         ]),
         ("When the Wind Changes", RED_D, "gameover", [
-            "If Papa's coat ever stops <b>below the bottom of the house</b> he jumped out of, the wind has changed.",
+            "If Papa's coat ever stops <b>below the floor of his house</b>, the wind has changed.",
             "The old game ends, and a <b>brand-new game</b> begins: this time going <b>DOWN</b>. Everything happens the mirror way, in red coats.",
-            "And if Papa ever jumps the opposite way to Grandma? Pip can still ring her bell, but it comes with a little warning: "
-            "<b>\"Careful! Grandma is going the other way.\"</b>",
         ]),
         ("Tiny Tia's Secret Signals", SKY, "peek", [
             "Pip has a tiny sister called <b>Tia</b>. Tia's steps are the smallest of all.",
-            "Grown-ups who want to trade pick their own spot on the tower and wait for Tia to give a <b>secret signal</b> right there: "
-            "a <b>Peek-and-Hold</b> (she peeks over a line and holds back) or a <b>Big Hug</b> (she wraps up the candle before her).",
+            "Grown-ups who want to trade pick their own spot in the playground, often right by a toy, and wait for Tia to give a <b>secret signal</b> there. "
+            "A <b>Peek-and-Hold</b> is when she peeks over a line and holds back. There are other signals too, and each grown-up ticks the ones they want to hear.",
             "Signals far away from their spot? Shhh. No ring.",
         ]),
     ]
 
 
 MORAL = [
-    "<b>And so, Pip learned the Golden Bell's secret:</b>",
-    "<b>1.</b> Grandma rests on her bench. (When she does, Papa's jump can be a <b>proper jump</b>.)",
-    "<b>2.</b> <b>Papa jumps</b> a fence. It becomes his trampoline.",
-    "<b>3.</b> <b>Pip bounces</b> on one of Papa's safe spots and doesn't fall through.",
-    "<b>4.</b> <b>Pip jumps her outside fence.</b> DING! DING! DING!",
+    "<b>And so, this is the story the Golden Bell tells:</b>",
+    "<b>1.</b> <b>Papa jumps</b> his fence. DING!",
+    "<b>2.</b> <b>Pip runs after him</b>, with her rope coming up behind her. Ding, ding!",
+    "<b>3.</b> <b>Her rope snaps.</b> Papa is resting. DING!",
+    "<b>4.</b> <b>Pip walks the other way.</b> Careful in the cellar! Ding, ding!",
+    "<b>5.</b> <b>Pip turns back</b>, and now she has a playground full of toys. DING!",
+    "<b>6.</b> <b>Over the roof</b>, Papa goes on. <b>Through the floor</b>, Pip walks away again. DING!",
     "<b>And never forget the kingdom's golden rule:</b> coats count, arms don't. Only where the coat stops, when the bell rings.",
-    "<b>And they bounced happily ever after. The End.</b>",
+    "<b>And they climbed happily ever after. The End.</b>",
 ]
 
 
@@ -501,29 +506,23 @@ def build():
 
     gloss = [("Green coat / red coat", "bullish candle (close above open) / bearish candle (close below open)"),
              ("Coat", "candle body (open to close): only the close counts, at the candle close"),
-             ("Stretchy arms and legs", "wicks (high and low): never decide anything"),
-             ("Grandma Wendy / Papa Dan / Pip / Tia", "Weekly / Daily / H4 / H1 and H2 candles"),
-             ("Fence (real once a later candle walks below it)", "A-shape (V-shape = a dip, for sells); counts once a later candle trades below its bearish candle"),
-             ("Jumping a fence", "a candle closing beyond the level (breakout)"),
-             ("Grandma's big jump / her bench", "Weekly breakout / a Weekly key level (Weekly Breaker, Weekly V/A, OC or FVG)"),
-             ("Papa's first touch of the bench", "first Daily touch of the Weekly level: the Weekly reaction's External start"),
-             ("Proper jump / baby fence", "Weekly-confirmed External / Internal (in line while Internal is off)"),
-             ("Trampoline / going out to play", "Daily Breaker / moving away (close beyond the Breaker ± 5 pips)"),
-             ("Bounce on a safe spot", "Daily reaction: exact H4 touch that holds at a Daily level"),
-             ("Stepping stones / dips and steps / soft cushions", "post-breakout Daily OCs / V-shapes and OCs in the broken range / Daily FVGs"),
-             ("Cushion rules", "FVG: dip in from above only; a deeper FVG takes over; no re-entry from below; only a Daily close through it kills it"),
-             ("Outside / inside fence", "External / Internal H4 level (formed before / after the first touch of the Daily level)"),
-             ("Golden Bell", "Origin alert"),
-             ("Encore bell", "continuation alert (in-line breakout, Breaker, OC, engulfing, Daily reaction + H4 breakout, back in line)"),
-             ("Little gap bell", "H4 FVG after breakout (liquidity marker)"),
-             ("A used spot", "a level that already rang its bell: only the first touch counts, Pip never bounces there for a bell again"),
-             ("Papa's big hug", "Daily engulfing: a Daily candle covering the one before it, in Papa's direction"),
-             ("Two steps the same way", "OC formed: two H4 (or Daily) candles in a row in Papa's direction, a little note, not a bell"),
-             ("Castle wall jumped, same way", "same-direction Daily breakout: H4 keeps riding, no new Origin"),
-             ("Wobble", "H4 out of line"),
-             ("Wind changes", "Daily breakout the other way: everything resets"),
-             ("Grandma going the other way", "Daily setup AGAINST the Weekly"),
-             ("Peek-and-Hold / Big Hug", "PCL / Engulfing Sweep entry patterns")]
+             ("Stretchy arms and legs", "wicks (high and low)"),
+             ("Grandma Wendy / Papa Dan / Pip / Tia", "Weekly / Daily / H4 / lower-timeframe candles"),
+             ("Papa jumping his fence", "Daily breakout, a Daily close beyond the external high or low"),
+             ("The Golden Bell", "an alert"),
+             ("Encore", "H4 continuation"),
+             ("A real rest", "a real pullback: a candle's wick took out the previous candle's low"),
+             ("Pip's rope", "the pullback line"),
+             ("The rope snaps", "pullback confirmed: an H4 close beyond the line"),
+             ("Papa's house, middle floor, cellar, attic", "the Daily range, its 0.5, discount, premium"),
+             ("The new rope up high", "the H4 key level: the last high that broke a low"),
+             ("Pip turns back", "H4 pullback: back in alignment"),
+             ("The playground, roof, floor", "the H4 range, its high, its low"),
+             ("Toys: cushions, stepping stones, little dips", "reaction zones: FVG, OC, V-shape (A-shape for sells)"),
+             ("A heap of toys", "merged zones"),
+             ("Over the roof / through the floor", "H4 range high broken (the Daily continues) / H4 range low broken (H4 against the Daily again)"),
+             ("Wind changes", "Daily breakout the other way: a mirrored story"),
+             ("Peek-and-Hold and other signals", "entry formations at the levels you choose")]
     cell = ParagraphStyle("cell", fontName="Kid", fontSize=9.6, leading=12.5, textColor=colors.HexColor(INK))
     tbl = Table([[Paragraph(f"<b>{a}</b>", cell), Paragraph(b, cell)] for a, b in gloss], colWidths=[62 * mm, W - 62 * mm])
     tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#ecd9a8")),

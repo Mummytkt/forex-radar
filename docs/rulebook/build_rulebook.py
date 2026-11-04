@@ -1,6 +1,6 @@
 """
 Builds docs/rulebook/MummyTKT_Strategy_Rulebook.pdf — the single source of truth for
-every rule the TradingView scripts implement (pine/MummyTKT_BiasPointer.pine and
+every rule the TradingView scripts implement (pine/MummyTKT_BiasPointer.pine, v14, and
 pine/MummyTKT_EntryConfirmations.pine).
 
 When a rule changes, update RULES below (and the script), then rebuild:
@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "29 October 2026 (script v13, a touched Daily level is tested, External belongs to the reaction, Daily OC / V-shape reactions fail only on a Daily close; v12 OC formed notifications, option: H4 OC only after a retest that held; v11 Daily engulfing, used levels) · matches the Bias Pointer script with Daily market structure (most recent External high / low), exact-level, bias-side H4 rejections (19 Oct 2026) and Entry Confirmations commit 882609e"
+VERSION = "4 November 2026 (script v14: the MTF story. Daily breakout, H4 continuations, the pullback line, pullback confirmed, the H4 range, reaction zones and the ten story alerts)"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -277,6 +277,48 @@ def make_images():
     im["timing"] = timeline("timing")
     im["delivery"] = flow("delivery", [("TradingView\nsends the event", ACCENT), ("Server checks\nsource + rules", ACCENT), ("Active plan?\nTelegram linked?", INK),
                                        ("Watches this pair?\nWants this type?", INK), ("Telegram\nalert sent", GREEN)])
+    # ── The story (v14): one H4 path, buys; sells are the mirror ──
+    H = [(100, 101, 99.5, 100.8), (100.8, 103, 100.5, 102.6), (102.6, 105, 102.2, 104.6), (104.6, 104.9, 102, 103),
+         (103, 103.6, 101.8, 102.4), (102.4, 105.2, 102.1, 104.9), (104.9, 107.4, 104.6, 107.1), (107.1, 107.3, 104.4, 105.6),
+         (105.6, 108.4, 105.3, 108.1), (108.1, 110.6, 107.8, 110.2), (110.2, 110.5, 107.5, 108), (108, 108.4, 105.6, 106),
+         (106, 106.3, 103.6, 104), (104, 104.6, 102.2, 102.6), (102.6, 104.9, 102.3, 103.8), (103.8, 105, 103.4, 104.6),
+         (104.6, 104.8, 101.4, 101.8), (101.8, 102, 100, 100.4), (100.4, 102.6, 100.1, 102.2), (102.2, 105.6, 102, 105.3),
+         (105.3, 107.2, 105, 106.9), (106.9, 107, 104.8, 105.2), (105.2, 108.2, 105, 107.9), (107.9, 108, 106.6, 107), (107, 111.4, 106.8, 111)]
+    im["s_daily"] = chart("s_daily", [(101, 103, 100.4, 102.6), (102.6, 106.2, 102.1, 105.8), (105.8, 106.4, 103, 103.6), (103.6, 105, 102.8, 104.6), (104.6, 108.4, 104.2, 108)],
+        levels=[(105.8, "Daily external high", ACCENT, -0.6, 4.4), (101, "Daily external low", MUTED, -0.6, 4.4)],
+        notes=[(4, 108.9, "Body closes above: Daily bullish breakout", GREEN)], ylim=(99.8, 109.8))
+    im["s_real"] = chart("s_real", H[2:6],
+        levels=[(104.6, "the high", ACCENT, -0.6, 3.4), (101.8, "the low that broke it: the pullback line", RED, 2, 3.4)],
+        notes=[(1, 101.1, "Wick below the candle before:\na real pullback", INK), (3, 105.7, "Close above: H4 continuation", GREEN)], ylim=(100.2, 106.4))
+    im["s_line"] = chart("s_line", H[0:10],
+        levels=[(101.8, "pullback line, first", MUTED, 4, 6.6), (104.4, "pullback line, moved up", RED, 7, 9.4)],
+        notes=[(5, 107.8, "H4.C", GREEN), (8, 108.9, "H4.C", GREEN)], ylim=(99, 111.4))
+    im["s_pb"] = chart("s_pb", H[7:14],
+        levels=[(104.4, "pullback line", RED, -0.6, 6.4), (106.9, "Daily range 0.5", MUTED, 3, 6.4), (110.6, "top of the leg", ACCENT, 2, 6.4)],
+        notes=[(5, 104, "Body closes below:\npullback confirmed", RED, (2.2, 102.7))], ylim=(101.6, 111.4))
+    im["s_against"] = chart("s_against", H[12:19],
+        levels=[(102.6, "the H4 low", MUTED, 1, 4.4), (105, "H4 key level: the high that broke it", RED, 3, 6.4)],
+        notes=[(4, 101.8, "Close below: H4 bearish\ncontinuation", RED, (1.5, 100.4)), (5, 99.4, "Careful: Daily discount", INK)], ylim=(99, 106.2))
+    im["s_align"] = chart("s_align", H[15:21],
+        levels=[(105, "H4 key level", RED, -0.6, 5.4), (100, "H4 range low", ACCENT, 2, 5.4)],
+        notes=[(4, 105.3, "Close above: back in alignment", GREEN, (1.6, 106.6))], ylim=(99.2, 107.8))
+    im["s_inrange"] = chart("s_inrange", H[19:24],
+        levels=[(110.2, "H4 range high", ACCENT), (104.8, "pullback line, inside the range", RED, 2, 4.4)],
+        notes=[(3, 108.9, "H4.C al", GREEN)], ylim=(103.8, 111))
+    im["s_high"] = chart("s_high", H[20:25],
+        levels=[(110.2, "H4 range high", ACCENT)],
+        notes=[(4, 111.9, "Close above: the Daily continues", GREEN)], ylim=(104.2, 112.6))
+    LOWB = [H[19], (105.3, 105.6, 103, 103.4), (103.4, 103.7, 101, 101.4), (101.4, 102.8, 101.1, 102.5), (102.5, 102.7, 99.2, 99.6)]
+    im["s_low"] = chart("s_low", LOWB,
+        levels=[(104.2, "pullback line, inside the range", RED, -0.6, 1.4), (100.4, "H4 range low", ACCENT)],
+        notes=[(1, 105.9, "PB.in", RED), (2, 99.9, "H4.C in", RED), (4, 98.6, "Close below: range low broken", RED)], ylim=(97.9, 106.6))
+    im["s_zones"] = chart("s_zones", [(101, 102.2, 100.6, 102), (102, 105.2, 101.8, 104.8), (104.8, 107, 104.4, 106.6), (106.6, 107.4, 105.5, 106), (106, 108.6, 105.8, 108.3)],
+        zones=[(102.2, 104.4, "FVG", ZONE)],
+        levels=[(104.8, "OC", GREEN, 1, 4.4), (106, "V-shape", ACCENT, 3, 4.4)], ylim=(100, 109.2))
+    im["s_merge"] = chart("s_merge", [(101, 102.2, 100.6, 102), (102, 105.2, 101.8, 104.8), (104.8, 107, 104.5, 106.6), (106.6, 106.8, 104.9, 105), (105, 108.6, 104.8, 108.3)],
+        zones=[(102.2, 105, "H4 FVG+OC+V", ZONE)], ylim=(100, 109.2))
+    im["s_flow"] = flow("s_flow", [("D.BO\nDaily\nbreakout", GREEN), ("H4.C\ncontinue", GREEN), ("PB · D.PC\npullback\nconfirmed", RED),
+                                   ("H4.C pb\ncontinue\nagainst", RED), ("H4.P · BIA\nH4 range", ACCENT), ("H4.RHB\nDaily\ncontinues", GREEN)])
     return im
 
 
@@ -310,250 +352,98 @@ def make_rules(im):
          "Two candles in a row in the same direction. The OC level is where the <b>first candle closed and the second opened</b>.",
          "Two up candles in a row", "Two down candles in a row",
          "A run of three same-direction candles makes two OC levels (C1/C2 and C2/C3).", im["oc"]),
-        ("C. Daily bias", "External high and low",
-         "The <b>external low</b> is the lowest body bottom between a Daily A-shape and the Daily candle that <b>closes above that A-shape's level</b> "
-         "(the external high is the mirror). The side in the direction of the move <b>keeps following price</b> (“still forming”) until price pulls back "
-         "by closing beyond the last A/V-shape it came from; then it is fixed.",
-         "Bullish: the external low is fixed; the external high follows new highs until a Daily close below the last V-shape",
-         "Bearish: the external high is fixed; the external low follows new lows until a Daily close above the last A-shape",
-         "A Daily close beyond the fixed level makes a new pair in the same direction. A close beyond the other level flips the direction.", im["external"]),
-        ("C. Daily bias", "Structures inside the range",
-         "While price is inside the current range, a <b>new structure can form inside it</b> by the same rules — a swing only counts once a later candle "
-         "has traded beyond the candle that formed the A/V-shape (below the A's down candle, above the V's up candle) before the break. "
-         "The new one becomes the <b>most recent External high and low</b>. This can repeat at any depth.",
-         "When the most recent structure breaks, every structure inside it is dropped and the one around it counts again",
-         "The Bias Pointer draws only the most recent pair, e.g. “Bullish External low” or “Bearish External low (still forming)”",
-         "A close beyond an older, wider level is also beyond every newer one inside it, so the most recent pair is always the first to break.", im["layers"]),
-        ("C. Daily bias", "Daily breakout",
-         "A Daily candle <b>body closes beyond the most recent External high or low</b>. No tolerance is used for this. "
-         "The <b>most recent break on any layer</b> sets the direction of the bias, and the level it broke is the Daily Breaker.",
-         "Daily close above the most recent External high", "Daily close below the most recent External low",
-         "A wick through a level is not a break. The breakout alone is not a trade signal — it starts the setup. "
-         "A wick through a level is not a break. The breakout alone is not a trade signal — it starts the setup.", im["breakout"]),
-        ("C. Daily bias", "The Daily Breaker and moving away first",
-         f"The broken level becomes the <b>Daily Breaker</b>: former resistance becomes support (or the reverse). Its zone is the level ± {T}. "
-         "Before any retest counts, price must have <b>moved away</b>: the Daily breakout candle itself closed beyond the zone, "
-         "or a later H4 candle closes beyond it.",
-         "An H4 close above the breaker zone, then a later dip back into it", "An H4 close below the breaker zone, then a later rise back into it",
-         "This stops a breakout that is still sitting on its level from counting as a retest straight away. The chart label says "
-         "“price hasn't moved away from the breakout yet” while this is what's holding a reaction back.", im["zone"]),
-        ("C. Daily bias", "The Weekly storyline above the Daily",
-         "<b>The Daily rules one level up.</b> The <b>Weekly External high/low</b> is built on Weekly candles (with its own <b>Weekly levels from: Body / Wick</b> setting); a <b>Weekly close</b> "
-         "beyond it is a Weekly breakout, and its own close beyond the Breaker counts as moving away. <b>Daily candles</b> then react at Weekly levels — post-breakout Weekly OCs, "
-         "Weekly V/A-shapes formed after the breakout, <b>Weekly FVGs</b>, the Weekly Breaker, and Weekly V/A-shapes, OCs and FVGs inside the broken Weekly range — with an exact "
-         "Daily wick touch that holds. The <b>first Daily touch</b> of a Weekly level decides External / Internal: a <b>Daily breakout in the Weekly direction is Weekly-confirmed</b>, "
-         "External if the Daily level it broke formed before that touch, Internal if after. Weekly FVGs follow every Daily FVG rule (dip in from above, only a Weekly close kills one, "
-         "each deeper Weekly candle restarts the check, a deeper FVG takes over, the ones price went through are used up). A Weekly-confirmed Daily breakout uses up that Weekly reaction. "
-         "The Weekly never fires an alert: it labels the setup.",
-         "Weekly breakout up, Daily touches a Weekly level and holds, then a Daily breakout up",
-         "Weekly breakout down, Daily touches a Weekly level and holds, then a Daily breakout down",
-         "A Daily close through the reacting Weekly level ends the Weekly link; a new Weekly breakout starts again. A Daily setup against the Weekly "
-         "direction still alerts, marked AGAINST the Weekly. With no Weekly setup, the Daily rules work exactly as before.", im["weekly"]),
-        ("C. Daily bias", "Weekly reaction → Daily breakout: the old A-shape (External)",
-         "An existing Daily External high/low does <b>not</b> have to break. Price falls inside the existing range and a Daily wick touches a "
-         "<b>Weekly key level</b> and holds: the <b>first touch</b> is the Weekly reaction's start. An A-shape that formed on the way down, "
-         "<b>before</b> that touch (and counts: a later candle traded below its bearish candle), is then closed above by a Daily candle. "
-         "That close is a <b>Daily breakout</b> (a new, smaller structure inside the old range), labelled <b>Weekly-confirmed External</b>.",
-         "Buys: the broken A-shape formed before the first Weekly touch → Weekly-confirmed External",
-         "Sells: the broken V-shape formed before the first Weekly touch → Weekly-confirmed External",
-         "The A-shape becomes the Daily Breaker: the H4 watches the reaction there, then an H4 External breakout sends the Origin alert. "
-         "This Weekly-confirmed breakout uses up that Weekly reaction.", ASSETS / "wk2_before_touch.png"),
-        ("C. Daily bias", "Weekly reaction → Daily breakout: an A-shape made after the touch (Internal)",
-         "Same start, but the A-shape that breaks formed <b>after</b> the first Weekly touch. It is still a <b>Daily breakout</b>, "
-         "and the H4 watches its Breaker as usual. Its Weekly label is <b>Internal</b>: with Internal off (the default) it is shown as "
-         "<b>in line with the Weekly</b>, and the Weekly reaction stays alive, waiting for an External break.",
-         "Buys: A-shape formed after the first Weekly touch → Internal (in line while Internal is off)",
-         "Sells: V-shape formed after the first Weekly touch → Internal (in line while Internal is off)",
-         "The breakout and its alerts are not blocked: only the Weekly label differs.", ASSETS / "wk1_after_touch.png"),
-        ("C. Daily bias", "Weekly reaction → the existing External high breaks",
-         "If the climb from the Weekly level makes no smaller structure first, the Daily close above the <b>existing External high</b> is "
-         "the Daily breakout. That high formed before the Weekly touch, so it is <b>Weekly-confirmed External</b>. The old high becomes the "
-         "Daily Breaker, and the range just broken (down to the External low) holds the Daily levels watched for reactions.",
-         "Buys: Daily close above the existing External high after a Weekly reaction",
-         "Sells: Daily close below the existing External low after a Weekly reaction",
-         "If the climb had made a pullback A-shape first, that smaller breakout comes first and this one follows as a same-direction breakout.",
-         ASSETS / "wk3_external_high.png"),
-        ("C. Daily bias", "Then the main External high breaks too",
-         "After a Weekly-confirmed Daily breakout and its Origin, price can go on to close above the main Daily External high. That is a "
-         "<b>second Daily breakout in the same direction</b>: nothing resets, H4 keeps riding, and there is <b>no new Origin</b>. Its Weekly "
-         "label is <b>in line</b> (the Weekly reaction was used up) unless a fresh Weekly reaction came first. The main high becomes the new "
-         "Daily Breaker; a reaction there plus an H4 External breakout sends a <b>“Daily reaction + H4 breakout”</b> continuation.",
-         "Buys: Daily close above the main External high → same-direction breakout, H4 keeps riding",
-         "Sells: Daily close below the main External low → same-direction breakout, H4 keeps riding",
-         "A Daily breakout the other way resets everything (a new Origin when it confirms).", ASSETS / "wk4_main_high_after.png"),
-        ("D. Daily reaction levels", "Post-breakout Daily OC",
-         "After the breakout day, Daily candles that keep closing in the breakout direction, beyond the breakout level, form OCs. "
-         "<b>Every completed OC</b> is watched until an opposing breakout.",
-         "Two up Daily candles in a row, both closing above the breakout level", "Two down Daily candles in a row, both closing below the breakout level",
-         f"The breakout candle itself doesn't count as candle 1. An OC must sit clear of the breaker zone (beyond ± {T}). "
-         "The chart label shows the newest one, e.g. “D.OC 10704.99 (3 watched)”.", im["postoc"]),
-        ("D. Daily reaction levels", "What counts as a reaction",
-         f"An H4 candle reacts from a zone when its <b>wick reaches the level exactly</b> (a near miss doesn't count) and its close doesn't go through it. Zones are checked in this order:",
-         "1) the deepest post-breakout OC touched · 2) a Daily V-shape formed after the breakout · 3) a bullish Daily FVG after the breakout · 4) the Daily Breaker · 5) a Daily V-shape or Daily bullish OC level inside the range that was just broken · 6) a bullish Daily FVG inside that range",
-         "1) the highest post-breakout OC touched · 2) a Daily A-shape formed after the breakout · 3) a bearish Daily FVG after the breakout · 4) the Daily Breaker · 5) a Daily A-shape or Daily bearish OC level inside the range that was just broken · 6) a bearish Daily FVG inside that range",
-         "A Daily level only exists once the Daily candle that forms it has closed; the candles that formed it can't react to it. "
-         "The reaction is reported with its source and level. Simply being back inside the range is not a reaction. It doesn't matter which zone price reaches first. "
-         "A Daily level is dead once a Daily candle closes through it (below a buy level, above a sell level) and never counts again.",
-         im["zones3"]),
-        ("D. Daily reaction levels", "A reaction stays alive until it fails",
-         "Once price has reacted, the reaction stays valid on <b>later candles</b>. The first H4 wick onto a Daily OC or V/A-shape starts it, even if that H4 candle "
-         "closes below it (above it for sells). A level only <b>fails</b> on a close on <b>its own timeframe</b>: every Daily level (Breaker, OC, V/A-shape, FVG) "
-         "on a <b>Daily close</b> through it, Weekly levels on a Weekly close, H4 levels on an H4 close. Then the next zone price reaches takes over.",
-         "Fails on a Daily close below the level", "Fails on a Daily close above the level",
-         "A candle that simply doesn't touch the zone any more does NOT cancel the reaction. The Weekly does the same one level up: a Weekly OC or V/A-shape reaction fails only on a Weekly close.", im["persist"]),
-        ("D. Daily reaction levels", "Daily FVG",
-         "Three Daily candles where the <b>third closes without reaching the first</b> leave a gap: a <b>Daily FVG</b>. It only exists once that third "
-         "candle has closed; the middle one can be the Daily breakout candle. One reaching beyond the Daily Breaker is a <b>Daily FVG after the breakout</b>; "
-         "one fully inside the broken range is a <b>Daily FVG inside the range</b>. An H4 wick <b>entering the gap</b> is a reaction.",
-         "Bullish FVG: the 3rd candle's low stays above the 1st candle's high (buy reactions)",
-         "Bearish FVG: the 3rd candle's high stays below the 1st candle's low (sell reactions)",
-         "Only a <b>Daily close through the gap</b> kills it; a wick past its far edge doesn't. Because it is a zone, each Daily candle that dips below the "
-         "previous Daily low while price reacts inside it (above the high, for sells) <b>restarts the External check</b> from when that candle entered the gap. "
-         "Every other Daily level keeps the first-touch rule.", im["dfvg"]),
-        ("D. Daily reaction levels", "Daily FVG: which gap counts",
-         "A bullish FVG only reacts when price <b>dips into it from above</b> (a bearish one from below). Once price has traded past the gap's far edge, "
-         "it can't start a new reaction: coming back into it from the other side is ignored. While price reacts at one FVG and goes on into a "
-         "<b>deeper FVG</b>, the deeper one takes over, with its own External level.",
-         "Buys: dip into a bullish gap from above; a deeper bullish gap below takes over",
-         "Sells: rise into a bearish gap from below; a higher bearish gap above takes over",
-         "Each FVG keeps its own External level (from the candle that first entered it, moved by each deeper Daily candle while it is the reaction), "
-         "so a return to it uses that level. An H4 breakout from an FVG <b>uses up</b> the FVGs above it (below, for sells) that price went through.",
-         im["fvgwhich"]),
-        ("E. H4 confirmation", "The Origin alert",
-         "While a reaction is alive, an H4 candle <b>closes beyond the External H4 A-shape</b> (buy) or <b>V-shape</b> (sell) of that reaction. "
-         "It can be <b>any later candle</b>, not only the one that reacted. The first confirmation of a Daily breakout is the <b>Origin</b>.",
-         "H4 close above the External H4 A-shape level", "H4 close below the External H4 V-shape level",
-         "The candle that forms an A/V-shape can't also break it. The alert names the reaction source and the H4 level broken.", im["origin"]),
-        ("E. H4 confirmation", "External and internal breaks",
-         "What counts is the <b>first H4 touch</b> of a Daily level after that level formed. The <b>External</b> level is the closest H4 A-shape (buy) "
-         "or V-shape (sell) that formed <b>before</b> that first touch (before the candle that touched; an A/V completed by that candle itself is Internal). Every A/V-shape that forms <b>after</b> the touch is <b>Internal</b>, however deep "
-         "price goes. The External level belongs to the reaction: a first touch of some other Daily level while the reaction runs does not move it.",
-         "External: the closest A-shape before the first touch · Internal: any A-shape formed after it",
-         "External: the closest V-shape before the first touch · Internal: any V-shape formed after it",
-         "With Internal off (the default), breaking only an Internal level does not use up the reaction: the script keeps waiting for the External one. "
-         "Daily FVGs are the one exception: the check moves with each deeper Daily candle inside the gap (see Daily FVG).", im["extint"]),
-        ("F. Continuations (after the Origin)", "Every Daily reaction + H4 breakout",
-         "There is one Origin per Daily breakout. After it, <b>every fresh reaction at a Daily level followed by an H4 External breakout</b> sends a "
-         "<b>“Daily reaction + H4 breakout”</b> alert, also while H4 is still in line. While H4 is in line, every new H4 close beyond the <b>latest</b> "
-         "H4 A-shape (buy) or V-shape (sell) also sends an <b>“H4 breakout in line with the Daily”</b> alert; no Daily reaction is needed for it.",
-         "Continuations keep firing in the buy direction", "Continuations keep firing in the sell direction",
-         "<b>A used level is used:</b> only the first touch of a level counts (the Weekly follows the same rule with Weekly levels). A Daily level (Breaker, OC, V/A-shape, FVG) that has given its H4 "
-         "confirmation, or whose reaction failed (a Daily close through it), never starts another reaction; price going past it must react at a level beyond it. "
-         "A Daily V/A-shape or OC that an H4 candle has <b>touched</b> since it formed (before or after the breakout, in either direction) has been tested: "
-         "it can't start a reaction later either. Continuations follow the setup's latest H4 confirmation: with Internal off, continuations of an Internal "
-         "setup are not sent.", im["noneworigin"]),
-        ("F. Continuations (after the Origin)", "H4 Breaker retest",
-         f"The H4 level broken by the Origin becomes the <b>H4 Breaker</b>. Each newer in-line H4 breakout (and a return in line) replaces it with "
-         "the level it broke. When a later H4 candle <b>wicks exactly onto it and closes beyond it</b> in the bias direction, a continuation fires.",
-         "Candle opens at/above the H4 breaker, wicks into it, closes above it", "Candle opens at/below the H4 breaker, wicks into it, closes below it",
-         "Only the <b>first touch</b> of each H4 Breaker counts: it alerts if it is a rejection, and either way the Breaker is then used. A later return to it sends nothing. "
-         "H4 OCs follow the same rule: the first touch uses them.",
-         im["breaker"]),
-        ("F. Continuations (after the Origin)", "H4 OC continuation",
-         f"Two H4 candles in a row in the bias direction form an <b>H4 OC</b>. After each H4 breakout in the bias direction, <b>every OC of that breakout's leg</b> "
-         "(from its swing low, or swing high for sells) and every OC formed after it is watched. When a <b>later</b> H4 candle wicks exactly onto one and closes "
-         "beyond it, a continuation fires and that OC is used up.",
-         "Candle opens at/above the H4 OC, wicks into it, closes above it", "Candle opens at/below the H4 OC, wicks into it, closes below it",
-         "The candle that completes the OC can't trigger it, and a candle climbing up through it from below (falling through it from above, for sells) "
-         "is not a rejection. If one candle rejects several OCs, one alert names the furthest and all of them are used up. An OC closed through against the "
-         "bias is dropped. A newer H4 breakout keeps only its own leg's OCs; an H4 break the other way or a new Daily breakout drops them all.", im["h4oc"]),
-        ("F. Continuations (after the Origin)", "Breakout continuation after a pullback",
-         "If an H4 candle closes against the bias beyond the <b>latest</b> H4 V-shape (buy) or A-shape (sell), H4 is <b>out of line</b> (the chart label says OUT OF LINE) "
-         "and every H4 OC is dropped. To come back in line, price must first <b>react at a Daily level again</b> (the Daily Breaker, a Daily V/A-shape "
-         "or OC inside the range, or a post-breakout Daily OC — same rules as before the Origin). Then an H4 close beyond the latest H4 A/V-shape in the "
-         "bias direction fires the continuation, naming that Daily level, and OC tracking starts fresh.",
-         "Out of line on a close below the latest H4 V-shape; back in after a Daily reaction plus a close above the latest H4 A-shape",
-         "Out of line on a close above the latest H4 A-shape; back in after a Daily reaction plus a close below the latest H4 V-shape",
-         "Going out of line sends no alert. While out of line no H4 OC or H4 Breaker alerts fire, and the dashboard shows the pair as OUT OF LINE.", im["realign"]),
-        ("F. Continuations (after the Origin)", "H4 engulfing",
-         "After the Origin and while H4 is in line, an H4 candle that <b>covers the previous opposite candle's body</b>, in the Daily direction, "
-         "sends an engulfing continuation, marked <b>covers the wick</b> when it also closes beyond that candle's high (low for sells). Each member "
-         "chooses which reach them: covers the wick (default), covers the body only, or both.",
-         "After a bearish candle: opens at/below its close, closes above its open (body) or above its HIGH (wick)",
-         "After a bullish candle: opens at/above its close, closes below its open (body) or below its LOW (wick)",
-         "One alert per candle: if a Breaker, OC or in-line breakout alert fires on the same candle, the engulfing alert is not sent.", im["h4engulf"]),
-        ("F. Continuations (after the Origin)", "Daily engulfing",
-         "Whenever a Daily direction is set (before or after the Origin), a <b>Daily</b> candle that <b>covers the previous opposite Daily "
-         "candle's body</b>, in the current Daily direction, sends a notification at the Daily close: only the pair and <b>“Daily buy engulfing candle has formed”</b> (<b>“Daily sell …”</b> in a bearish Daily direction). It counts as <b>covers the wick</b> "
-         "when it also closes beyond that candle's high (low for sells). Each member chooses which reach them, separately from the H4 "
-         "engulfing: covers the wick (default), covers the body only, or both.",
-         "Bullish Daily direction: after a bearish Daily candle, opens at/below its close, closes above its open (body) or above its HIGH (wick)",
-         "Bearish Daily direction: after a bullish Daily candle, opens at/above its close, closes below its open (body) or below its LOW (wick)",
-         "It doesn't change the H4 stage or the H4 Breaker, and it isn't filtered by External / Internal (there is no H4 break in it). "
-         "It has its own Alert Filters switch “Daily engulfing”.", im["dengulf"]),
-        ("F. Continuations (after the Origin)", "OC formed (H4 and Daily)",
-         "A notification only, no buy or sell. <b>H4:</b> after the Origin, while H4 is in line, when the last two H4 candles both close in the "
-         "Daily direction: only the pair and <b>“H4 OC has formed”</b>. <b>Daily:</b> whenever a Daily direction is set, when the last two Daily "
-         "candles both close in that direction: <b>“Daily OC has formed”</b>, at the Daily close. The OC level is where the first candle closed.",
-         "Bullish Daily direction: two bullish candles in a row",
-         "Bearish Daily direction: two bearish candles in a row",
-         "It doesn't change the H4 stage or the H4 Breaker. H4 and Daily each have their own Alert Filters switch (off for subscribers until they "
-         "switch it on). On the chart an ✕ marks the most recent of each; it is not in the info table.", im["ocformed"]),
-        ("F. Continuations (after the Origin)", "Option: H4 OC only after a retest that held",
-         "Off by default (Alert Filters and the chart settings). <b>On:</b> after each H4 breakout in line (Origin, Daily reaction + H4 breakout, "
-         "back in line, in line), H4 OC rejections and <b>“H4 OC has formed”</b> only start counting after an H4 candle has <b>touched the H4 Breaker</b>, "
-         "or an <b>H4 V-shape (A-shape for sells) of the breakout leg</b>, and <b>closed back beyond it</b>. <b>Off:</b> every one, as before.",
-         "Buys: an H4 candle's low reaches the Breaker or a leg V-shape below it, and it closes above that level",
-         "Sells: an H4 candle's high reaches the Breaker or a leg A-shape above it, and it closes below that level",
-         "From then on every one counts, until the next H4 breakout in line, which needs its own retest. The OC rules themselves (first touch, used levels) don't change, "
-         "and neither do the Daily or Weekly rules.", im["ocretest"]),
-        ("F. Continuations (after the Origin)", "H4 FVG after breakout",
-         "After an <b>Origin</b>, a <b>Daily reaction + H4 breakout</b>, <b>H4 back in line</b> or an <b>H4 breakout in line</b>, the <b>next H4 candle</b> is "
-         "checked once. If it completes an FVG, one alert is sent with only the pair and <b>“H4 FVG candle after breakout has formed”</b>. "
-         "It is a liquidity marker, not a buy or sell signal.",
-         "Buys: the next candle's low stays above the high of the candle before the breakout",
-         "Sells: the next candle's high stays below the low of the candle before the breakout",
-         "Checked only on that one candle: if it doesn't form an FVG, nothing more until the next H4 breakout. Breaker, OC and engulfing alerts don't trigger it. "
-         "Off for subscribers unless they switch it on in Alert Filters; it follows the setup's External / Internal like other continuations.", im["h4fvg"]),
-        ("G. A new breakout", "When the setup changes",
-         "Pulling back into the range is not a cancellation — that's where reactions happen. A new Daily breakout in the <b>same</b> direction "
-         "keeps H4 riding: in-line breakouts and H4 reactions keep firing, and a reaction at the new breakout's levels plus an H4 breakout becomes "
-         "what H4 rides on. A Daily breakout the <b>other</b> way resets everything.",
-         "A Daily close below the other side of the broken range (or any lower low) starts a sell setup",
-         "A Daily close above the other side of the broken range (or any higher high) starts a buy setup",
-         "There is no separate invalidation any more: a break the other way replaces the setup.", im["invalid"]),
-        ("H. Entry patterns (H1 / H2)", "PCL — sweep that holds",
+        ("C. The story", "The whole story at a glance",
+         "The Daily sets the direction and H4 tells the story inside it. Each step below is an alert. The abbreviation is what you see on the chart, and the key table on the chart explains each one.",
+         "Bullish Daily breakout, H4 continues up, the pullback is confirmed down, H4 turns back up inside its range", "The mirror: bearish Daily breakout, H4 continues down, the pullback is confirmed up, H4 turns back down",
+         "Only one story runs at a time. Every new Daily breakout starts it again in its direction.", im["s_flow"]),
+        ("C. The story", "Daily external high and low, and the Daily breakout",
+         "A Daily candle <b>body closes</b> beyond the Daily external level. The chart labels the levels with the Daily direction: <b>D.Bull XH / XL</b> or <b>D.Bear XH / XL</b> (f = still forming).",
+         "Daily close above the external high", "Daily close below the external low",
+         "Alert: <b>Daily breakout</b>. On the chart: D.BO. A breakout the other way starts a mirrored story.", im["s_daily"]),
+        ("C. The story", "A real pullback",
+         "A high only counts as broken after a real pullback: a candle's <b>wick took out the previous candle's low</b>. Until then a new high is the same leg.",
+         "Wick below the previous candle's low", "Wick above the previous candle's high",
+         "Tiny pauses that don't take out the previous candle's low are ignored.", im["s_real"]),
+        ("C. The story", "H4 continuations and the pullback line",
+         "Each H4 body close beyond a real high is an <b>H4 continuation</b>. The <b>pullback line (PL)</b> is the last low inside the breaking move that broke a high; else the new dip low if it is above the current line; else the broken high itself (PL b). It is drawn on the candle's wick.",
+         "Close above the last high; the line moves up", "Close below the last low; the line moves down",
+         "Alert: <b>H4 continuation after the Daily breakout</b>. On the chart: H4.C.", im["s_line"]),
+        ("C. The story", "Pullback confirmed",
+         "An H4 <b>body close</b> beyond the pullback line. H4 is now against the Daily. The Daily range shows with its 0.5 (D.EQ): discount below, premium above. The new line, the H4 key level, is the top of the leg.",
+         "H4 close below the pullback line", "H4 close above the pullback line",
+         "Alert: <b>H4 pullback confirmed</b>. On the chart: PB · D.PC.", im["s_pb"]),
+        ("C. The story", "H4 continuation after the pullback",
+         "Each H4 close beyond the last low of this move, against the Daily, until H4 reverses into the H4 range. The <b>H4 key level</b> is the last high that broke a low.",
+         "H4 close below the last low", "H4 close above the last high",
+         "Alert: <b>H4 continuation after the pullback</b>. On the chart: H4.C pb. The message warns you when price is in the Daily discount (premium for sells).", im["s_against"]),
+        ("C. The story", "H4 pullback: back in alignment, the H4 range",
+         "An H4 close beyond the key level brings H4 back with the Daily. The <b>H4 range</b> is now set: its low is the bottom of the move against the Daily, its high is the top of the leg, always inside the Daily range.",
+         "H4 close above the key level", "H4 close below the key level",
+         "Alert: <b>H4 pullback: back in alignment</b>. On the chart: H4.P · BIA, H4.RH, H4.RL.", im["s_align"]),
+        ("C. The story", "Inside the H4 range",
+         "The pullback line keeps following the same rule. Each H4 close beyond a real high in the Daily direction is a continuation in alignment. A close beyond the line is a pullback break inside the range, and later breaks against the Daily are continuations inside the range.",
+         "Close above the last high: in alignment. Close below the line: inside the range", "Close below the last low: in alignment. Close above the line: inside the range",
+         "Alerts: <b>H4 continuation in alignment</b> (H4.C al), <b>Inside the H4 range: H4 against the Daily</b> (PB.in, H4.C in).", im["s_inrange"]),
+        ("C. The story", "H4 range high broken: the Daily continues",
+         "An H4 close beyond the H4 range high. The last H4 high inside the Daily range has gone, so the Daily continues and the story goes back to H4 continuations.",
+         "H4 close above the range high", "H4 close below the range low",
+         "Alert: <b>H4 range high broken</b> (for sells the range's “high” is its lower side). On the chart: H4.RHB · D.C.", im["s_high"]),
+        ("C. The story", "H4 range low broken: H4 against the Daily again",
+         "An H4 close beyond the H4 range low. H4 is against the Daily again. The line and the new H4 range high are the high that broke that low.",
+         "H4 close below the range low", "H4 close above the range high",
+         "Alert: <b>H4 range low broken</b>. On the chart: H4.RLB.", im["s_low"]),
+        ("D. Reaction zones", "FVG, OC and V-shape in the move",
+         "The zones of the move price is trading in are drawn for you to watch entries: <b>FVG</b> (three-candle gap), <b>OC</b> (two candles the same way: where the first closed), <b>V-shape</b> (sells: A-shape).",
+         "Zones below price, from the bullish move", "Zones above price, from the bearish move",
+         "Against the Daily they start from the top of the leg; in alignment from the H4 range low; just after the Daily breakout from the pullback line. A zone is gone once an H4 candle closes through it.", im["s_zones"]),
+        ("D. Reaction zones", "Merged zones",
+         "Zones that touch or sit within a few pips of each other merge into one, named after its parts, to keep the chart clean.",
+         "H4 FVG+OC+V", "H4 FVG+OC+A",
+         "Twelve zones show by default, newest first; change it in the script settings.", im["s_merge"]),
+        ("E. Entry patterns", "PCL — sweep that holds",
          "A two-candle pattern measured on the previous candle's <b>body edge</b>. The new candle's wick sweeps past it, but its body closes back inside.",
          "Down candle, then up candle: its high goes above C1's body high, and it closes at or below that body high",
          "Up candle, then down candle: its low goes below C1's body low, and it closes at or above that body low",
          "The two candles must be opposite colours. Fires on candle close.", im["pcl"]),
-        ("H. Entry patterns (H1 / H2)", "Engulfing Sweep — full engulf",
+        ("E. Entry patterns", "Engulfing Sweep — full engulf",
          "Measured on the previous candle's <b>full high and low</b>. The new candle's wick sweeps one extreme, and its body closes beyond the other.",
          "Down candle, then up candle: wick below C1's low, body closes above C1's high",
          "Up candle, then down candle: wick above C1's high, body closes below C1's low",
          "The two candles must be opposite colours. Fires on candle close.", im["engulf"]),
-        ("H. Entry patterns (H1 / H2)", "When an entry alert fires",
+        ("E. Entry patterns", "When an entry alert fires",
          "Entry patterns only alert at a level <b>you chose</b> in Price Alerts → Entry Pattern Alerts: same direction, and the pattern's close within your tolerance "
          "(default 20 pips). The alert fires once, then closes.",
          "Set a Buy entry alert at your level", "Set a Sell entry alert at your level",
          "Entry alerts don't check the bias state — you decide when and where to watch.", im["entrylevel"]),
-        ("I. Timing and delivery", "When alerts arrive",
-         "Everything is judged at <b>candle close</b>. H4 candles on forex.com close at 2am, 6am, 10am, 2pm, 6pm and 10pm (Nigeria time); "
-         "alerts arrive within moments of the close.",
+        ("F. Timing and delivery", "When alerts arrive",
+         "Everything is judged at <b>candle close</b>. H4 candles on forex.com close at 2am, 6am, 10am, 2pm, 6pm and 10pm (Nigeria time). "
+         "Alerts arrive on the first tick after the close, usually within seconds. Friday's last H4 alert arrives when the market reopens on Sunday.",
          "Forex and metals: Sunday 10pm to Friday 10pm (Nigeria time)", "Crypto: around the clock",
          "When US clocks change in November, all these times move one hour later.", im["timing"]),
-        ("I. Timing and delivery", "Who receives an alert",
+        ("F. Timing and delivery", "Who receives an alert",
          "An alert reaches a member only if their plan is active, their Telegram is linked, they follow that pair (Settings → My Instruments), "
-         "and they allow that alert type in Alert Filters (Origin, each continuation type including “Daily reaction + H4 breakout”, engulfing; External / Internal). Continuations follow the setup's latest H4 confirmation: with Internal off, an Internal setup sends none.",
-         "Buy and Sell alerts follow the same rules", "Every type is on until switched off, except Internal H4 breakouts (off until switched on)",
+         "and they allow that alert type in Alert Filters. There is one switch per alert, and each message comes in the Full or Short style they chose.",
+         "Buy and Sell alerts follow the same rules", "Every alert type is on until switched off",
          "Members without Telegram linked still see every alert on the dashboard and in History.", im["delivery"]),
     ]
 
 
 GLOSSARY = [
     ("Bias", "The direction (buy or sell) the Daily breakout sets."),
-    ("Breakout", "A Daily candle body closing beyond the most recent External high (buy) or low (sell)."),
-    ("External high / low (Daily)", "The most recent structure's high and low. Smaller structures can form inside the range at any depth; the newest one counts."),
-    ("Daily Breaker", "The broken level, now acting as support (buy) or resistance (sell)."),
-    ("OC", "Open/Close level: where the first of two same-direction candles closed and the second opened."),
-    ("Reaction / Retest", "An H4 candle's wick entering a Daily zone without closing through it."),
-    ("Origin", "The first H4 confirmation of a Daily breakout. One per breakout."),
-    ("Continuation", "Every later H4 alert in the same Daily direction: Daily reaction + H4 breakout, in-line breakout, Breaker, OC, engulfing."),
-    ("Daily FVG", "Gap left when the 3rd of three Daily candles closes without reaching the 1st; a reaction zone until a Daily close goes through it. Reacts only when price dips into it from above (rises into it, sells); a deeper FVG takes over."),
-    ("H4 FVG after breakout", "The H4 candle right after an in-line H4 breakout completed an FVG: a liquidity marker alert (pair + message only)."),
-    ("H4 External / Internal", "External = the closest H4 A/V-shape before the first touch of the Daily level; anything formed after that touch is Internal."),
-    ("Tolerance", "The ± band (default 5 pips) used for moving away from the breaker and for a reaction failing; touches must be exact. Entry alerts use 20 pips. On crypto and Deriv synthetic indices one pip is 0.002% of price, so the 5-pip band is 0.01% of price."),
-    ("Next breakout", "Any later Daily break replaces the setup; a break the other way flips the bias."),
+    ("D.Bull XH / XL, D.Bear XH / XL", "Daily external high and low, with the Daily direction. f = still forming."),
+    ("D.BO", "Daily breakout: a Daily body close beyond the external level."),
+    ("D.EQ", "The 0.5 of the Daily range. Discount below, premium above."),
+    ("H4.C", "H4 continuation. al = in alignment, pb = in the pullback, in = against the Daily inside the H4 range."),
+    ("PL, H4.PL", "Pullback line. PL b = it sits on the broken high itself."),
+    ("PB, D.PC", "Pullback break: an H4 close beyond the line. Daily pullback confirmed."),
+    ("H4 key level", "The last H4 high that broke a low (sells: low that broke a high)."),
+    ("H4.P · BIA", "H4 pullback: back in alignment with the Daily."),
+    ("H4.RH, H4.RL", "H4 range high and low. f = forming, ? = the range low if the pullback line breaks. For sells the letters swap."),
+    ("H4.RHB, H4.RLB", "H4 range high broken (the Daily continues). H4 range low broken (H4 against the Daily again)."),
+    ("PB.in", "Pullback break inside the H4 range."),
+    ("FVG, OC, V, A", "Reaction zones. + = merged."),
+    ("!", "An alert point on the chart."),
+    ("Tolerance", "The ± band your entry alert allows around your level. Entry alerts use 20 pips by default."),
 ]
 
 

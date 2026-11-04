@@ -153,19 +153,19 @@ def chart(flip):
 cont_i = iPL + 1
 
 PHASES = [
-    ("1", "Daily breakout", "Alert: Daily breakout", "w", [
+    ("1", "Daily breakout", "Alert: Daily breakout · D.BO", "w", [
         "A Daily candle body closed beyond the Daily external high (the wick level).",
         "Note the Weekly direction: with it, or against it.",
         "Mark the Daily external low (the frame). The Daily high is now forming.",
         "Go to H4 and wait for the continuation breaks.",
     ]),
-    ("2", "H4 continuation", "Alert: H4 bullish cont", "w", [
-        "An H4 body closed above the last real high (a real pullback came before it, not one candle).",
+    ("2", "H4 continuation", "Alert: H4 continuation after the Daily breakout · H4.C", "w", [
+        "An H4 body closed above the last real high (a real pullback came first: a candle's wick took out the previous candle's low).",
         "Pullback line = the last H4 low that broke a high. It just moved up.",
         "Range low waiting = the pullback line before it.",
         "Entry: in the leg of this break, with M15 confirmation at the leg's levels.",
     ]),
-    ("3", "Pullback confirmed", "Alert: Pullback break · Daily pullback confirmed", "a", [
+    ("3", "Pullback confirmed", "Alert: H4 pullback confirmed · PB · D.PC", "a", [
         "An H4 body closed below the pullback line, after a proper reversal.",
         "The Daily range is set: high = the top, low = the Daily external low. Mark the 0.5: premium above, discount below.",
         "H4 is now against the Daily.",
@@ -176,23 +176,25 @@ PHASES = [
         "It breaks out above that range (a body close above the high that broke the pullback line): the range did not hold, the Daily is continuing. Back to phase 2.",
         "It holds and H4 breaks bearish again: H4 is still in play. Go to phase 5.",
     ]),
-    ("5", "H4 bearish continuation", "Alert: H4 bearish cont", "a", [
+    ("5", "H4 bearish continuation", "Alert: H4 continuation after the pullback · H4.C pb", "a", [
         "An H4 body closed below a real low.",
         "H4 pullback line = the last high that broke a low.",
         "Key level: the last H4 high that made the external low. If there is no pullback line inside it, that high is the pullback line. Until it is taken, H4 is still bearish.",
         "Entry: sells in the leg of this break, with M15 confirmation.",
         "Care: price is heading into the Daily discount (below 0.5). Manage the trade there.",
     ]),
-    ("6", "H4 pullback: the MTF range", "Alert: H4 pullback · back in alignment", "d", [
+    ("6", "H4 pullback: the MTF range", "Alert: H4 pullback: back in alignment · H4.P · BIA", "d", [
         "An H4 body closed above the H4 pullback line.",
         "MTF range: low = the bottom of the pullback, high = the last H4 high (the one that made the external low).",
+        "Inside the range: H4 continuation in alignment (H4.C al), pullback break inside the range (PB.in), H4 continuation against the Daily (H4.C in).",
         "That last H4 high holds: still bearish. Back to phase 5.",
         "It breaks: go to phase 7.",
     ]),
-    ("7", "Aligned with the Daily", "Alert: H4 range high broken · Daily continues", "w", [
+    ("7", "Aligned with the Daily", "Alert: H4 range high broken · H4.RHB · D.C", "w", [
         "An H4 body closed above the last H4 high inside the Daily range.",
         "Target: the Daily external high.",
         "Entry: buys in the leg of each H4 continuation break, with M15 confirmation.",
+        "A close below the H4 range low instead: alert H4 range low broken (H4.RLB). H4 is against the Daily again, back to phase 5.",
         "A new close below the pullback line takes you back to phase 3.",
     ]),
 ]
