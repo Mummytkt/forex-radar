@@ -861,6 +861,9 @@ string BW = D > 0 ? "Bull" : "Bear"
 // the rule run over the story-timeframe candles from time t0 in direction w_ (continuations only):
 // [line, line time, leg extreme, its time, its body's far side, real pullback, dip, dip time]
 // inside the move from t0 on: the last low that broke a high (sells: high that broke a low), and its time
+// did candle j close against direction w_? (one candle can only pull back and break if the candle before it did)
+f_ag(int j, int w_) =>
+    j >= 0 and (w_ > 0 ? array.get(q2c, j) < array.get(q2o, j) : array.get(q2c, j) > array.get(q2o, j))
 f_inner(int t0, int w_) =>
     float ln = na
     int   lt = na
@@ -887,7 +890,7 @@ f_inner(int t0, int w_) =>
                 eo := co
                 ln := co
                 lt := tj
-            else if (fm or (not na(pc) and f_gt(pc, cw0, w_))) and f_gt(cc, ex, w_)
+            else if (fm or (not na(pc) and f_gt(pc, cw0, w_) and f_ag(j - 1, w_))) and f_gt(cc, ex, w_)
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
@@ -986,7 +989,7 @@ f_seed(int t0, int w_) =>
                 eo := co
                 ln := co
                 lt := tj
-            else if (fm or (not na(pc) and f_gt(pc, cw0, w_))) and f_gt(cc, ex, w_)
+            else if (fm or (not na(pc) and f_gt(pc, cw0, w_) and f_ag(j - 1, w_))) and f_gt(cc, ex, w_)
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
@@ -1127,8 +1130,8 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
     float ce = w > 0 ? x2H : x2L
     float co = w > 0 ? x2L : x2H
     string WW = w > 0 ? "bullish" : "bearish"
-    // one candle can do both: its wick takes out the previous candle's low (sells: high), then it closes beyond the high
-    if not na(tk_ext) and (tk_fm or (not na(w > 0 ? tk_pl2 : tk_ph2) and f_gt(w > 0 ? tk_pl2 : tk_ph2, w > 0 ? x2l : x2h, w))) and f_gt(x2c, tk_ext, w)
+    // one candle can do both, after a candle against the move: its wick takes out that candle's low (sells: high), then it closes beyond the high
+    if not na(tk_ext) and (tk_fm or (not na(w > 0 ? tk_pl2 : tk_ph2) and f_gt(w > 0 ? tk_pl2 : tk_ph2, w > 0 ? x2l : x2h, w) and f_ag(array.size(q2c) - 2, w))) and f_gt(x2c, tk_ext, w)
         // a REAL high broken: continuation; the line moves to the low that broke it
         if (w == D ? br_with : br_agst)
             f_brk(tk_et, tk_ext, f_ab(N2 + " " + WW + " cont", N2 + ".C"), w > 0, w == D ? br_wcol : br_acol)

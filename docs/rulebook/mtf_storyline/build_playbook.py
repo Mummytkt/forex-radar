@@ -160,7 +160,7 @@ PHASES = [
         "Go to H4 and wait for the continuation breaks.",
     ]),
     ("2", "H4 continuation", "Alert: H4 continuation after the Daily breakout · H4.C", "w", [
-        "An H4 body closed above the last real high (a real pullback came first: a candle's wick took out the previous candle's low, or this same candle did it).",
+        "An H4 body closed above the last real high (a real pullback came first: a candle's wick took out the previous candle's low, or this same candle did it, right after a bearish candle).",
         "Pullback line = the last H4 low that broke a high. It just moved up.",
         "Range low waiting = the pullback line before it.",
         "Entry: in the leg of this break, with M15 confirmation at the leg's levels.",

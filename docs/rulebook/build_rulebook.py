@@ -363,7 +363,7 @@ def make_rules(im):
         ("C. The story", "A real pullback",
          "A high only counts as broken after a real pullback: a candle's <b>wick took out the previous candle's low</b>. Until then a new high is the same leg.",
          "Wick below the previous candle's low", "Wick above the previous candle's high",
-         "Tiny pauses that don't take out the previous candle's low are ignored. One candle can do both: its wick takes out the previous candle's low and it closes above the high. It then counts as a continuation and its wick is the new pullback line.", im["s_real"]),
+         "Tiny pauses that don't take out the previous candle's low are ignored. One candle can do both, after a bearish candle: its wick takes out that candle's low and it closes above the high. A straight run of candles the same way has no high or low inside it. It then counts as a continuation and its wick is the new pullback line.", im["s_real"]),
         ("C. The story", "H4 continuations and the pullback line",
          "Each H4 body close beyond a real high is an <b>H4 continuation</b>. The <b>pullback line (PL)</b> is the last low inside the breaking move that broke a high; else the new dip low if it is above the current line; else the broken high itself (PL b). It is drawn on the candle's wick.",
          "Close above the last high; the line moves up", "Close below the last low; the line moves down",

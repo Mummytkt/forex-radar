@@ -871,7 +871,7 @@ STRATEGY_CONTENT = {
     "formations": [
         {"term": "External high / low", "body": "The Daily levels whose close-through is a Daily breakout. On the chart: D.Bull XH / XL when the Daily is bullish, D.Bear XH / XL when it is bearish; f = still forming."},
         {"term": "Pullback line", "body": "One line, on the wick. In a bullish move it is the last H4 low inside the breaking move that broke a high; else the new dip low if it is above the current line; else the broken high itself. At a pullback the new line is the closest high or low inside the range just broken. A body close beyond it confirms the pullback."},
-        {"term": "Real pullback", "body": "A candle took out the previous candle's low (wick). Until then a new high is the same leg, not a continuation. One candle can do both: its wick takes out the previous candle's low and it closes above the high; its wick is then the new pullback line."},
+        {"term": "Real pullback", "body": "A candle took out the previous candle's low (wick). Until then a new high is the same leg, not a continuation. After a bearish candle, one candle can do both: its wick takes out that candle's low and it closes above the high; its wick is then the new pullback line."},
     ],
     "h4_classification": [
         {"label": "With the Daily", "variant": "accent", "desc": "After the Daily breakout, or once the H4 range high has broken: continuation alerts in the Daily direction."},
