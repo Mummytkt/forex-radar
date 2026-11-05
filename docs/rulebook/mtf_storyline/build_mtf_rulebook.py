@@ -6,7 +6,7 @@ import os
 import random
 import re
 
-VERSION = "Version 2 · 3 November 2026"
+VERSION = "Version 2 · 5 November 2026"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 esc = html.escape
 
@@ -287,7 +287,7 @@ RULES = [
      "A Daily candle body closes beyond the Daily external high (the wick level). The Daily external high and low are the Bias Pointer's, always. Every new Daily breakout starts the story again in its direction.",
      "D.BO · D.Bull XH / XL · alert: Daily breakout"),
     ("2", "Continuation: trade the breakout direction", "f_cont", (iDB, iTOP + 1),
-     "In a bullish move lows break highs. The pullback line is the low that broke the last high. Until that high breaks, the low stands and everything inside it is ignored. A high counts once price really pulled back from it (a candle's wick took out the previous candle's low; after a bearish candle, one candle can do this and close above the high, and its wick is then the new line). When an H4 body closes above it, the line moves to the last low inside the breaking move that broke a high; else the new dip low if it is above the current line; else the broken high itself. The line is drawn on the wick.",
+     "In a bullish move lows break highs. The pullback line is the low that broke the last high. Until that high breaks, the low stands and everything inside it is ignored. A high counts once price really pulled back from it (a candle's wick took out the previous candle's low; after a bearish candle, one candle can do this and close above the high, and its wick is then the new line). When an H4 body closes above it, the line moves to the last low inside the breaking move that broke a high; else the new dip low if it is above the current line; else the broken high itself. The line is drawn on the wick; on a broken high it is the high itself. A line price has already closed through is finished and is never used again: when the story restarts at a Daily breakout, the next continuation's line is the low the move came from (sells: high).",
      "H4.C · PL · alert: H4 continuation after the Daily breakout"),
     ("3", "Pullback break: the Daily pulls back", "f_pullback_break", (iTOP - 2, iPB + 2),
      "An H4 body closes below the pullback line. The Daily pullback is confirmed, the Daily range prints its premium and discount, and H4 is now against the Daily. The new pullback line is the closest high inside the range just broken. The H4 range resets to that range: one side is the top of the leg, the other is the newest leg extreme beyond the old line.",

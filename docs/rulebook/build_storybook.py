@@ -409,7 +409,7 @@ def chapters():
         ]),
         ("Over the Roof", GREEN_D, "roofbreak", [
             "One day Pip's coat stopped above the playground roof. <b>DING!</b>",
-            "<b>\"Papa is going on!\"</b> she shouted. Off she ran with a brand-new rope, and the whole story started climbing again.",
+            "<b>\"Papa is going on!\"</b> she shouted. Off she ran with a brand-new rope, and the whole story started climbing again. A rope that has snapped is never tied again.",
         ]),
         ("Through the Floor", RED_D, "floorbreak", [
             "But some days it goes the other way. Pip's coat stops below the playground floor. <b>DING!</b>",

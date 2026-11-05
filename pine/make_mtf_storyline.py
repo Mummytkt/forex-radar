@@ -266,6 +266,9 @@ f_wk(int t, bool hiSide) =>
         if k >= 0 and array.get(q2t, k) == t
             v := hiSide ? array.get(q2hw, k) : array.get(q2lw, k)
     v
+// where the pullback line is drawn: on the wick, unless it sits on a broken high / low (it is that level itself)
+f_lw(int t, float ln, bool bk, bool hiSide) =>
+    bk ? ln : nz(f_wk(t, hiSide), ln)
 // the tracker replayed over the story-timeframe candles from time t0, in direction w: the running
 // extreme, the opposite extreme since it, and the last opposite extreme that made a new extreme
 f_replay(int t0, int w_) =>
@@ -512,7 +515,7 @@ string BW = D > 0 ? "Bull" : "Bear"
 // did candle j close against direction w_? (one candle can only pull back and break if the candle before it did)
 f_ag(int j, int w_) =>
     j >= 0 and (w_ > 0 ? array.get(q2c, j) < array.get(q2o, j) : array.get(q2c, j) > array.get(q2o, j))
-f_inner(int t0, int w_) =>
+f_inner(int t0, int w_, int jmax) =>
     float ln = na
     int   lt = na
     float ex = na
@@ -527,7 +530,7 @@ f_inner(int t0, int w_) =>
         int k = n - 1
         while k > 0 and array.get(q2t, k - 1) >= t0
             k -= 1
-        for j = k to n - 1
+        for j = k to jmax
             float ce = w_ > 0 ? array.get(q2h, j) : array.get(q2l, j)
             float co = w_ > 0 ? array.get(q2l, j) : array.get(q2h, j)
             float cc = array.get(q2c, j)
@@ -620,6 +623,8 @@ f_seed(int t0, int w_) =>
     int   dt = na
     float pv = na
     int   pvt = na
+    bool  bk = false     // the line sits on a broken high (sells: low)
+    bool  sp = false     // price has closed through the line: that pullback is done with, the line can't be used again
     int   n = array.size(q2t)
     if n > 0 and not na(t0)
         int k = n - 1
@@ -644,13 +649,15 @@ f_seed(int t0, int w_) =>
                 // the range low waiting = the low the breaking move came from; the pullback line = the last
                 // low inside that move that broke a high, or (none) the broken high itself
                 f_leg(dp, dt)
-                [il, ilt] = f_inner(dt, w_)
+                [il, ilt] = f_inner(dt, w_, j)
                 bool inner = not na(ilt) and ilt > dt
-                bool newlo = not na(ln) and f_gt(dp, ln, w_)
+                bool newlo = sp or (not na(ln) and f_gt(dp, ln, w_))
                 pv  := ln
                 pvt := lt
                 ln := inner ? il : newlo ? dp : ex
                 lt := inner ? ilt : newlo ? dt : et
+                bk := not inner and not newlo
+                sp := false
                 ex := ce
                 et := tj
                 eo := co
@@ -674,8 +681,15 @@ f_seed(int t0, int w_) =>
                 if na(dp) or f_gt(dp, co, w_)
                     dp := co
                     dt := tj
+            if not na(ln) and f_gt(ln, cc, w_)
+                sp := true
             pc := w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
-    [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt]
+        // still closed through when the replay ends: the line is the extreme reached since, never the finished one
+        if sp and not na(dp)
+            ln := dp
+            lt := dt
+            bk := false
+    [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt, bk]
 
 // a new story in direction d
 int   ns_d   = 0
@@ -705,7 +719,7 @@ var bool al_rev = false   // the reversal to the story-timeframe range has happe
 f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>
     if on
         if al_live and al_ok
-            alert(f_hdr("STORY") + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + f_num(lvl) + ',"breakout_level":' + f_num(a_blvl) + ',"pullback_line":' + f_num(nz(f_wk(tk_lt, w < 0), tk_ln)) + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"range_hi":' + f_num(rg_hi) + ',"range_lo":' + f_num(rg_lo) + ',"price":' + str.tostring(x2c) + '}', alert.freq_once_per_bar)
+            alert(f_hdr("STORY") + '","event":"' + ev + '","direction":"' + (dir > 0 ? "bullish" : "bearish") + '","top":"' + (D > 0 ? "bullish" : "bearish") + '","level":' + f_num(lvl) + ',"breakout_level":' + f_num(a_blvl) + ',"pullback_line":' + f_num(f_lw(tk_lt, tk_ln, tk_bk, w < 0)) + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"range_hi":' + f_num(rg_hi) + ',"range_lo":' + f_num(rg_lo) + ',"price":' + str.tostring(x2c) + '}', alert.freq_once_per_bar)
         if al_mk and chart_ok
             array.push(al_l, label.new(time, dir > 0 ? high : low, ab_on ? "! " + ab : "ALERT · " + txt, xloc = xloc.bar_time, style = dir > 0 ? label.style_label_down : label.style_label_up,
                  color = with_ ? al_cwc : al_cac, textcolor = al_tx, size = size.tiny))
@@ -744,12 +758,12 @@ if ns_d != 0
     array.clear(lg_v)
     array.clear(lg_t)
     f_leg(D > 0 ? XL : XH, D > 0 ? XLt : XHt)
-    [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt] = f_seed(D > 0 ? XLt : XHt, D)
+    [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt, s_bk] = f_seed(D > 0 ? XLt : XHt, D)
     tk_pv  := s_pv
     tk_pvt := s_pvt
     rl_x   := D > 0 ? XL : XH
     rl_xt  := D > 0 ? XLt : XHt
-    tk_bk  := false
+    tk_bk  := s_bk
     rg_lf  := false
     w      := D
     tk_ln  := s_ln
@@ -791,7 +805,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         // inside that move that broke a high, or (none: a straight run) the broken high itself
         // a NEW low (above the current line) that broke the high = the line; the move from the current line
         // itself (no new low) = the last low inside the move, or the broken high itself
-        [i_ln, i_lt] = f_inner(tk_dt, w)
+        [i_ln, i_lt] = f_inner(tk_dt, w, array.size(q2t) - 1)
         bool inner_ = not na(i_lt) and i_lt > tk_dt
         bool newlo_ = not na(tk_ln) and f_gt(tk_dip, tk_ln, w)
         tk_pv  := tk_ln
@@ -845,6 +859,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         f_leg(f0, f0t)
         float old_ln = tk_ln
         int   old_lt = tk_lt
+        bool  old_bk = tk_bk
         float old_pv = tk_pv
         int   old_pvt = tk_pvt
         int   ph0 = sph
@@ -868,7 +883,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             sph := 2
             if ph0 == 1 or rl_brk
                 al_rev := false
-            float pb_lv = rl_brk ? rg_lo : nz(f_wk(old_lt, w > 0), old_ln)
+            float pb_lv = rl_brk ? rg_lo : f_lw(old_lt, old_ln, old_bk, w > 0)
             bool  pc_a  = false
             if ph0 == 1
                 rg_lo  := na(fa0) ? nz(rl_x, D > 0 ? XL : XH) : fa0
@@ -931,7 +946,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             bool pc_w = not na(rg_hi) and f_gt(x2c, rg_hi, D)
             if pc_w
                 // one candle closed through the line and the new range high: one event, and the top timeframe continues
-                f_al(al_rl or al_cw, "pullback_continuation", N2 + " pullback + continuation", D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P+C")
+                f_al(al_rl or al_cw, "pullback_continuation", N2 + " pullback + continuation", D, f_lw(old_lt, old_ln, old_bk, w > 0), true, N2 + ".P+C")
                 sph := 1
                 f_bro(old_lt, old_ln, f_ab(N2 + " pullback + continuation", N2 + ".P+C"), D > 0, br_wcol)
                 if tg_al
@@ -943,7 +958,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
                 rg_hi := na
                 rg_lo := na
             else
-                f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P · BIA")
+                f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, f_lw(old_lt, old_ln, old_bk, w > 0), true, N2 + ".P · BIA")
                 f_bro(old_lt, old_ln, f_ab(N2 + " pullback", N2 + ".P"), D > 0, br_wcol)
                 if tg_al
                     f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback · back in alignment with " + N1, N2 + ".P · BIA"), D > 0, tg_alc)
@@ -1006,7 +1021,7 @@ if x2_new and al_live and al_ok
          + ',"snapshot":{"stage":"' + _stage + '","bias":' + (D == 0 ? "null" : D > 0 ? '"bullish"' : '"bearish"') + ',"retest_source":null'
          + ',"breakout_level":' + f_num(a_blvl) + ',"level_type":"external"'
          + ',"ext_hi":' + f_num(XH) + ',"ext_lo":' + f_num(XL) + ',"d_oc":null,"d_oc_count":0'
-         + ',"pl":' + f_num(sph >= 1 ? nz(f_wk(tk_lt, w < 0), tk_ln) : na) + ',"rg_hi":' + f_num(sph >= 2 ? rg_hi : na) + ',"rg_lo":' + f_num(sph >= 2 ? rg_lo : na) + '}'
+         + ',"pl":' + f_num(sph >= 1 ? f_lw(tk_lt, tk_ln, tk_bk, w < 0) : na) + ',"rg_hi":' + f_num(sph >= 2 ? rg_hi : na) + ',"rg_lo":' + f_num(sph >= 2 ? rg_lo : na) + '}'
          + ',"bar":' + f_bar(time[1], open[1], high[1], low[1], close[1])
          + ',"dbar":' + f_bar(dr_t, dr_o, dr_h, dr_l, dr_c) + '}', alert.freq_once_per_bar)
 // Once per alert: the first H4 close sends the last Daily candles, the second the last H4 candles
@@ -1077,7 +1092,7 @@ if barstate.islast
         if pl_on and not na(tk_ln)
             string lw = w > 0 ? "low" : "high"
             string hw = w > 0 ? "high" : "low"
-            f_lvl(tk_lt, nz(f_wk(tk_lt, w < 0), tk_ln), ab_on ? (sph == 2 ? N2 + ".PL" : "PL") + (tk_bk ? " b" : "") : (sph == 2 ? N2 + " pullback line" : "pullback line") + ": " + (tk_bk ? "the broken " + N2 + " " + hw + " (no " + lw + " inside the move that broke it)" : "the " + N2 + " " + lw + " that broke the last " + hw) + (sph == 1 ? " (an " + N2 + " close beyond it = the " + N1 + " pullback)" : sph == 2 ? " (an " + N2 + " close beyond it = " + N2 + " pullback)" : " (inside the " + N2 + " range)"), pl_col, pl_sty, pl_w)
+            f_lvl(tk_lt, f_lw(tk_lt, tk_ln, tk_bk, w < 0), ab_on ? (sph == 2 ? N2 + ".PL" : "PL") + (tk_bk ? " b" : "") : (sph == 2 ? N2 + " pullback line" : "pullback line") + ": " + (tk_bk ? "the broken " + N2 + " " + hw + " (no " + lw + " inside the move that broke it)" : "the " + N2 + " " + lw + " that broke the last " + hw) + (sph == 1 ? " (an " + N2 + " close beyond it = the " + N1 + " pullback)" : sph == 2 ? " (an " + N2 + " close beyond it = " + N2 + " pullback)" : " (inside the " + N2 + " range)"), pl_col, pl_sty, pl_w)
         if sph == 2 and rh_on and rx_on and not na(tk_ext)
             f_lvl(tk_et, tk_ext, f_ab(N2 + " " + LO + " (forming)", N2 + "." + LC + " f"), rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
@@ -1215,7 +1230,7 @@ if barstate.islast
             if sph >= 1 and not na(XH) and not na(XL)
                 f_row(3, N1 + " range", str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick))
             if sph >= 1 and not na(tk_ln)
-                f_row(4, sph == 2 ? N2 + " pullback line" : "Pullback line", str.tostring(nz(f_wk(tk_lt, w < 0), tk_ln), format.mintick))
+                f_row(4, sph == 2 ? N2 + " pullback line" : "Pullback line", str.tostring(f_lw(tk_lt, tk_ln, tk_bk, w < 0), format.mintick))
             if sph >= 2 and not na(rg_hi)
                 f_row(5, N2 + " range", (not na(rg_lo) ? str.tostring(rg_lo, format.mintick) + (rg_lf ? " (forming)" : "") + " – " : HI + " ") + str.tostring(rg_hi, format.mintick))
 '''

@@ -50,7 +50,7 @@ BUY / SELL <pair> (Daily breakout): a Daily candle closed beyond the Daily exter
 
 BUY / SELL CONTINUATION, H4 continuation after the Daily breakout: 4H closed beyond its last high (sells: low), in the Daily direction, after a real pullback.
 
-Pullback line: the last 4H low that broke a high (sells: high that broke a low). It moves as 4H continues.
+Pullback line: the last 4H low that broke a high (sells: high that broke a low). It moves as 4H continues. A line price has already closed through is finished and is never used again.
 
 DAILY PULLBACK, H4 pullback confirmed: 4H closed beyond the pullback line, so 4H is now against the Daily.
 
