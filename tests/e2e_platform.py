@@ -151,6 +151,16 @@ c.delete(f"/api/entry-tests/images/{_img_id}", headers=H(owner))
 check("one image can be removed, the others stay",
       c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner)).status_code == 404
       and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"h4_key": [_up2.json()["id"]], "h1_cisd_h4_key": [_ue.json()["id"]]})
+# every journal's pictures: the chart, and each confirmation under it (5 Nov 2026: the new 1H ones were refused)
+_si = c.post("/api/entry-tests?book=bt_scl", headers=H(owner), json={"trade_date": "2020-01-06", "instrument": "EURUSD", "direction": "sell"}).json()["id"]
+for _poi in ("scl", "hl_liq"):
+    for _sl in (_poi, f"oc1h_{_poi}", f"cisd1h_{_poi}", f"pcl1h_{_poi}"):
+        check(f"a picture can be added to {_sl}", c.post(f"/api/entry-tests/{_si}/images/{_sl}", headers=H(owner),
+              files={"file": ("e.png", _png.getvalue(), "image/png")}).status_code == 200)
+for _sl in ("direct_scl", "oc1h_engulfing"):
+    check(f"{_sl} is not a confirmation of that journal", c.post(f"/api/entry-tests/{_si}/images/{_sl}", headers=H(owner),
+          files={"file": ("e.png", _png.getvalue(), "image/png")}).status_code == 400)
+c.delete(f"/api/entry-tests/{_si}", headers=H(owner))
 _ed = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",
       "direction": "sell", "alert_type": "H4 back in line", "results": {"direct_fvg": {"outcome": "loss"}}}).json()
 _tk = c.put(f"/api/entry-tests/{_et['id']}", headers=H(owner), json={"trade_date": "2020-01-09", "instrument": "XAUUSD",

@@ -150,7 +150,9 @@ def _row(r: sqlite3.Row, images: Optional[dict] = None) -> dict:
 # under that POI. Stored as JPEG files on the data volume next to the database
 # (not inside it, so the nightly Telegram backup stays small).
 _POI_KEYS = {k for k, _ in POIS}
-_SLOT_POI = {k: k for k in _POI_KEYS} | {f"{m}_{p}": p for p, _ in POIS for m, _ in MODELS}
+_NEW_POI_KEYS = {k for k, _ in NEW_POIS}
+_SLOT_POI = {k: k for k in _POI_KEYS} | {
+    f"{m}_{p}": p for p in _POI_KEYS for m, _ in (NEW_MODELS if p in _NEW_POI_KEYS else MODELS)}
 MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PER_SLOT = 12
 

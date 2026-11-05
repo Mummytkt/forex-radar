@@ -28,7 +28,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 PART_LIMIT = 15 * 1024 * 1024
-POI_NAMES = {"fvg": "H4-FVG", "engulfing": "H4-Engulfing", "h4_key": "H4-fresh-key-level", "3cr": "4H-2H-3CR"}
+POI_NAMES = {"fvg": "H4-FVG", "engulfing": "H4-Engulfing", "h4_key": "H4-fresh-key-level", "3cr": "4H-2H-3CR",
+             "scl": "SCL-before-POI", "hl_liq": "High-Low-Liquidity-before-POI"}
 
 
 def _pending(conn, img_dir: Path) -> list[dict]:
