@@ -561,6 +561,45 @@ f_inner(int t0, int w_) =>
             pc := w_ > 0 ? array.get(q2lw, j) : array.get(q2hw, j)
     [ln, lt]
 
+// the extreme each breaking leg came from (buys: its low, sells: its high), oldest first
+var array<float> lg_v = array.new<float>()
+var array<int>   lg_t = array.new<int>()
+f_leg(float v, int t) =>
+    if not na(v)
+        array.push(lg_v, v)
+        array.push(lg_t, t)
+        if array.size(lg_v) > 60
+            array.shift(lg_v)
+            array.shift(lg_t)
+// the far side of the range just broken: the newest leg extreme beyond the line (w_ = the direction that broke)
+f_far(float ln, int w_) =>
+    float v = na
+    int   t = na
+    int   n = array.size(lg_v)
+    if n > 0 and not na(ln)
+        for i = n - 1 to 0
+            if f_gt(ln, array.get(lg_v, i), w_)
+                v := array.get(lg_v, i)
+                t := array.get(lg_t, i)
+                break
+    [v, t]
+// the closest low (w_ < 0: high) inside the range just broken, walking back from the breaking candle: the last
+// candle that took out the previous candle's low; none means the breaking candle itself
+f_close(int t0, int w_) =>
+    float v = na
+    int   t = na
+    int   n = array.size(q2t)
+    if n > 0 and not na(t0)
+        int k = n - 1
+        while k > 0 and array.get(q2t, k) >= t0 and na(t)
+            float a = w_ > 0 ? array.get(q2lw, k) : array.get(q2hw, k)
+            float b = w_ > 0 ? array.get(q2lw, k - 1) : array.get(q2hw, k - 1)
+            if f_gt(b, a, w_)
+                v := w_ > 0 ? array.get(q2l, k) : array.get(q2h, k)
+                t := array.get(q2t, k)
+            k -= 1
+    [v, t]
+
 f_seed(int t0, int w_) =>
     float ln = na
     int   lt = na
@@ -597,6 +636,7 @@ f_seed(int t0, int w_) =>
                     dt := tj
                 // the range low waiting = the low the breaking move came from; the pullback line = the last
                 // low inside that move that broke a high, or (none) the broken high itself
+                f_leg(dp, dt)
                 [il, ilt] = f_inner(dt, w_)
                 bool inner = not na(ilt) and ilt > dt
                 bool newlo = not na(ln) and f_gt(dp, ln, w_)
@@ -694,6 +734,9 @@ if ns_d != 0
     rg_hi := na
     rg_lo := na
     // the rule run over this leg (from the external low's time for buys, the high's for sells)
+    array.clear(lg_v)
+    array.clear(lg_t)
+    f_leg(D > 0 ? XL : XH, D > 0 ? XLt : XHt)
     [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt] = f_seed(D > 0 ? XLt : XHt, D)
     tk_pv  := s_pv
     tk_pvt := s_pvt
@@ -748,6 +791,12 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_ln  := inner_ ? i_ln : newlo_ ? tk_dip : tk_ext
         tk_lt  := inner_ ? i_lt : newlo_ ? tk_dt : tk_et
         tk_bk  := not inner_ and not newlo_
+        f_leg(tk_dip, tk_dt)
+        if sph == 1
+            [rx0, rx0t] = f_far(tk_ln, w)
+            if not na(rx0)
+                rl_x  := rx0
+                rl_xt := rx0t
         if w == D
             f_al(sph == 3 ? al_ci : al_cw, sph == 3 ? "cont_aligned" : "cont_after_breakout", N2 + " " + WW + " continuation" + (sph == 3 ? " (in alignment with the " + N1 + ")" : " after the " + N1 + " breakout"), w, tk_ext, true, N2 + ".C" + (sph == 3 ? " al" : ""))
         else
@@ -779,8 +828,13 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             tk_dip := co
             tk_dt  := x2t
     if not na(tk_ln) and f_gt(tk_ln, x2c, w)
-        // a close beyond the line: the direction flips; the line = the high that broke the low
+        // a close beyond the line: the direction flips; the line = the closest low / high inside the range just broken
         [f0, f0t] = f_ext2(tk_lt, w > 0)
+        [cl0, cl0t] = f_close(tk_lt, -w)
+        [fa0, fa0t] = f_far(tk_ln, w)
+        array.clear(lg_v)
+        array.clear(lg_t)
+        f_leg(f0, f0t)
         float old_ln = tk_ln
         int   old_lt = tk_lt
         float old_pv = tk_pv
@@ -790,8 +844,9 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_pvt := na
         tk_bk  := false
         w      := -w
-        tk_ln  := f0
-        tk_lt  := f0t
+        bool cl_ok = not na(cl0) and f_gt(x2c, cl0, w)
+        tk_ln  := cl_ok ? cl0 : (w > 0 ? x2L : x2H)
+        tk_lt  := cl_ok ? cl0t : x2t
         tk_ext := w > 0 ? x2H : x2L
         tk_et  := x2t
         tk_eo  := w > 0 ? x2L : x2H
@@ -805,10 +860,10 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             sph := 2
             if ph0 == 1 or rl_brk
                 al_rev := false
-            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, rl_brk ? rg_lo : nz(f_wk(old_lt, w > 0), old_ln), false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
+            float pb_lv = rl_brk ? rg_lo : nz(f_wk(old_lt, w > 0), old_ln)
             if ph0 == 1
-                rg_lo  := nz(rl_x, D > 0 ? XL : XH)
-                rg_lot := na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
+                rg_lo  := na(fa0) ? nz(rl_x, D > 0 ? XL : XH) : fa0
+                rg_lot := not na(fa0) ? fa0t : na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
                 rg_lf  := false
                 f_brk(old_lt, old_ln, f_ab("Pullback break", "PB"), D < 0, br_acol)
                 f_tag(tg_pl, time, D > 0 ? low : high, f_ab("Pullback break · " + N1 + " pullback confirmed", "PB · " + A1 + ".PC"), D < 0, tg_pbc)
@@ -819,13 +874,18 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
                 rg_lot := tk_et
             else
                 f_brk(old_lt, old_ln, f_ab("Pullback break (inside the " + N2 + " range)", "PB.in"), D < 0, br_acol)
-            if ph0 == 1 or rl_brk or na(rg_hi)
-                // the range high = the top of the leg: the high that broke the low (inside the top-timeframe range)
-                rg_hi  := tk_ln
-                rg_hit := tk_lt
-                if f_gt(rg_hi, D > 0 ? XH : XL, D)
-                    rg_hi  := D > 0 ? XH : XL
-                    rg_hit := D > 0 ? XHt : XLt
+                if not na(fa0)
+                    rg_lo  := fa0
+                    rg_lot := fa0t
+                    rg_lf  := false
+            // at every pullback the range resets to the range just broken: its high = the top of the leg
+            // (inside the top-timeframe range)
+            rg_hi  := f0
+            rg_hit := f0t
+            if f_gt(rg_hi, D > 0 ? XH : XL, D)
+                rg_hi  := D > 0 ? XH : XL
+                rg_hit := D > 0 ? XHt : XLt
+            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, pb_lv, false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
             f_story(time, D > 0 ? low : high, D < 0, (ph0 == 1 ? "Pullback break: the " + N1 + " pullback is confirmed. " + N1 + " range " + str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick) : rl_brk ? "The " + N2 + " range " + LO + " " + str.tostring(rg_lo, format.mintick) + " is broken: " + N2 + " is " + AW + " again" : "Pullback break inside the " + N2 + " range: " + N2 + " is " + AW) + ".\n" + N2 + " pullback line: the " + HI + " that broke the " + LO + " " + str.tostring(tk_ln, format.mintick) + "; " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + ".")
         else if not na(rg_hi) and f_gt(x2c, rg_hi, D)
             // straight through the range high: the top timeframe continues
@@ -842,10 +902,16 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             // the story-timeframe pullback: back in alignment, the story-timeframe range
             al_rev := true
             sph    := 3
-            [b0, b0t] = f_ext2(rg_hit, D < 0)
-            rg_lo  := nz(b0, tk_ln)
-            rg_lot := na(b0) ? tk_lt : b0t
+            // the range just broken: its low = the bottom of this leg, its high = the far side beyond the line
+            rg_lo  := f0
+            rg_lot := f0t
             rg_lf  := false
+            if not na(fa0)
+                rg_hi  := fa0
+                rg_hit := fa0t
+                if f_gt(rg_hi, D > 0 ? XH : XL, D)
+                    rg_hi  := D > 0 ? XH : XL
+                    rg_hit := D > 0 ? XHt : XLt
             f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P · BIA")
             f_brk(old_lt, old_ln, f_ab(N2 + " pullback", N2 + ".P"), D > 0, br_wcol)
             f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback · back in alignment with " + N1, N2 + ".P · BIA"), D > 0, tg_alc)
@@ -1125,6 +1191,10 @@ body = HEAD + ENGINE + BODY + NOTES + STORY
 open(OUT, 'w', encoding='utf-8', newline='\n').write(body)
 TITLE = 'indicator("MummyTKT — MTF Storyline", overlay = true,'
 assert body.count(TITLE) == 1
-live = body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,')
-open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(live)
+# TRIAL until the user confirms it in replay (their numbered map, EURUSD Oct 2026): the closest low / high is the new
+# line, and the range resets to the range just broken. True = write the live Bias Pointer as well.
+PORT_TO_LIVE = False
+if PORT_TO_LIVE:
+    live = body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,')
+    open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(live)
 print(OUT, body.count('\n'), 'lines')
