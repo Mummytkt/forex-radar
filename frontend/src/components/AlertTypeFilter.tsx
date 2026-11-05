@@ -11,8 +11,6 @@ export const ALERT_TYPES: { key: string; label: string }[] = [
   { key: 'story_against', label: 'H4 cont after pullback' },
   { key: 'story_align', label: 'H4 back in alignment' },
   { key: 'story_aligned', label: 'H4 cont in alignment' },
-  { key: 'story_range_high', label: 'H4 range high broken' },
-  { key: 'story_range_low', label: 'H4 range low broken' },
   { key: 'story_in_range', label: 'Inside the H4 range' },
   { key: 'origin', label: 'Origin' },
   { key: 'daily_react', label: 'Daily reaction + H4' },
@@ -26,7 +24,7 @@ export const ALERT_TYPES: { key: string; label: string }[] = [
   { key: 'h4_oc_formed', label: 'H4 OC formed' },
   { key: 'd_oc_formed', label: 'Daily OC formed' },
 ]
-export const typeLabel = (k?: string) => ALERT_TYPES.find(t => t.key === k)?.label ?? 'Origin'
+export const typeLabel = (k?: string) => ALERT_TYPES.find(t => t.key === k)?.label ?? (k?.startsWith('story_range') ? 'H4 continuation' : 'Origin')
 
 const KEY = 'mbp_alert_types'
 const EVT = 'mbp-alert-types'

@@ -802,7 +802,7 @@ feed = [
 ev = news.parse_feed(feed)
 check("news feed keeps high impact only, times in UTC",
       len(ev) == 3 and ev[0]["ts"] == "2026-10-21T21:45:00+00:00" and ev[0]["currency"] == "NZD")
-news.store_events(conn, ev)
+news.store_events(conn, ev, at=_now)
 check("currencies come from pairs (indices, metals, crypto map to their currency; synthetics none)",
       news.currencies_for(["NZD/USD", "GER40", "XAUUSD", "BTCUSD", SYN]) == {"NZD", "USD", "EUR"})
 _out = []
@@ -875,8 +875,7 @@ c.patch("/api/preferences", headers=H(ts_), json={"alertOrigin": True, "contOc":
 _switches = [("alertOrigin", "origin", "external"), ("contInline", "cont_inline", None), ("contBreaker", "cont_breaker", None),
              ("contOc", "cont_oc", None), ("contRealign", "cont_realign", "external"), ("contEngulfing", "engulfing", None),
              ("dailyBreakout", "daily_breakout", None), ("storyCont", "story_cont", None), ("storyPullback", "story_pullback", None), ("storyAgainst", "story_against", None),
-             ("storyAlign", "story_align", None), ("storyAligned", "story_aligned", None), ("storyRangeHigh", "story_range_high", None),
-             ("storyRangeLow", "story_range_low", None), ("storyInRange", "story_in_range", None)]
+             ("storyAlign", "story_align", None), ("storyAligned", "story_aligned", None), ("storyInRange", "story_in_range", None)]
 for field, pref_key, cls in _switches:
     c.patch("/api/preferences", headers=H(ts_), json={field: False})
     sent.clear(); asyncio.run(tvw._deliver_alert(conn, cfg, "EURUSD", "x", h4_class=cls, pref=pref_key))
@@ -1184,10 +1183,15 @@ _r = _story("back_in_alignment", "bullish", 1.3410)
 check("back in alignment gives the H4 range", _r["alert_type"] == "story_align" and "H4 key level broken @ 1.34100" in _r["alert_text"] and "H4 range: 1.33500 – 1.34480" in _r["alert_text"])
 _r = _story("cont_aligned", "bullish", 1.3420)
 check("continuation in alignment", _r["alert_type"] == "story_aligned" and "inside the H4 range and in the Daily bullish direction" in _r["alert_text"])
+_nb = conn.execute("SELECT COUNT(*) FROM alerts WHERE instrument = 'GBPUSD'").fetchone()[0]
+_story("range_high_broken", "bullish", 1.3448)
+check("one candle, one message: range high broken right after its continuation is not sent again",
+      conn.execute("SELECT COUNT(*) FROM alerts WHERE instrument = 'GBPUSD'").fetchone()[0] == _nb)
+conn.execute("UPDATE alerts SET fired_at = '2026-01-01T00:00:00' WHERE instrument = 'GBPUSD' AND alert_type = 'story_aligned'")
 _r = _story("range_high_broken", "bullish", 1.3448)
-check("range high broken: the Daily continues", _r["alert_type"] == "story_range_high" and "H4 range high broken @ 1.34480" in _r["alert_text"] and "The Daily bullish move continues" in _r["alert_text"])
+check("range high broken is an H4 continuation", _r["alert_type"] == "story_cont" and "H4 bullish continuation: H4 range high broken" in _r["alert_text"] and "H4 range high broken @ 1.34480" in _r["alert_text"] and "The Daily bullish move continues" in _r["alert_text"])
 _r = _story("range_low_broken", "bearish", 1.3350)
-check("range low broken: H4 against again", _r["alert_type"] == "story_range_low" and "H4 range low broken @ 1.33500" in _r["alert_text"] and "against the Daily bullish direction again" in _r["alert_text"])
+check("range low broken is an H4 continuation", _r["alert_type"] == "story_against" and "H4 bearish continuation: H4 range low broken" in _r["alert_text"] and "H4 range low broken @ 1.33500" in _r["alert_text"] and "against the Daily bullish direction again" in _r["alert_text"])
 _r = _story("pullback_in_range", "bearish", 1.3385)
 check("pullback break inside the range", _r["alert_type"] == "story_in_range" and _r["alert_text"].startswith("INSIDE THE H4 RANGE") and "H4 range: 1.33500" in _r["alert_text"])
 _r = _story("cont_in_range", "bearish", 1.3370)

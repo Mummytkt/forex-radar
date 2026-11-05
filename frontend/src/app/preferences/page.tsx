@@ -24,18 +24,16 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled?: 
   )
 }
 
-type Key = 'newsAlerts' | 'dailyBreakout' | 'storyCont' | 'storyPullback' | 'storyAgainst' | 'storyAlign' | 'storyAligned' | 'storyRangeHigh' | 'storyRangeLow' | 'storyInRange'
+type Key = 'newsAlerts' | 'dailyBreakout' | 'storyCont' | 'storyPullback' | 'storyAgainst' | 'storyAlign' | 'storyAligned' | 'storyInRange'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
 const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'dailyBreakout', group: 'Bias alerts', label: 'Daily breakout', desc: 'A Daily candle closed beyond the Daily external high or low. This sets the Daily direction.' },
-  { key: 'storyCont', label: 'H4 continuation after the Daily breakout', desc: 'Each H4 continuation in the Daily direction, until the pullback is confirmed.' },
+  { key: 'storyCont', label: 'H4 continuation after the Daily breakout', desc: 'Each H4 continuation in the Daily direction, until the pullback is confirmed. A close beyond the H4 range high counts too.' },
   { key: 'storyPullback', label: 'H4 pullback confirmed', desc: 'An H4 candle closed beyond the pullback line, so H4 is now against the Daily.' },
-  { key: 'storyAgainst', label: 'H4 continuation after the pullback', desc: 'Each H4 continuation against the Daily after the pullback, until H4 reverses into the H4 range.' },
+  { key: 'storyAgainst', label: 'H4 continuation after the pullback', desc: 'Each H4 continuation against the Daily after the pullback, until H4 reverses into the H4 range. A close beyond the H4 range low counts too.' },
   { key: 'storyAlign', label: 'H4 pullback: back in alignment', desc: 'An H4 candle closed beyond the H4 key level. H4 is with the Daily again and the H4 range is set.' },
   { key: 'storyAligned', label: 'H4 continuation in alignment', desc: 'Each H4 continuation in the Daily direction, inside the H4 range.' },
-  { key: 'storyRangeHigh', label: 'H4 range high broken', desc: 'An H4 candle closed beyond the H4 range high: the Daily continues.' },
-  { key: 'storyRangeLow', label: 'H4 range low broken', desc: 'An H4 candle closed beyond the H4 range low: H4 is against the Daily again.' },
   { key: 'storyInRange', label: 'Inside the H4 range: H4 against the Daily', desc: 'A pullback break inside the H4 range, and each H4 continuation against the Daily after it.' },
   { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each one.' },
 ]
@@ -43,7 +41,7 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
-  const [status, setStatus] = useState<Record<Key, Status>>({ newsAlerts: 'idle', dailyBreakout: 'idle', storyCont: 'idle', storyPullback: 'idle', storyAgainst: 'idle', storyAlign: 'idle', storyAligned: 'idle', storyRangeHigh: 'idle', storyRangeLow: 'idle', storyInRange: 'idle' })
+  const [status, setStatus] = useState<Record<Key, Status>>({ newsAlerts: 'idle', dailyBreakout: 'idle', storyCont: 'idle', storyPullback: 'idle', storyAgainst: 'idle', storyAlign: 'idle', storyAligned: 'idle', storyInRange: 'idle' })
 
   const { user } = useAuth()
   useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
@@ -53,7 +51,7 @@ export default function PreferencesPage() {
       .then(r => (r.ok ? r.json() : Promise.reject()))
       .then(d => setPrefs({ newsAlerts: d.newsAlerts !== false, dailyBreakout: d.dailyBreakout !== false, storyCont: d.storyCont !== false,
         storyPullback: d.storyPullback !== false, storyAgainst: d.storyAgainst !== false, storyAlign: d.storyAlign !== false, storyAligned: d.storyAligned !== false,
-        storyRangeHigh: d.storyRangeHigh !== false, storyRangeLow: d.storyRangeLow !== false, storyInRange: d.storyInRange !== false }))
+        storyInRange: d.storyInRange !== false }))
       .catch(() => setLoadError(true))
   }, [])
 

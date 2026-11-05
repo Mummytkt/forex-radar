@@ -25,7 +25,7 @@ import hashlib
 import os
 import hmac
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -842,7 +842,7 @@ async def _handle_h4_continuation(conn, config, instrument: str, payload: TVWebh
 # The notification-list type of each story event; it is also the name of its Alert Filters switch
 _STORY_TYPE = {"daily_breakout": "daily_breakout", "cont_after_breakout": "story_cont", "pullback_confirmed": "story_pullback",
                "cont_pullback": "story_against", "back_in_alignment": "story_align", "cont_aligned": "story_aligned",
-               "range_high_broken": "story_range_high", "range_low_broken": "story_range_low",
+               "range_high_broken": "story_cont", "range_low_broken": "story_against",   # a broken range is a continuation
                "pullback_in_range": "story_in_range", "cont_in_range": "story_in_range"}
 
 
@@ -854,6 +854,14 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
         return
     direction = Direction(payload.direction)
     top = Direction(payload.top)
+
+    # Older copies of the script send both for one candle: it is one continuation, so one message
+    if event == "range_high_broken":
+        since = (datetime.utcnow() - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S")
+        if conn.execute("SELECT 1 FROM alerts WHERE instrument = ? AND alert_type = 'story_aligned' AND fired_at >= ? LIMIT 1",
+                        (instrument, since)).fetchone():
+            logger.info("%s STORY range_high_broken: same candle as its continuation, not sent again", instrument)
+            return
 
     if event == "daily_breakout":
         await _handle_breakout(conn, config, instrument, payload)

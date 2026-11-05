@@ -74,9 +74,10 @@ def parse_feed(items: Iterable[dict]) -> list[dict]:
     return out
 
 
-def store_events(conn, events: list[dict]) -> int:
+def store_events(conn, events: list[dict], at: Optional[datetime] = None) -> int:
     ensure_table(conn)
-    now = datetime.now(timezone.utc).isoformat()
+    at = at or datetime.now(timezone.utc)
+    now = at.isoformat()
     for e in events:
         conn.execute(
             "INSERT INTO news_events (id, ts, currency, title, forecast, previous, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
@@ -87,7 +88,7 @@ def store_events(conn, events: list[dict]) -> int:
     if events:
         ids = [e["id"] for e in events]
         conn.execute(f"DELETE FROM news_events WHERE ts > ? AND id NOT IN ({','.join('?' * len(ids))})", (now, *ids))
-    conn.execute("DELETE FROM news_events WHERE ts < ?", ((datetime.now(timezone.utc) - timedelta(days=14)).isoformat(),))
+    conn.execute("DELETE FROM news_events WHERE ts < ?", ((at - timedelta(days=14)).isoformat(),))
     conn.commit()
     return len(events)
 

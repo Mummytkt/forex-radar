@@ -64,7 +64,7 @@ H4 pullback, back in alignment: 4H closed beyond the key level, so 4H is with th
 
 H4 continuation in alignment: 4H keeps breaking in the Daily direction inside the H4 range.
 
-H4 range high broken: the Daily continues. H4 range low broken: 4H is against the Daily again.
+H4 continuation, H4 range high broken: the Daily continues. H4 continuation, H4 range low broken: 4H is against the Daily again.
 
 Pullback break inside the H4 range: 4H broke the pullback line but is still inside the range. Later 4H breaks against the Daily there are called continuations inside the H4 range.
 

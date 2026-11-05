@@ -725,8 +725,7 @@ def get_preferences(request: Request):
                             ocAfterRetest=prefs["oc_after_retest"], dailyBreakout=prefs["daily_breakout"],
                             storyCont=prefs["story_cont"], storyPullback=prefs["story_pullback"],
                             storyAgainst=prefs["story_against"], storyAlign=prefs["story_align"],
-                            storyAligned=prefs["story_aligned"], storyRangeHigh=prefs["story_range_high"],
-                            storyRangeLow=prefs["story_range_low"], storyInRange=prefs["story_in_range"], alertStyle=style,
+                            storyAligned=prefs["story_aligned"], storyInRange=prefs["story_in_range"], alertStyle=style,
                             engulfMode=engulf, dEngulfMode=d_engulf)
 
 
@@ -749,8 +748,7 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
                             ("ocAfterRetest", "oc_after_retest"), ("dailyBreakout", "daily_breakout"),
                             ("storyCont", "story_cont"), ("storyPullback", "story_pullback"),
                             ("storyAgainst", "story_against"), ("storyAlign", "story_align"),
-                            ("storyAligned", "story_aligned"), ("storyRangeHigh", "story_range_high"),
-                            ("storyRangeLow", "story_range_low"), ("storyInRange", "story_in_range")):
+                            ("storyAligned", "story_aligned"), ("storyInRange", "story_in_range")):
             value = getattr(body, field)
             if value is not None:
                 set_alert_pref(conn, uid, kind, value)
@@ -867,7 +865,7 @@ STRATEGY_CONTENT = {
         {"n": 3, "title": "Pullback confirmed", "body": "An H4 body close below the pullback line. Alert: H4 pullback confirmed. The Daily range now shows with its 0.5: discount below, premium above."},
         {"n": 4, "title": "H4 bearish continuation", "body": "Each H4 close beyond the last H4 low, against the Daily, is a continuation in the pullback. Alert: H4 continuation after the pullback, until H4 reverses into the H4 range. The key level is the last H4 high that broke a low. Be careful in the Daily discount."},
         {"n": 5, "title": "H4 pullback: the H4 range", "body": "An H4 close above the key level brings H4 back in alignment. Alert: H4 pullback, back in alignment. The H4 range runs from its low to the top of the leg. Inside it, alerts follow each H4 continuation and pullback break; watch the reaction zones and set your own entry alerts on the levels you choose."},
-        {"n": 6, "title": "Range broken", "body": "An H4 close above the H4 range high: the Daily continues. Alert: H4 range high broken. An H4 close below its low: H4 is against the Daily again. Alert: H4 range low broken."},
+        {"n": 6, "title": "Range broken", "body": "An H4 close above the H4 range high: the Daily continues. An H4 close below its low: H4 is against the Daily again. Both are sent as H4 continuations."},
         {"n": 7, "title": "Aligned", "body": "With H4 aligned, the target is the Daily external high. Entry at every break in the leg of the break, on your lower-timeframe confirmation."},
     ],
     "formations": [
@@ -888,13 +886,11 @@ STRATEGY_CONTENT = {
     },
     "alert_classifications": [
         {"term": "Daily breakout", "body": "A Daily close beyond the Daily external high or low. Starts a new story in that direction."},
-        {"term": "H4 continuation after the Daily breakout", "body": "Each H4 continuation in the Daily direction, until the pullback is confirmed."},
+        {"term": "H4 continuation after the Daily breakout", "body": "Each H4 continuation in the Daily direction, until the pullback is confirmed. A close beyond the H4 range high counts too."},
         {"term": "H4 pullback confirmed", "body": "An H4 close beyond the pullback line."},
-        {"term": "H4 continuation after the pullback", "body": "Each H4 continuation against the Daily after the pullback, with no reversal to the H4 range yet."},
+        {"term": "H4 continuation after the pullback", "body": "Each H4 continuation against the Daily after the pullback, with no reversal to the H4 range yet. A close beyond the H4 range low counts too."},
         {"term": "H4 pullback: back in alignment", "body": "An H4 close beyond the H4 key level. H4 is with the Daily again and the H4 range is set."},
         {"term": "H4 continuation in alignment", "body": "Each H4 continuation in the Daily direction, inside the H4 range."},
-        {"term": "H4 range high broken", "body": "An H4 close beyond the H4 range high: the Daily continues."},
-        {"term": "H4 range low broken", "body": "An H4 close beyond the H4 range low: H4 is against the Daily again."},
         {"term": "Inside the H4 range: H4 against the Daily", "body": "A pullback break inside the H4 range, and each H4 continuation against the Daily after it, until H4 is back in alignment or the range low breaks."},
     ],
     "reaction_sources": [

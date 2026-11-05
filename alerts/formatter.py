@@ -849,8 +849,8 @@ def story_title(event: str, direction: Direction, top: Direction) -> str:
         "cont_pullback": f"H4 {move} continuation after the pullback",
         "back_in_alignment": "H4 pullback: back in alignment with the Daily",
         "cont_aligned": f"H4 {move} continuation, in alignment with the Daily",
-        "range_high_broken": f"H4 range {hi} broken: the Daily {daily} move continues",
-        "range_low_broken": f"H4 range {lo} broken: H4 {against} again",
+        "range_high_broken": f"H4 {daily} continuation: H4 range {hi} broken, the Daily continues",
+        "range_low_broken": f"H4 {against} continuation: H4 range {lo} broken",
         "pullback_in_range": "Pullback break inside the H4 range",
         "cont_in_range": f"H4 {move} continuation inside the H4 range",
     }[event]
