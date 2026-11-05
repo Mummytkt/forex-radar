@@ -394,12 +394,12 @@ def chapters():
         ]),
         ("Pip Walks the Other Way", "#8a5cf6", "other", [
             "Now Pip walks down, the opposite way to Papa. Each time her coat stops below her last low spot, the bell rings an encore.",
-            "She ties a <b>new rope</b> up high, at the last high spot that sent her lower.",
+            "She ties a <b>new rope</b> up high, at the closest high spot behind her, not the very top of the climb.",
             "But Pip is careful in the cellar. \"Down here,\" she whispers, \"Papa might wake up at any time.\"",
         ]),
         ("Pip Turns Back: The Playground", SKY, "playground", [
             "One morning Pip's coat stopped <b>above</b> her new rope. <b>DING!</b> She was going Papa's way again!",
-            "And now she has a <b>playground</b>. Its floor is the lowest place she went, and its roof is the top of her climb. The playground is always inside Papa's house.",
+            "And now she has a <b>playground</b>. Its floor is the lowest place she went, and its roof is the top of her climb. The playground is always inside Papa's house, and each time a rope snaps, she gets a new one.",
             "Inside it she still ties her rope. If her coat stops higher, the bell rings. If her coat stops below the rope, the bell rings too, because she is still deciding.",
         ]),
         ("The Toys in the Playground", SUN, "toys", [
@@ -516,9 +516,9 @@ def build():
              ("Pip's rope", "the pullback line"),
              ("The rope snaps", "pullback confirmed: an H4 close beyond the line"),
              ("Papa's house, middle floor, cellar, attic", "the Daily range, its 0.5, discount, premium"),
-             ("The new rope up high", "the H4 key level: the last high that broke a low"),
+             ("The new rope up high", "the H4 key level: the closest high inside the range just broken"),
              ("Pip turns back", "H4 pullback: back in alignment"),
-             ("The playground, roof, floor", "the H4 range, its high, its low"),
+             ("The playground, roof, floor", "the H4 range, its high, its low; it resets to the range just broken at every pullback"),
              ("Toys: cushions, stepping stones, little dips", "reaction zones: FVG, OC, V-shape (A-shape for sells)"),
              ("A heap of toys", "merged zones"),
              ("Over the roof / through the floor", "H4 range high broken (the Daily continues) / H4 range low broken (H4 against the Daily again)"),

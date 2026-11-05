@@ -863,14 +863,14 @@ STRATEGY_CONTENT = {
         {"n": 1, "title": "Daily breakout", "body": "A Daily body close beyond the Daily external high (buys) or low (sells). Alert: Daily breakout. Sells are the mirror of everything below."},
         {"n": 2, "title": "H4 continuations", "body": "Each H4 close beyond the last H4 high that has had a real pullback is an H4 continuation. Alert: H4 continuation after the Daily breakout. The pullback line is the last H4 low that broke a high."},
         {"n": 3, "title": "Pullback confirmed", "body": "An H4 body close below the pullback line. Alert: H4 pullback confirmed. The Daily range now shows with its 0.5: discount below, premium above."},
-        {"n": 4, "title": "H4 bearish continuation", "body": "Each H4 close beyond the last H4 low, against the Daily, is a continuation in the pullback. Alert: H4 continuation after the pullback, until H4 reverses into the H4 range. The key level is the last H4 high that broke a low. Be careful in the Daily discount."},
-        {"n": 5, "title": "H4 pullback: the H4 range", "body": "An H4 close above the key level brings H4 back in alignment. Alert: H4 pullback, back in alignment. The H4 range runs from its low to the top of the leg. Inside it, alerts follow each H4 continuation and pullback break; watch the reaction zones and set your own entry alerts on the levels you choose."},
+        {"n": 4, "title": "H4 bearish continuation", "body": "Each H4 close beyond the last H4 low, against the Daily, is a continuation in the pullback. Alert: H4 continuation after the pullback, until H4 reverses into the H4 range. The key level is the closest H4 high inside the range just broken, and it moves down as each low breaks. Be careful in the Daily discount."},
+        {"n": 5, "title": "H4 pullback: the H4 range", "body": "An H4 close above the key level brings H4 back in alignment. Alert: H4 pullback, back in alignment. The H4 range resets to the range just broken, as it does at every pullback. Inside it, alerts follow each H4 continuation and pullback break; watch the reaction zones and set your own entry alerts on the levels you choose."},
         {"n": 6, "title": "Range broken", "body": "An H4 close above the H4 range high: the Daily continues. An H4 close below its low: H4 is against the Daily again. Both are sent as H4 continuations."},
         {"n": 7, "title": "Aligned", "body": "With H4 aligned, the target is the Daily external high. Entry at every break in the leg of the break, on your lower-timeframe confirmation."},
     ],
     "formations": [
         {"term": "External high / low", "body": "The Daily levels whose close-through is a Daily breakout. On the chart: D.Bull XH / XL when the Daily is bullish, D.Bear XH / XL when it is bearish; f = still forming."},
-        {"term": "Pullback line", "body": "One line, on the wick. In a bullish move it is the last H4 low inside the breaking move that broke a high; else the new dip low if it is above the current line; else the broken high itself. A body close beyond it confirms the pullback."},
+        {"term": "Pullback line", "body": "One line, on the wick. In a bullish move it is the last H4 low inside the breaking move that broke a high; else the new dip low if it is above the current line; else the broken high itself. At a pullback the new line is the closest high or low inside the range just broken. A body close beyond it confirms the pullback."},
         {"term": "Real pullback", "body": "A candle took out the previous candle's low (wick). Until then a new high is the same leg, not a continuation. One candle can do both: its wick takes out the previous candle's low and it closes above the high; its wick is then the new pullback line."},
     ],
     "h4_classification": [
@@ -881,7 +881,7 @@ STRATEGY_CONTENT = {
         "intro": "The Daily range frames the whole story once the pullback is confirmed.",
         "items": [
             {"label": "Daily range", "variant": "bullish", "desc": "From the external low to the external high, with its 0.5. The H4 range always sits inside it."},
-            {"label": "H4 range", "variant": "warning", "desc": "High: the top of the leg. Low: the extreme of the breakout leg, or the bottom of the H4 move against the Daily once H4 is back in alignment."},
+            {"label": "H4 range", "variant": "warning", "desc": "Resets at every pullback to the range just broken: one side is the far end of the broken leg, the other is the newest leg extreme beyond the old line."},
         ],
     },
     "alert_classifications": [

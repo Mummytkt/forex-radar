@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "4 November 2026 (script v14: the MTF story. Daily breakout, H4 continuations, the pullback line, pullback confirmed, the H4 range, reaction zones and the ten story alerts)"
+VERSION = "5 November 2026 (script v14: the MTF story, with the numbered pullback map. Daily breakout, H4 continuations, the pullback line, pullback confirmed, the H4 range, reaction zones and the ten story alerts)"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -294,10 +294,10 @@ def make_images():
         levels=[(101.8, "pullback line, first", MUTED, 4, 6.6), (104.4, "pullback line, moved up", RED, 7, 9.4)],
         notes=[(5, 107.8, "H4.C", GREEN), (8, 108.9, "H4.C", GREEN)], ylim=(99, 111.4))
     im["s_pb"] = chart("s_pb", H[7:14],
-        levels=[(104.4, "pullback line", RED, -0.6, 6.4), (106.9, "Daily range 0.5", MUTED, 3, 6.4), (110.6, "top of the leg", ACCENT, 2, 6.4)],
+        levels=[(104.4, "pullback line", RED, -0.6, 6.4), (106.9, "Daily range 0.5", MUTED, 3, 6.4), (110.6, "the new line (closest high, here the top)", ACCENT, 2, 6.4)],
         notes=[(5, 104, "Body closes below:\npullback confirmed", RED, (2.2, 102.7))], ylim=(101.6, 111.4))
     im["s_against"] = chart("s_against", H[12:19],
-        levels=[(102.6, "the H4 low", MUTED, 1, 4.4), (105, "H4 key level: the high that broke it", RED, 3, 6.4)],
+        levels=[(102.6, "the H4 low", MUTED, 1, 4.4), (105, "H4 key level: the closest high", RED, 3, 6.4)],
         notes=[(4, 101.8, "Close below: H4 bearish\ncontinuation", RED, (1.5, 100.4)), (5, 99.4, "Careful: Daily discount", INK)], ylim=(99, 106.2))
     im["s_align"] = chart("s_align", H[15:21],
         levels=[(105, "H4 key level", RED, -0.6, 5.4), (100, "H4 range low", ACCENT, 2, 5.4)],
@@ -369,29 +369,29 @@ def make_rules(im):
          "Close above the last high; the line moves up", "Close below the last low; the line moves down",
          "Alert: <b>H4 continuation after the Daily breakout</b>. On the chart: H4.C.", im["s_line"]),
         ("C. The story", "Pullback confirmed",
-         "An H4 <b>body close</b> beyond the pullback line. H4 is now against the Daily. The Daily range shows with its 0.5 (D.EQ): discount below, premium above. The new line, the H4 key level, is the top of the leg.",
+         "An H4 <b>body close</b> beyond the pullback line. H4 is now against the Daily. The Daily range shows with its 0.5 (D.EQ): discount below, premium above. The new line, the H4 key level, is the <b>closest high inside the range just broken</b>: walking back from the breaking candle, the last candle whose wick took out the previous candle's high; none means the breaking candle's own wick. The <b>H4 range</b> resets to the range just broken: one side is the far end of the broken leg, the other is the newest leg extreme beyond the old line.",
          "H4 close below the pullback line", "H4 close above the pullback line",
          "Alert: <b>H4 pullback confirmed</b>. On the chart: PB · D.PC.", im["s_pb"]),
         ("C. The story", "H4 continuation after the pullback",
-         "Each H4 close beyond the last low of this move, against the Daily, until H4 reverses into the H4 range. The <b>H4 key level</b> is the last high that broke a low.",
+         "Each H4 close beyond the last low of this move, against the Daily, until H4 reverses into the H4 range. The <b>H4 key level</b> is the closest high: the line that moves down as each low breaks.",
          "H4 close below the last low", "H4 close above the last high",
          "Alert: <b>H4 continuation after the pullback</b>. On the chart: H4.C pb. The message warns you when price is in the Daily discount (premium for sells).", im["s_against"]),
         ("C. The story", "H4 pullback: back in alignment, the H4 range",
-         "An H4 close beyond the key level brings H4 back with the Daily. The <b>H4 range</b> is now set: its low is the bottom of the move against the Daily, its high is the top of the leg, always inside the Daily range.",
+         "An H4 close beyond the key level brings H4 back with the Daily. The <b>H4 range</b> resets to the range just broken, as it does at every pullback: one side is the far end of the move against the Daily, the other is the newest leg extreme beyond the old line, always inside the Daily range.",
          "H4 close above the key level", "H4 close below the key level",
          "Alert: <b>H4 pullback: back in alignment</b>. On the chart: H4.P · BIA, H4.RH, H4.RL.", im["s_align"]),
         ("C. The story", "Inside the H4 range",
-         "The pullback line keeps following the same rule. Each H4 close beyond a real high in the Daily direction is a continuation in alignment. A close beyond the line is a pullback break inside the range, and later breaks against the Daily are continuations inside the range.",
+         "The pullback line keeps following the same rule. Each H4 close beyond a real high in the Daily direction is a continuation in alignment. A close beyond the line is a pullback break inside the range, and later breaks against the Daily are continuations inside the range. That pullback break resets the range too.",
          "Close above the last high: in alignment. Close below the line: inside the range", "Close below the last low: in alignment. Close above the line: inside the range",
          "Alerts: <b>H4 continuation in alignment</b> (H4.C al), <b>Inside the H4 range: H4 against the Daily</b> (PB.in, H4.C in).", im["s_inrange"]),
         ("C. The story", "H4 range high broken: the Daily continues",
          "An H4 close beyond the H4 range high. The last H4 high inside the Daily range has gone, so the Daily continues and the story goes back to H4 continuations.",
          "H4 close above the range high", "H4 close below the range low",
-         "Alert: <b>H4 range high broken</b> (for sells the range's “high” is its lower side). On the chart: H4.RHB · D.C.", im["s_high"]),
+         "This is a continuation: it comes as <b>H4 continuation after the Daily breakout</b>, with that switch (for sells the range's “high” is its lower side). On the chart: H4.RHB · D.C.", im["s_high"]),
         ("C. The story", "H4 range low broken: H4 against the Daily again",
-         "An H4 close beyond the H4 range low. H4 is against the Daily again. The line and the new H4 range high are the high that broke that low.",
+         "An H4 close beyond the H4 range low. H4 is against the Daily again.",
          "H4 close below the range low", "H4 close above the range high",
-         "Alert: <b>H4 range low broken</b>. On the chart: H4.RLB.", im["s_low"]),
+         "This is a continuation too: it comes as <b>H4 continuation after the pullback</b>, with that switch. On the chart: H4.RLB.", im["s_low"]),
         ("D. Reaction zones", "FVG, OC and V-shape in the move",
          "The zones of the move price is trading in are drawn for you to watch entries: <b>FVG</b> (three-candle gap), <b>OC</b> (two candles the same way: where the first closed), <b>V-shape</b> (sells: A-shape).",
          "Zones below price, from the bullish move", "Zones above price, from the bearish move",
@@ -436,7 +436,7 @@ GLOSSARY = [
     ("H4.C", "H4 continuation. al = in alignment, pb = in the pullback, in = against the Daily inside the H4 range."),
     ("PL, H4.PL", "Pullback line. PL b = it sits on the broken high itself."),
     ("PB, D.PC", "Pullback break: an H4 close beyond the line. Daily pullback confirmed."),
-    ("H4 key level", "The last H4 high that broke a low (sells: low that broke a high)."),
+    ("H4 key level", "The pullback line while H4 is against the Daily: the closest high (sells: low)."),
     ("H4.P · BIA", "H4 pullback: back in alignment with the Daily."),
     ("H4.RH, H4.RL", "H4 range high and low. f = forming, ? = the range low if the pullback line breaks. For sells the letters swap."),
     ("H4.RHB, H4.RLB", "H4 range high broken (the Daily continues). H4 range low broken (H4 against the Daily again)."),

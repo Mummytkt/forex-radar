@@ -56,11 +56,11 @@ DAILY PULLBACK, H4 pullback confirmed: 4H closed beyond the pullback line, so 4H
 
 H4 continuation after the pullback: 4H keeps breaking against the Daily and has not reversed into the H4 range yet.
 
-H4 key level: the last 4H high that broke a low (sells: low that broke a high). A 4H close beyond it is the reversal into the H4 range.
+H4 key level: the closest 4H high inside the range just broken (sells: low). A 4H close beyond it is the reversal into the H4 range.
 
 Daily range: the Daily external low to high, with its 0.5. Discount is below the 0.5, premium above. Be careful selling in the discount or buying in the premium.
 
-H4 pullback, back in alignment: 4H closed beyond the key level, so 4H is with the Daily again. The H4 range is now set, from its low to the top of the leg.
+H4 pullback, back in alignment: 4H closed beyond the key level, so 4H is with the Daily again. The H4 range resets to the range just broken, as it does at every pullback.
 
 H4 continuation in alignment: 4H keeps breaking in the Daily direction inside the H4 range.
 

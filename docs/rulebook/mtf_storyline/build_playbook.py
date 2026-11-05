@@ -167,7 +167,7 @@ PHASES = [
     ]),
     ("3", "Pullback confirmed", "Alert: H4 pullback confirmed · PB · D.PC", "a", [
         "An H4 body closed below the pullback line, after a proper reversal.",
-        "The Daily range is set: high = the top, low = the Daily external low. Mark the 0.5: premium above, discount below.",
+        "Mark the Daily range and its 0.5: premium above, discount below. The H4 range resets to the range just broken, and the new line is the closest high inside it.",
         "H4 is now against the Daily.",
         "Watch for one of two things: an H4 bearish continuation, or a reversal into the pullback-break range.",
     ]),
@@ -185,16 +185,16 @@ PHASES = [
     ]),
     ("6", "H4 pullback: the MTF range", "Alert: H4 pullback: back in alignment · H4.P · BIA", "d", [
         "An H4 body closed above the H4 pullback line.",
-        "MTF range: low = the bottom of the pullback, high = the last H4 high (the one that made the external low).",
+        "MTF range resets to the range just broken: low = the bottom of the pullback, high = the newest leg high beyond the old line. The new line is the closest low inside it.",
         "Inside the range: H4 continuation in alignment (H4.C al), pullback break inside the range (PB.in), H4 continuation against the Daily (H4.C in).",
         "That last H4 high holds: still bearish. Back to phase 5.",
         "It breaks: go to phase 7.",
     ]),
-    ("7", "Aligned with the Daily", "Alert: H4 range high broken · H4.RHB · D.C", "w", [
+    ("7", "Aligned with the Daily", "Alert: H4 continuation · H4.RHB · D.C", "w", [
         "An H4 body closed above the last H4 high inside the Daily range.",
         "Target: the Daily external high.",
         "Entry: buys in the leg of each H4 continuation break, with M15 confirmation.",
-        "A close below the H4 range low instead: alert H4 range low broken (H4.RLB). H4 is against the Daily again, back to phase 5.",
+        "A close below the H4 range low instead: alert H4 continuation (H4.RLB). H4 is against the Daily again, back to phase 5.",
         "A new close below the pullback line takes you back to phase 3.",
     ]),
 ]

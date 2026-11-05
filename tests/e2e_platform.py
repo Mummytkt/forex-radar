@@ -1172,7 +1172,7 @@ _r = _story("cont_after_breakout", "bullish", 1.3420)
 check("H4 continuation after the breakout", _r["alert_type"] == "story_cont" and "H4 bullish continuation after the Daily breakout" in _r["alert_text"] and "H4 high broken @ 1.34200" in _r["alert_text"])
 _r = _story("pullback_confirmed", "bearish", 1.3381)
 check("pullback confirmed gives the Daily range and its 0.5", _r["alert_type"] == "story_pullback" and _r["alert_text"].startswith("DAILY PULLBACK") and "H4 pullback confirmed" in _r["alert_text"]
-      and "Pullback line broken @ 1.33810" in _r["alert_text"] and "closed below it" in _r["alert_text"] and "(0.5 = 1.33680)" in _r["alert_text"])
+      and "Pullback line broken @ 1.33810" in _r["alert_text"] and "closed below it" in _r["alert_text"] and "(0.5 = 1.33680)" in _r["alert_text"] and "H4 range: 1.33500 – 1.34480" in _r["alert_text"])
 _r = _story("cont_pullback", "bearish", 1.3350)
 check("continuation after the pullback warns in the Daily discount", _r["alert_type"] == "story_against" and "H4 low broken @ 1.33500" in _r["alert_text"] and "Careful: price is in the Daily discount" in _r["alert_text"])
 _r = _story("cont_pullback", "bearish", 1.3400)

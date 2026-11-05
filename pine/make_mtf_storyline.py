@@ -146,13 +146,12 @@ string tg_sz    = input.string("Small", "size", ''' + SZ + ''', group = G_TG, in
 int    tg_op    = input.int(100, "Tag opacity % (on top of the colour box's own opacity)", minval = 0, maxval = 100, group = G_TG)
 int    tg_n     = input.int(1, "Tags kept of each kind (1 = only the newest)", minval = 1, maxval = 20, group = G_TG)
 bool   al_bo    = input.bool(true, "Top-timeframe breakout", group = G_AL)
-bool   al_cw    = input.bool(true, "Story-timeframe continuation after the top-timeframe breakout", group = G_AL)
+bool   al_cw    = input.bool(true, "Story-timeframe continuation after the top-timeframe breakout (a close beyond the range high counts)", group = G_AL)
 bool   al_pb    = input.bool(true, "Pullback confirmed (a close beyond the pullback line)", group = G_AL)
-bool   al_ca    = input.bool(true, "Story-timeframe continuation after the pullback (no reversal to the story-timeframe range yet)", group = G_AL)
+bool   al_ca    = input.bool(true, "Story-timeframe continuation after the pullback, no reversal to the range yet (a close beyond the range low counts)", group = G_AL)
 bool   al_rl    = input.bool(true, "Story-timeframe pullback: back in alignment", group = G_AL)
 bool   al_ci    = input.bool(true, "Story-timeframe continuation in alignment", group = G_AL)
-bool   al_dc    = input.bool(true, "Range high broken: the top timeframe continues", group = G_AL)
-bool   al_lb    = input.bool(true, "Range low broken / pullback break inside the range", group = G_AL)
+bool   al_lb    = input.bool(true, "Pullback break inside the range", group = G_AL)
 bool   al_cr    = input.bool(true, "Story-timeframe continuation against the top timeframe, inside the range", group = G_AL)
 string wh_secret = input.string("", "Webhook secret", group = G_AL)
 bool   al_mk    = input.bool(true, "Mark every alert point on the chart", group = G_AL, inline = "am")
@@ -798,7 +797,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
                 rl_x  := rx0
                 rl_xt := rx0t
         if w == D
-            f_al(sph == 3 ? al_ci : al_cw, sph == 3 ? "cont_aligned" : "cont_after_breakout", N2 + " " + WW + " continuation" + (sph == 3 ? " (in alignment with the " + N1 + ")" : " after the " + N1 + " breakout"), w, tk_ext, true, N2 + ".C" + (sph == 3 ? " al" : ""))
+            f_al(sph == 3 ? al_ci and not (not na(rg_hi) and f_gt(x2c, rg_hi, D)) : al_cw, sph == 3 ? "cont_aligned" : "cont_after_breakout", N2 + " " + WW + " continuation" + (sph == 3 ? " (in alignment with the " + N1 + ")" : " after the " + N1 + " breakout"), w, tk_ext, true, N2 + ".C" + (sph == 3 ? " al" : ""))
         else
             // after the reversal to the range these are inside it; a close beyond its low alerts below instead
             if not (al_rev and not na(rg_lo) and f_gt(rg_lo, x2c, D))
@@ -885,11 +884,11 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             if f_gt(rg_hi, D > 0 ? XH : XL, D)
                 rg_hi  := D > 0 ? XH : XL
                 rg_hit := D > 0 ? XHt : XLt
-            f_al(ph0 == 1 ? al_pb : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, pb_lv, false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
+            f_al(ph0 == 1 ? al_pb : rl_brk ? al_ca : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, pb_lv, false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
             f_story(time, D > 0 ? low : high, D < 0, (ph0 == 1 ? "Pullback break: the " + N1 + " pullback is confirmed. " + N1 + " range " + str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick) : rl_brk ? "The " + N2 + " range " + LO + " " + str.tostring(rg_lo, format.mintick) + " is broken: " + N2 + " is " + AW + " again" : "Pullback break inside the " + N2 + " range: " + N2 + " is " + AW) + ".\n" + N2 + " pullback line: the " + HI + " that broke the " + LO + " " + str.tostring(tk_ln, format.mintick) + "; " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + ".")
         else if not na(rg_hi) and f_gt(x2c, rg_hi, D)
             // straight through the range high: the top timeframe continues
-            f_al(al_dc, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true, N2 + ".R" + HC + "B · " + A1 + ".C")
+            f_al(al_cw, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true, N2 + ".R" + HC + "B · " + A1 + ".C")
             sph   := 1
             f_brk(rg_hit, rg_hi, f_ab(N2 + " range " + HI + " broken · " + N1 + " continues", N2 + ".R" + HC + "B · " + A1 + ".C"), D > 0, br_wcol)
             [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
@@ -918,7 +917,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
     else if sph == 3 and not na(rg_hi) and f_gt(x2c, rg_hi, D)
         // the range high broken: the top timeframe continues (the line has already followed the rule)
-        f_al(al_dc, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true, N2 + ".R" + HC + "B · " + A1 + ".C")
+        f_al(al_cw, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true, N2 + ".R" + HC + "B · " + A1 + ".C")
         sph := 1
         f_brk(rg_hit, rg_hi, f_ab(N2 + " range " + HI + " broken · " + N1 + " continues", N2 + ".R" + HC + "B · " + A1 + ".C"), D > 0, br_wcol)
         [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
@@ -935,7 +934,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             rg_lf := true
             if al_rev
                 al_rev := false
-                f_al(al_lb, "range_low_broken", N2 + " range " + LO + " broken · " + N2 + " " + AW + " again", -D, rg_lo, false, N2 + ".R" + LC + "B")
+                f_al(al_ca, "range_low_broken", N2 + " range " + LO + " broken · " + N2 + " " + AW + " again", -D, rg_lo, false, N2 + ".R" + LC + "B")
         if rg_lf and not na(tk_ext) and f_gt(rg_lo, tk_ext, D)
             rg_lo  := tk_ext
             rg_lot := tk_et
@@ -1191,10 +1190,6 @@ body = HEAD + ENGINE + BODY + NOTES + STORY
 open(OUT, 'w', encoding='utf-8', newline='\n').write(body)
 TITLE = 'indicator("MummyTKT — MTF Storyline", overlay = true,'
 assert body.count(TITLE) == 1
-# TRIAL until the user confirms it in replay (their numbered map, EURUSD Oct 2026): the closest low / high is the new
-# line, and the range resets to the range just broken. True = write the live Bias Pointer as well.
-PORT_TO_LIVE = False
-if PORT_TO_LIVE:
-    live = body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,')
-    open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(live)
+live = body.replace(TITLE, 'indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000,')
+open('C:/Users/u/forex-radar/pine/MummyTKT_BiasPointer.pine', 'w', encoding='utf-8', newline='\n').write(live)
 print(OUT, body.count('\n'), 'lines')
