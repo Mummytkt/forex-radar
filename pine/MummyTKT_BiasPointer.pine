@@ -91,6 +91,7 @@ string rx_sty   = input.string("Dashed", "style", options = ["Solid", "Dashed", 
 bool   br_with  = input.bool(true, "Cont breaks with the top timeframe", group = G_BR, inline = "bw")
 color  br_wcol  = input.color(#26A69A, "", group = G_BR, inline = "bw")
 bool   br_agst  = input.bool(true, "Cont breaks against it", group = G_BR, inline = "ba")
+bool   br_ot    = input.bool(true, "Pullback and range breaks", group = G_BR)
 color  br_acol  = input.color(#EF5350, "", group = G_BR, inline = "ba")
 string br_sty   = input.string("Dotted", "Break line style", options = ["Solid", "Dashed", "Dotted"], group = G_BR, inline = "bs")
 int    br_w     = input.int(1, "width", minval = 1, maxval = 4, group = G_BR, inline = "bs")
@@ -132,6 +133,7 @@ color  rz_avc   = input.color(#FFB300, "", group = G_RZ, inline = "z3")
 string rz_sty   = input.string("Dotted", "Line style", options = ["Solid", "Dashed", "Dotted"], group = G_RZ, inline = "z4")
 int    rz_w     = input.int(1, "width", minval = 1, maxval = 4, group = G_RZ, inline = "z4")
 int    rz_n     = input.int(12, "Zones shown (newest first)", minval = 1, maxval = 30, group = G_RZ)
+int    rz_op    = input.int(25, "Zone box opacity %", minval = 0, maxval = 100, group = G_RZ)
 
 string T1 = plan == "W → D → H4" ? "W" : plan == "D → H4 → M15" ? "D" : plan == "H4 → M15 → M5" ? "240" : cu_t1
 string T2 = plan == "W → D → H4" ? "D" : plan == "D → H4 → M15" ? "240" : plan == "H4 → M15 → M5" ? "15" : cu_t2
@@ -776,6 +778,9 @@ f_brk(int t1, float y, string txt, bool above, color c) =>
             line.delete(array.shift(br_l))
         while array.size(br_b) > br_n
             label.delete(array.shift(br_b))
+f_bro(int t1, float y, string txt, bool above, color c) =>
+    if br_ot
+        f_brk(t1, y, txt, above, c)
 
 var array<label> st_l = array.new<label>()
 var st_last = array.from("")
@@ -1113,7 +1118,8 @@ if ns_d != 0
     tk_cn  := 0
     tk_dip := s_dp
     tk_dt  := s_dt
-    f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, f_ab(N1 + " " + DW + " breakout", A1 + ".BO"), D > 0, tg_boc)
+    if tg_bo
+        f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, f_ab(N1 + " " + DW + " breakout", A1 + ".BO"), D > 0, tg_boc)
     al_rev := false
     f_al(al_bo, "daily_breakout", N1 + " " + DW + " breakout", D, ns_lvl, true, A1 + ".BO")
     f_story(time, D > 0 ? high : low, D > 0, N1 + " " + DW + " breakout (" + (t1_wick ? "wick" : "body close") + " beyond " + str.tostring(ns_lvl, format.mintick) + ").\nPullback line: the " + N2 + " " + LO + " that broke the last " + HI + "; it moves only when that " + HI + " breaks.\nAn " + N2 + " close beyond it = the " + N1 + " pullback.")
@@ -1224,15 +1230,16 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
                 rg_lo  := na(fa0) ? nz(rl_x, D > 0 ? XL : XH) : fa0
                 rg_lot := not na(fa0) ? fa0t : na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
                 rg_lf  := false
-                f_brk(old_lt, old_ln, f_ab("Pullback break", "PB"), D < 0, br_acol)
-                f_tag(tg_pl, time, D > 0 ? low : high, f_ab("Pullback break · " + N1 + " pullback confirmed", "PB · " + A1 + ".PC"), D < 0, tg_pbc)
+                f_bro(old_lt, old_ln, f_ab("Pullback break", "PB"), D < 0, br_acol)
+                if tg_pb
+                    f_tag(tg_pl, time, D > 0 ? low : high, f_ab("Pullback break · " + N1 + " pullback confirmed", "PB · " + A1 + ".PC"), D < 0, tg_pbc)
             else if rl_brk
-                f_brk(rg_lot, rg_lo, f_ab(N2 + " range " + LO + " broken", N2 + ".R" + LC + "B"), D < 0, br_acol)
+                f_bro(rg_lot, rg_lo, f_ab(N2 + " range " + LO + " broken", N2 + ".R" + LC + "B"), D < 0, br_acol)
                 rg_lf  := true
                 rg_lo  := tk_ext
                 rg_lot := tk_et
             else
-                f_brk(old_lt, old_ln, f_ab("Pullback break (inside the " + N2 + " range)", "PB.in"), D < 0, br_acol)
+                f_bro(old_lt, old_ln, f_ab("Pullback break (inside the " + N2 + " range)", "PB.in"), D < 0, br_acol)
                 if not na(fa0)
                     rg_lo  := fa0
                     rg_lot := fa0t
@@ -1250,7 +1257,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             // straight through the range high: the top timeframe continues
             f_al(al_cw, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true, N2 + ".R" + HC + "B · " + A1 + ".C")
             sph   := 1
-            f_brk(rg_hit, rg_hi, f_ab(N2 + " range " + HI + " broken · " + N1 + " continues", N2 + ".R" + HC + "B · " + A1 + ".C"), D > 0, br_wcol)
+            f_bro(rg_hit, rg_hi, f_ab(N2 + " range " + HI + " broken · " + N1 + " continues", N2 + ".R" + HC + "B · " + A1 + ".C"), D > 0, br_wcol)
             [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
             rl_x  := x0_
             rl_xt := x0t_
@@ -1272,14 +1279,15 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
                     rg_hi  := D > 0 ? XH : XL
                     rg_hit := D > 0 ? XHt : XLt
             f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P · BIA")
-            f_brk(old_lt, old_ln, f_ab(N2 + " pullback", N2 + ".P"), D > 0, br_wcol)
-            f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback · back in alignment with " + N1, N2 + ".P · BIA"), D > 0, tg_alc)
+            f_bro(old_lt, old_ln, f_ab(N2 + " pullback", N2 + ".P"), D > 0, br_wcol)
+            if tg_al
+                f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback · back in alignment with " + N1, N2 + ".P · BIA"), D > 0, tg_alc)
             f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
     else if sph == 3 and not na(rg_hi) and f_gt(x2c, rg_hi, D)
         // the range high broken: the top timeframe continues (the line has already followed the rule)
         f_al(al_cw, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true, N2 + ".R" + HC + "B · " + A1 + ".C")
         sph := 1
-        f_brk(rg_hit, rg_hi, f_ab(N2 + " range " + HI + " broken · " + N1 + " continues", N2 + ".R" + HC + "B · " + A1 + ".C"), D > 0, br_wcol)
+        f_bro(rg_hit, rg_hi, f_ab(N2 + " range " + HI + " broken · " + N1 + " continues", N2 + ".R" + HC + "B · " + A1 + ".C"), D > 0, br_wcol)
         [x0_, x0t_] = f_ext2(nz(rg_lot, rg_hit), D < 0)
         rl_x  := x0_
         rl_xt := x0t_
@@ -1409,9 +1417,9 @@ if barstate.islast
             f_lvl(tk_et, tk_ext, f_ab(N2 + " " + LO + " (forming)", N2 + "." + LC + " f"), rh_col, rx_sty, rh_w)
         if sph >= 2 and rh_on and not na(rg_hi)
             f_lvl(rg_hit, rg_hi, ab_on ? N2 + ".R" + HC : N2 + " range " + HI + (sph == 3 ? " (a close beyond it: the " + N1 + " continues)" : ""), rh_col, rh_sty, rh_w)
-        if sph == 1 and rh_on and not na(rl_x)
+        if sph == 1 and rh_on and rx_on and not na(rl_x)
             f_lvl(rl_xt, rl_x, f_ab(N2 + " range " + LO + " if the pullback line breaks (the extreme " + LO + " of the breakout leg)", N2 + ".R" + LC + "?"), rh_col, rx_sty, rh_w)
-        if sph >= 2 and rh_on and not na(rg_lo)
+        if sph >= 2 and rh_on and (rx_on or not rg_lf) and not na(rg_lo)
             f_lvl(rg_lot, rg_lo, ab_on ? N2 + ".R" + LC + (rg_lf ? " f" : "") : N2 + " range " + LO + (rg_lf ? " (forming)" : sph == 3 ? " (a close beyond it: " + N2 + " " + AW + " again)" : ""), rh_col, rg_lf ? rx_sty : rh_sty, rh_w)
     // reaction zones inside the current breakout leg (from the pullback line to now), in the leg's direction:
     // FVG (3-candle gap), OC (two candles the same way: first close / second open), V-shape (sells: A-shape,
@@ -1492,7 +1500,7 @@ if barstate.islast
                 string ks = ab_on ? str.replace_all(str.replace_all(str.replace_all(kn, " + ", "+"), "V-shape", "V"), "A-shape", "A") : kn
                 color zc = str.contains(kn, "FVG") ? rz_fvc : str.contains(kn, "OC") ? rz_occ : rz_avc
                 if zh - zl > ztol * 0.25
-                    array.push(cx, box.new(array.get(mz_t, q), zh, time, zl, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(zc, 100), bgcolor = color.new(zc, math.max(color.t(zc), 75))))
+                    array.push(cx, box.new(array.get(mz_t, q), zh, time, zl, xloc = xloc.bar_time, extend = extend.right, border_color = color.new(zc, 100), bgcolor = color.new(zc, 100 - rz_op)))
                     array.push(cb, label.new(bar_index + 3, (zh + zl) / 2, N2 + " " + ks + (lv_px ? "  " + str.tostring(zl, format.mintick) + " – " + str.tostring(zh, format.mintick) : ""), style = label.style_label_left, color = color.new(color.black, 100), textcolor = lv_tx, size = f_sz(lv_sz)))
                 else
                     f_lvl(array.get(mz_t, q), zl, N2 + " " + ks, zc, rz_sty, rz_w)
