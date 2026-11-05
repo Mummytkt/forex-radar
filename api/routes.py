@@ -891,6 +891,7 @@ STRATEGY_CONTENT = {
         {"term": "H4 continuation after the pullback", "body": "Each H4 continuation against the Daily after the pullback, with no reversal to the H4 range yet. A close beyond the H4 range low counts too."},
         {"term": "H4 pullback: back in alignment", "body": "An H4 close beyond the H4 key level. H4 is with the Daily again and the H4 range is set."},
         {"term": "H4 continuation in alignment", "body": "Each H4 continuation in the Daily direction, inside the H4 range."},
+        {"term": "H4 pullback + continuation", "body": "One H4 candle closed through the line and the H4 range edge: one alert instead of two. On the chart: H4.P+C."},
         {"term": "Inside the H4 range: H4 against the Daily", "body": "A pullback break inside the H4 range, and each H4 continuation against the Daily after it, until H4 is back in alignment or the range low breaks."},
     ],
     "reaction_sources": [

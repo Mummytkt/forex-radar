@@ -66,6 +66,8 @@ H4 continuation in alignment: 4H keeps breaking in the Daily direction inside th
 
 H4 continuation, H4 range high broken: the Daily continues. H4 continuation, H4 range low broken: 4H is against the Daily again.
 
+H4 pullback + continuation on one candle: one 4H candle closed through the line and the range edge, so you get one alert, not two.
+
 Pullback break inside the H4 range: 4H broke the pullback line but is still inside the range. Later 4H breaks against the Daily there are called continuations inside the H4 range.
 
 Entry alerts: set your own levels on the Price Alerts page and tick the formations you want to hear about.

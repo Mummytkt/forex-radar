@@ -833,7 +833,7 @@ def _reason_origin(
 # ── MTF story alerts ─────────────────────────────────────────────────────────
 
 STORY_EVENTS = ("daily_breakout", "cont_after_breakout", "pullback_confirmed", "cont_pullback", "back_in_alignment",
-                "cont_aligned", "range_high_broken", "range_low_broken", "pullback_in_range", "cont_in_range")
+                "cont_aligned", "range_high_broken", "range_low_broken", "pullback_in_range", "cont_in_range", "pullback_continuation")
 
 
 def story_title(event: str, direction: Direction, top: Direction) -> str:
@@ -853,6 +853,7 @@ def story_title(event: str, direction: Direction, top: Direction) -> str:
         "range_low_broken": f"H4 {against} continuation: H4 range {lo} broken",
         "pullback_in_range": "Pullback break inside the H4 range",
         "cont_in_range": f"H4 {move} continuation inside the H4 range",
+        "pullback_continuation": f"H4 pullback + {move} continuation on one candle",
     }[event]
 
 
@@ -922,6 +923,16 @@ def format_story_alert(instrument: str, event: str, direction: Direction, top: D
                 f"An H4 candle closed {beyond} it, inside the H4 range.", ""]
         body += h4_range + [f"H4 key level: {px(pullback_line)}",
                             f"An H4 close {with_} it: back in alignment. An H4 close {against_} the range {lo}: H4 is against the Daily again."] + careful
+    elif event == "pullback_continuation":
+        head = _headline(direction, instrument, continuation=True)
+        if direction == top:
+            body = [f"Level: H4 key level broken @ {px(level)}",
+                    f"One H4 candle closed {beyond} it and {beyond} the H4 range {hi}. H4 is back in alignment and the Daily {daily} move continues.",
+                    ""] + line_watch
+        else:
+            body = [f"Level: Pullback line broken @ {px(level)}",
+                    f"One H4 candle closed {beyond} it and {beyond} the H4 range {lo}. H4 is against the Daily {daily} direction again.",
+                    ""] + key_watch + careful
     else:   # cont_in_range
         head = _headline(direction, instrument, continuation=True)
         body = [f"Level: H4 {lo} broken @ {px(level)}",

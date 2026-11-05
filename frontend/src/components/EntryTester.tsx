@@ -27,22 +27,31 @@ interface Trade {
 }
 
 // Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
-const POIS: { key: string; label: string }[] = [
-  { key: 'engulfing', label: 'H4 Engulfing' },
-  { key: 'h4_key', label: 'H4 fresh key level' },
+const NEW_MODELS: { key: string; label: string }[] = [
+  { key: 'oc1h', label: '1H OC' },
+  { key: 'cisd1h', label: '1H CISD' },
+  { key: 'pcl1h', label: '1H PCL' },
 ]
-const MODELS: { key: string; label: string }[] = [
+// The older journals keep their own list, so their trades still read as they were logged
+const OLD_MODELS: { key: string; label: string }[] = [
   { key: 'direct', label: 'Direct entry' },
   { key: 'h1_cisd', label: '1H PCL' },   // keys kept from when these were called CISD
   { key: 'm5_cisd', label: '5M SMC' },
   { key: 'm15_cisd', label: '15M SMC' },
 ]
+const MODELS = [...NEW_MODELS, ...OLD_MODELS]
+const POIS: { key: string; label: string; old?: boolean }[] = [
+  { key: 'scl', label: 'Single candle liquidity (SCL) before POI' },
+  { key: 'hl_liq', label: 'High/low liquidity before POI' },
+  { key: 'engulfing', label: 'H4 Engulfing', old: true },
+  { key: 'h4_key', label: 'H4 fresh key level', old: true },
+]
 const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string }[] = POIS.flatMap(p =>
-  MODELS.map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label })))
+  (p.old ? OLD_MODELS : NEW_MODELS).map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label })))
 // The H4 alert each trade came from (same names as Alert Filters)
 const ALERT_TYPES = [
-  'Origin', 'Daily reaction + H4 breakout', 'H4 back in line', 'H4 breakout in line',
-  'H4 Breaker', 'H4 OC reaction', 'H4 Engulfing', 'Daily Engulfing', 'H4 FVG after breakout',
+  'Daily breakout', 'H4 continuation after the Daily breakout', 'H4 pullback confirmed', 'H4 continuation after the pullback',
+  'H4 pullback: back in alignment', 'H4 continuation in alignment', 'Inside the H4 range: H4 against the Daily',
 ]
 const OUTCOMES: { key: Outcome; label: string; color: string; bg: string }[] = [
   { key: 'win', label: 'Win', color: 'var(--bullish)', bg: 'var(--bullish-bg)' },
@@ -819,18 +828,24 @@ function DiaryCover({ title, sub, trades, look, setLook }: { title: string; sub:
 // ── Page ──────────────────────────────────────────────────────────────────────
 // book "backtest" (Backtest page, every POI) or a live journal on the Trading Journal
 // page: "live_engulfing" / "live_h4_key", each its own trades, limited to that POI
-type Book = 'backtest' | 'bt_engulfing' | 'bt_h4_key' | 'live_engulfing' | 'live_h4_key'
+type Book = 'backtest' | 'bt_engulfing' | 'bt_h4_key' | 'live_engulfing' | 'live_h4_key' | 'bt_scl' | 'bt_hl_liq' | 'live_scl' | 'live_hl_liq'
 const JOURNAL: Record<Book, { title: string; poi: string }> = {
   backtest: { title: 'Entry Tester', poi: '' },
   bt_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
   bt_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
   live_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
   live_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
+  bt_scl: { title: 'SCL before POI Journal', poi: 'scl' },
+  bt_hl_liq: { title: 'High/Low Liquidity before POI Journal', poi: 'hl_liq' },
+  live_scl: { title: 'SCL before POI Journal', poi: 'scl' },
+  live_hl_liq: { title: 'High/Low Liquidity before POI Journal', poi: 'hl_liq' },
 }
 // The diary cover's handwritten title for each journal
 const DIARY_TITLE: Partial<Record<Book, string>> = {
   bt_engulfing: 'My Engulfing Backtest Diary', bt_h4_key: 'My Fresh Key Levels Backtest Diary',
   live_engulfing: 'My Engulfing Diary', live_h4_key: 'My Fresh Key Levels Diary',
+  bt_scl: 'My SCL before POI Backtest Diary', bt_hl_liq: 'My High/Low Liquidity Backtest Diary',
+  live_scl: 'My SCL before POI Diary', live_hl_liq: 'My High/Low Liquidity Diary',
 }
 export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: Book }) {
   const live = book.startsWith('live')
@@ -1017,7 +1032,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
               <div className={diary ? 'diary-script' : undefined} style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6, fontSize: diary ? 24 : undefined }}>{diary ? 'Your first page is waiting 🌸' : 'How to log a trade'}</div>
               <div><b>1.</b> In the bar above, pick the <b>pair</b>, the <b>date</b>, <b>BUY</b> or <b>SELL</b>, and the <b>H4 alert</b> it came from.</div>
               <div><b>2.</b> Tap <b>Add trade</b>. The trade opens right here.</div>
-              <div><b>3.</b> {jr.poi ? <>Tap</> : <>Pick the POI tab (<b>H4 Engulfing</b> or <b>H4 fresh key level</b>), then tap</>} <b>Win</b>, <b>Loss</b>, <b>BE</b> or <b>No entry</b> on each {jr.poi ? 'confirmation model' : 'entry model'}. On a win, tap the RR.</div>
+              <div><b>3.</b> {jr.poi ? <>Tap</> : <>Pick the entry model tab, then tap</>} <b>Win</b>, <b>Loss</b>, <b>BE</b> or <b>No entry</b> on each {jr.poi ? 'confirmation model' : 'entry model'}. On a win, tap the RR.</div>
               <div><b>4.</b> Every tap saves. The results table fills in by itself.</div>
             </div>
           )

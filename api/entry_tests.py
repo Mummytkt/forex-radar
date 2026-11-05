@@ -58,9 +58,21 @@ _LEGACY |= {f"{m}_{p}" for m in ("direct", "h1_cisd", "m15_cisd", "m5_cisd", "h1
                                  "h1_smc", "m5_smc", "m15_smc", "h4_3cr", "h2_3cr") for p in ("fvg", "3cr")}
 # 1H / 2H Engulfing entry models, taken off on 2026-10-28 (results already ticked stay stored)
 _LEGACY |= {f"{m}_{p}" for m in ("h1_engulfing", "h2_engulfing") for p in ("engulfing", "h4_key")}
+# The entry models and confirmations since 2026-11-05. The lists above stay for the older journals.
+NEW_POIS: list[tuple[str, str]] = [
+    ("scl", "Single candle liquidity (SCL) before POI"),
+    ("hl_liq", "High/low liquidity before POI"),
+]
+NEW_MODELS: list[tuple[str, str]] = [
+    ("oc1h", "1H OC"),
+    ("cisd1h", "1H CISD"),
+    ("pcl1h", "1H PCL"),
+]
+POIS += NEW_POIS
+ENTRY_TYPES += [(f"{m}_{p}", f"{ml} on {pl}") for p, pl in NEW_POIS for m, ml in NEW_MODELS]
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
-BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key")
+BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key", "bt_scl", "bt_hl_liq", "live_scl", "live_hl_liq")
 
 
 def _book(book: str) -> str:

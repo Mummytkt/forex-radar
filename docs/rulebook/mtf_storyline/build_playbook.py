@@ -194,6 +194,7 @@ PHASES = [
         "An H4 body closed above the last H4 high inside the Daily range.",
         "Target: the Daily external high.",
         "Entry: buys in the leg of each H4 continuation break, with M15 confirmation.",
+        "One candle through the line and the range edge is one alert: H4 pullback + continuation (H4.P+C).",
         "A close below the H4 range low instead: alert H4 continuation (H4.RLB). H4 is against the Daily again, back to phase 5.",
         "A new close below the pullback line takes you back to phase 3.",
     ]),

@@ -869,6 +869,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             if ph0 == 1 or rl_brk
                 al_rev := false
             float pb_lv = rl_brk ? rg_lo : nz(f_wk(old_lt, w > 0), old_ln)
+            bool  pc_a  = false
             if ph0 == 1
                 rg_lo  := na(fa0) ? nz(rl_x, D > 0 ? XL : XH) : fa0
                 rg_lot := not na(fa0) ? fa0t : na(rl_x) ? (D > 0 ? XLt : XHt) : rl_xt
@@ -882,11 +883,13 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
                 rg_lo  := tk_ext
                 rg_lot := tk_et
             else
-                f_bro(old_lt, old_ln, f_ab("Pullback break (inside the " + N2 + " range)", "PB.in"), D < 0, br_acol)
                 if not na(fa0)
                     rg_lo  := fa0
                     rg_lot := fa0t
                     rg_lf  := false
+                // one candle closed through the line and the range low: one event
+                pc_a := not na(rg_lo) and f_gt(rg_lo, x2c, D)
+                f_bro(old_lt, old_ln, pc_a ? f_ab(N2 + " pullback + continuation", N2 + ".P+C") : f_ab("Pullback break (inside the " + N2 + " range)", "PB.in"), D < 0, br_acol)
             // at every pullback the range resets to the range just broken: its high = the top of the leg
             // (inside the top-timeframe range)
             rg_hi  := f0
@@ -894,7 +897,11 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
             if f_gt(rg_hi, D > 0 ? XH : XL, D)
                 rg_hi  := D > 0 ? XH : XL
                 rg_hit := D > 0 ? XHt : XLt
-            f_al(ph0 == 1 ? al_pb : rl_brk ? al_ca : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, pb_lv, false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
+            if pc_a
+                al_rev := false
+                f_al(al_lb or al_ca, "pullback_continuation", N2 + " pullback + continuation", -D, pb_lv, false, N2 + ".P+C")
+            else
+                f_al(ph0 == 1 ? al_pb : rl_brk ? al_ca : al_lb, ph0 == 1 ? "pullback_confirmed" : rl_brk ? "range_low_broken" : "pullback_in_range", ph0 == 1 ? "Pullback confirmed · " + N1 + " pullback" : rl_brk ? N2 + " range " + LO + " broken · " + N2 + " " + AW + " again" : "Pullback break inside the " + N2 + " range", -D, pb_lv, false, ph0 == 1 ? A1 + ".PC" : rl_brk ? N2 + ".R" + LC + "B" : "PB.in")
             f_story(time, D > 0 ? low : high, D < 0, (ph0 == 1 ? "Pullback break: the " + N1 + " pullback is confirmed. " + N1 + " range " + str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick) : rl_brk ? "The " + N2 + " range " + LO + " " + str.tostring(rg_lo, format.mintick) + " is broken: " + N2 + " is " + AW + " again" : "Pullback break inside the " + N2 + " range: " + N2 + " is " + AW) + ".\n" + N2 + " pullback line: the " + HI + " that broke the " + LO + " " + str.tostring(tk_ln, format.mintick) + "; " + N2 + " range " + HI + " " + str.tostring(rg_hi, format.mintick) + ".")
         else if not na(rg_hi) and f_gt(x2c, rg_hi, D)
             // straight through the range high: the top timeframe continues
@@ -921,11 +928,26 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
                 if f_gt(rg_hi, D > 0 ? XH : XL, D)
                     rg_hi  := D > 0 ? XH : XL
                     rg_hit := D > 0 ? XHt : XLt
-            f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P · BIA")
-            f_bro(old_lt, old_ln, f_ab(N2 + " pullback", N2 + ".P"), D > 0, br_wcol)
-            if tg_al
-                f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback · back in alignment with " + N1, N2 + ".P · BIA"), D > 0, tg_alc)
-            f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
+            bool pc_w = not na(rg_hi) and f_gt(x2c, rg_hi, D)
+            if pc_w
+                // one candle closed through the line and the new range high: one event, and the top timeframe continues
+                f_al(al_rl or al_cw, "pullback_continuation", N2 + " pullback + continuation", D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P+C")
+                sph := 1
+                f_bro(old_lt, old_ln, f_ab(N2 + " pullback + continuation", N2 + ".P+C"), D > 0, br_wcol)
+                if tg_al
+                    f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback + continuation", N2 + ".P+C"), D > 0, tg_alc)
+                [x0p, x0pt] = f_ext2(nz(rg_lot, rg_hit), D < 0)
+                rl_x  := x0p
+                rl_xt := x0pt
+                f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback and the range " + HI + " " + str.tostring(rg_hi, format.mintick) + " broken by one candle: the " + N1 + " " + DW + " trend continues.")
+                rg_hi := na
+                rg_lo := na
+            else
+                f_al(al_rl, "back_in_alignment", N2 + " pullback · back in alignment with the " + N1, D, nz(f_wk(old_lt, w > 0), old_ln), true, N2 + ".P · BIA")
+                f_bro(old_lt, old_ln, f_ab(N2 + " pullback", N2 + ".P"), D > 0, br_wcol)
+                if tg_al
+                    f_tag(tg_al_, time, D > 0 ? high : low, f_ab(N2 + " pullback · back in alignment with " + N1, N2 + ".P · BIA"), D > 0, tg_alc)
+                f_story(time, D > 0 ? high : low, D > 0, N2 + " pullback: back in alignment with the " + N1 + ".\n" + N2 + " range: " + LO + " " + str.tostring(rg_lo, format.mintick) + " · " + HI + " " + str.tostring(rg_hi, format.mintick) + ". The pullback line starts at its " + LO + ".")
     else if sph == 3 and not na(rg_hi) and f_gt(x2c, rg_hi, D)
         // the range high broken: the top timeframe continues (the line has already followed the rule)
         f_al(al_cw, "range_high_broken", N2 + " range " + HI + " broken · " + N1 + " continues", D, rg_hi, true, N2 + ".R" + HC + "B · " + A1 + ".C")
@@ -1016,7 +1038,7 @@ f_lvl(int t, float y, string txt, color c, string st, int wd) =>
 f_tpos(string p) =>
     p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : p == "Middle right" ? position.middle_right : p == "Middle left" ? position.middle_left : position.bottom_left
 var table sk = table.new(f_tpos(sk_pos), 2, 11, bgcolor = sk_bg, border_width = 1, border_color = color.new(color.gray, 75))
-var table ky = table.new(f_tpos(ky_pos), 2, 15, bgcolor = tb_bg, border_width = 1, border_color = color.new(color.gray, 75))
+var table ky = table.new(f_tpos(ky_pos), 2, 16, bgcolor = tb_bg, border_width = 1, border_color = color.new(color.gray, 75))
 f_key(int r, string a, string b) =>
     table.cell(ky, 0, r, a, text_color = tb_tx, text_size = size.tiny, text_halign = text.align_left)
     table.cell(ky, 1, r, b, text_color = color.gray, text_size = size.tiny, text_halign = text.align_left)
@@ -1153,7 +1175,7 @@ if barstate.islast
     int   so      = sk_same and tb_on ? 8 : 0
     table.clear(sk, 0, 0, 1, 10)
     table.clear(tb, 0, 0, 1, 19)
-    table.clear(ky, 0, 0, 1, 14)
+    table.clear(ky, 0, 0, 1, 15)
     if ky_on and ab_on and chart_ok and D != 0
         f_key(0, "KEY", "")
         f_key(1, A1 + "." + BW + " XH / XL", N1 + " " + DW + " external high / low (f = still forming); after the pullback: the " + N1 + " range")
@@ -1170,6 +1192,7 @@ if barstate.islast
         f_key(12, N2 + "." + LC + " f", N2 + " " + LO + " still forming")
         f_key(13, "FVG / OC / V / A", "reaction zones (FVG, OC, V-shape, A-shape; + = merged)")
         f_key(14, "!", "alert point")
+        f_key(15, N2 + ".P+C", N2 + " pullback and continuation closed by one candle: one alert")
     if sk_on and chart_ok
         table.cell(st_tb, 0, so, "STORY", text_color = sk_tx, text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
         table.cell(st_tb, 1, so, PLAN, text_color = color.new(sk_tx, 40), text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)

@@ -113,6 +113,13 @@ check("live Entry Journal trades stay out of the backtest Entry Tester and back"
 check("the backtest Engulfing / Fresh Key Levels journals are their own books",
       c.get("/api/entry-tests?book=bt_engulfing", headers=H(owner)).status_code == 200
       and c.get("/api/entry-tests?book=bt_h4_key", headers=H(owner)).json() == [])
+_nm = c.post("/api/entry-tests?book=live_scl", headers=H(owner), json={
+    "trade_date": "2026-11-05", "instrument": "EURUSD", "direction": "buy",
+    "results": {"oc1h_scl": {"outcome": "win", "rr": 2}, "cisd1h_scl": {"outcome": "loss"}, "pcl1h_hl_liq": {"outcome": "none"}}})
+check("the new entry models and confirmations save in their own journal",
+      _nm.status_code == 200 and _nm.json()["results"]["oc1h_scl"]["outcome"] == "win"
+      and c.get("/api/entry-tests?book=live_hl_liq", headers=H(owner)).json() == [])
+c.delete(f"/api/entry-tests/{_nm.json()['id']}", headers=H(owner))
 check("an unknown book is refused", c.get("/api/entry-tests?book=demo", headers=H(owner)).status_code == 400)
 check("delete-all clears only its own book",
       c.post("/api/entry-tests/delete-all?book=live_engulfing", headers=H(owner), json={"confirm": "DELETE"}).json()["deleted"] == 1
@@ -1192,6 +1199,10 @@ _r = _story("range_high_broken", "bullish", 1.3448)
 check("range high broken is an H4 continuation", _r["alert_type"] == "story_cont" and "H4 bullish continuation: H4 range high broken" in _r["alert_text"] and "H4 range high broken @ 1.34480" in _r["alert_text"] and "The Daily bullish move continues" in _r["alert_text"])
 _r = _story("range_low_broken", "bearish", 1.3350)
 check("range low broken is an H4 continuation", _r["alert_type"] == "story_against" and "H4 bearish continuation: H4 range low broken" in _r["alert_text"] and "H4 range low broken @ 1.33500" in _r["alert_text"] and "against the Daily bullish direction again" in _r["alert_text"])
+_r = _story("pullback_continuation", "bullish", 1.3410)
+check("pullback + continuation with the Daily is one continuation alert", _r["alert_type"] == "story_cont" and "H4 pullback + bullish continuation on one candle" in _r["alert_text"] and "H4 range high" in _r["alert_text"])
+_r = _story("pullback_continuation", "bearish", 1.3385)
+check("pullback + continuation against the Daily follows the pullback continuations", _r["alert_type"] == "story_against" and "H4 range low" in _r["alert_text"])
 _r = _story("pullback_in_range", "bearish", 1.3385)
 check("pullback break inside the range", _r["alert_type"] == "story_in_range" and _r["alert_text"].startswith("INSIDE THE H4 RANGE") and "H4 range: 1.33500" in _r["alert_text"])
 _r = _story("cont_in_range", "bearish", 1.3370)

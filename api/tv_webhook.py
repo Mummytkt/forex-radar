@@ -854,6 +854,8 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
         return
     direction = Direction(payload.direction)
     top = Direction(payload.top)
+    # one candle, pullback + continuation: it answers to the switch of the continuation it makes
+    story_type = _STORY_TYPE.get(event) or ("story_cont" if direction == top else "story_against")
 
     # Older copies of the script send both for one candle: it is one continuation, so one message
     if event == "range_high_broken":
@@ -881,7 +883,7 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
         classification=AlertClassification.STORY,
         h4_breaker_level=payload.level,
         daily_level_context="external",
-        alert_type=_STORY_TYPE[event],
+        alert_type=story_type,
     )
     alert_id = insert_alert(conn, alert_record, breakout.db_id, None, None, alert_text)
     title = story_title(event, direction, top)
@@ -890,7 +892,7 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
     logger.info("%s STORY %s %s @ %s: alert stored", instrument, event, direction.value, payload.level)
 
     if config.telegram_enabled:
-        _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id, pref=_STORY_TYPE[event]))
+        _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id, pref=story_type))
 
 
 async def _handle_price_update(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

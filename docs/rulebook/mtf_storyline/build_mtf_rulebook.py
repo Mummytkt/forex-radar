@@ -306,7 +306,7 @@ RULES = [
      "PL · H4.C al · PB.in · H4.C in · alerts: H4 continuation in alignment, Inside the H4 range"),
     ("8", "The range breaks: the Daily continues (or H4 keeps going against)", "f_continues", (iP3, N - 1),
      "A close above the H4 range high is the last H4 high inside the Daily range taken: now you can be convinced you are with the Daily. A close below the H4 range low instead means H4 is against the Daily again. Both are sent as H4 continuations.",
-     "H4.RHB · D.C / H4.RLB · alerts: H4 continuation"),
+     "H4.RHB · D.C / H4.RLB / one candle through the line and the range edge: H4.P+C · alerts: H4 continuation"),
 ]
 
 PHOTON = [
