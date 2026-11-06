@@ -1,11 +1,12 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X, Eye, Pencil, Check } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
 import { API_BASE } from '@/lib/api'
 import DateInput from '@/components/DateInput'
 import { useAuth } from '@/lib/auth'
+import { buildStory } from '@/lib/diaryStory'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -409,7 +410,7 @@ function authHdr(): HeadersInit {
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
-function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove: () => void }) {
+function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove?: () => void }) {
   const [url, setUrl] = useState<string | null>(null)
   const [big, setBig] = useState(false)
   useEffect(() => {
@@ -425,10 +426,10 @@ function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove: (
       {url
         ? <img src={url} alt={label} onClick={() => setBig(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} />
         : <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: 8 }}>Loading…</div>}
-      <button onClick={onRemove} aria-label="Remove image" title="Remove this image"
+      {onRemove && <button onClick={onRemove} aria-label="Remove image" title="Remove this image"
         style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: 6, padding: 3, color: 'white', cursor: 'pointer', display: 'flex' }}>
         <X size={13} />
-      </button>
+      </button>}
       {big && url && (
         <div onClick={() => setBig(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, cursor: 'zoom-out' }}>
@@ -494,6 +495,52 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
 }
 
 // ── One trade: tick each entry pattern's result ──────────────────────────────
+// A saved trade read back as a page of the diary
+function DiaryPage({ trade, onEdit }: { trade: Trade; onEdit: () => void }) {
+  const only = useContext(OnlyPoi)
+  const { user } = useAuth()
+  const imgs = trade.images || {}
+  const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key])
+  const story = buildStory({
+    id: trade.id, name: user?.name, date: trade.trade_date, pair: trade.instrument, direction: trade.direction,
+    journal: only ? POIS.find(p => p.key === only)?.label : undefined, exitDate: trade.exit_date,
+    rows: types.map(t => {
+      const r = trade.results[t.key]
+      return { slot: t.key, label: (only ? t.model : t.label).replace(' (old)', ''), outcome: r.outcome, rr: r.rr, takes: r.takes, exit: r.exit, net: rOf(r) }
+    }),
+  })
+  const pics = (slot: string, label: string) => imgs[slot]?.length
+    ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0 2px' }}>{imgs[slot].map(id => <Thumb key={id} id={id} label={label} />)}</div>
+    : null
+  const para: React.CSSProperties = { fontSize: 14.5, lineHeight: 1.7, color: 'var(--text-primary)', margin: '0 0 10px' }
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', padding: '16px 20px 18px', background: 'var(--surface)' }}>
+      <div className="diary-script" style={{ fontSize: 26, color: 'var(--accent-hover)', marginBottom: 8 }}>{story.greeting}</div>
+      <p style={para}>{story.opening}</p>
+      {pics(only || '', 'Chart')}
+      {story.rows.map(r => (
+        <div key={r.slot} style={{ marginBottom: 10 }}>
+          <p style={{ ...para, margin: 0 }}><b style={{ color: 'var(--accent-hover)' }}>{r.label}:</b> {r.text}</p>
+          {pics(r.slot, r.label)}
+        </div>
+      ))}
+      {/* Pictures on a row with no result ticked, so none go missing from the page */}
+      {Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).map(k => <div key={k}>{pics(k, 'Chart')}</div>)}
+      {trade.notes.trim() && (
+        <div style={{ margin: '14px 0', padding: '10px 14px', borderLeft: '3px solid var(--accent)', background: 'var(--card)', borderRadius: '0 8px 8px 0' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>What you wrote that day</div>
+          <div style={{ ...para, margin: 0, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>{trade.notes}</div>
+        </div>
+      )}
+      <p style={{ ...para, fontWeight: 600 }}>{story.closing}</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <span className="diary-script" style={{ fontSize: 18, color: 'var(--text-secondary)' }}>Your diary 📖</span>
+        <Chip on={false} color="var(--accent)" bg="var(--accent-bg)" onClick={onEdit}><Pencil size={11} style={{ verticalAlign: -1 }} /> Edit this page</Chip>
+      </div>
+    </div>
+  )
+}
+
 function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   trade: Trade; open: boolean; onToggle: () => void
   onChange: (t: Trade) => void; onImages: (images: Record<string, number[]>) => void; onDelete: () => void
@@ -503,6 +550,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
   const [poi, setPoi] = useState(only || POIS[0].key)
   const [customVal, setCustomVal] = useState('')
   const [picsFor, setPicsFor] = useState<string | null>(null)   // entry row whose image strip is open
+  const [viewing, setViewing] = useState(false)   // reading the page as a story
   const imgs = trade.images || {}
   const setSlot = (slot: string, ids: number[]) => {
     const images = { ...imgs }
@@ -530,8 +578,8 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
 
   return (
     <div data-diary-card="" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
-      <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', flexWrap: 'wrap' }}>
-        {open ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
+      <div onClick={() => { if (open) onToggle(); else setViewing(v => !v) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', flexWrap: 'wrap' }}>
+        {open || viewing ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
         <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>{trade.instrument}</span>
         <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 6,
           color: trade.direction === 'buy' ? 'var(--bullish)' : 'var(--bearish)',
@@ -545,7 +593,12 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
           {done} ticked
           {tradeR.length > 0 && <> · best <b style={{ color: 'var(--bullish)' }}>{fmtR(Math.max(...tradeR))}</b></>}
         </span>
+        <span onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
+          <Chip on={viewing} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { if (open) onToggle(); setViewing(!viewing) }}><Eye size={12} style={{ verticalAlign: -2 }} /> View</Chip>
+          <Chip on={open} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { setViewing(false); onToggle() }}><Pencil size={11} style={{ verticalAlign: -1 }} /> Edit</Chip>
+        </span>
       </div>
+      {viewing && !open && <DiaryPage trade={trade} onEdit={() => { setViewing(false); onToggle() }} />}
       {open && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 12px' }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
@@ -640,7 +693,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
           })}
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Edit the trade's details: pair, date, direction, H4 alert (each saves straight away) */}
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexBasis: '100%' }}>Trade details (edit any of them; changes save straight away)</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexBasis: '100%' }}>Trade details</span>
             <input defaultValue={trade.instrument} title="Pair (fix a spelling mistake here)"
               onInput={e => { e.currentTarget.value = cleanPair(e.currentTarget.value) }}
               onBlur={e => { const p = cleanPair(e.target.value); if (p && p !== trade.instrument) onChange({ ...trade, instrument: p }); else e.target.value = trade.instrument }}
@@ -662,7 +715,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
               {!ALERT_TYPES.includes(trade.alert_type) && <option value={trade.alert_type}>{trade.alert_type || '—'}</option>}
               {ALERT_TYPES.map(a => <option key={a} value={a}>{a}</option>)}
             </select>}
-            <textarea defaultValue={trade.notes} placeholder="Notes (optional): saved when you click away" rows={3}
+            <textarea defaultValue={trade.notes} placeholder="Notes (optional)" rows={3}
               onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight + 2}px` }}
               ref={t => { if (t && !t.dataset.sized) { t.dataset.sized = '1'; t.style.height = 'auto'; t.style.height = `${Math.max(t.scrollHeight + 2, 72)}px` } }}
               onBlur={e => e.target.value !== trade.notes && onChange({ ...trade, notes: e.target.value })}
@@ -670,6 +723,10 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
             <button onClick={() => { if (confirm(`Delete this ${trade.instrument} trade?`)) onDelete() }}
               style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
               <Trash2 size={13} /> Delete
+            </button>
+            <button onClick={onToggle}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 'auto', padding: '8px 18px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+              <Check size={14} /> Save
             </button>
           </div>
         </div>
