@@ -4,7 +4,7 @@ import EntryTester from '@/components/EntryTester'
 import { useAuth } from '@/lib/auth'
 import { useJournalTabs } from '@/components/JournalTabs'
 
-// The owner also gets an entry journal per entry model (SCL / high-low liquidity before
+// The owner also gets an entry journal per entry model (H1 entry / M15 entry, formerly SCL / high-low liquidity before
 // the POI; older ones on request), each ranking its confirmations on its own live trades;
 // subscribers see only the Trading Journal.
 export default function JournalPage() {

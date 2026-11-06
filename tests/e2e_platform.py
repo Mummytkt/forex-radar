@@ -115,7 +115,7 @@ check("the backtest Engulfing / Fresh Key Levels journals are their own books",
       and c.get("/api/entry-tests?book=bt_h4_key", headers=H(owner)).json() == [])
 _nm = c.post("/api/entry-tests?book=live_scl", headers=H(owner), json={
     "trade_date": "2026-11-05", "instrument": "EURUSD", "direction": "buy",
-    "results": {"oc1h_scl": {"outcome": "win", "rr": 2}, "cisd1h_scl": {"outcome": "loss"}, "pcl1h_hl_liq": {"outcome": "none"}}})
+    "results": {"oc1h_scl": {"outcome": "win", "rr": 2}, "cisd1h_scl": {"outcome": "loss"}, "pcl1h_hl_liq": {"outcome": "none"}, "lc1_scl": {"outcome": "win", "rr": 3}, "lc2_hl_liq": {"outcome": "loss"}}})
 check("the new entry models and confirmations save in their own journal",
       _nm.status_code == 200 and _nm.json()["results"]["oc1h_scl"]["outcome"] == "win"
       and c.get("/api/entry-tests?book=live_hl_liq", headers=H(owner)).json() == [])
@@ -154,7 +154,7 @@ check("one image can be removed, the others stay",
 # every journal's pictures: the chart, and each confirmation under it (5 Nov 2026: the new 1H ones were refused)
 _si = c.post("/api/entry-tests?book=bt_scl", headers=H(owner), json={"trade_date": "2020-01-06", "instrument": "EURUSD", "direction": "sell"}).json()["id"]
 for _poi in ("scl", "hl_liq"):
-    for _sl in (_poi, f"oc1h_{_poi}", f"cisd1h_{_poi}", f"pcl1h_{_poi}"):
+    for _sl in (_poi, f"lc1_{_poi}", f"lc2_{_poi}", f"oc1h_{_poi}", f"cisd1h_{_poi}", f"pcl1h_{_poi}"):
         check(f"a picture can be added to {_sl}", c.post(f"/api/entry-tests/{_si}/images/{_sl}", headers=H(owner),
               files={"file": ("e.png", _png.getvalue(), "image/png")}).status_code == 200)
 for _sl in ("direct_scl", "oc1h_engulfing"):

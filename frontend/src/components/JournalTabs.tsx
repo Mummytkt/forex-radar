@@ -44,8 +44,8 @@ export function useJournalTabs(tabKey: string, journalLabel: string): [JournalTa
   const node = (
     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
       <div style={{ display: 'flex', gap: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
-        {b('scl', 'SCL before POI')}
-        {b('hl_liq', 'High/Low Liquidity before POI')}
+        {b('scl', 'H1 entry')}
+        {b('hl_liq', 'M15 entry')}
         {showOld && b('engulfing', 'Engulfing Journal')}
         {showOld && b('h4_key', 'Fresh Key Levels Journal')}
         {b('journal', journalLabel)}

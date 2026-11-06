@@ -58,18 +58,21 @@ _LEGACY |= {f"{m}_{p}" for m in ("direct", "h1_cisd", "m15_cisd", "m5_cisd", "h1
                                  "h1_smc", "m5_smc", "m15_smc", "h4_3cr", "h2_3cr") for p in ("fvg", "3cr")}
 # 1H / 2H Engulfing entry models, taken off on 2026-10-28 (results already ticked stay stored)
 _LEGACY |= {f"{m}_{p}" for m in ("h1_engulfing", "h2_engulfing") for p in ("engulfing", "h4_key")}
-# The entry models and confirmations since 2026-11-05. The lists above stay for the older journals.
+# The entry models and confirmations since 2026-11-05 (keys scl / hl_liq kept from their first names, SCL and
+# high/low liquidity before POI; renamed 2026-11-06). The lists above stay for the older journals.
 NEW_POIS: list[tuple[str, str]] = [
-    ("scl", "Single candle liquidity (SCL) before POI"),
-    ("hl_liq", "High/low liquidity before POI"),
+    ("scl", "H1 entry"),
+    ("hl_liq", "M15 entry"),
 ]
 NEW_MODELS: list[tuple[str, str]] = [
-    ("oc1h", "15M OC"),   # key kept from when this was 1H OC (renamed 2026-11-06): saved trades and pictures use it
-    ("cisd1h", "1H CISD"),
-    ("pcl1h", "1H PCL"),
+    ("lc1", "LC 1"),
+    ("lc2", "LC 2"),
 ]
+# Taken off on 2026-11-06: results and pictures already saved on them stay, and still save
+RETIRED_MODELS: list[str] = ["oc1h", "cisd1h", "pcl1h"]
 POIS += NEW_POIS
 ENTRY_TYPES += [(f"{m}_{p}", f"{ml} on {pl}") for p, pl in NEW_POIS for m, ml in NEW_MODELS]
+_LEGACY |= {f"{m}_{p}" for m in RETIRED_MODELS for p, _ in NEW_POIS}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key", "bt_scl", "bt_hl_liq", "live_scl", "live_hl_liq")
@@ -152,7 +155,8 @@ def _row(r: sqlite3.Row, images: Optional[dict] = None) -> dict:
 _POI_KEYS = {k for k, _ in POIS}
 _NEW_POI_KEYS = {k for k, _ in NEW_POIS}
 _SLOT_POI = {k: k for k in _POI_KEYS} | {
-    f"{m}_{p}": p for p in _POI_KEYS for m, _ in (NEW_MODELS if p in _NEW_POI_KEYS else MODELS)}
+    f"{m}_{p}": p for p in _POI_KEYS
+    for m in ([k for k, _ in NEW_MODELS] + RETIRED_MODELS if p in _NEW_POI_KEYS else [k for k, _ in MODELS])}
 MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PER_SLOT = 12
 

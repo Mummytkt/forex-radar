@@ -28,9 +28,14 @@ interface Trade {
 
 // Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
 const NEW_MODELS: { key: string; label: string }[] = [
-  { key: 'oc1h', label: '15M OC' },   // key kept from when this was 1H OC: saved trades and pictures use it
-  { key: 'cisd1h', label: '1H CISD' },
-  { key: 'pcl1h', label: '1H PCL' },
+  { key: 'lc1', label: 'LC 1' },
+  { key: 'lc2', label: 'LC 2' },
+]
+// Taken off on 2026-11-06: a row shows only on a trade that already has a result or picture on it
+const RETIRED_MODELS: { key: string; label: string; retired: true }[] = [
+  { key: 'oc1h', label: '15M OC (old)', retired: true },
+  { key: 'cisd1h', label: '1H CISD (old)', retired: true },
+  { key: 'pcl1h', label: '1H PCL (old)', retired: true },
 ]
 // The older journals keep their own list, so their trades still read as they were logged
 const OLD_MODELS: { key: string; label: string }[] = [
@@ -39,15 +44,15 @@ const OLD_MODELS: { key: string; label: string }[] = [
   { key: 'm5_cisd', label: '5M SMC' },
   { key: 'm15_cisd', label: '15M SMC' },
 ]
-const MODELS = [...NEW_MODELS, ...OLD_MODELS]
+const MODELS = [...NEW_MODELS, ...RETIRED_MODELS, ...OLD_MODELS]
 const POIS: { key: string; label: string; old?: boolean }[] = [
-  { key: 'scl', label: 'Single candle liquidity (SCL) before POI' },
-  { key: 'hl_liq', label: 'High/low liquidity before POI' },
+  { key: 'scl', label: 'H1 entry' },   // keys kept from their first names (SCL, high/low liquidity before POI)
+  { key: 'hl_liq', label: 'M15 entry' },
   { key: 'engulfing', label: 'H4 Engulfing', old: true },
   { key: 'h4_key', label: 'H4 fresh key level', old: true },
 ]
-const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string }[] = POIS.flatMap(p =>
-  (p.old ? OLD_MODELS : NEW_MODELS).map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label })))
+const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string; retired: boolean }[] = POIS.flatMap(p =>
+  (p.old ? OLD_MODELS : [...NEW_MODELS, ...RETIRED_MODELS]).map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label, retired: 'retired' in m })))
 // The H4 alert each trade came from (same names as Alert Filters)
 const ALERT_TYPES = [
   'Daily breakout', 'H4 continuation after the Daily breakout', 'H4 pullback confirmed', 'H4 continuation after the pullback',
@@ -323,7 +328,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       winRate: taken ? (w / taken) * 100 : null,
       avgRR: rrN ? rrSum / rrN : null,
       expectancy: taken ? totalR / taken : null }
-  }).sort((a, b) => (b.taken ? 1 : 0) - (a.taken ? 1 : 0) || b.totalR - a.totalR), [trades, poi, chrono])
+  }).filter(r => !r.retired || r.taken || r.none).sort((a, b) => (b.taken ? 1 : 0) - (a.taken ? 1 : 0) || b.totalR - a.totalR), [trades, poi, chrono])
 
   const tested = all.filter(r => r.taken || r.none)
   const rows = showAll || tested.length === 0 ? all : tested
@@ -623,7 +628,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
           </div>
           <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
             ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />
-          {ENTRY_TYPES.filter(t => t.poi === poi).map(t => {
+          {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map(t => {
             const r = trade.results[t.key]
             return (
               <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 0', borderBottom: '1px dashed var(--border)', flexWrap: 'wrap' }}>
@@ -835,17 +840,17 @@ const JOURNAL: Record<Book, { title: string; poi: string }> = {
   bt_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
   live_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
   live_h4_key: { title: 'Fresh Key Levels Journal', poi: 'h4_key' },
-  bt_scl: { title: 'SCL before POI Journal', poi: 'scl' },
-  bt_hl_liq: { title: 'High/Low Liquidity before POI Journal', poi: 'hl_liq' },
-  live_scl: { title: 'SCL before POI Journal', poi: 'scl' },
-  live_hl_liq: { title: 'High/Low Liquidity before POI Journal', poi: 'hl_liq' },
+  bt_scl: { title: 'H1 Entry Journal', poi: 'scl' },
+  bt_hl_liq: { title: 'M15 Entry Journal', poi: 'hl_liq' },
+  live_scl: { title: 'H1 Entry Journal', poi: 'scl' },
+  live_hl_liq: { title: 'M15 Entry Journal', poi: 'hl_liq' },
 }
 // The diary cover's handwritten title for each journal
 const DIARY_TITLE: Partial<Record<Book, string>> = {
   bt_engulfing: 'My Engulfing Backtest Diary', bt_h4_key: 'My Fresh Key Levels Backtest Diary',
   live_engulfing: 'My Engulfing Diary', live_h4_key: 'My Fresh Key Levels Diary',
-  bt_scl: 'My SCL before POI Backtest Diary', bt_hl_liq: 'My High/Low Liquidity Backtest Diary',
-  live_scl: 'My SCL before POI Diary', live_hl_liq: 'My High/Low Liquidity Diary',
+  bt_scl: 'My H1 Entry Backtest Diary', bt_hl_liq: 'My M15 Entry Backtest Diary',
+  live_scl: 'My H1 Entry Diary', live_hl_liq: 'My M15 Entry Diary',
 }
 export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: Book }) {
   const live = book.startsWith('live')
