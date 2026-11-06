@@ -1,4 +1,4 @@
-// Typed dates: always day first, dd/mm/yy. Stored as YYYY-MM-DD or YYYY-MM-DDTHH:MM.
+// Typed dates: always day first, dd/mm/yy or dd/mm/yyyy, shown back with the full year. Stored as YYYY-MM-DD or YYYY-MM-DDTHH:MM.
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const fullYear = (s: string) => (+s >= 100 ? +s : +s < 90 ? 2000 + +s : 1900 + +s)
@@ -27,10 +27,10 @@ export function parseTyped(raw: string, withTime: boolean): string | null {
   return withTime && tm ? `${date}T${pad2(hh)}:${pad2(mi)}` : date
 }
 
-/** A stored date as dd/mm/yy (with hh:mm when it has a time). */
+/** A stored date with the full year, dd/mm/yyyy (with hh:mm when it has a time), so 20 or 2020 both read 2020. */
 export function showTyped(v: string | null | undefined): string {
   if (!v) return ''
-  return `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(2, 4)}` + (v.length >= 16 ? ` ${v.slice(11, 16)}` : '')
+  return `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}` + (v.length >= 16 ? ` ${v.slice(11, 16)}` : '')
 }
 
 /** The slashes go in as you type: 060120 reads 06/01/20. 6/1/20 and month names stay as typed. */
