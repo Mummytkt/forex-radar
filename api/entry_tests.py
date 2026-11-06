@@ -64,7 +64,7 @@ NEW_POIS: list[tuple[str, str]] = [
     ("hl_liq", "High/low liquidity before POI"),
 ]
 NEW_MODELS: list[tuple[str, str]] = [
-    ("oc1h", "1H OC"),
+    ("oc1h", "15M OC"),   # key kept from when this was 1H OC (renamed 2026-11-06): saved trades and pictures use it
     ("cisd1h", "1H CISD"),
     ("pcl1h", "1H PCL"),
 ]

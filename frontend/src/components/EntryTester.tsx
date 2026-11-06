@@ -28,7 +28,7 @@ interface Trade {
 
 // Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
 const NEW_MODELS: { key: string; label: string }[] = [
-  { key: 'oc1h', label: '1H OC' },
+  { key: 'oc1h', label: '15M OC' },   // key kept from when this was 1H OC: saved trades and pictures use it
   { key: 'cisd1h', label: '1H CISD' },
   { key: 'pcl1h', label: '1H PCL' },
 ]
