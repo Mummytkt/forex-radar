@@ -890,7 +890,8 @@ def format_story_alert(instrument: str, event: str, direction: Direction, top: D
         body = [f"Level: H4 {hi} broken @ {px(level)}",
                 f"An H4 candle closed {beyond} it, in the Daily {daily} direction.", ""] + line_watch
     elif event == "pullback_confirmed":
-        head = f"DAILY PULLBACK — {tagged(instrument)}"
+        side = "BUY" if direction == Direction.BULLISH else "SELL"   # the way H4 has turned
+        head = f"DAILY PULLBACK — {side} {tagged(instrument)}"
         body = [f"Level: Pullback line broken @ {px(level)}",
                 f"An H4 candle closed {beyond} it. H4 is now against the Daily {daily} direction.", ""] + daily_range + (h4_range + [""] if h4_range else []) + key_watch
     elif event == "cont_pullback":
