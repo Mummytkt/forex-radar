@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X, Eye, Pencil, Check } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
@@ -422,6 +423,12 @@ function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove?: 
       .catch(() => {})
     return () => { gone = true; if (made) URL.revokeObjectURL(made) }
   }, [id])
+  useEffect(() => {   // Esc closes the big picture
+    if (!big) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setBig(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [big])
   return (
     <div style={{ position: 'relative', width: 150, height: 96, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
       {url
@@ -431,13 +438,15 @@ function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove?: 
         style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: 6, padding: 3, color: 'white', cursor: 'pointer', display: 'flex' }}>
         <X size={13} />
       </button>}
-      {big && url && (
-        <div onClick={() => setBig(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100,
+      {/* On the page body, so no card or animation around the picture can trap or clip it */}
+      {big && url && createPortal(
+        <div onClick={e => { e.stopPropagation(); setBig(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 10000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, cursor: 'zoom-out' }}>
-          <img src={url} alt={label} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8 }} />
+          <img src={url} alt={label} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />
           <button aria-label="Close" style={{ position: 'absolute', top: 16, right: 16, background: 'var(--card)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: 6, color: 'var(--text-primary)', cursor: 'pointer' }}><X size={18} /></button>
-        </div>
+            borderRadius: 8, padding: 6, color: 'var(--text-primary)', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
+        </div>,
+        document.body,
       )}
     </div>
   )

@@ -429,7 +429,7 @@ body {
     radial-gradient(circle at 92% 6%, color-mix(in srgb, var(--mood) 16%, transparent), transparent 42%),
     radial-gradient(circle at 4% 96%, color-mix(in srgb, var(--mood) 10%, transparent), transparent 46%),
     var(--surface);
-  animation: dp-open 0.5s ease both;
+  animation: dp-open 0.5s ease backwards;
 }
 .dp-page.dp-win { --mood: var(--bullish); }
 .dp-page.dp-loss { --mood: #E0888F; }
@@ -445,7 +445,7 @@ body {
 .dp-foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .dp-yours { font-size: 13px; color: var(--text-secondary); }
 .dp-sign { font-size: 28px; line-height: 1.25; color: var(--accent-hover); }
-.dp-line { animation: dp-rise 0.7s ease both; }
+.dp-line { animation: dp-rise 0.7s ease backwards; }
 .dp-spark { position: absolute; font-size: 16px; opacity: 0.4; pointer-events: none; animation: dp-float 7s ease-in-out infinite; }
 .dp-spark0 { top: 14%; right: 5%; }
 .dp-spark1 { top: 46%; right: 2.5%; font-size: 13px; animation-delay: 1.2s; }
