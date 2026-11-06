@@ -441,7 +441,6 @@ body {
 .dp-p { position: relative; z-index: 1; font-size: 15px; line-height: 1.8; color: var(--text-primary); margin: 0 0 12px; }
 .dp-note { position: relative; z-index: 1; margin: -2px 0 14px; padding: 2px 0 2px 14px; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); font-size: 15px; font-style: italic; line-height: 1.8; color: var(--text-primary); white-space: pre-wrap; }
 .dp-pics { display: flex; gap: 8px; flex-wrap: wrap; margin: -4px 0 14px; }
-.dp-close { font-weight: 600; margin-top: 4px; }
 .dp-foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .dp-yours { font-size: 13px; color: var(--text-secondary); }
 .dp-sign { font-size: 28px; line-height: 1.25; color: var(--accent-hover); }

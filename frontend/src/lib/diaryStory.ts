@@ -28,7 +28,6 @@ export interface Story {
   noNote: string       // the words that stand in for the note ('' when there is one)
   rows: { slot: string; text: string }[]
   held: string
-  closing: string
   yours: string
   signature: string
   mood: Mood
@@ -102,37 +101,6 @@ function rowText(r: StoryRow, id: number, i: number, many: boolean): string {
   return many ? `On ${r.label}, ${t}` : `${cap(t)}`
 }
 
-const CLOSINGS: Record<Mood, string[]> = {
-  win: [
-    'One more golden page. Thank you, patience ✨',
-    "Today I'm grateful for my plan, and for staying with it 🌷",
-    "I'll carry this feeling into the next trade 💫",
-    'Small steps, golden results 🌟',
-    'Proud of me today 👑',
-    'I waited for my level, I trusted my plan, and here we are 🌸',
-  ],
-  loss: [
-    'A small price for a lesson kept. Tomorrow is a new page 🌅',
-    "Losses are part of the story. I'm still here, still growing 🌱",
-    'I protect my capital and my peace. On to the next one 🕊️',
-    'Every page makes me wiser, and this one too 📖',
-    'I am not my last trade. Deep breath, and onward 🍃',
-  ],
-  be: [
-    'Nothing lost, and something learned 🌿',
-    'Capital protected, and a calm heart 🕊️',
-    "Not every page needs fireworks. This one is safe, and that's enough 🌤️",
-  ],
-  out: [
-    'Sometimes the best trade is the one I leave alone 🌙',
-    "No trade is a decision too, and I'm at peace with it 🕊️",
-    'The market will be there tomorrow, and so will I 🌿',
-  ],
-  open: [
-    "I haven't written how this one ended yet. I'll come back and finish this page ✍️",
-    'The ending of this page is still to be written 🌙',
-  ],
-}
 const RIBBON: Record<Mood, string> = { win: 'A winning page', loss: 'A lesson page', be: 'A calm page', out: 'A patient page', open: 'Still being written' }
 const SPARKS: Record<Mood, string[]> = {
   win: ['✨', '🌟', '🌸', '🎉', '💖'],
@@ -197,7 +165,6 @@ export function buildStory(s: StoryInput): Story {
     noNote,
     rows: s.rows.map((r, i) => ({ slot: r.slot, text: rowText(r, s.id, i, s.rows.length > 1) })),
     held,
-    closing: pick(s.id, 5, CLOSINGS[mood]),
     yours: pick(s.id, 6, ['Yours,', 'Yours,', 'Yours always,', 'Yours truly,']),
     signature: s.name?.trim() || 'Me',
     mood,

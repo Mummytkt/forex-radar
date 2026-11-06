@@ -506,7 +506,7 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
 
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 // A saved trade read back as a page of the owner's diary
-function DiaryPage({ trade, onEdit, onDelete }: { trade: Trade; onEdit: () => void; onDelete: () => void }) {
+function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: number; onEdit: () => void; onDelete: () => void }) {
   const only = useContext(OnlyPoi)
   const { user } = useAuth()
   const imgs = trade.images || {}
@@ -532,7 +532,7 @@ function DiaryPage({ trade, onEdit, onDelete }: { trade: Trade; onEdit: () => vo
         {story.sparks.map((e, i) => <span key={i} className={`dp-spark dp-spark${i}`} aria-hidden>{e}</span>)}
         <div className="dp-head dp-line" style={line()}>
           <span className="dp-ribbon">{story.ribbon}</span>
-          <span className="dp-stamp">{journal ? `${journal} · ` : ''}{fmtDay(trade.trade_date)}</span>
+          <span className="dp-stamp">Trade {num} · {journal ? `${journal} · ` : ''}{fmtDay(trade.trade_date)}</span>
         </div>
         <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
         <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
@@ -547,7 +547,6 @@ function DiaryPage({ trade, onEdit, onDelete }: { trade: Trade; onEdit: () => vo
         {/* Pictures on a row with no result ticked, so none go missing from the page */}
         {Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).map(k => <div key={k} className="dp-line" style={line()}>{pics(k, 'Chart')}</div>)}
         {story.held && <p className="dp-p dp-line" style={line()}>{story.held}</p>}
-        <p className="dp-p dp-close dp-line" style={line()}>{story.closing}</p>
         <div className="dp-foot dp-line" style={line()}>
           <div>
             <div className="dp-yours">{story.yours}</div>
@@ -566,8 +565,8 @@ function DiaryPage({ trade, onEdit, onDelete }: { trade: Trade; onEdit: () => vo
   )
 }
 
-function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
-  trade: Trade; open: boolean; onToggle: () => void
+function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }: {
+  trade: Trade; num: number; open: boolean; onToggle: () => void
   onChange: (t: Trade) => void; onImages: (images: Record<string, number[]>) => void; onDelete: () => void
 }) {
   const only = useContext(OnlyPoi)
@@ -605,6 +604,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
     <div data-diary-card="" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
       <div onClick={() => { if (open) onToggle(); else setViewing(v => !v) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', flexWrap: 'wrap' }}>
         {open || viewing ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
+        <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>#{num}</span>
         <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>{trade.instrument}</span>
         <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 6,
           color: trade.direction === 'buy' ? 'var(--bullish)' : 'var(--bearish)',
@@ -623,7 +623,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
           <Chip on={open} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { setViewing(false); onToggle() }}><Pencil size={11} /> Edit</Chip>
         </span>
       </div>
-      {viewing && !open && <DiaryPage trade={trade} onEdit={() => { setViewing(false); onToggle() }} onDelete={onDelete} />}
+      {viewing && !open && <DiaryPage trade={trade} num={num} onEdit={() => { setViewing(false); onToggle() }} onDelete={onDelete} />}
       {open && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 12px' }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
@@ -964,6 +964,10 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
 
   const shown = trades.filter(t => (!fPair || t.instrument === fPair) && (!fAlert || t.alert_type === fAlert) && (!fDir || t.direction === fDir))
   const pairs = Array.from(new Set(trades.map(t => t.instrument))).sort()
+  // The journal's own count: oldest trade is #1, and filtering never changes a trade's number
+  const tradeNum = useMemo(() => new Map([...trades]
+    .sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
+    .map((t, i) => [t.id, i + 1])), [trades])
   // The newest month you've logged is still running; earlier months are complete
   const latestMonth = trades.reduce((m, t) => (t.trade_date.slice(0, 7) > m ? t.trade_date.slice(0, 7) : m), '')
   // The remembered pair stays selectable even if it isn't in the standard list
@@ -1073,7 +1077,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
                     note={m.key === latestMonth ? 'month so far' : undefined}
                     openWith={m.trades.some(t => t.id === openId)}>
                     {m.trades.map(t => (
-                      <TradeCard key={t.id} trade={t} open={openId === t.id}
+                      <TradeCard key={t.id} trade={t} num={tradeNum.get(t.id) ?? 0} open={openId === t.id}
                         onToggle={() => setOpenId(openId === t.id ? null : t.id)}
                         onChange={update} onDelete={() => remove(t.id)}
                         onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />
