@@ -178,6 +178,7 @@ function Streak({ s }: { s: ReturnType<typeof streaks> }) {
 function Chip({ on, color, bg, onClick, children }: { on: boolean; color: string; bg: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
       padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer',
       border: `1px solid ${on ? color : 'var(--border)'}`, background: on ? bg : 'transparent',
       color: on ? color : 'var(--text-muted)', whiteSpace: 'nowrap',
@@ -495,47 +496,56 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
 }
 
 // ── One trade: tick each entry pattern's result ──────────────────────────────
-// A saved trade read back as a page of the diary
+// A saved trade read back as a page of the owner's diary
 function DiaryPage({ trade, onEdit }: { trade: Trade; onEdit: () => void }) {
   const only = useContext(OnlyPoi)
   const { user } = useAuth()
   const imgs = trade.images || {}
+  const note = trade.notes.trim()
   const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key])
   const story = buildStory({
     id: trade.id, name: user?.name, date: trade.trade_date, pair: trade.instrument, direction: trade.direction,
-    journal: only ? POIS.find(p => p.key === only)?.label : undefined, exitDate: trade.exit_date,
+    hasNote: !!note, exitDate: trade.exit_date,
     rows: types.map(t => {
       const r = trade.results[t.key]
       return { slot: t.key, label: (only ? t.model : t.label).replace(' (old)', ''), outcome: r.outcome, rr: r.rr, takes: r.takes, exit: r.exit, net: rOf(r) }
     }),
   })
   const pics = (slot: string, label: string) => imgs[slot]?.length
-    ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0 2px' }}>{imgs[slot].map(id => <Thumb key={id} id={id} label={label} />)}</div>
+    ? <div className="dp-pics">{imgs[slot].map(id => <Thumb key={id} id={id} label={label} />)}</div>
     : null
-  const para: React.CSSProperties = { fontSize: 14.5, lineHeight: 1.7, color: 'var(--text-primary)', margin: '0 0 10px' }
+  let n = 0
+  const line = () => ({ animationDelay: `${(n++) * 0.14}s` })   // each line drifts in after the one before
+  const journal = only ? POIS.find(p => p.key === only)?.label : ''
   return (
-    <div style={{ borderTop: '1px solid var(--border)', padding: '16px 20px 18px', background: 'var(--surface)' }}>
-      <div className="diary-script" style={{ fontSize: 26, color: 'var(--accent-hover)', marginBottom: 8 }}>{story.greeting}</div>
-      <p style={para}>{story.opening}</p>
-      {pics(only || '', 'Chart')}
-      {story.rows.map(r => (
-        <div key={r.slot} style={{ marginBottom: 10 }}>
-          <p style={{ ...para, margin: 0 }}><b style={{ color: 'var(--accent-hover)' }}>{r.label}:</b> {r.text}</p>
-          {pics(r.slot, r.label)}
+    <div className="dp-wrap">
+      <div className={`dp-page dp-${story.mood}`}>
+        {story.sparks.map((e, i) => <span key={i} className={`dp-spark dp-spark${i}`} aria-hidden>{e}</span>)}
+        <div className="dp-head dp-line" style={line()}>
+          <span className="dp-ribbon">{story.ribbon}</span>
+          <span className="dp-stamp">{journal ? `${journal} · ` : ''}{fmtDay(trade.trade_date)}</span>
         </div>
-      ))}
-      {/* Pictures on a row with no result ticked, so none go missing from the page */}
-      {Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).map(k => <div key={k}>{pics(k, 'Chart')}</div>)}
-      {trade.notes.trim() && (
-        <div style={{ margin: '14px 0', padding: '10px 14px', borderLeft: '3px solid var(--accent)', background: 'var(--card)', borderRadius: '0 8px 8px 0' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>What you wrote that day</div>
-          <div style={{ ...para, margin: 0, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>{trade.notes}</div>
+        <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
+        <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
+        {note && <div className="dp-note dp-line" style={line()}>{note}</div>}
+        {imgs[only]?.length ? <div className="dp-line" style={line()}>{pics(only, 'Chart')}</div> : null}
+        {story.rows.map(r => (
+          <div key={r.slot} className="dp-line" style={line()}>
+            <p className="dp-p">{r.text}</p>
+            {pics(r.slot, 'Chart')}
+          </div>
+        ))}
+        {/* Pictures on a row with no result ticked, so none go missing from the page */}
+        {Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).map(k => <div key={k} className="dp-line" style={line()}>{pics(k, 'Chart')}</div>)}
+        {story.held && <p className="dp-p dp-line" style={line()}>{story.held}</p>}
+        <p className="dp-p dp-close dp-line" style={line()}>{story.closing}</p>
+        <div className="dp-foot dp-line" style={line()}>
+          <div>
+            <div className="dp-yours">{story.yours}</div>
+            <div className="diary-script dp-sign">{story.signature}</div>
+          </div>
+          <Chip on={false} color="var(--accent)" bg="var(--accent-bg)" onClick={onEdit}><Pencil size={11} /> Edit this page</Chip>
         </div>
-      )}
-      <p style={{ ...para, fontWeight: 600 }}>{story.closing}</p>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-        <span className="diary-script" style={{ fontSize: 18, color: 'var(--text-secondary)' }}>Your diary 📖</span>
-        <Chip on={false} color="var(--accent)" bg="var(--accent-bg)" onClick={onEdit}><Pencil size={11} style={{ verticalAlign: -1 }} /> Edit this page</Chip>
       </div>
     </div>
   )
@@ -594,8 +604,8 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
           {tradeR.length > 0 && <> · best <b style={{ color: 'var(--bullish)' }}>{fmtR(Math.max(...tradeR))}</b></>}
         </span>
         <span onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
-          <Chip on={viewing} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { if (open) onToggle(); setViewing(!viewing) }}><Eye size={12} style={{ verticalAlign: -2 }} /> View</Chip>
-          <Chip on={open} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { setViewing(false); onToggle() }}><Pencil size={11} style={{ verticalAlign: -1 }} /> Edit</Chip>
+          <Chip on={viewing} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { if (open) onToggle(); setViewing(!viewing) }}><Eye size={12} /> View</Chip>
+          <Chip on={open} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { setViewing(false); onToggle() }}><Pencil size={11} /> Edit</Chip>
         </span>
       </div>
       {viewing && !open && <DiaryPage trade={trade} onEdit={() => { setViewing(false); onToggle() }} />}

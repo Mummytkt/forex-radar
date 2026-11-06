@@ -418,3 +418,42 @@ body {
 }
 .fairy-diary .diary-add:hover { filter: brightness(1.06); }
 .fairy-diary main table th { color: var(--text-secondary) !important; }
+
+/* A journal trade read as a page of the diary */
+.dp-wrap { padding: 14px; border-top: 1px solid var(--border); }
+.dp-page {
+  --mood: var(--accent);
+  position: relative; overflow: hidden; padding: 22px 26px 20px; border-radius: 14px;
+  border: 1px dashed color-mix(in srgb, var(--mood) 45%, transparent);
+  background:
+    radial-gradient(circle at 92% 6%, color-mix(in srgb, var(--mood) 16%, transparent), transparent 42%),
+    radial-gradient(circle at 4% 96%, color-mix(in srgb, var(--mood) 10%, transparent), transparent 46%),
+    var(--surface);
+  animation: dp-open 0.5s ease both;
+}
+.dp-page.dp-win { --mood: var(--bullish); }
+.dp-page.dp-loss { --mood: #E0888F; }
+.dp-page.dp-be { --mood: #E0B15C; }
+.dp-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.dp-ribbon { font-size: 11px; font-weight: 700; letter-spacing: 0.3px; padding: 3px 10px; border-radius: 999px; color: var(--mood); background: color-mix(in srgb, var(--mood) 14%, transparent); }
+.dp-stamp { font-size: 12px; color: var(--text-muted); }
+.dp-greet { font-size: 30px; line-height: 1.2; color: var(--accent-hover); margin-bottom: 10px; }
+.dp-p { position: relative; z-index: 1; font-size: 15px; line-height: 1.8; color: var(--text-primary); margin: 0 0 12px; }
+.dp-note { position: relative; z-index: 1; margin: -2px 0 14px; padding: 2px 0 2px 14px; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); font-size: 15px; font-style: italic; line-height: 1.8; color: var(--text-primary); white-space: pre-wrap; }
+.dp-pics { display: flex; gap: 8px; flex-wrap: wrap; margin: -4px 0 14px; }
+.dp-close { font-weight: 600; margin-top: 4px; }
+.dp-foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.dp-yours { font-size: 13px; color: var(--text-secondary); }
+.dp-sign { font-size: 28px; line-height: 1.25; color: var(--accent-hover); }
+.dp-line { animation: dp-rise 0.7s ease both; }
+.dp-spark { position: absolute; font-size: 16px; opacity: 0.4; pointer-events: none; animation: dp-float 7s ease-in-out infinite; }
+.dp-spark0 { top: 14%; right: 5%; }
+.dp-spark1 { top: 46%; right: 2.5%; font-size: 13px; animation-delay: 1.2s; }
+.dp-spark2 { bottom: 26%; right: 8%; font-size: 18px; animation-delay: 2.4s; }
+.dp-spark3 { bottom: 8%; left: 46%; font-size: 13px; animation-delay: 3.6s; }
+.dp-spark4 { top: 5%; left: 42%; font-size: 12px; animation-delay: 4.8s; }
+@keyframes dp-open { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes dp-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dp-float { 0%, 100% { transform: translateY(0) rotate(-4deg); opacity: 0.28; } 50% { transform: translateY(-9px) rotate(5deg); opacity: 0.6; } }
+@media (max-width: 600px) { .dp-wrap { padding: 8px; } .dp-page { padding: 16px; } .dp-spark { display: none; } }
+@media (prefers-reduced-motion: reduce) { .dp-page, .dp-line, .dp-spark { animation: none; } }
