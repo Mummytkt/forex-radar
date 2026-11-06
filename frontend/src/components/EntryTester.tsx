@@ -558,8 +558,9 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
               )
             })}
           </div>
-          <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
-            ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />
+          {/* H1 / M15 entry: pictures go on LC 1 and LC 2 only. A chart already saved up here still shows, so it can be seen or removed */}
+          {(POIS.find(p => p.key === poi)?.old || !!imgs[poi]?.length) && <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
+            ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />}
           {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map(t => {
             const r = trade.results[t.key]
             return (
