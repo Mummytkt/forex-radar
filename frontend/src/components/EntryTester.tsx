@@ -55,6 +55,9 @@ const POIS: { key: string; label: string; old?: boolean }[] = [
 ]
 const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string; retired: boolean }[] = POIS.flatMap(p =>
   (p.old ? OLD_MODELS : [...NEW_MODELS, ...RETIRED_MODELS]).map(m => ({ key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label, retired: 'retired' in m })))
+// The H4 alert picker is hidden for now (2026-11-06: the owner writes it in the notes). true brings all of it back:
+// the add bar, the filter, the trade's details and its header. Alerts on trades already saved stay stored.
+const SHOW_H4_ALERT = false
 // The H4 alert each trade came from (same names as Alert Filters)
 const ALERT_TYPES = [
   'Daily breakout', 'H4 continuation after the Daily breakout', 'H4 pullback confirmed', 'H4 continuation after the pullback',
@@ -537,7 +540,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
           {fmtDay(trade.trade_date)}
           {trade.exit_date && <> → {fmtDay(trade.exit_date)} <span style={{ color: 'var(--text-muted)' }}>· {heldFor(trade.trade_date, trade.exit_date)}</span></>}
         </span>
-        {trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
+        {SHOW_H4_ALERT && trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
           {done} ticked
           {tradeR.length > 0 && <> · best <b style={{ color: 'var(--bullish)' }}>{fmtR(Math.max(...tradeR))}</b></>}
@@ -654,10 +657,10 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
             </label>
             <Chip on={trade.direction === 'buy'} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => trade.direction !== 'buy' && onChange({ ...trade, direction: 'buy' })}>BUY</Chip>
             <Chip on={trade.direction === 'sell'} color="var(--bearish)" bg="var(--bearish-bg)" onClick={() => trade.direction !== 'sell' && onChange({ ...trade, direction: 'sell' })}>SELL</Chip>
-            <select value={trade.alert_type} title="H4 alert" onChange={e => onChange({ ...trade, alert_type: e.target.value })} style={selStyle}>
+            {SHOW_H4_ALERT && <select value={trade.alert_type} title="H4 alert" onChange={e => onChange({ ...trade, alert_type: e.target.value })} style={selStyle}>
               {!ALERT_TYPES.includes(trade.alert_type) && <option value={trade.alert_type}>{trade.alert_type || '—'}</option>}
               {ALERT_TYPES.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
+            </select>}
             <textarea defaultValue={trade.notes} placeholder="Notes (optional): saved when you click away" rows={3}
               onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${t.scrollHeight + 2}px` }}
               ref={t => { if (t && !t.dataset.sized) { t.dataset.sized = '1'; t.style.height = 'auto'; t.style.height = `${Math.max(t.scrollHeight + 2, 72)}px` } }}
@@ -828,7 +831,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
     save('mbp_et_alert', alertType)
     const r = await fetch(`${API_BASE}/api/entry-tests${bq}`, {
       method: 'POST', headers: hdrs(),
-      body: body({ trade_date: date, instrument: p, direction: dir, alert_type: alertType, notes: '', results: {}, images: {} }),
+      body: body({ trade_date: date, instrument: p, direction: dir, alert_type: SHOW_H4_ALERT ? alertType : '', notes: '', results: {}, images: {} }),
     })
     if (!r.ok) { setErr('Could not add the trade.'); return }
     const t: Trade = await r.json()
@@ -935,9 +938,9 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
           {date && <b style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{weekday(date)}</b>}
           <Chip on={dir === 'buy'} color="var(--bullish)" bg="var(--bullish-bg)" onClick={() => setDir('buy')}>BUY</Chip>
           <Chip on={dir === 'sell'} color="var(--bearish)" bg="var(--bearish-bg)" onClick={() => setDir('sell')}>SELL</Chip>
-          <select value={alertType} onChange={e => setAlertType(e.target.value)} style={selStyle}>
+          {SHOW_H4_ALERT && <select value={alertType} onChange={e => setAlertType(e.target.value)} style={selStyle}>
             {ALERT_TYPES.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+          </select>}
           <button onClick={addTrade} className={diary ? 'diary-add' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 700, marginLeft: 'auto' }}>
             <Plus size={14} /> {diary ? 'Add to my diary' : 'Add trade'}
           </button>
@@ -952,10 +955,10 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
               <option value="">All pairs</option>
               {pairs.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-            <select value={fAlert} onChange={e => setFAlert(e.target.value)} style={selStyle}>
+            {SHOW_H4_ALERT && <select value={fAlert} onChange={e => setFAlert(e.target.value)} style={selStyle}>
               <option value="">All H4 alerts</option>
               {ALERT_TYPES.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
+            </select>}
             <select value={fDir} onChange={e => setFDir(e.target.value)} style={selStyle}>
               <option value="">Buys and sells</option>
               <option value="buy">Buys</option>
@@ -969,7 +972,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
           : trades.length === 0 ? (
             <div data-diary-card="" style={{ background: 'var(--card)', border: '1px dashed var(--border)', borderRadius: 12, padding: '18px 20px', marginBottom: 20, color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.7 }}>
               <div className={diary ? 'diary-script' : undefined} style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6, fontSize: diary ? 24 : undefined }}>{diary ? 'Your first page is waiting 🌸' : 'How to log a trade'}</div>
-              <div><b>1.</b> In the bar above, pick the <b>pair</b>, the <b>date</b>, <b>BUY</b> or <b>SELL</b>, and the <b>H4 alert</b> it came from.</div>
+              <div><b>1.</b> In the bar above, pick the <b>pair</b>, the <b>date</b>, <b>BUY</b> or <b>SELL</b>{SHOW_H4_ALERT ? <>, and the <b>H4 alert</b> it came from</> : ''}.</div>
               <div><b>2.</b> Tap <b>Add trade</b>. The trade opens right here.</div>
               <div><b>3.</b> {jr.poi ? <>Tap</> : <>Pick the entry model tab, then tap</>} <b>Win</b>, <b>Loss</b>, <b>BE</b> or <b>No entry</b> on each {jr.poi ? 'confirmation model' : 'entry model'}. On a win, tap the RR.</div>
               <div><b>4.</b> Every tap saves. The results table fills in by itself.</div>
