@@ -506,7 +506,7 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
 
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 // A saved trade read back as a page of the owner's diary
-function DiaryPage({ trade, onEdit }: { trade: Trade; onEdit: () => void }) {
+function DiaryPage({ trade, onEdit, onDelete }: { trade: Trade; onEdit: () => void; onDelete: () => void }) {
   const only = useContext(OnlyPoi)
   const { user } = useAuth()
   const imgs = trade.images || {}
@@ -553,7 +553,13 @@ function DiaryPage({ trade, onEdit }: { trade: Trade; onEdit: () => void }) {
             <div className="dp-yours">{story.yours}</div>
             <div className="diary-script dp-sign">{story.signature}</div>
           </div>
-          <Chip on={false} color="var(--accent)" bg="var(--accent-bg)" onClick={onEdit}><Pencil size={11} /> Edit this page</Chip>
+          <span style={{ display: 'flex', gap: 6 }}>
+            <Chip on={false} color="var(--accent)" bg="var(--accent-bg)" onClick={onEdit}><Pencil size={11} /> Edit this page</Chip>
+            <button onClick={() => { if (confirm(`Delete this ${trade.instrument} trade?`)) onDelete() }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              <Trash2 size={12} /> Delete
+            </button>
+          </span>
         </div>
       </div>
     </div>
@@ -617,7 +623,7 @@ function TradeCard({ trade, open, onToggle, onChange, onImages, onDelete }: {
           <Chip on={open} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { setViewing(false); onToggle() }}><Pencil size={11} /> Edit</Chip>
         </span>
       </div>
-      {viewing && !open && <DiaryPage trade={trade} onEdit={() => { setViewing(false); onToggle() }} />}
+      {viewing && !open && <DiaryPage trade={trade} onEdit={() => { setViewing(false); onToggle() }} onDelete={onDelete} />}
       {open && (
         <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 12px' }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
