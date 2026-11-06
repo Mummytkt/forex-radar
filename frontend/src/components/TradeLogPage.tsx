@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
+import DateInput from '@/components/DateInput'
 import {
   TradeImage, getTradeImages, addTradeImage,
   deleteTradeImage, deleteAllTradeImages,
@@ -736,7 +737,7 @@ function TradeModal({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>Log Date</label>
-              <input type="date" value={form.trade_date} onChange={e => set('trade_date', e.target.value)} style={inputStyle} />
+              <DateInput fill value={form.trade_date} onChange={v => set('trade_date', v)} style={inputStyle} />
             </div>
             <div>
               <label style={labelStyle}>Instrument</label>
@@ -749,12 +750,12 @@ function TradeModal({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>Entry Date</label>
-              <input type="date" value={form.entry_date} onChange={e => set('entry_date', e.target.value)} style={inputStyle} />
+              <DateInput fill value={form.entry_date} onChange={v => set('entry_date', v)} style={inputStyle} />
               {form.entry_date && <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>{fmtLongDate(form.entry_date)}</p>}
             </div>
             <div>
               <label style={labelStyle}>Exit Date</label>
-              <input type="date" value={form.exit_date} onChange={e => handleExitDateTimeChange('exit_date', e.target.value)} style={inputStyle} />
+              <DateInput fill value={form.exit_date} onChange={v => handleExitDateTimeChange('exit_date', v)} style={inputStyle} />
               {form.exit_date && <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>{fmtLongDate(form.exit_date)}</p>}
             </div>
           </div>
@@ -981,7 +982,7 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
   // ── Modal helpers ──────────────────────────────────────────────────────────
   const openAdd = () => {
     setEditEntry(null)
-    setForm({ ...blank(), trade_date: new Date().toISOString().split('T')[0] })
+    setForm(blank())
     setModalOpen(true)
   }
   const openEdit = (e: Entry) => {

@@ -1,4 +1,5 @@
 'use client'
+import DateInput from '@/components/DateInput'
 import { useState, useEffect } from 'react'
 import useSWR, { mutate } from 'swr'
 import { Target, Trash2, Clock, CheckCircle2, Bell, Pencil, Zap } from 'lucide-react'
@@ -533,16 +534,11 @@ function EntryAlertsPanel({ instruments, prices }: {
               <option value="never">Never</option>
             </select>
             {expiry === 'custom' && (
-              <input
-                type="date"
-                value={customExpiry}
-                onChange={e => setCustomExpiry(e.target.value)}
-                style={{
+              <DateInput fill value={customExpiry} onChange={setCustomExpiry} style={{
                   marginTop: 8, width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
                   border: '1px solid var(--border)', background: 'var(--bg)',
                   color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
-                }}
-              />
+}} />
             )}
           </div>
 
@@ -1000,16 +996,11 @@ export default function PriceAlertsPage() {
                   <option value="never">Never</option>
                 </select>
                 {expiry === 'custom' && (
-                  <input
-                    type="date"
-                    value={customExpiry}
-                    onChange={e => setCustomExpiry(e.target.value)}
-                    style={{
+                  <DateInput fill value={customExpiry} onChange={setCustomExpiry} style={{
                       marginTop: 8, width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
                       border: '1px solid var(--border)', background: 'var(--bg)',
                       color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
-                    }}
-                  />
+}} />
                 )}
               </div>
 
