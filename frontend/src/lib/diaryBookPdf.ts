@@ -20,7 +20,7 @@ const SHEET_CSS = `
   .sheet .noteline { margin: 0; padding: 0 0 0 15px; border-left: 3px solid var(--note); font-style: italic; white-space: pre-wrap; }
   .sheet .noteend { margin-bottom: 15px; }
   .sheet table { table-layout: fixed; }
-  .sheet td.n { width: 23px; }
+  .sheet td.n { width: 42px; white-space: normal; }
   .sheet td:nth-child(2) { width: 33%; }
   .sheet td:nth-child(3) { width: 31%; }
   .sheet td.r { white-space: normal; }

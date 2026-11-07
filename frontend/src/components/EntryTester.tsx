@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { buildStory } from '@/lib/diaryStory'
 import { bookHtml, BOOK_WAIT, type BookChapter, type BookInput, type BookPage, type BookPicture } from '@/lib/diaryBook'
 import { downloadBookPdf } from '@/lib/diaryBookPdf'
+import { numberTrades, tradesWord, NO_NUM, type TradeNum } from '@/lib/tradeNumbers'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -509,7 +510,6 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
 }
 
 // ── One trade: tick each entry pattern's result ──────────────────────────────
-interface TradeNum { month: number; year: number }   // its place in its month and in its year
 // A saved trade read back as a page of the owner's diary
 function storyOf(trade: Trade, only: string, name?: string) {
   const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key])
@@ -541,7 +541,7 @@ function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeN
         {story.sparks.map((e, i) => <span key={i} className={`dp-spark dp-spark${i}`} aria-hidden>{e}</span>)}
         <div className="dp-head dp-line" style={line()}>
           <span className="dp-ribbon">{story.ribbon}</span>
-          <span className="dp-stamp">{monthName(trade.trade_date.slice(0, 7)).split(' ')[0]} trade {num.month} · {trade.trade_date.slice(0, 4)} trade {num.year} · {journal ? `${journal} · ` : ''}{fmtDay(trade.trade_date)}</span>
+          <span className="dp-stamp">{monthName(trade.trade_date.slice(0, 7)).split(' ')[0]} {tradesWord(num.month)} {num.month} · {trade.trade_date.slice(0, 4)} {tradesWord(num.year)} {num.year} · {journal ? `${journal} · ` : ''}{fmtDay(trade.trade_date)}</span>
         </div>
         <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
         <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
@@ -898,7 +898,7 @@ function periodSummary(list: Trade[], only: string): string {
       r += rOf(x) ?? 0
     }
   const buys = list.filter(t => t.direction === 'buy').length
-  return `${plural(list.length, 'trade')} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
+  return `${plural(list.length, 'setup')} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
 }
 function resultWord(t: Trade, only: string): string {
   return ENTRY_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key]).map(e => {
@@ -922,7 +922,7 @@ async function bookInput(opt: BookOptions): Promise<BookInput> {
     if (!c || c.title !== monthTitle) { c = { title: monthTitle, summary: '', pages: [] }; chapters.push(c) }
     const story = storyOf(t, only, name)
     const imgs = t.images || {}
-    const n = nums.get(t.id) ?? { month: 0, year: 0 }
+    const n = nums.get(t.id) ?? NO_NUM
     const page: BookPage = {
       monthNum: n.month, yearNum: n.year, monthWord: monthTitle.split(' ')[0], year: key.slice(0, 4), dayLabel: fmtDay(t.trade_date),
       pair: t.instrument, direction: t.direction, note: t.notes.trim(), story,
@@ -1073,14 +1073,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
 
   const shown = trades.filter(t => (!fPair || t.instrument === fPair) && (!fAlert || t.alert_type === fAlert) && (!fDir || t.direction === fDir))
   const pairs = Array.from(new Set(trades.map(t => t.instrument))).sort()
-  // The journal's own count: a new month starts again at 1, the year keeps going. Filtering never changes a number
-  const tradeNum = useMemo(() => {
-    const seen = new Map<string, number>()
-    const bump = (k: string) => { const n = (seen.get(k) ?? 0) + 1; seen.set(k, n); return n }
-    return new Map([...trades]
-      .sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
-      .map(t => [t.id, { month: bump(t.trade_date.slice(0, 7)), year: bump(t.trade_date.slice(0, 4)) } as TradeNum]))
-  }, [trades])
+  const tradeNum = useMemo(() => numberTrades(trades), [trades])
   // The newest month you've logged is still running; earlier months are complete
   const latestMonth = trades.reduce((m, t) => (t.trade_date.slice(0, 7) > m ? t.trade_date.slice(0, 7) : m), '')
   // The remembered pair stays selectable even if it isn't in the standard list
@@ -1237,7 +1230,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
                     note={m.key === latestMonth ? 'month so far' : undefined}
                     openWith={m.trades.some(t => t.id === openId)}>
                     {m.trades.map(t => (
-                      <TradeCard key={t.id} trade={t} num={tradeNum.get(t.id) ?? { month: 0, year: 0 }} open={openId === t.id}
+                      <TradeCard key={t.id} trade={t} num={tradeNum.get(t.id) ?? NO_NUM} open={openId === t.id}
                         onToggle={() => setOpenId(openId === t.id ? null : t.id)}
                         onChange={update} onDelete={() => remove(t.id)}
                         onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />

@@ -2,12 +2,13 @@
 // oldest first. This file only builds the page; it takes the words already written by diaryStory.ts, so the book
 // and the diary page on the site always read the same.
 import type { Story } from './diaryStory'
+import { tradesWord } from './tradeNumbers'
 
 export interface BookPicture { src: string | null }   // null: the picture could not be loaded
 export interface BookRow { text: string; pictures: BookPicture[] }
 export interface BookPage {
-  monthNum: number
-  yearNum: number
+  monthNum: string      // "5", or "5, 6" for a setup entered twice
+  yearNum: string
   monthWord: string      // "February"
   year: string
   dayLabel: string       // "Wed 5 Feb 2020"
@@ -47,7 +48,7 @@ function page(p: BookPage): string {
   return `<section class="page">
   <div class="head">
     <span class="ribbon" style="color:${MOOD[s.mood] || MOOD.open}">${esc(s.ribbon)}</span>
-    <span class="stamp">${esc(p.monthWord)} trade ${p.monthNum} · ${esc(p.year)} trade ${p.yearNum}<br>${esc(p.dayLabel)}</span>
+    <span class="stamp">${esc(p.monthWord)} ${tradesWord(p.monthNum)} ${esc(p.monthNum)} · ${esc(p.year)} ${tradesWord(p.yearNum)} ${esc(p.yearNum)}<br>${esc(p.dayLabel)}</span>
   </div>
   <div class="script greet">${esc(s.greeting)}</div>
   <p>${esc(s.opening)}${s.noNote ? ` ${esc(s.noNote)}` : ''}</p>
@@ -68,7 +69,7 @@ function chapter(c: BookChapter): string {
   <div class="script ctitle">${esc(c.title)}</div>
   <div class="csum">${esc(c.summary)}</div>
   <table>
-    ${c.pages.map(p => `<tr><td class="n">${p.monthNum}</td><td>${esc(p.dayLabel)}</td><td><b>${esc(p.pair)}</b> ${p.direction.toUpperCase()}</td><td class="r">${esc(p.resultWord)}</td></tr>`).join('\n    ')}
+    ${c.pages.map(p => `<tr><td class="n">${esc(p.monthNum)}</td><td>${esc(p.dayLabel)}</td><td><b>${esc(p.pair)}</b> ${p.direction.toUpperCase()}</td><td class="r">${esc(p.resultWord)}</td></tr>`).join('\n    ')}
   </table>
 </section>
 ${c.pages.map(page).join('\n')}`
@@ -97,7 +98,7 @@ export function bookHtml(b: BookInput): string {
   table { width: 100%; border-collapse: collapse; font-size: 8.5pt; line-height: 1.4; }
   tr { break-inside: avoid; }
   td { padding: 1.6mm 1mm; border-bottom: 0.5pt solid #e7e2ee; vertical-align: top; }
-  td.n { color: #8a8496; width: 6mm; }
+  td.n { color: #8a8496; width: 6mm; white-space: nowrap; }
   td.r { text-align: right; white-space: nowrap; font-weight: 600; }
   .page { break-before: page; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 4mm; margin-bottom: 3mm; }
