@@ -32,6 +32,7 @@ export interface BookInput {
   chapters: BookChapter[]
 }
 
+export const BOOK_FONTS = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@400;500;600;700&display=swap'
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const MOOD: Record<string, string> = { win: '#1F9D6B', loss: '#C9626B', be: '#C08A2E', out: '#7A7A95', open: '#7A7A95' }
 
@@ -76,7 +77,7 @@ ${c.pages.map(page).join('\n')}`
 export function bookHtml(b: BookInput): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <title>${esc(b.title)} - ${esc(b.owner)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="${BOOK_FONTS}" rel="stylesheet">
 <style>
   @page { size: A5; margin: 15mm 14mm 16mm; @bottom-center { content: counter(page); font: 9pt Quicksand, sans-serif; color: #8a8496; } }
   @page :first { margin: 0; @bottom-center { content: none; } }

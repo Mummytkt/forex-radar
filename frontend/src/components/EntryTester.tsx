@@ -1,14 +1,15 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X, Eye, Pencil, Check, Download } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X, Eye, Pencil, Check, Download, Printer } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
 import { API_BASE } from '@/lib/api'
 import DateInput from '@/components/DateInput'
 import { useAuth } from '@/lib/auth'
 import { buildStory } from '@/lib/diaryStory'
-import { bookHtml, BOOK_WAIT, type BookChapter, type BookPage, type BookPicture } from '@/lib/diaryBook'
+import { bookHtml, BOOK_WAIT, type BookChapter, type BookInput, type BookPage, type BookPicture } from '@/lib/diaryBook'
+import { downloadBookPdf } from '@/lib/diaryBookPdf'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -905,9 +906,8 @@ function resultWord(t: Trade, only: string): string {
     return `${x.outcome === 'win' ? 'Win' : x.outcome === 'loss' ? 'Loss' : 'BE'}${v != null ? ` ${fmtR(v)}` : ''}`
   }).join(', ')
 }
-async function openBook(w: Window, opt: {
-  list: Trade[]; only: string; name?: string; title: string; palette: string; filterNote: string; nums: Map<number, TradeNum>
-}) {
+type BookOptions = { list: Trade[]; only: string; name?: string; title: string; palette: string; filterNote: string; nums: Map<number, TradeNum> }
+async function bookInput(opt: BookOptions): Promise<BookInput> {
   const { list, only, name, title, palette, filterNote, nums } = opt
   const chrono = [...list].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
   const pictures = await fetchPictures(chrono.flatMap(t => Object.values(t.images || {}).flat()))
@@ -934,11 +934,14 @@ async function openBook(w: Window, opt: {
   for (const c of chapters) c.summary = periodSummary(chrono.filter(t => monthName(t.trade_date.slice(0, 7)) === c.title), only)
   const [ink, soft] = BOOK_INK[palette] || BOOK_INK.purple
   const firstM = chapters[0]?.title || '', lastM = chapters[chapters.length - 1]?.title || ''
-  const html = bookHtml({
+  return {
     title, owner: name?.trim() || 'My diary',
     span: firstM === lastM ? firstM : `${firstM} to ${lastM}`,
     stats: periodSummary(chrono, only), filterNote, accent: ink, accentSoft: soft, chapters,
-  })
+  }
+}
+async function printBook(w: Window, opt: BookOptions) {
+  const html = bookHtml(await bookInput(opt))
   w.document.open()
   w.document.write(html)
   w.document.close()
@@ -978,7 +981,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   const diary = !!jr.poi   // the Engulfing / Fresh Key Levels journals
   const [look, setLook] = useDiaryLook()
   const { user } = useAuth()
-  const [booking, setBooking] = useState(false)
+  const [booking, setBooking] = useState('')   // what the book buttons are busy with
   const bq = `?book=${book}`
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
@@ -1084,24 +1087,40 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   // A pair typed under "Other…" that has no trades yet can be removed again
   const customPair = !typing && !!pair && !stdPairs.includes(pair) && !pairs.includes(pair)
   const removePair = () => { setPair('XAUUSD'); save('mbp_et_pair', 'XAUUSD') }
+  const bookOptions = (): BookOptions => ({
+    list: shown, only: jr.poi, name: user?.name, title: DIARY_TITLE[book] || jr.title, palette: look.palette, nums: tradeNum,
+    filterNote: [fPair, fDir === 'buy' ? 'Buys only' : fDir === 'sell' ? 'Sells only' : ''].filter(Boolean).join(' · '),
+  })
+  // Straight to the device: a real PDF file
   const downloadBook = async () => {
+    setBooking('Gathering your pictures…')
+    setErr('')
+    try {
+      const opt = bookOptions()
+      const input = await bookInput(opt)
+      await downloadBookPdf(input, `${input.title} - ${input.owner}.pdf`.replace(/[\\/:*?"<>|]/g, ''), (done, total) => setBooking(`Making page ${done} of ${total}…`))
+    } catch {
+      setErr('Could not make the PDF. Try again, or use Print.')
+    } finally {
+      setBooking('')
+    }
+  }
+  // The browser's print box, for paper
+  const printTheBook = async () => {
     // Opened straight from the tap, or the browser blocks it as a pop-up
     const w = window.open('', '_blank')
     if (!w) { setErr('Your browser blocked the new tab for the book. Allow pop-ups for this site, then tap again.'); return }
     w.document.write(BOOK_WAIT)
     w.document.close()
-    setBooking(true)
+    setBooking('Preparing your book…')
     setErr('')
     try {
-      await openBook(w, {
-        list: shown, only: jr.poi, name: user?.name, title: DIARY_TITLE[book] || jr.title, palette: look.palette, nums: tradeNum,
-        filterNote: [fPair, fDir === 'buy' ? 'Buys only' : fDir === 'sell' ? 'Sells only' : ''].filter(Boolean).join(' · '),
-      })
+      await printBook(w, bookOptions())
     } catch {
       w.close()
       setErr('Could not prepare the book. Try again.')
     } finally {
-      setBooking(false)
+      setBooking('')
     }
   }
 
@@ -1179,10 +1198,17 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
               <option value="buy">Buys</option>
               <option value="sell">Sells</option>
             </select>
-            <button onClick={downloadBook} disabled={booking || shown.length === 0} title="The trades showing, as a book"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--accent)', cursor: booking ? 'wait' : 'pointer', fontSize: 13, fontWeight: 700 }}>
-              <Download size={14} /> {booking ? 'Preparing your book…' : 'Download as PDF'}
-            </button>
+            <span style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center', flexWrap: 'wrap' }}>
+              {booking && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{booking}</span>}
+              <button onClick={downloadBook} disabled={!!booking || shown.length === 0} title="Save the trades showing to this device as a PDF book"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'white', cursor: booking ? 'wait' : 'pointer', fontSize: 13, fontWeight: 700, opacity: booking ? 0.6 : 1 }}>
+                <Download size={14} /> Download PDF
+              </button>
+              <button onClick={printTheBook} disabled={!!booking || shown.length === 0} title="Open the trades showing as a book, ready to print"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--accent)', cursor: booking ? 'wait' : 'pointer', fontSize: 13, fontWeight: 700, opacity: booking ? 0.6 : 1 }}>
+                <Printer size={14} /> Print
+              </button>
+            </span>
           </div>
         )}
 
