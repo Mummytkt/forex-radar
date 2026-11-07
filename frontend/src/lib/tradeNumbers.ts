@@ -31,4 +31,30 @@ export function numberTrades(trades: Numbered[]): Map<number, TradeNum> {
   }))
 }
 
+// Every entry on a result: each one before the last was stopped out, so it is a loss; the last is the result ticked
+export function entriesIn(r: { outcome: string; takes?: number }): { w: number; l: number; be: number } {
+  if (r.outcome === 'none') return { w: 0, l: 0, be: 0 }
+  const before = Math.max((r.takes ?? 1) - 1, 0)
+  return { w: r.outcome === 'win' ? 1 : 0, l: before + (r.outcome === 'loss' ? 1 : 0), be: r.outcome === 'be' ? 1 : 0 }
+}
+
+// Win / loss streaks over every entry, oldest to newest. A BE or no entry is skipped (it doesn't end a streak).
+// now = the run still going at the newest entry.
+export function streaks(seq: { o: string; takes?: number }[]) {
+  let run = 0, runO: string | null = null, bestW = 0, worstL = 0
+  const step = (o: string) => {
+    if (o === runO) run++
+    else { runO = o; run = 1 }
+    if (o === 'win') bestW = Math.max(bestW, run)
+    else worstL = Math.max(worstL, run)
+  }
+  for (const x of seq) {
+    if (x.o === 'none') continue
+    const { w, l } = entriesIn({ outcome: x.o, takes: x.takes })
+    for (let i = 0; i < l; i++) step('loss')
+    if (w) step('win')
+  }
+  return { now: run, nowO: runO, bestW, worstL }
+}
+
 export const tradesWord = (num: string) => (num.includes(',') ? 'trades' : 'trade')

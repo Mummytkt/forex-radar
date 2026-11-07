@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { buildStory } from '@/lib/diaryStory'
 import { bookHtml, BOOK_WAIT, type BookChapter, type BookInput, type BookPage, type BookPicture } from '@/lib/diaryBook'
 import { downloadBookPdf } from '@/lib/diaryBookPdf'
-import { numberTrades, tradesWord, NO_NUM, type TradeNum } from '@/lib/tradeNumbers'
+import { numberTrades, tradesWord, entriesIn, streaks, NO_NUM, type TradeNum } from '@/lib/tradeNumbers'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -154,19 +154,6 @@ function rOf(r: EntryResult): number | null {
   return null
 }
 
-// Win / loss streaks over results oldest → newest. A BE or no entry is skipped
-// (it doesn't end a streak). now = the run still going at the newest result.
-function streaks(seq: { o: Outcome }[]) {
-  let run = 0, runO: Outcome | null = null, bestW = 0, worstL = 0
-  for (const x of seq) {
-    if (x.o !== 'win' && x.o !== 'loss') continue
-    if (x.o === runO) run++
-    else { runO = x.o; run = 1 }
-    if (x.o === 'win') bestW = Math.max(bestW, run)
-    else worstL = Math.max(worstL, run)
-  }
-  return { now: run, nowO: runO, bestW, worstL }
-}
 function Streak({ s }: { s: ReturnType<typeof streaks> }) {
   if (!s.nowO) return <span style={{ color: 'var(--text-muted)' }}>–</span>
   return (
@@ -234,40 +221,39 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       for (const t of ENTRY_TYPES) {
         const x = tr.results[t.key]
         if (!x || (only && t.poi !== only)) continue
-        if (x.outcome === 'win') w++
-        else if (x.outcome === 'loss') l++
-        else if (x.outcome === 'be') be++
+        const e = entriesIn(x)
+        w += e.w; l += e.l; be += e.be
         const v = rOf(x)
         if (v != null) r += v
       }
     return { w, l, be, r, buys: trades.filter(t => t.direction === 'buy').length, sells: trades.filter(t => t.direction === 'sell').length }
   }, [trades, only])
   const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
-    let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0
+    let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0, setups = 0
     // Each trade's result for this entry, oldest first: the run of wins and losses
-    const seq: { o: Outcome; r: number | null; tip: string }[] = []
+    const seq: { o: Outcome; r: number | null; takes?: number; tip: string }[] = []
     for (const tr of chrono) {
       const x = tr.results[t.key]
       if (x && x.outcome !== 'none')
-        seq.push({ o: x.outcome, r: rOf(x), tip: `${fmtDay(tr.trade_date)} · ${tr.instrument} ${tr.direction.toUpperCase()}` +
+        seq.push({ o: x.outcome, r: rOf(x), takes: x.takes, tip: `${fmtDay(tr.trade_date)} · ${tr.instrument} ${tr.direction.toUpperCase()}` +
           `${(x.takes ?? 1) > 1 ? ` · ${x.takes} trades` : ''}${x.exit ? ` · closed ${fmtDay(x.exit.slice(0, 10))} ${x.exit.slice(11, 16)} (${heldFor(tr.trade_date, x.exit.slice(0, 10))})` : ''}` })
     }
     for (const tr of trades) {
       const r = tr.results[t.key]
       if (!r) continue
-      if (r.outcome === 'win') { w++; if (r.rr != null) { rrSum += r.rr; rrN++ } else noRR++ }
-      else if (r.outcome === 'loss') l++
-      else if (r.outcome === 'be') be++
-      else none++
-      if (r.outcome !== 'none') trades_ += r.takes ?? 1
+      if (r.outcome === 'win') { if (r.rr != null) { rrSum += r.rr; rrN++ } else noRR++ }
+      if (r.outcome === 'none') none++
+      else setups++
+      const e = entriesIn(r)
+      w += e.w; l += e.l; be += e.be
+      trades_ += e.w + e.l + e.be
       const v = rOf(r)
       if (v != null) totalR += v
     }
-    const taken = w + l + be
-    return { ...t, w, l, be, none, taken, trades: trades_, noRR, totalR, seq, streak: streaks(seq),
-      winRate: taken ? (w / taken) * 100 : null,
+    return { ...t, w, l, be, none, taken: setups, trades: trades_, noRR, totalR, seq, streak: streaks(seq),
+      winRate: trades_ ? (w / trades_) * 100 : null,
       avgRR: rrN ? rrSum / rrN : null,
-      expectancy: taken ? totalR / taken : null }
+      expectancy: trades_ ? totalR / trades_ : null }
   }).filter(r => !r.retired || r.taken || r.none).sort((a, b) => (b.taken ? 1 : 0) - (a.taken ? 1 : 0) || b.totalR - a.totalR), [trades, poi, chrono])
 
   const tested = all.filter(r => r.taken || r.none)
@@ -281,8 +267,9 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         for (const p of POIS.filter(x => !only || x.key === only)) {
           const x = tr.results[`${m.key}_${p.key}`]
           if (!x || x.outcome === 'none') continue
-          n++
-          if (x.outcome === 'win') w++
+          const e = entriesIn(x)
+          n += e.w + e.l + e.be
+          w += e.w
           const v = rOf(x)
           if (v != null) r += v
         }
@@ -339,7 +326,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
               <th style={th} title="Trades placed, re-entries included">Trades</th><th style={th}>Win</th><th style={th}>Loss</th><th style={th}>BE</th>
               <th style={th}>No entry</th><th style={th}>Win %</th><th style={th}>Avg RR (wins)</th>
               <th style={th}>Total R</th><th style={th}>R / trade</th>
-              <th style={th} title="Wins / losses in a row: the run going now, the longest win run, the longest loss run. BE and no entry don't break a run.">Streak</th>
+              <th style={th} title="Wins / losses in a row, counting every entry: the run going now, the longest win run, the longest loss run. BE and no entry don't break a run.">Streak</th>
               <th style={{ ...th, textAlign: 'left' }} title="Each setup's result for this entry, oldest first. Hover a badge for the date and pair.">Results (oldest → newest)</th>
             </tr>
           </thead>
@@ -892,9 +879,8 @@ function periodSummary(list: Trade[], only: string): string {
     for (const t of ENTRY_TYPES) {
       const x = tr.results[t.key]
       if (!x || (only && t.poi !== only)) continue
-      if (x.outcome === 'win') w++
-      else if (x.outcome === 'loss') l++
-      else if (x.outcome === 'be') be++
+      const e = entriesIn(x)
+      w += e.w; l += e.l; be += e.be
       r += rOf(x) ?? 0
     }
   const buys = list.filter(t => t.direction === 'buy').length
