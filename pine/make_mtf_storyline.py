@@ -497,6 +497,7 @@ var float rg_lo  = na      // the story-timeframe range low (buys; sells: its hi
 var int   rg_lot = na
 var bool  rg_lf  = false   // the range low is still forming (price closed below the one set at the pullback)
 var bool  tk_bk  = false   // the pullback line is a broken high (sells: low): no low inside the move that broke it
+var bool  tk_sp  = false   // the replay ended with the old line closed through: the next continuation's line is the dip, as in the replay
 var float tk_pv  = na      // the pullback line BEFORE the current one (the range low if the line breaks)
 var int   tk_pvt = na
 string up = D > 0 ? "up" : "down"
@@ -689,7 +690,7 @@ f_seed(int t0, int w_) =>
             ln := dp
             lt := dt
             bk := false
-    [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt, bk]
+    [ln, lt, ex, et, eo, fm, dp, dt, pv, pvt, bk, sp]
 
 // a new story in direction d
 int   ns_d   = 0
@@ -758,12 +759,13 @@ if ns_d != 0
     array.clear(lg_v)
     array.clear(lg_t)
     f_leg(D > 0 ? XL : XH, D > 0 ? XLt : XHt)
-    [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt, s_bk] = f_seed(D > 0 ? XLt : XHt, D)
+    [s_ln, s_lt, s_ex, s_et, s_eo, s_fm, s_dp, s_dt, s_pv, s_pvt, s_bk, s_sp] = f_seed(D > 0 ? XLt : XHt, D)
     tk_pv  := s_pv
     tk_pvt := s_pvt
     rl_x   := D > 0 ? XL : XH
     rl_xt  := D > 0 ? XLt : XHt
     tk_bk  := s_bk
+    tk_sp  := s_sp
     rg_lf  := false
     w      := D
     tk_ln  := s_ln
@@ -807,12 +809,13 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         // itself (no new low) = the last low inside the move, or the broken high itself
         [i_ln, i_lt] = f_inner(tk_dt, w, array.size(q2t) - 1)
         bool inner_ = not na(i_lt) and i_lt > tk_dt
-        bool newlo_ = not na(tk_ln) and f_gt(tk_dip, tk_ln, w)
+        bool newlo_ = tk_sp or (not na(tk_ln) and f_gt(tk_dip, tk_ln, w))
         tk_pv  := tk_ln
         tk_pvt := tk_lt
         tk_ln  := inner_ ? i_ln : newlo_ ? tk_dip : tk_ext
         tk_lt  := inner_ ? i_lt : newlo_ ? tk_dt : tk_et
         tk_bk  := not inner_ and not newlo_
+        tk_sp  := false
         f_leg(tk_dip, tk_dt)
         if sph == 1
             [rx0, rx0t] = f_far(tk_ln, w)
@@ -866,6 +869,7 @@ if D != 0 and x2_new and not t1_ev and sph >= 1
         tk_pv  := na
         tk_pvt := na
         tk_bk  := false
+        tk_sp  := false
         w      := -w
         bool cl_ok = not na(cl0) and f_gt(x2c, cl0, w)
         tk_ln  := cl_ok ? cl0 : (w > 0 ? x2L : x2H)
