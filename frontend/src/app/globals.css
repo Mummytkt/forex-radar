@@ -20,6 +20,8 @@
   --bullish-bg: rgba(34,197,94,0.12);
   --bearish: #F43F5E;
   --bearish-bg: rgba(244,63,94,0.12);
+  --loss: #FF3B3B;
+  --loss-bg: rgba(255,59,59,0.14);
   --warning: #F59E0B;
   --warning-bg: rgba(245,158,11,0.12);
   --info: #3B82F6;
@@ -46,6 +48,8 @@
   --bullish-bg: rgba(22,163,74,0.10);
   --bearish: #DC2626;
   --bearish-bg: rgba(220,38,38,0.10);
+  --loss: #DC2626;
+  --loss-bg: rgba(220,38,38,0.10);
   --warning: #D97706;
   --warning-bg: rgba(217,119,6,0.10);
   --info: #2563EB;
@@ -432,7 +436,7 @@ body {
   animation: dp-open 0.5s ease backwards;
 }
 .dp-page.dp-win { --mood: var(--bullish); }
-.dp-page.dp-loss { --mood: #E0888F; }
+.dp-page.dp-loss { --mood: var(--loss); }
 .dp-page.dp-be { --mood: #E0B15C; }
 .dp-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .dp-ribbon { font-size: 11px; font-weight: 700; letter-spacing: 0.3px; padding: 3px 10px; border-radius: 999px; color: var(--mood); background: color-mix(in srgb, var(--mood) 14%, transparent); }

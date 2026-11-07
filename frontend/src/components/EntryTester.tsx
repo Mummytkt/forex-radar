@@ -69,7 +69,7 @@ const ALERT_TYPES = [
 ]
 const OUTCOMES: { key: Outcome; label: string; color: string; bg: string }[] = [
   { key: 'win', label: 'Win', color: 'var(--bullish)', bg: 'var(--bullish-bg)' },
-  { key: 'loss', label: 'Loss', color: 'var(--bearish)', bg: 'var(--bearish-bg)' },
+  { key: 'loss', label: 'Loss', color: 'var(--loss)', bg: 'var(--loss-bg)' },
   { key: 'be', label: 'BE', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   { key: 'none', label: 'No entry', color: 'var(--text-muted)', bg: 'var(--surface)' },
 ]
@@ -170,9 +170,9 @@ function Streak({ s }: { s: ReturnType<typeof streaks> }) {
   if (!s.nowO) return <span style={{ color: 'var(--text-muted)' }}>–</span>
   return (
     <span title="Now = the run still going (newest results). Longest wins / losses in a row. BE and no entry don't break a run.">
-      <b style={{ color: s.nowO === 'win' ? SOFT.up : SOFT.dn }}>{s.now}{s.nowO === 'win' ? 'W' : 'L'} now</b>
+      <b style={{ color: s.nowO === 'win' ? SOFT.up : SOFT.loss }}>{s.now}{s.nowO === 'win' ? 'W' : 'L'} now</b>
       <span style={{ color: 'var(--text-muted)' }}> · best </span><b style={{ color: SOFT.up }}>{s.bestW}W</b>
-      <span style={{ color: 'var(--text-muted)' }}> · worst </span><b style={{ color: SOFT.dn }}>{s.worstL}L</b>
+      <span style={{ color: 'var(--text-muted)' }}> · worst </span><b style={{ color: SOFT.loss }}>{s.worstL}L</b>
     </span>
   )
 }
@@ -200,6 +200,8 @@ const SOFT = {
   be: 'rgba(245,158,11,0.72)', ac: 'color-mix(in srgb, var(--accent) 75%, var(--text-secondary))',
   row: 'rgba(127,127,127,0.07)', upBg: 'color-mix(in srgb, var(--bullish) 9%, transparent)',
   dnBg: 'color-mix(in srgb, var(--bearish) 9%, transparent)', beBg: 'rgba(245,158,11,0.08)',
+  // A loss is a plain, full-strength red, never softened and not the pink a SELL uses
+  loss: 'var(--loss)', lossBg: 'var(--loss-bg)',
 }
 
 // The results table: for all trades (title "Which entry holds up best"), or one
@@ -299,11 +301,11 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         {note && <span className="diary-sum" style={{ fontSize: 11, fontWeight: 700, color: SOFT.be }}>{note}</span>}
         <span className="diary-sum" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           {trades.length} setup{trades.length === 1 ? '' : 's'} · <b style={{ color: SOFT.up }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: SOFT.dn }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
-          {' · '}entries: <b style={{ color: SOFT.up }}>{tot.w} W</b> · <b style={{ color: SOFT.dn }}>{tot.l} L</b> · <b style={{ color: SOFT.be }}>{tot.be} BE</b>
-          {' · '}<b style={{ color: tot.r > 0 ? SOFT.up : tot.r < 0 ? SOFT.dn : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
+          {' · '}entries: <b style={{ color: SOFT.up }}>{tot.w} W</b> · <b style={{ color: SOFT.loss }}>{tot.l} L</b> · <b style={{ color: SOFT.be }}>{tot.be} BE</b>
+          {' · '}<b style={{ color: tot.r > 0 ? SOFT.up : tot.r < 0 ? SOFT.loss : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
           {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
-        {best && <span className="diary-sum" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
+        {best && <span className="diary-sum" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: best.r < 0 ? SOFT.loss : SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
       </div>
       {open && children && (
         <div onClick={() => setReport(!report)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 14px 8px', padding: '7px 10px',
@@ -358,13 +360,13 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                   <td style={{ ...td, fontWeight: 700 }}>{g.taken}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{g.trades}</td>
                   <td style={{ ...td, fontWeight: 700, color: SOFT.up }}>{g.w}</td>
-                  <td style={{ ...td, fontWeight: 700, color: SOFT.dn }}>{g.l}</td>
+                  <td style={{ ...td, fontWeight: 700, color: SOFT.loss }}>{g.l}</td>
                   <td style={{ ...td, fontWeight: 700, color: SOFT.be }}>{g.be}</td>
                   <td style={{ ...td, color: 'var(--text-muted)' }}>{g.none}</td>
                   <td style={{ ...td, fontWeight: 800 }}>{gTaken ? `${((g.w / gTaken) * 100).toFixed(0)}%` : '–'}</td>
                   <td style={td}></td>
-                  <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? SOFT.up : g.totalR < 0 ? SOFT.dn : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
-                  <td style={td}>{gTaken ? fmtR(g.totalR / gTaken) : '–'}</td>
+                  <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? SOFT.up : g.totalR < 0 ? SOFT.loss : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
+                  <td style={g.totalR < 0 ? { ...td, color: SOFT.loss } : td}>{gTaken ? fmtR(g.totalR / gTaken) : '–'}</td>
                   <td style={td}></td>
                   <td style={td}></td>
                 </tr>,
@@ -374,21 +376,21 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                 <td style={td}>{r.taken}</td>
                 <td style={{ ...td, color: r.trades > r.taken ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.trades}</td>
                 <td style={{ ...td, color: SOFT.up }}>{r.w}</td>
-                <td style={{ ...td, color: SOFT.dn }}>{r.l}</td>
+                <td style={{ ...td, color: SOFT.loss }}>{r.l}</td>
                 <td style={{ ...td, color: SOFT.be }}>{r.be}</td>
                 <td style={{ ...td, color: 'var(--text-muted)' }}>{r.none}</td>
                 <td style={{ ...td, fontWeight: 700 }}>{r.winRate == null ? '–' : `${r.winRate.toFixed(0)}%`}</td>
                 <td style={td}>{r.avgRR == null ? '–' : r.avgRR.toFixed(2)}{r.noRR ? <span title="Wins with no RR set" style={{ color: 'var(--text-muted)' }}> ({r.noRR}?)</span> : null}</td>
-                <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? SOFT.up : r.totalR < 0 ? SOFT.dn : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
-                <td style={td}>{r.expectancy == null ? '–' : fmtR(r.expectancy)}</td>
+                <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? SOFT.up : r.totalR < 0 ? SOFT.loss : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
+                <td style={r.expectancy != null && r.expectancy < 0 ? { ...td, color: SOFT.loss } : td}>{r.expectancy == null ? '–' : fmtR(r.expectancy)}</td>
                 <td style={td}><Streak s={r.streak} /></td>
                 <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal' }}>
                   <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', maxWidth: 380 }}>
                     {r.seq.map((x, i) => (
                       <span key={i} title={`${x.tip}${x.r != null ? ` · ${fmtR(x.r)}` : ''}`}
                         style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 5px', borderRadius: 5,
-                          color: x.o === 'win' ? SOFT.up : x.o === 'loss' ? SOFT.dn : SOFT.be,
-                          background: x.o === 'win' ? SOFT.upBg : x.o === 'loss' ? SOFT.dnBg : SOFT.beBg }}>
+                          color: x.o === 'win' ? SOFT.up : x.o === 'loss' ? SOFT.loss : SOFT.be,
+                          background: x.o === 'win' ? SOFT.upBg : x.o === 'loss' ? SOFT.lossBg : SOFT.beBg }}>
                         {x.o === 'win' ? 'W' : x.o === 'loss' ? 'L' : 'BE'}{x.r != null && x.o !== 'loss' ? ` ${x.r > 0 ? '+' : ''}${+x.r.toFixed(2)}` : x.r != null && x.r !== -1 ? ` ${+x.r.toFixed(2)}` : ''}
                       </span>
                     ))}
@@ -625,7 +627,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
         {SHOW_H4_ALERT && trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
           {done} ticked
-          {tradeR.length > 0 && <> · best <b style={{ color: 'var(--bullish)' }}>{fmtR(Math.max(...tradeR))}</b></>}
+          {tradeR.length > 0 && <> · best <b style={{ color: Math.max(...tradeR) > 0 ? 'var(--bullish)' : Math.max(...tradeR) < 0 ? 'var(--loss)' : 'var(--text-muted)' }}>{fmtR(Math.max(...tradeR))}</b></>}
         </span>
         <span onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
           <Chip on={viewing} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { if (open) onToggle(); setViewing(!viewing) }}><Eye size={12} /> View</Chip>
@@ -710,7 +712,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
                     {(r.takes ?? 1) > 1 && (() => { const v = rOf(r); return (
                       <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 4 }}>
                         {(r.takes ?? 1) - 1} stop-out{(r.takes ?? 1) > 2 ? 's' : ''} then {r.outcome === 'win' ? 'a win' : r.outcome === 'loss' ? 'a loss' : r.rr ? `a close at ${fmtR(r.rr)}` : 'BE'}
-                        {v != null && <> = <b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-muted)' }}>{fmtR(v)}</b> overall</>}
+                        {v != null && <> = <b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--loss)' : 'var(--text-muted)' }}>{fmtR(v)}</b> overall</>}
                       </span>) })()}
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 2px 0 12px' }} title="When this entry's trade was closed">Exit</span>
                     <DateText withTime value={r.exit} min={trade.trade_date}

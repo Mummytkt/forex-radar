@@ -34,7 +34,7 @@ export interface BookInput {
 
 export const BOOK_FONTS = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@400;500;600;700&display=swap'
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-const MOOD: Record<string, string> = { win: '#1F9D6B', loss: '#C9626B', be: '#C08A2E', out: '#7A7A95', open: '#7A7A95' }
+const MOOD: Record<string, string> = { win: '#1F9D6B', loss: '#DC2626', be: '#C08A2E', out: '#7A7A95', open: '#7A7A95' }
 
 const pics = (list: BookPicture[]) => list.length
   ? `<div class="pics">${list.map(p => p.src
