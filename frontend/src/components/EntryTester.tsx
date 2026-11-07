@@ -614,7 +614,9 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
         {SHOW_H4_ALERT && trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
           {done} ticked
-          {tradeR.length > 0 && <> · best <b style={{ color: Math.max(...tradeR) > 0 ? 'var(--bullish)' : Math.max(...tradeR) < 0 ? 'var(--loss)' : 'var(--text-muted)' }}>{fmtR(Math.max(...tradeR))}</b></>}
+          {tradeR.length > 0 && <> · outcome {tradeR.map((v, i) => (
+            <span key={i}>{i > 0 && ' / '}<b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--loss)' : 'var(--text-muted)' }}>{fmtR(v)}</b></span>
+          ))}</>}
         </span>
         <span onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
           <Chip on={viewing} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { if (open) onToggle(); setViewing(!viewing) }}><Eye size={12} /> View</Chip>
