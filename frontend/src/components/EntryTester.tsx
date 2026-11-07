@@ -1,13 +1,14 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, createContext, useContext } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X, Eye, Pencil, Check } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Trophy, FlaskConical, Camera, X, Eye, Pencil, Check, Download } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { INSTRUMENTS } from '@/components/TradeLogPage'
 import { API_BASE } from '@/lib/api'
 import DateInput from '@/components/DateInput'
 import { useAuth } from '@/lib/auth'
 import { buildStory } from '@/lib/diaryStory'
+import { bookHtml, BOOK_WAIT, type BookChapter, type BookPage, type BookPicture } from '@/lib/diaryBook'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -507,20 +508,24 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 interface TradeNum { month: number; year: number }   // its place in its month and in its year
 // A saved trade read back as a page of the owner's diary
-function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeNum; onEdit: () => void; onDelete: () => void }) {
-  const only = useContext(OnlyPoi)
-  const { user } = useAuth()
-  const imgs = trade.images || {}
-  const note = trade.notes.trim()
+function storyOf(trade: Trade, only: string, name?: string) {
   const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key])
-  const story = buildStory({
-    id: trade.id, name: user?.name, date: trade.trade_date, pair: trade.instrument, direction: trade.direction,
-    hasNote: !!note, exitDate: trade.exit_date,
+  return buildStory({
+    id: trade.id, name, date: trade.trade_date, pair: trade.instrument, direction: trade.direction,
+    hasNote: !!trade.notes.trim(), exitDate: trade.exit_date,
     rows: types.map(t => {
       const r = trade.results[t.key]
       return { slot: t.key, label: (only ? t.model : t.label).replace(' (old)', ''), outcome: r.outcome, rr: r.rr, takes: r.takes, exit: r.exit, net: rOf(r) }
     }),
   })
+}
+
+function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeNum; onEdit: () => void; onDelete: () => void }) {
+  const only = useContext(OnlyPoi)
+  const { user } = useAuth()
+  const imgs = trade.images || {}
+  const note = trade.notes.trim()
+  const story = storyOf(trade, only, user?.name)
   const pics = (slot: string, label: string) => imgs[slot]?.length
     ? <div className="dp-pics">{imgs[slot].map(id => <Thumb key={id} id={id} label={label} />)}</div>
     : null
@@ -851,6 +856,100 @@ function DiaryCover({ title, sub, trades, look, setLook }: { title: string; sub:
   )
 }
 
+// ── The journal as a book (saved as a PDF from the browser's print box) ──────
+const BOOK_INK: Record<string, [string, string]> = {
+  purple: ['#7B3FC9', '#E4D2FF'], ice: ['#2479B3', '#CFE9FB'], pink: ['#C44D86', '#FFD3E6'], peach: ['#D0663A', '#FFE0D0'], mint: ['#1F9176', '#CFF3E7'],
+}
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
+async function fetchPicture(id: number): Promise<BookPicture> {
+  try {
+    const r = await fetch(`${API_BASE}/api/entry-tests/images/${id}`, { headers: authHdr() })
+    if (!r.ok) return { src: null }
+    const b = await r.blob()
+    return { src: await new Promise<string>((ok, no) => {
+      const f = new FileReader()
+      f.onload = () => ok(String(f.result))
+      f.onerror = no
+      f.readAsDataURL(b)
+    }) }
+  } catch { return { src: null } }
+}
+// A few at a time, so a long journal doesn't flood the server
+async function fetchPictures(ids: number[]): Promise<Map<number, BookPicture>> {
+  const out = new Map<number, BookPicture>()
+  const todo = [...ids]
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    for (let id = todo.shift(); id != null; id = todo.shift()) out.set(id, await fetchPicture(id))
+  }))
+  return out
+}
+function periodSummary(list: Trade[], only: string): string {
+  let w = 0, l = 0, be = 0, r = 0
+  for (const tr of list)
+    for (const t of ENTRY_TYPES) {
+      const x = tr.results[t.key]
+      if (!x || (only && t.poi !== only)) continue
+      if (x.outcome === 'win') w++
+      else if (x.outcome === 'loss') l++
+      else if (x.outcome === 'be') be++
+      r += rOf(x) ?? 0
+    }
+  const buys = list.filter(t => t.direction === 'buy').length
+  return `${plural(list.length, 'trade')} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
+}
+function resultWord(t: Trade, only: string): string {
+  return ENTRY_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key]).map(e => {
+    const x = t.results[e.key]
+    if (x.outcome === 'none') return 'No entry'
+    const v = rOf(x)
+    return `${x.outcome === 'win' ? 'Win' : x.outcome === 'loss' ? 'Loss' : 'BE'}${v != null ? ` ${fmtR(v)}` : ''}`
+  }).join(', ')
+}
+async function openBook(w: Window, opt: {
+  list: Trade[]; only: string; name?: string; title: string; palette: string; filterNote: string; nums: Map<number, TradeNum>
+}) {
+  const { list, only, name, title, palette, filterNote, nums } = opt
+  const chrono = [...list].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
+  const pictures = await fetchPictures(chrono.flatMap(t => Object.values(t.images || {}).flat()))
+  const take = (ids?: number[]) => (ids || []).map(id => pictures.get(id) ?? { src: null })
+  const chapters: BookChapter[] = []
+  for (const t of chrono) {
+    const key = t.trade_date.slice(0, 7)
+    const monthTitle = monthName(key)
+    let c = chapters[chapters.length - 1]
+    if (!c || c.title !== monthTitle) { c = { title: monthTitle, summary: '', pages: [] }; chapters.push(c) }
+    const story = storyOf(t, only, name)
+    const imgs = t.images || {}
+    const n = nums.get(t.id) ?? { month: 0, year: 0 }
+    const page: BookPage = {
+      monthNum: n.month, yearNum: n.year, monthWord: monthTitle.split(' ')[0], year: key.slice(0, 4), dayLabel: fmtDay(t.trade_date),
+      pair: t.instrument, direction: t.direction, note: t.notes.trim(), story,
+      topPictures: take(imgs[only]),
+      rows: story.rows.map(r => ({ text: r.text, pictures: take(imgs[r.slot]) })),
+      otherPictures: take(Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).flatMap(k => imgs[k])),
+      resultWord: resultWord(t, only),
+    }
+    c.pages.push(page)
+  }
+  for (const c of chapters) c.summary = periodSummary(chrono.filter(t => monthName(t.trade_date.slice(0, 7)) === c.title), only)
+  const [ink, soft] = BOOK_INK[palette] || BOOK_INK.purple
+  const firstM = chapters[0]?.title || '', lastM = chapters[chapters.length - 1]?.title || ''
+  const html = bookHtml({
+    title, owner: name?.trim() || 'My diary',
+    span: firstM === lastM ? firstM : `${firstM} to ${lastM}`,
+    stats: periodSummary(chrono, only), filterNote, accent: ink, accentSoft: soft, chapters,
+  })
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
+  // Print once the pictures and the handwriting font are really there, or they come out blank
+  const imgs = Array.from(w.document.images)
+  await Promise.all(imgs.map(i => i.complete ? null : new Promise(ok => { i.onload = ok; i.onerror = ok })))
+  await Promise.race([w.document.fonts.ready, new Promise(ok => setTimeout(ok, 4000))])
+  w.focus()
+  w.print()
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 // book "backtest" (Backtest page, every POI) or a live journal on the Trading Journal
 // page: "live_engulfing" / "live_h4_key", each its own trades, limited to that POI
@@ -878,6 +977,8 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   const jr = JOURNAL[book]
   const diary = !!jr.poi   // the Engulfing / Fresh Key Levels journals
   const [look, setLook] = useDiaryLook()
+  const { user } = useAuth()
+  const [booking, setBooking] = useState(false)
   const bq = `?book=${book}`
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
@@ -983,6 +1084,26 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   // A pair typed under "Other…" that has no trades yet can be removed again
   const customPair = !typing && !!pair && !stdPairs.includes(pair) && !pairs.includes(pair)
   const removePair = () => { setPair('XAUUSD'); save('mbp_et_pair', 'XAUUSD') }
+  const downloadBook = async () => {
+    // Opened straight from the tap, or the browser blocks it as a pop-up
+    const w = window.open('', '_blank')
+    if (!w) { setErr('Your browser blocked the new tab for the book. Allow pop-ups for this site, then tap again.'); return }
+    w.document.write(BOOK_WAIT)
+    w.document.close()
+    setBooking(true)
+    setErr('')
+    try {
+      await openBook(w, {
+        list: shown, only: jr.poi, name: user?.name, title: DIARY_TITLE[book] || jr.title, palette: look.palette, nums: tradeNum,
+        filterNote: [fPair, fDir === 'buy' ? 'Buys only' : fDir === 'sell' ? 'Sells only' : ''].filter(Boolean).join(' · '),
+      })
+    } catch {
+      w.close()
+      setErr('Could not prepare the book. Try again.')
+    } finally {
+      setBooking(false)
+    }
+  }
 
   return (
     <div className={diary ? `fairy-diary dp-${look.palette} dt-${look.text} ds-${look.size}` : undefined}
@@ -1058,6 +1179,10 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
               <option value="buy">Buys</option>
               <option value="sell">Sells</option>
             </select>
+            <button onClick={downloadBook} disabled={booking || shown.length === 0} title="The trades showing, as a book"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--accent)', cursor: booking ? 'wait' : 'pointer', fontSize: 13, fontWeight: 700 }}>
+              <Download size={14} /> {booking ? 'Preparing your book…' : 'Download as PDF'}
+            </button>
           </div>
         )}
 
