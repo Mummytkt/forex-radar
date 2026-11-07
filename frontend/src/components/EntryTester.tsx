@@ -288,8 +288,8 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         <span className="diary-sum" style={{ fontSize: kind === 'month' ? 14 : 15, fontWeight: 800, color: 'var(--text-primary)' }}>{title || 'Which entry holds up best'}</span>
         {note && <span className="diary-sum" style={{ fontSize: 11, fontWeight: 700, color: SOFT.be }}>{note}</span>}
         <span className="diary-sum" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {trades.length} setup{trades.length === 1 ? '' : 's'} · <b style={{ color: SOFT.up }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: SOFT.dn }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
-          {' · '}entries: <b style={{ color: SOFT.up }}>{tot.w} W</b> · <b style={{ color: SOFT.loss }}>{tot.l} L</b> · <b style={{ color: SOFT.be }}>{tot.be} BE</b>
+          {trades.length} setup{trades.length === 1 ? '' : 's'} · {tot.w + tot.l + tot.be} {tot.w + tot.l + tot.be === 1 ? 'entry' : 'entries'} · <b style={{ color: SOFT.up }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: SOFT.dn }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
+          {' · '}<b style={{ color: SOFT.up }}>{tot.w} W</b> · <b style={{ color: SOFT.loss }}>{tot.l} L</b> · <b style={{ color: SOFT.be }}>{tot.be} BE</b>
           {' · '}<b style={{ color: tot.r > 0 ? SOFT.up : tot.r < 0 ? SOFT.loss : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
           {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
@@ -884,7 +884,8 @@ function periodSummary(list: Trade[], only: string): string {
       r += rOf(x) ?? 0
     }
   const buys = list.filter(t => t.direction === 'buy').length
-  return `${plural(list.length, 'setup')} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
+  const entries = w + l + be
+  return `${plural(list.length, 'setup')} · ${entries} ${entries === 1 ? 'entry' : 'entries'} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
 }
 function resultWord(t: Trade, only: string): string {
   return ENTRY_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key]).map(e => {
