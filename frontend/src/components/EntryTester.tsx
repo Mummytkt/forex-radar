@@ -298,7 +298,6 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         </span>
         {best && <span className="diary-sum" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: best.r < 0 ? SOFT.loss : SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
       </div>
-      {only === 'chk' && kind && <ChecklistCount trades={trades} />}
       {open && children && (
         <div onClick={() => setReport(!report)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 14px 8px', padding: '7px 10px',
           borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
@@ -306,6 +305,8 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         </div>
       )}
       {open && (report || !children) && <>
+      {/* The checklist's count sits in the report, so the summary line stays calm */}
+      {only === 'chk' && <ChecklistCount trades={trades} />}
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
         {only ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Confirmation models, best first</span> : <>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Group by</span>
@@ -554,11 +555,12 @@ function ChecklistRead({ value }: { value: Checklist }) {
     </div>
   )
 }
-// Under a month's or year's summary: how often each box was ticked, so the consistency shows
+// Inside a month's or year's report (opened on request): how often each box was ticked, so the consistency shows
 function ChecklistCount({ trades }: { trades: Trade[] }) {
   const c = checklistCounts(trades.map(t => t.checklist))
   return (
-    <div className="diary-sum" style={{ display: 'flex', gap: '4px 12px', flexWrap: 'wrap', padding: '0 14px 8px 38px', fontSize: 12, color: 'var(--text-muted)' }}>
+    <div className="diary-sum" style={{ display: 'flex', gap: '4px 12px', flexWrap: 'wrap', padding: '0 14px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+      <b style={{ color: 'var(--text-secondary)' }}>Checklist</b>
       {c.items.map(i => (
         <span key={i.key}>{i.label} <b style={{ color: i.count === c.n ? 'var(--bullish)' : 'var(--text-secondary)' }}>{i.count}/{c.n}</b></span>
       ))}
