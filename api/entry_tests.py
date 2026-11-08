@@ -94,12 +94,12 @@ BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key
 CHECK_ITEMS: list[tuple[str, str]] = [
     ("h4_liq", "H4 Liquidity"),
     ("h1_liq_only", "H1 Liquidity only"),
-    ("octgd_1h", "1hr OCTGD"),
-    ("cisd_1h", "1hr CISD"),
     ("sl_kl_poi", "SL behind KL POI"),
     ("sl_1h_candle", "SL behind 1hr candle"),
     ("kl_reaction", "Reaction from an actual key level in the POI"),
 ]
+# Taken off the checklist on 2026-11-08 (now entry types): a tick already saved on them stays stored, unseen
+CHECK_RETIRED = ("octgd_1h", "cisd_1h")
 CHECK_RATIOS = (1, 2, 3)
 
 
@@ -146,12 +146,13 @@ class TradeBody(BaseModel):
 def _checklist(c: Optional[Checklist]) -> Optional[str]:
     if c is None:
         return None
+    known = [key for key, _ in CHECK_ITEMS] + list(CHECK_RETIRED)
     for k in c.items:
-        if k not in {key for key, _ in CHECK_ITEMS}:
+        if k not in known:
             raise HTTPException(400, f"unknown checklist item: {k}")
     if c.ratio is not None and c.ratio not in CHECK_RATIOS:
         raise HTTPException(400, "the highest ratio done must be 1, 2 or 3")
-    return json.dumps({"items": [k for k, _ in CHECK_ITEMS if k in c.items], "ratio": c.ratio})
+    return json.dumps({"items": [k for k in known if k in c.items], "ratio": c.ratio})
 
 
 def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str, Optional[str]]:

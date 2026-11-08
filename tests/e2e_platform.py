@@ -140,6 +140,9 @@ check("an unknown checklist item or ratio is refused",
             "direction": "sell", "checklist": {"items": ["bogus"]}}).status_code == 400
       and c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={"trade_date": "2020-05-26", "instrument": "EURUSD",
             "direction": "sell", "checklist": {"items": [], "ratio": 5}}).status_code == 400)
+check("a tick saved on a retired checklist item is still accepted",
+      c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={"trade_date": "2020-05-26", "instrument": "EURUSD",
+            "direction": "sell", "checklist": {"items": ["cisd_1h", "h4_liq"], "ratio": 1}}).json()["checklist"]["items"] == ["h4_liq", "cisd_1h"])
 _ck3 = c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={
     "trade_date": "2020-05-26", "instrument": "EURUSD", "direction": "sell", "checklist": {"items": [], "ratio": None}}).json()
 check("ticks can be cleared", _ck3["checklist"] == {"items": [], "ratio": None})
