@@ -11,6 +11,7 @@ export default function BacktestPage() {
   const isOwner = user?.role === 'OWNER'
   const [tab, tabs] = useJournalTabs('mbp_bt_tab2', 'Backtest Journal')
   if (isOwner && tab === 'scl') return <EntryTester key="bt-scl" book="bt_scl" tabs={tabs} />
+  if (isOwner && tab === 'check') return <EntryTester key="bt-check" book="bt_check" tabs={tabs} />
   if (isOwner && tab === 'hl_liq') return <EntryTester key="bt-hl" book="bt_hl_liq" tabs={tabs} />
   if (isOwner && tab === 'engulfing') return <EntryTester key="bt-eng" book="bt_engulfing" tabs={tabs} />
   if (isOwner && tab === 'h4_key') return <EntryTester key="bt-key" book="bt_h4_key" tabs={tabs} />

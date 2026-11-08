@@ -12,6 +12,7 @@ export default function JournalPage() {
   const isOwner = user?.role === 'OWNER'
   const [tab, tabs] = useJournalTabs('mbp_jr_tab', 'Trading Journal')
   if (isOwner && tab === 'scl') return <EntryTester key="scl" book="live_scl" tabs={tabs} />
+  if (isOwner && tab === 'check') return <EntryTester key="check" book="live_check" tabs={tabs} />
   if (isOwner && tab === 'hl_liq') return <EntryTester key="hl" book="live_hl_liq" tabs={tabs} />
   if (isOwner && tab === 'engulfing') return <EntryTester key="eng" book="live_engulfing" tabs={tabs} />
   if (isOwner && tab === 'h4_key') return <EntryTester key="key" book="live_h4_key" tabs={tabs} />

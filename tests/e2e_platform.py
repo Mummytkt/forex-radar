@@ -121,6 +121,27 @@ check("the new entry models and confirmations save in their own journal",
       and c.get("/api/entry-tests?book=live_hl_liq", headers=H(owner)).json() == [])
 c.delete(f"/api/entry-tests/{_nm.json()['id']}", headers=H(owner))
 check("an unknown book is refused", c.get("/api/entry-tests?book=demo", headers=H(owner)).status_code == 400)
+# The Checklist journal: LC 1 / LC 2 results plus tick boxes and the highest ratio done
+_ck = c.post("/api/entry-tests?book=bt_check", headers=H(owner), json={
+    "trade_date": "2020-05-26", "instrument": "EURUSD", "direction": "sell", "results": {"lc1_chk": {"outcome": "win", "rr": 3}},
+    "checklist": {"items": ["sl_kl_poi", "h4_liq"], "ratio": 2}}).json()
+check("a Checklist trade saves its ticks in the list's order",
+      _ck["checklist"] == {"items": ["h4_liq", "sl_kl_poi"], "ratio": 2} and _ck["results"]["lc1_chk"]["rr"] == 3)
+_ck2 = c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={
+    "trade_date": "2020-05-26", "instrument": "EURUSD", "direction": "sell", "notes": "my view"}).json()
+check("a save without the checklist keeps the ticks", _ck2["checklist"] == {"items": ["h4_liq", "sl_kl_poi"], "ratio": 2})
+check("an unknown checklist item or ratio is refused",
+      c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={"trade_date": "2020-05-26", "instrument": "EURUSD",
+            "direction": "sell", "checklist": {"items": ["bogus"]}}).status_code == 400
+      and c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={"trade_date": "2020-05-26", "instrument": "EURUSD",
+            "direction": "sell", "checklist": {"items": [], "ratio": 5}}).status_code == 400)
+_ck3 = c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={
+    "trade_date": "2020-05-26", "instrument": "EURUSD", "direction": "sell", "checklist": {"items": [], "ratio": None}}).json()
+check("ticks can be cleared", _ck3["checklist"] == {"items": [], "ratio": None})
+check("other journals' trades come back with an empty checklist",
+      c.get("/api/entry-tests", headers=H(owner)).json()[0]["checklist"] == {"items": [], "ratio": None}
+      and c.get("/api/entry-tests?book=live_check", headers=H(owner)).json() == [])
+c.delete(f"/api/entry-tests/{_ck['id']}", headers=H(owner))
 check("delete-all clears only its own book",
       c.post("/api/entry-tests/delete-all?book=live_engulfing", headers=H(owner), json={"confirm": "DELETE"}).json()["deleted"] == 1
       and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 1)

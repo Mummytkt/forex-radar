@@ -2,9 +2,10 @@
 import { useState, useEffect } from 'react'
 import { EyeOff, Eye } from 'lucide-react'
 
-export type JournalTab = 'scl' | 'hl_liq' | 'engulfing' | 'h4_key' | 'journal'
-const TABS: JournalTab[] = ['scl', 'hl_liq', 'engulfing', 'h4_key', 'journal']
-const OLD: JournalTab[] = ['engulfing', 'h4_key']
+export type JournalTab = 'scl' | 'check' | 'hl_liq' | 'engulfing' | 'h4_key' | 'journal'
+const TABS: JournalTab[] = ['scl', 'check', 'hl_liq', 'engulfing', 'h4_key', 'journal']
+// M15 entry joined the old journals on 2026-11-08, when the Checklist took its place
+const OLD: JournalTab[] = ['hl_liq', 'engulfing', 'h4_key']
 const OLD_KEY = 'mbp_show_old_journals'   // one choice for the Journal and Backtest pages
 
 // The owner's journal tabs (one per entry model, then the trade journal), the chosen
@@ -45,14 +46,15 @@ export function useJournalTabs(tabKey: string, journalLabel: string): [JournalTa
     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
       <div style={{ display: 'flex', gap: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
         {b('scl', 'H1 entry')}
-        {b('hl_liq', 'M15 entry')}
+        {b('check', 'Checklist')}
+        {showOld && b('hl_liq', 'M15 entry')}
         {showOld && b('engulfing', 'Engulfing Journal')}
         {showOld && b('h4_key', 'Fresh Key Levels Journal')}
         {b('journal', journalLabel)}
       </div>
       {showOld
         ? <button onClick={() => toggleOld(false)} style={small} title="Hide the older journals (their trades stay saved)"><EyeOff size={13} /> Hide old journals</button>
-        : <button onClick={() => toggleOld(true)} style={small} title="Show the Engulfing and Fresh Key Levels journals with their saved trades"><Eye size={13} /> Show old journals</button>}
+        : <button onClick={() => toggleOld(true)} style={small} title="Show the M15 entry, Engulfing and Fresh Key Levels journals with their saved trades"><Eye size={13} /> Show old journals</button>}
     </div>
   )
   return [tab, node]

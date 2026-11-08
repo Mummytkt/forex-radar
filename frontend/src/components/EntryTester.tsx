@@ -11,6 +11,7 @@ import { buildStory } from '@/lib/diaryStory'
 import { bookHtml, BOOK_WAIT, type BookChapter, type BookInput, type BookPage, type BookPicture } from '@/lib/diaryBook'
 import { downloadBookPdf } from '@/lib/diaryBookPdf'
 import { numberTrades, tradesWord, entriesIn, streaks, NO_NUM, type TradeNum } from '@/lib/tradeNumbers'
+import { CHECK_ITEMS, CHECK_RATIOS, EMPTY_CHECKLIST, checklistCounts, checklistLine, type Checklist } from '@/lib/checklist'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -31,6 +32,7 @@ interface Trade {
   exit_date?: string | null   // YYYY-MM-DD the trade closed
   results: Record<string, EntryResult>
   images: Record<string, number[]>   // {slot: image ids} — slot = a POI key or an entry key
+  checklist?: Checklist   // the Checklist journal's tick boxes (empty on the other journals)
 }
 
 // Must match POIS / MODELS in api/entry_tests.py (the keys are stored: "<model>_<poi>")
@@ -54,6 +56,7 @@ const OLD_MODELS: { key: string; label: string }[] = [
 const MODELS = [...NEW_MODELS, ...RETIRED_MODELS, ...OLD_MODELS]
 const POIS: { key: string; label: string; old?: boolean }[] = [
   { key: 'scl', label: 'H1 entry' },   // keys kept from their first names (SCL, high/low liquidity before POI)
+  { key: 'chk', label: 'Checklist' },   // 2026-11-08: LC 1 / LC 2 like the H1 entry, plus the checklist
   { key: 'hl_liq', label: 'M15 entry' },
   { key: 'engulfing', label: 'H4 Engulfing', old: true },
   { key: 'h4_key', label: 'H4 fresh key level', old: true },
@@ -295,6 +298,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         </span>
         {best && <span className="diary-sum" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: best.r < 0 ? SOFT.loss : SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
       </div>
+      {only === 'chk' && kind && <ChecklistCount trades={trades} />}
       {open && children && (
         <div onClick={() => setReport(!report)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 14px 8px', padding: '7px 10px',
           borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
@@ -496,6 +500,73 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
   )
 }
 
+// ── The Checklist journal ────────────────────────────────────────────────────
+function TickBox({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} aria-pressed={on} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 11px', borderRadius: 8, cursor: 'pointer',
+      border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`, background: on ? 'var(--accent-bg)' : 'transparent',
+      color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, textAlign: 'left' }}>
+      <span style={{ width: 17, height: 17, borderRadius: 4, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        border: `2px solid ${on ? 'var(--accent)' : 'var(--text-muted)'}`, background: on ? 'var(--accent)' : 'transparent' }}>
+        {on && <Check size={12} color="white" strokeWidth={3.5} />}
+      </span>
+      {label}
+    </button>
+  )
+}
+// Each tap saves, like the rest of the trade
+function ChecklistBox({ value, onChange }: { value: Checklist; onChange: (c: Checklist) => void }) {
+  const items = value.items || []
+  const flip = (k: string) => onChange({ ...value, items: items.includes(k) ? items.filter(x => x !== k) : [...items, k] })
+  return (
+    <div style={{ padding: '6px 0 10px', borderBottom: '1px dashed var(--border)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 6 }}>Checklist</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {CHECK_ITEMS.map(i => <TickBox key={i.key} on={items.includes(i.key)} label={i.label} onClick={() => flip(i.key)} />)}
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginRight: 4 }}>Highest Ratio Done</span>
+        {CHECK_RATIOS.map(r => <TickBox key={r} on={value.ratio === r} label={`${r}R`} onClick={() => onChange({ ...value, items, ratio: value.ratio === r ? null : r })} />)}
+      </div>
+    </div>
+  )
+}
+// The checklist on the diary page: every box, ticked or not
+function ChecklistRead({ value }: { value: Checklist }) {
+  const items = value.items || []
+  return (
+    <div style={{ margin: '2px 0 12px', display: 'grid', gap: 3 }}>
+      {CHECK_ITEMS.map(i => {
+        const on = items.includes(i.key)
+        return (
+          <div key={i.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: on ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+            <span style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              border: `2px solid ${on ? 'var(--accent)' : 'var(--text-muted)'}`, background: on ? 'var(--accent)' : 'transparent' }}>
+              {on && <Check size={11} color="white" strokeWidth={3.5} />}
+            </span>
+            {i.label}
+          </div>
+        )
+      })}
+      <div style={{ fontSize: 13.5, marginTop: 4, color: 'var(--text-primary)' }}>
+        Highest ratio done: <b>{value.ratio ? `${value.ratio}R` : 'not ticked'}</b>
+      </div>
+    </div>
+  )
+}
+// Under a month's or year's summary: how often each box was ticked, so the consistency shows
+function ChecklistCount({ trades }: { trades: Trade[] }) {
+  const c = checklistCounts(trades.map(t => t.checklist))
+  return (
+    <div className="diary-sum" style={{ display: 'flex', gap: '4px 12px', flexWrap: 'wrap', padding: '0 14px 8px 38px', fontSize: 12, color: 'var(--text-muted)' }}>
+      {c.items.map(i => (
+        <span key={i.key}>{i.label} <b style={{ color: i.count === c.n ? 'var(--bullish)' : 'var(--text-secondary)' }}>{i.count}/{c.n}</b></span>
+      ))}
+      <span>Highest ratio done: {c.ratios.map((x, k) => <span key={x.r}>{k > 0 && ' · '}<b style={{ color: 'var(--text-secondary)' }}>{x.r}R ×{x.count}</b></span>)}</span>
+    </div>
+  )
+}
+
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 // A saved trade read back as a page of the owner's diary
 function storyOf(trade: Trade, only: string, name?: string) {
@@ -533,6 +604,7 @@ function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeN
         <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
         <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
         {note && <div className="dp-note dp-line" style={line()}>{note}</div>}
+        {only === 'chk' && <div className="dp-line" style={line()}><ChecklistRead value={trade.checklist ?? EMPTY_CHECKLIST} /></div>}
         {imgs[only]?.length ? <div className="dp-line" style={line()}>{pics(only, 'Chart')}</div> : null}
         {story.rows.map(r => (
           <div key={r.slot} className="dp-line" style={line()}>
@@ -613,6 +685,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
         </span>
         {SHOW_H4_ALERT && trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
+          {only === 'chk' && <>checklist <b style={{ color: 'var(--text-secondary)' }}>{trade.checklist?.items?.length ?? 0}/{CHECK_ITEMS.length}</b>{trade.checklist?.ratio ? <> · {trade.checklist.ratio}R done</> : null} · </>}
           {done} ticked
           {tradeR.length > 0 && <> · outcome {tradeR.map((v, i) => (
             <span key={i}>{i > 0 && ' / '}<b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--loss)' : 'var(--text-muted)' }}>{fmtR(v)}</b></span>
@@ -639,6 +712,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
           {/* H1 / M15 entry: pictures go on LC 1 and LC 2 only. A chart already saved up here still shows, so it can be seen or removed */}
           {(POIS.find(p => p.key === poi)?.old || !!imgs[poi]?.length) && <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
             ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />}
+          {poi === 'chk' && <ChecklistBox value={trade.checklist ?? EMPTY_CHECKLIST} onChange={c => onChange({ ...trade, checklist: c })} />}
           {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map(t => {
             const r = trade.results[t.key]
             return (
@@ -919,16 +993,24 @@ async function bookInput(opt: BookOptions): Promise<BookInput> {
       rows: story.rows.map(r => ({ text: r.text, pictures: take(imgs[r.slot]) })),
       otherPictures: take(Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).flatMap(k => imgs[k])),
       resultWord: resultWord(t, only),
+      ...(only === 'chk' ? {
+        checklist: CHECK_ITEMS.map(i => ({ label: i.label, on: !!t.checklist?.items?.includes(i.key) })),
+        ratio: t.checklist?.ratio ? `${t.checklist.ratio}R` : 'not ticked',
+      } : {}),
     }
     c.pages.push(page)
   }
-  for (const c of chapters) c.summary = periodSummary(chrono.filter(t => monthName(t.trade_date.slice(0, 7)) === c.title), only)
+  for (const c of chapters) {
+    const inMonth = chrono.filter(t => monthName(t.trade_date.slice(0, 7)) === c.title)
+    c.summary = periodSummary(inMonth, only)
+    if (only === 'chk') c.extra = checklistLine(inMonth.map(t => t.checklist))
+  }
   const [ink, soft] = BOOK_INK[palette] || BOOK_INK.purple
   const firstM = chapters[0]?.title || '', lastM = chapters[chapters.length - 1]?.title || ''
   return {
     title, owner: name?.trim() || 'My diary',
     span: firstM === lastM ? firstM : `${firstM} to ${lastM}`,
-    stats: periodSummary(chrono, only), filterNote, accent: ink, accentSoft: soft, chapters,
+    stats: periodSummary(chrono, only), ...(only === 'chk' ? { statsExtra: checklistLine(chrono.map(t => t.checklist)) } : {}), filterNote, accent: ink, accentSoft: soft, chapters,
   }
 }
 async function printBook(w: Window, opt: BookOptions) {
@@ -947,7 +1029,7 @@ async function printBook(w: Window, opt: BookOptions) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 // book "backtest" (Backtest page, every POI) or a live journal on the Trading Journal
 // page: "live_engulfing" / "live_h4_key", each its own trades, limited to that POI
-type Book = 'backtest' | 'bt_engulfing' | 'bt_h4_key' | 'live_engulfing' | 'live_h4_key' | 'bt_scl' | 'bt_hl_liq' | 'live_scl' | 'live_hl_liq'
+type Book = 'backtest' | 'bt_engulfing' | 'bt_h4_key' | 'live_engulfing' | 'live_h4_key' | 'bt_scl' | 'bt_hl_liq' | 'live_scl' | 'live_hl_liq' | 'bt_check' | 'live_check'
 const JOURNAL: Record<Book, { title: string; poi: string }> = {
   backtest: { title: 'Entry Tester', poi: '' },
   bt_engulfing: { title: 'Engulfing Journal', poi: 'engulfing' },
@@ -958,6 +1040,8 @@ const JOURNAL: Record<Book, { title: string; poi: string }> = {
   bt_hl_liq: { title: 'M15 Entry Journal', poi: 'hl_liq' },
   live_scl: { title: 'H1 Entry Journal', poi: 'scl' },
   live_hl_liq: { title: 'M15 Entry Journal', poi: 'hl_liq' },
+  bt_check: { title: 'Checklist Journal', poi: 'chk' },
+  live_check: { title: 'Checklist Journal', poi: 'chk' },
 }
 // The diary cover's handwritten title for each journal
 const DIARY_TITLE: Partial<Record<Book, string>> = {
@@ -965,6 +1049,7 @@ const DIARY_TITLE: Partial<Record<Book, string>> = {
   live_engulfing: 'My Engulfing Diary', live_h4_key: 'My Fresh Key Levels Diary',
   bt_scl: 'My H1 Entry Backtest Diary', bt_hl_liq: 'My M15 Entry Backtest Diary',
   live_scl: 'My H1 Entry Diary', live_hl_liq: 'My M15 Entry Diary',
+  bt_check: 'My Checklist Backtest Diary', live_check: 'My Checklist Diary',
 }
 export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.ReactNode; book?: Book }) {
   const live = book.startsWith('live')
@@ -1002,6 +1087,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
   function body(t: Omit<Trade, 'id'>) { return JSON.stringify({
     trade_date: t.trade_date, instrument: t.instrument, direction: t.direction,
     alert_type: t.alert_type, notes: t.notes, results: t.results, exit_date: t.exit_date || null,
+    ...(t.checklist ? { checklist: t.checklist } : {}),
   }) }
 
   const addTrade = async () => {

@@ -62,7 +62,8 @@ _LEGACY |= {f"{m}_{p}" for m in ("h1_engulfing", "h2_engulfing") for p in ("engu
 # high/low liquidity before POI; renamed 2026-11-06). The lists above stay for the older journals.
 NEW_POIS: list[tuple[str, str]] = [
     ("scl", "H1 entry"),
-    ("hl_liq", "M15 entry"),
+    ("hl_liq", "M15 entry"),   # behind "Show old journals" since 2026-11-08, replaced by the Checklist
+    ("chk", "Checklist"),      # 2026-11-08: LC 1 / LC 2 like the H1 entry, plus the checklist below
 ]
 NEW_MODELS: list[tuple[str, str]] = [
     ("lc1", "LC 1"),
@@ -75,7 +76,20 @@ ENTRY_TYPES += [(f"{m}_{p}", f"{ml} on {pl}") for p, pl in NEW_POIS for m, ml in
 _LEGACY |= {f"{m}_{p}" for m in RETIRED_MODELS for p, _ in NEW_POIS}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
-BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key", "bt_scl", "bt_hl_liq", "live_scl", "live_hl_liq")
+BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key", "bt_scl", "bt_hl_liq", "live_scl", "live_hl_liq",
+         "bt_check", "live_check")
+# The Checklist journal's tick boxes (keys are stored, never rename one; must match lib/checklist.ts), and the
+# "Highest Ratio Done" boxes
+CHECK_ITEMS: list[tuple[str, str]] = [
+    ("h4_liq", "H4 Liquidity?"),
+    ("h1_liq_only", "H1 Liquidity only?"),
+    ("octgd_1h", "1hr OCTGD?"),
+    ("cisd_1h", "1hr CISD"),
+    ("sl_kl_poi", "SL behind KL POI?"),
+    ("sl_1h_candle", "SL behind 1hr candle?"),
+    ("kl_reaction", "Reaction from an actual key level in the POI?"),
+]
+CHECK_RATIOS = (1, 2, 3)
 
 
 def _book(book: str) -> str:
@@ -102,6 +116,11 @@ class EntryResult(BaseModel):
     exit: Optional[str] = None    # when this entry's trade was closed: "YYYY-MM-DDTHH:MM" (each entry runs differently)
 
 
+class Checklist(BaseModel):
+    items: list[str] = []          # the boxes ticked
+    ratio: Optional[int] = None    # Highest Ratio Done: 1, 2 or 3 (R)
+
+
 class TradeBody(BaseModel):
     trade_date: str
     instrument: str
@@ -110,6 +129,18 @@ class TradeBody(BaseModel):
     notes: str = ""
     results: dict[str, EntryResult] = {}
     exit_date: Optional[str] = None   # YYYY-MM-DD the trade was closed (unset = still open / not recorded)
+    checklist: Optional[Checklist] = None   # Checklist journal only; left out = keep what is saved
+
+
+def _checklist(c: Optional[Checklist]) -> Optional[str]:
+    if c is None:
+        return None
+    for k in c.items:
+        if k not in {key for key, _ in CHECK_ITEMS}:
+            raise HTTPException(400, f"unknown checklist item: {k}")
+    if c.ratio is not None and c.ratio not in CHECK_RATIOS:
+        raise HTTPException(400, "the highest ratio done must be 1, 2 or 3")
+    return json.dumps({"items": [k for k, _ in CHECK_ITEMS if k in c.items], "ratio": c.ratio})
 
 
 def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str, Optional[str]]:
@@ -144,6 +175,7 @@ def _clean(body: TradeBody) -> tuple[str, str, str, str, str, str, Optional[str]
 def _row(r: sqlite3.Row, images: Optional[dict] = None) -> dict:
     d = dict(r)
     d["results"] = json.loads(d.pop("results_json") or "{}")
+    d["checklist"] = json.loads(d.pop("checklist_json", None) or '{"items": [], "ratio": null}')
     d["images"] = images or {}   # {slot: [image ids]} — slot = a POI key or an entry key
     return d
 
@@ -203,10 +235,11 @@ def list_trades(request: Request, book: str = "backtest"):
 def create_trade(request: Request, body: TradeBody, book: str = "backtest"):
     u = require_owner(request)
     vals = _clean(body)
+    chk = _checklist(body.checklist) or '{"items": [], "ratio": null}'
     with _db(request) as conn:
         cur = conn.execute(
-            """INSERT INTO entry_tests (trade_date, instrument, direction, alert_type, notes, results_json, exit_date, user_id, book)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", vals + (u["id"], _book(book)))
+            """INSERT INTO entry_tests (trade_date, instrument, direction, alert_type, notes, results_json, exit_date, user_id, book, checklist_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", vals + (u["id"], _book(book), chk))
         row = conn.execute("SELECT * FROM entry_tests WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row(row)
 
@@ -215,11 +248,13 @@ def create_trade(request: Request, body: TradeBody, book: str = "backtest"):
 def update_trade(trade_id: int, request: Request, body: TradeBody):
     u = require_owner(request)
     vals = _clean(body)
+    chk = _checklist(body.checklist)
     with _db(request) as conn:
         cur = conn.execute(
             """UPDATE entry_tests SET trade_date = ?, instrument = ?, direction = ?, alert_type = ?, notes = ?,
-                      results_json = ?, exit_date = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-               WHERE id = ? AND user_id = ?""", vals + (trade_id, u["id"]))
+                      results_json = ?, exit_date = ?, checklist_json = COALESCE(?, checklist_json),
+                      updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+               WHERE id = ? AND user_id = ?""", vals + (chk, trade_id, u["id"]))
         if cur.rowcount == 0:
             raise HTTPException(404, "Trade not found")
         row = conn.execute("SELECT * FROM entry_tests WHERE id = ?", (trade_id,)).fetchone()
