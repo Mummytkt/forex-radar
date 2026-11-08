@@ -12,12 +12,13 @@ interface Numbered {
 }
 
 // Rows on one setup test different ways into the same move, so the setup counts its biggest "times entered", not their sum
-export function timesEntered(t: Numbered): number {
-  const counts = Object.values(t.results || {}).filter(r => r.outcome !== 'none').map(r => r.takes ?? 1)
-  return Math.max(1, ...counts)
+// counts: which result rows are the trade itself (the Checklist journal's "what if" entry types are not)
+export function timesEntered(t: Numbered, counts: (key: string) => boolean = () => true): number {
+  const n = Object.entries(t.results || {}).filter(([k, r]) => counts(k) && r.outcome !== 'none').map(([, r]) => r.takes ?? 1)
+  return Math.max(1, ...n)
 }
 
-export function numberTrades(trades: Numbered[]): Map<number, TradeNum> {
+export function numberTrades(trades: Numbered[], counts: (key: string) => boolean = () => true): Map<number, TradeNum> {
   const seen = new Map<string, number>()
   const next = (key: string, count: number) => {
     const from = seen.get(key) ?? 0
@@ -26,7 +27,7 @@ export function numberTrades(trades: Numbered[]): Map<number, TradeNum> {
   }
   const inOrder = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
   return new Map(inOrder.map(t => {
-    const count = timesEntered(t)
+    const count = timesEntered(t, counts)
     return [t.id, { month: next(t.trade_date.slice(0, 7), count), year: next(t.trade_date.slice(0, 4), count) }]
   }))
 }

@@ -74,6 +74,16 @@ RETIRED_MODELS: list[str] = ["oc1h", "cisd1h", "pcl1h"]
 POIS += NEW_POIS
 ENTRY_TYPES += [(f"{m}_{p}", f"{ml} on {pl}") for p, pl in NEW_POIS for m, ml in NEW_MODELS]
 _LEGACY |= {f"{m}_{p}" for m in RETIRED_MODELS for p, _ in NEW_POIS}
+# 2026-11-08, Checklist journal only: the entry types the owner compares on every trade ("what if I had entered with…").
+# LC 1 / LC 2 stay the trade itself; these are tested alongside. Keys are stored, never rename one.
+CHK_MODELS: list[tuple[str, str]] = [
+    ("e_direct", "Direct entry"),
+    ("e_cisd15", "15M CISD"),
+    ("e_cisd1h", "1H CISD"),
+    ("e_octgd1h", "H1 OCTGD"),
+    ("e_smc5", "5M SMC"),
+]
+ENTRY_TYPES += [(f"{m}_chk", f"{ml} on Checklist") for m, ml in CHK_MODELS]
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key", "bt_scl", "bt_hl_liq", "live_scl", "live_hl_liq",
@@ -188,7 +198,8 @@ _POI_KEYS = {k for k, _ in POIS}
 _NEW_POI_KEYS = {k for k, _ in NEW_POIS}
 _SLOT_POI = {k: k for k in _POI_KEYS} | {
     f"{m}_{p}": p for p in _POI_KEYS
-    for m in ([k for k, _ in NEW_MODELS] + RETIRED_MODELS if p in _NEW_POI_KEYS else [k for k, _ in MODELS])}
+    for m in ([k for k, _ in NEW_MODELS] + RETIRED_MODELS if p in _NEW_POI_KEYS else [k for k, _ in MODELS])} | {
+    f"{m}_chk": "chk" for m, _ in CHK_MODELS}
 MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PER_SLOT = 12
 
