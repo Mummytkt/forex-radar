@@ -13,17 +13,3 @@ export const CHECK_RATIOS = [1, 2, 3]
 export interface Checklist { items: string[]; ratio: number | null }
 export const EMPTY_CHECKLIST: Checklist = { items: [], ratio: null }
 
-// How often each box was ticked over some trades, and how often each ratio was reached: the consistency count
-export function checklistCounts(lists: (Checklist | undefined)[]) {
-  const n = lists.length
-  const items = CHECK_ITEMS.map(i => ({ ...i, count: lists.filter(c => c?.items?.includes(i.key)).length }))
-  const ratios = CHECK_RATIOS.map(r => ({ r, count: lists.filter(c => c?.ratio === r).length }))
-  return { n, items, ratios, noRatio: n - ratios.reduce((s, x) => s + x.count, 0) }
-}
-
-// The same count as one line of words, for the book: "H4 Liquidity? 5 of 6 · … · Highest ratio done: 1R ×2, 2R ×3"
-export function checklistLine(lists: (Checklist | undefined)[]): string {
-  const c = checklistCounts(lists)
-  const ratios = c.ratios.filter(x => x.count).map(x => `${x.r}R ×${x.count}`)
-  return `Checklist: ${c.items.map(i => `${i.label} ${i.count} of ${c.n}`).join(' · ')} · Highest ratio done: ${ratios.length ? ratios.join(', ') : 'none ticked'}`
-}

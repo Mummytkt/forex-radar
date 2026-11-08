@@ -11,7 +11,7 @@ import { buildStory } from '@/lib/diaryStory'
 import { bookHtml, BOOK_WAIT, type BookChapter, type BookInput, type BookPage, type BookPicture } from '@/lib/diaryBook'
 import { downloadBookPdf } from '@/lib/diaryBookPdf'
 import { numberTrades, tradesWord, entriesIn, streaks, NO_NUM, type TradeNum } from '@/lib/tradeNumbers'
-import { CHECK_ITEMS, CHECK_RATIOS, EMPTY_CHECKLIST, checklistCounts, checklistLine, type Checklist } from '@/lib/checklist'
+import { CHECK_ITEMS, CHECK_RATIOS, EMPTY_CHECKLIST, type Checklist } from '@/lib/checklist'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -305,8 +305,6 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         </div>
       )}
       {open && (report || !children) && <>
-      {/* The checklist's count sits in the report, so the summary line stays calm */}
-      {only === 'chk' && <ChecklistCount trades={trades} />}
       <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
         {only ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Confirmation models, best first</span> : <>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Group by</span>
@@ -555,19 +553,6 @@ function ChecklistRead({ value }: { value: Checklist }) {
     </div>
   )
 }
-// Inside a month's or year's report (opened on request): how often each box was ticked, so the consistency shows
-function ChecklistCount({ trades }: { trades: Trade[] }) {
-  const c = checklistCounts(trades.map(t => t.checklist))
-  return (
-    <div className="diary-sum" style={{ display: 'flex', gap: '4px 12px', flexWrap: 'wrap', padding: '0 14px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-      <b style={{ color: 'var(--text-secondary)' }}>Checklist</b>
-      {c.items.map(i => (
-        <span key={i.key}>{i.label} <b style={{ color: i.count === c.n ? 'var(--bullish)' : 'var(--text-secondary)' }}>{i.count}/{c.n}</b></span>
-      ))}
-      <span>Highest ratio done: {c.ratios.map((x, k) => <span key={x.r}>{k > 0 && ' · '}<b style={{ color: 'var(--text-secondary)' }}>{x.r}R ×{x.count}</b></span>)}</span>
-    </div>
-  )
-}
 
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 // A saved trade read back as a page of the owner's diary
@@ -687,7 +672,6 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
         </span>
         {SHOW_H4_ALERT && trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
-          {only === 'chk' && <>checklist <b style={{ color: 'var(--text-secondary)' }}>{trade.checklist?.items?.length ?? 0}/{CHECK_ITEMS.length}</b>{trade.checklist?.ratio ? <> · {trade.checklist.ratio}R done</> : null} · </>}
           {done} ticked
           {tradeR.length > 0 && <> · outcome {tradeR.map((v, i) => (
             <span key={i}>{i > 0 && ' / '}<b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--loss)' : 'var(--text-muted)' }}>{fmtR(v)}</b></span>
@@ -1002,17 +986,13 @@ async function bookInput(opt: BookOptions): Promise<BookInput> {
     }
     c.pages.push(page)
   }
-  for (const c of chapters) {
-    const inMonth = chrono.filter(t => monthName(t.trade_date.slice(0, 7)) === c.title)
-    c.summary = periodSummary(inMonth, only)
-    if (only === 'chk') c.extra = checklistLine(inMonth.map(t => t.checklist))
-  }
+  for (const c of chapters) c.summary = periodSummary(chrono.filter(t => monthName(t.trade_date.slice(0, 7)) === c.title), only)
   const [ink, soft] = BOOK_INK[palette] || BOOK_INK.purple
   const firstM = chapters[0]?.title || '', lastM = chapters[chapters.length - 1]?.title || ''
   return {
     title, owner: name?.trim() || 'My diary',
     span: firstM === lastM ? firstM : `${firstM} to ${lastM}`,
-    stats: periodSummary(chrono, only), ...(only === 'chk' ? { statsExtra: checklistLine(chrono.map(t => t.checklist)) } : {}), filterNote, accent: ink, accentSoft: soft, chapters,
+    stats: periodSummary(chrono, only), filterNote, accent: ink, accentSoft: soft, chapters,
   }
 }
 async function printBook(w: Window, opt: BookOptions) {

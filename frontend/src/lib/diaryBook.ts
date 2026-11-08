@@ -23,13 +23,12 @@ export interface BookPage {
   checklist?: { label: string; on: boolean }[]   // the Checklist journal only
   ratio?: string         // its Highest Ratio Done: "2R" or "not ticked"
 }
-export interface BookChapter { title: string; summary: string; extra?: string; pages: BookPage[] }
+export interface BookChapter { title: string; summary: string; pages: BookPage[] }
 export interface BookInput {
   title: string          // "My H1 Entry Backtest Diary"
   owner: string
   span: string           // "January to February 2020"
   stats: string          // "13 pages · 6 wins"
-  statsExtra?: string    // the Checklist journal's count over the whole book
   filterNote: string     // "" or "EURUSD only"
   accent: string
   accentSoft: string
@@ -72,7 +71,6 @@ function chapter(c: BookChapter): string {
   return `<section class="chapter">
   <div class="script ctitle">${esc(c.title)}</div>
   <div class="csum">${esc(c.summary)}</div>
-  ${c.extra ? `<div class="csum">${esc(c.extra)}</div>` : ''}
   <table>
     ${c.pages.map(p => `<tr><td class="n">${esc(p.monthNum)}</td><td>${esc(p.dayLabel)}</td><td><b>${esc(p.pair)}</b> ${p.direction.toUpperCase()}</td><td class="r">${esc(p.resultWord)}</td></tr>`).join('\n    ')}
   </table>
@@ -140,7 +138,6 @@ export function bookHtml(b: BookInput): string {
   <div class="by">${esc(b.owner)}</div>
   <div class="small">${esc(b.span)}</div>
   <div class="small">${esc(b.stats)}</div>
-  ${b.statsExtra ? `<div class="small">${esc(b.statsExtra)}</div>` : ''}
   ${b.filterNote ? `<div class="small">${esc(b.filterNote)}</div>` : ''}
 </section>
 ${b.chapters.map(chapter).join('\n')}
