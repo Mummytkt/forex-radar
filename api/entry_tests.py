@@ -81,13 +81,13 @@ BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key
 # The Checklist journal's tick boxes (keys are stored, never rename one; must match lib/checklist.ts), and the
 # "Highest Ratio Done" boxes
 CHECK_ITEMS: list[tuple[str, str]] = [
-    ("h4_liq", "H4 Liquidity?"),
-    ("h1_liq_only", "H1 Liquidity only?"),
-    ("octgd_1h", "1hr OCTGD?"),
+    ("h4_liq", "H4 Liquidity"),
+    ("h1_liq_only", "H1 Liquidity only"),
+    ("octgd_1h", "1hr OCTGD"),
     ("cisd_1h", "1hr CISD"),
-    ("sl_kl_poi", "SL behind KL POI?"),
-    ("sl_1h_candle", "SL behind 1hr candle?"),
-    ("kl_reaction", "Reaction from an actual key level in the POI?"),
+    ("sl_kl_poi", "SL behind KL POI"),
+    ("sl_1h_candle", "SL behind 1hr candle"),
+    ("kl_reaction", "Reaction from an actual key level in the POI"),
 ]
 CHECK_RATIOS = (1, 2, 3)
 
