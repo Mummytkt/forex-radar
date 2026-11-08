@@ -74,8 +74,9 @@ RETIRED_MODELS: list[str] = ["oc1h", "cisd1h", "pcl1h"]
 POIS += NEW_POIS
 ENTRY_TYPES += [(f"{m}_{p}", f"{ml} on {pl}") for p, pl in NEW_POIS for m, ml in NEW_MODELS]
 _LEGACY |= {f"{m}_{p}" for m in RETIRED_MODELS for p, _ in NEW_POIS}
-# 2026-11-08, Checklist journal only: the entry types the owner compares on every trade ("what if I had entered with…").
-# LC 1 / LC 2 stay the trade itself; these are tested alongside. Keys are stored, never rename one.
+# 2026-11-08, Checklist journal only: the entry types the owner compares on every trade, to see which suits the
+# strategy. They replaced LC 1 / LC 2 there the same day (lc1_chk / lc2_chk still save, for trades already ticked).
+# Keys are stored, never rename one.
 CHK_MODELS: list[tuple[str, str]] = [
     ("e_direct", "Direct entry"),
     ("e_cisd15", "15M CISD"),

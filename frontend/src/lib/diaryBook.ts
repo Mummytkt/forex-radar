@@ -18,7 +18,6 @@ export interface BookPage {
   story: Story
   topPictures: BookPicture[]    // pictures on the trade itself
   rows: BookRow[]
-  whatIf?: BookRow[]     // the Checklist journal's entry types: "Direct entry: Win +3.00R"
   otherPictures: BookPicture[]  // pictures on a row with no result ticked
   resultWord: string     // the month's list: "Win +3.00R"
   checklist?: { label: string; on: boolean }[]   // the Checklist journal only
@@ -59,7 +58,6 @@ function page(p: BookPage): string {
   ${p.checklist ? `<div class="check">${p.checklist.map(c => `<div class="ci${c.on ? ' on' : ''}"><span class="box">${c.on ? '✓' : ''}</span>${esc(c.label)}</div>`).join('')}<div class="ci on ratio">Highest ratio done: <b>${esc(p.ratio || 'not ticked')}</b></div></div>` : ''}
   ${pics(p.topPictures)}
   ${p.rows.map(r => `<p>${esc(r.text)}</p>${pics(r.pictures)}`).join('\n  ')}
-  ${p.whatIf?.length ? `<p class="wi">If I had entered another way:</p>${p.whatIf.map(r => `<p class="wr">${esc(r.text)}</p>${pics(r.pictures)}`).join('')}` : ''}
   ${pics(p.otherPictures)}
   ${s.held ? `<p>${esc(s.held)}</p>` : ''}
   <div class="sign">
@@ -118,8 +116,6 @@ export function bookHtml(b: BookInput): string {
     border: 0.45mm solid #b5afc0; border-radius: 0.8mm; color: #fff; font-size: 7pt; font-weight: 700; line-height: 1; }
   .ci.on .box { background: ${b.accent}; border-color: ${b.accent}; }
   .ci.ratio { margin-top: 1mm; }
-  .wi { margin-bottom: 1mm; }
-  .wr { margin: 0 0 1mm 3mm; font-size: 9.5pt; }
   .pics { margin: 0 0 4mm; }
   .pics img { display: block; width: 100%; max-height: 120mm; object-fit: contain; margin-bottom: 2.5mm; border-radius: 1.5mm; break-inside: avoid; background: #111; }
   .nopic { font-size: 9pt; color: #8a8496; font-style: italic; }

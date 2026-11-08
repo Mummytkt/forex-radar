@@ -53,8 +53,8 @@ const OLD_MODELS: { key: string; label: string }[] = [
   { key: 'm5_cisd', label: '5M SMC' },
   { key: 'm15_cisd', label: '15M SMC' },
 ]
-// The Checklist journal only: entry types tested on every trade, "what if I had entered with…". LC 1 / LC 2 stay the
-// trade itself, so these don't change its numbers, the month's W / L or the diary story; the reports compare them all.
+// The Checklist journal's rows: the entry types tried on every trade, to see which suits the strategy (2026-11-08;
+// LC 1 / LC 2 were taken off it the same day and show only on a trade already ticked there).
 // Must match CHK_MODELS in api/entry_tests.py (keys are stored)
 const CHK_MODELS: { key: string; label: string }[] = [
   { key: 'e_direct', label: 'Direct entry' },
@@ -71,12 +71,11 @@ const POIS: { key: string; label: string; old?: boolean }[] = [
   { key: 'engulfing', label: 'H4 Engulfing', old: true },
   { key: 'h4_key', label: 'H4 fresh key level', old: true },
 ]
-const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string; retired: boolean; whatIf: boolean }[] = POIS.flatMap(p =>
-  (p.old ? OLD_MODELS : p.key === 'chk' ? [...NEW_MODELS, ...CHK_MODELS, ...RETIRED_MODELS] : [...NEW_MODELS, ...RETIRED_MODELS]).map(m => ({
+const CHK_OLD = NEW_MODELS.map(m => ({ ...m, label: `${m.label} (old)`, retired: true as const }))
+const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string; retired: boolean }[] = POIS.flatMap(p =>
+  (p.old ? OLD_MODELS : p.key === 'chk' ? [...CHK_MODELS, ...CHK_OLD] : [...NEW_MODELS, ...RETIRED_MODELS]).map(m => ({
     key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label,
-    retired: 'retired' in m, whatIf: CHK_MODELS.some(c => c.key === m.key) })))
-const WHAT_IF = new Set(ENTRY_TYPES.filter(t => t.whatIf).map(t => t.key))
-const isTrade = (key: string) => !WHAT_IF.has(key)   // a row that is the trade itself
+    retired: 'retired' in m })))
 // The H4 alert picker is hidden for now (2026-11-06: the owner writes it in the notes). true brings all of it back:
 // the add bar, the filter, the trade's details and its header. Alerts on trades already saved stay stored.
 const SHOW_H4_ALERT = false
@@ -237,7 +236,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
     for (const tr of trades)
       for (const t of ENTRY_TYPES) {
         const x = tr.results[t.key]
-        if (!x || (only && t.poi !== only) || t.whatIf) continue
+        if (!x || (only && t.poi !== only)) continue
         const e = entriesIn(x)
         w += e.w; l += e.l; be += e.be
         const v = rOf(x)
@@ -360,8 +359,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                 be: a.be + r.be, none: a.none + r.none, totalR: a.totalR + r.totalR }), { taken: 0, trades: 0, w: 0, l: 0, be: 0, none: 0, totalR: 0 })
               const gTaken = g.w + g.l + g.be
               return [
-                // The Checklist journal mixes the trade with its "what if" entries, so a total of them would mean nothing
-                only === 'chk' ? null : <tr key={`grp-${p.key}`} style={{ background: SOFT.row, borderBottom: '1px solid var(--border)' }}>
+                <tr key={`grp-${p.key}`} style={{ background: SOFT.row, borderBottom: '1px solid var(--border)' }}>
                   <td style={{ ...td, textAlign: 'left', fontWeight: 800, color: SOFT.ac }}>{p.label}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{g.taken}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{g.trades}</td>
@@ -572,7 +570,7 @@ function ChecklistRead({ value }: { value: Checklist }) {
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 // A saved trade read back as a page of the owner's diary
 function storyOf(trade: Trade, only: string, name?: string) {
-  const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && !t.whatIf && trade.results[t.key])
+  const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key])
   return buildStory({
     id: trade.id, name, date: trade.trade_date, pair: trade.instrument, direction: trade.direction,
     hasNote: !!trade.notes.trim(), exitDate: trade.exit_date,
@@ -583,23 +581,12 @@ function storyOf(trade: Trade, only: string, name?: string) {
   })
 }
 
-// The entry types ticked on a Checklist trade: "Direct entry: Win +3.00R (2 trades)"
-function whatIfOf(trade: Trade, only: string) {
-  return ENTRY_TYPES.filter(t => t.whatIf && t.poi === only && trade.results[t.key]).map(t => {
-    const x = trade.results[t.key]
-    const v = rOf(x)
-    const word = x.outcome === 'none' ? 'No entry' : `${x.outcome === 'win' ? 'Win' : x.outcome === 'loss' ? 'Loss' : 'BE'}${v != null ? ` ${fmtR(v)}` : x.outcome === 'win' ? ' (RR not added)' : ''}`
-    return { slot: t.key, label: t.model, outcome: x.outcome, text: `${t.model}: ${word}${(x.takes ?? 1) > 1 ? ` (${x.takes} trades)` : ''}` }
-  })
-}
-
 function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeNum; onEdit: () => void; onDelete: () => void }) {
   const only = useContext(OnlyPoi)
   const { user } = useAuth()
   const imgs = trade.images || {}
   const note = trade.notes.trim()
   const story = storyOf(trade, only, user?.name)
-  const whatIfs = whatIfOf(trade, only)
   const pics = (slot: string, label: string) => imgs[slot]?.length
     ? <div className="dp-pics">{imgs[slot].map(id => <Thumb key={id} id={id} label={label} />)}</div>
     : null
@@ -625,19 +612,8 @@ function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeN
             {pics(r.slot, 'Chart')}
           </div>
         ))}
-        {whatIfs.length > 0 && (
-          <div className="dp-line" style={line()}>
-            <p className="dp-p" style={{ marginBottom: 4 }}>If I had entered another way:</p>
-            {whatIfs.map(w => (
-              <div key={w.slot} style={{ margin: '0 0 6px' }}>
-                <div style={{ fontSize: 13.5, color: w.outcome === 'win' ? 'var(--bullish)' : w.outcome === 'loss' ? 'var(--loss)' : 'var(--text-secondary)' }}>{w.text}</div>
-                {pics(w.slot, 'Chart')}
-              </div>
-            ))}
-          </div>
-        )}
         {/* Pictures on a row with no result ticked, so none go missing from the page */}
-        {Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k) && !whatIfs.some(w => w.slot === k)).map(k => <div key={k} className="dp-line" style={line()}>{pics(k, 'Chart')}</div>)}
+        {Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).map(k => <div key={k} className="dp-line" style={line()}>{pics(k, 'Chart')}</div>)}
         {story.held && <p className="dp-p dp-line" style={line()}>{story.held}</p>}
         <div className="dp-foot dp-line" style={line()}>
           <div>
@@ -678,7 +654,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
   const poiPics = (p: string) => Object.entries(imgs).filter(([k]) => k === p || k.endsWith(`_${p}`)).reduce((n, [, v]) => n + v.length, 0)
   const shownRes = ENTRY_TYPES.filter(t => !only || t.poi === only).map(t => trade.results[t.key]).filter((r): r is EntryResult => !!r)   // hidden old keys not counted
   const done = shownRes.length
-  const tradeR = ENTRY_TYPES.filter(t => (!only || t.poi === only) && !t.whatIf && trade.results[t.key]).map(t => rOf(trade.results[t.key])).filter((v): v is number => v != null)
+  const tradeR = shownRes.map(rOf).filter((v): v is number => v != null)
 
   const setResult = (key: string, r: EntryResult | null) => {
     const results = { ...trade.results }
@@ -740,11 +716,6 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
             const r = trade.results[t.key]
             return (
               <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 0', borderBottom: '1px dashed var(--border)', flexWrap: 'wrap' }}>
-                {t.mkey === CHK_MODELS[0].key && (
-                  <div style={{ flexBasis: '100%', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3, margin: '8px 0 2px' }}>
-                    What if I had entered with… <span style={{ textTransform: 'none', fontWeight: 500 }}>(compared in the reports; your W / L above stays LC 1 and LC 2)</span>
-                  </div>
-                )}
                 <span style={{ flex: '1 1 210px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.model}</span>
                 {OUTCOMES.map(o => (
                   <Chip key={o.key} on={r?.outcome === o.key} color={o.color} bg={o.bg} onClick={() => tapOutcome(t.key, o.key)}>{o.label}</Chip>
@@ -911,7 +882,7 @@ function DiaryCover({ title, sub, trades, look, setLook }: { title: string; sub:
     setQuote(DIARY_QUOTES[Math.floor(Date.now() / 86400000) % DIARY_QUOTES.length])   // a new one each day
   }, [name])
   let wins = 0
-  for (const t of trades) for (const [k, r] of Object.entries(t.results || {})) if (isTrade(k) && r.outcome === 'win') wins++
+  for (const t of trades) for (const r of Object.values(t.results || {})) if (r.outcome === 'win') wins++
   return (
     <div className="diary-cover">
       <div className="diary-ribbon" />
@@ -982,7 +953,7 @@ function periodSummary(list: Trade[], only: string): string {
   for (const tr of list)
     for (const t of ENTRY_TYPES) {
       const x = tr.results[t.key]
-      if (!x || (only && t.poi !== only) || t.whatIf) continue
+      if (!x || (only && t.poi !== only)) continue
       const e = entriesIn(x)
       w += e.w; l += e.l; be += e.be
       r += rOf(x) ?? 0
@@ -992,7 +963,7 @@ function periodSummary(list: Trade[], only: string): string {
   return `${plural(list.length, 'setup')} · ${entries} ${entries === 1 ? 'entry' : 'entries'} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
 }
 function resultWord(t: Trade, only: string): string {
-  return ENTRY_TYPES.filter(e => (!only || e.poi === only) && !e.whatIf && t.results[e.key]).map(e => {
+  return ENTRY_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key]).map(e => {
     const x = t.results[e.key]
     if (x.outcome === 'none') return 'No entry'
     const v = rOf(x)
@@ -1019,8 +990,7 @@ async function bookInput(opt: BookOptions): Promise<BookInput> {
       pair: t.instrument, direction: t.direction, note: t.notes.trim(), story,
       topPictures: take(imgs[only]),
       rows: story.rows.map(r => ({ text: r.text, pictures: take(imgs[r.slot]) })),
-      whatIf: whatIfOf(t, only).map(w => ({ text: w.text, pictures: take(imgs[w.slot]) })),
-      otherPictures: take(Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k) && !WHAT_IF.has(k)).flatMap(k => imgs[k])),
+      otherPictures: take(Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).flatMap(k => imgs[k])),
       resultWord: resultWord(t, only),
       ...(only === 'chk' ? {
         checklist: CHECK_ITEMS.map(i => ({ label: i.label, on: !!t.checklist?.items?.includes(i.key) })),
@@ -1173,7 +1143,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
 
   const shown = trades.filter(t => (!fPair || t.instrument === fPair) && (!fAlert || t.alert_type === fAlert) && (!fDir || t.direction === fDir))
   const pairs = Array.from(new Set(trades.map(t => t.instrument))).sort()
-  const tradeNum = useMemo(() => numberTrades(trades, isTrade), [trades])
+  const tradeNum = useMemo(() => numberTrades(trades), [trades])
   // The newest month you've logged is still running; earlier months are complete
   const latestMonth = trades.reduce((m, t) => (t.trade_date.slice(0, 7) > m ? t.trade_date.slice(0, 7) : m), '')
   // The remembered pair stays selectable even if it isn't in the standard list
