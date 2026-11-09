@@ -740,11 +740,16 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
           {(POIS.find(p => p.key === poi)?.old || !!imgs[poi]?.length) && <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
             ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />}
           {poi === 'chk' && <ChecklistBox value={trade.checklist ?? EMPTY_CHECKLIST} onChange={c => onChange({ ...trade, checklist: c })} />}
-          {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map(t => {
+          {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map((t, i, rows) => {
             const r = trade.results[t.key]
+            // Checklist entries are "<model>, <how>" (e.g. "1hr CISD, Instant entry"): the model is written once as a
+            // heading and each way of entering sits under it, so the page isn't the same name over and over
+            const [grp, sub] = poi === 'chk' && t.model.includes(', ') ? t.model.split(/, (.+)/) : ['', t.model]
+            const prevGrp = i > 0 && poi === 'chk' && rows[i - 1].model.includes(', ') ? rows[i - 1].model.split(', ')[0] : ''
             return (
-              <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 0', borderBottom: '1px dashed var(--border)', flexWrap: 'wrap' }}>
-                <span style={{ flex: '1 1 210px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.model}</span>
+              <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: grp ? '5px 0' : '7px 0', borderBottom: grp && rows[i + 1]?.model.startsWith(`${grp}, `) ? 'none' : '1px dashed var(--border)', flexWrap: 'wrap' }}>
+                {grp && grp !== prevGrp && <div style={{ flexBasis: '100%', fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>{grp}</div>}
+                <span style={{ flex: '1 1 210px', fontSize: 13, fontWeight: grp ? 500 : 600, color: grp ? 'var(--text-secondary)' : 'var(--text-primary)', paddingLeft: grp ? 14 : 0 }}>{sub}</span>
                 {OUTCOMES.map(o => (
                   <Chip key={o.key} on={r?.outcome === o.key} color={o.color} bg={o.bg} onClick={() => tapOutcome(t.key, o.key)}>{o.label}</Chip>
                 ))}
