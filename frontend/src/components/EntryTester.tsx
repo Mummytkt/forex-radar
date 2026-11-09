@@ -11,7 +11,7 @@ import { buildStory } from '@/lib/diaryStory'
 import { bookHtml, BOOK_WAIT, type BookChapter, type BookInput, type BookPage, type BookPicture } from '@/lib/diaryBook'
 import { downloadBookPdf } from '@/lib/diaryBookPdf'
 import { numberTrades, tradesWord, entriesIn, streaks, NO_NUM, type TradeNum } from '@/lib/tradeNumbers'
-import { CHECK_ITEMS, CHECK_RATIOS, EMPTY_CHECKLIST, type Checklist } from '@/lib/checklist'
+import { CHECK_ITEMS, CHECK_RATIOS, EMPTY_CHECKLIST, checklistText, type Checklist } from '@/lib/checklist'
 
 // A journal limited to one POI (the live Engulfing / Fresh Key Levels Journals): ''
 // = every POI (the backtest Entry Tester). Read by the scoreboards and trade cards.
@@ -53,17 +53,35 @@ const OLD_MODELS: { key: string; label: string }[] = [
   { key: 'm5_cisd', label: '5M SMC' },
   { key: 'm15_cisd', label: '15M SMC' },
 ]
-// The Checklist journal's rows: the entry types tried on every trade, to see which suits the strategy (2026-11-08;
-// LC 1 / LC 2 were taken off it the same day and show only on a trade already ticked there).
+// The Checklist journal's rows: the entries tried on every trade, to see which suits the POIs best (2026-11-09).
 // Must match CHK_MODELS in api/entry_tests.py (keys are stored)
 const CHK_MODELS: { key: string; label: string }[] = [
-  { key: 'e_direct', label: 'Direct entry' },
-  { key: 'e_cisd15', label: '15M CISD' },
-  { key: 'e_cisd1h', label: '1H CISD' },
-  { key: 'e_octgd1h', label: 'H1 OCTGD' },
-  { key: 'e_smc5', label: '5M SMC' },
+  { key: 'e_cisd1h_inst', label: '1hr CISD, Instant entry' },
+  { key: 'e_cisd1h_lim', label: '1hr CISD, Limit entry' },
+  { key: 'e_eg1h_inst', label: '1hr EG, Instant entry' },
+  { key: 'e_eg1h_lim', label: '1hr EG, Limit entry' },
+  { key: 'e_eg1h_smc5', label: '1hr EG, 5mins SMC entry' },
+  { key: 'e_octgd1h_inst', label: '1hr OCTGD, Instant entry' },
+  { key: 'e_octgd1h_lim', label: '1hr OCTGD, Limit entry' },
+  { key: 'e_pcl1h_lim', label: '1hr PCL, Limit entry' },
+  { key: 'e_pcl1h_inst', label: '1hr PCL, Instant entry' },
+  { key: 'e_cisd15_inst', label: '15mins CISD, Instant entry' },
+  { key: 'e_cisd15_lim', label: '15mins CISD, Limit entry' },
+  { key: 'e_smc15_bqm', label: '15mins SMC, Breaker / QM entry' },
+  { key: 'e_cisd5_inst', label: '5mins CISD, Instant entry' },
+  { key: 'e_smc5_lim', label: '5mins SMC, Limit entry' },
+  { key: 'e_smc5_inst', label: '5mins SMC, Instant entry' },
 ]
-const MODELS = [...NEW_MODELS, ...CHK_MODELS, ...RETIRED_MODELS, ...OLD_MODELS]
+// Its earlier rows: LC 1 / LC 2, then five entry types (2026-11-08). They show only on a trade already ticked there
+const CHK_OLD: { key: string; label: string; retired: true }[] = [
+  ...NEW_MODELS.map(m => ({ ...m, label: `${m.label} (old)`, retired: true as const })),
+  { key: 'e_direct', label: 'Direct entry (old)', retired: true as const },
+  { key: 'e_cisd15', label: '15M CISD (old)', retired: true as const },
+  { key: 'e_cisd1h', label: '1H CISD (old)', retired: true as const },
+  { key: 'e_octgd1h', label: 'H1 OCTGD (old)', retired: true as const },
+  { key: 'e_smc5', label: '5M SMC (old)', retired: true as const },
+]
+const MODELS = [...NEW_MODELS, ...CHK_MODELS, ...CHK_OLD.slice(NEW_MODELS.length), ...RETIRED_MODELS, ...OLD_MODELS]
 const POIS: { key: string; label: string; old?: boolean }[] = [
   { key: 'scl', label: 'H1 entry' },   // keys kept from their first names (SCL, high/low liquidity before POI)
   { key: 'chk', label: 'Checklist' },   // 2026-11-08: LC 1 / LC 2 like the H1 entry, plus the checklist
@@ -71,7 +89,6 @@ const POIS: { key: string; label: string; old?: boolean }[] = [
   { key: 'engulfing', label: 'H4 Engulfing', old: true },
   { key: 'h4_key', label: 'H4 fresh key level', old: true },
 ]
-const CHK_OLD = NEW_MODELS.map(m => ({ ...m, label: `${m.label} (old)`, retired: true as const }))
 const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; poi: string; poiLabel: string; retired: boolean }[] = POIS.flatMap(p =>
   (p.old ? OLD_MODELS : p.key === 'chk' ? [...CHK_MODELS, ...CHK_OLD] : [...NEW_MODELS, ...RETIRED_MODELS]).map(m => ({
     key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label,
@@ -543,28 +560,10 @@ function ChecklistBox({ value, onChange }: { value: Checklist; onChange: (c: Che
     </div>
   )
 }
-// The checklist on the diary page: every box, ticked or not
+// The checklist on the diary page: only what was ticked, written out as words
 function ChecklistRead({ value }: { value: Checklist }) {
-  const items = value.items || []
-  return (
-    <div style={{ margin: '2px 0 12px', display: 'grid', gap: 3 }}>
-      {CHECK_ITEMS.map(i => {
-        const on = items.includes(i.key)
-        return (
-          <div key={i.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: on ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-            <span style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              border: `2px solid ${on ? 'var(--accent)' : 'var(--text-muted)'}`, background: on ? 'var(--accent)' : 'transparent' }}>
-              {on && <Check size={11} color="white" strokeWidth={3.5} />}
-            </span>
-            {i.label}
-          </div>
-        )
-      })}
-      <div style={{ fontSize: 13.5, marginTop: 4, color: 'var(--text-primary)' }}>
-        Highest ratio done: <b>{value.ratio ? `${value.ratio}R` : 'not ticked'}</b>
-      </div>
-    </div>
-  )
+  const text = checklistText(value)
+  return text ? <p className="dp-p">{text}</p> : null
 }
 
 // ── One trade: tick each entry pattern's result ──────────────────────────────
@@ -604,7 +603,7 @@ function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeN
         <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
         <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
         {note && <div className="dp-note dp-line" style={line()}>{note}</div>}
-        {only === 'chk' && <div className="dp-line" style={line()}><ChecklistRead value={trade.checklist ?? EMPTY_CHECKLIST} /></div>}
+        {only === 'chk' && checklistText(trade.checklist ?? EMPTY_CHECKLIST) && <div className="dp-line" style={line()}><ChecklistRead value={trade.checklist ?? EMPTY_CHECKLIST} /></div>}
         {imgs[only]?.length ? <div className="dp-line" style={line()}>{pics(only, 'Chart')}</div> : null}
         {story.rows.map(r => (
           <div key={r.slot} className="dp-line" style={line()}>
@@ -993,8 +992,7 @@ async function bookInput(opt: BookOptions): Promise<BookInput> {
       otherPictures: take(Object.keys(imgs).filter(k => k !== only && !story.rows.some(r => r.slot === k)).flatMap(k => imgs[k])),
       resultWord: resultWord(t, only),
       ...(only === 'chk' ? {
-        checklist: CHECK_ITEMS.map(i => ({ label: i.label, on: !!t.checklist?.items?.includes(i.key) })),
-        ratio: t.checklist?.ratio ? `${t.checklist.ratio}R` : 'not ticked',
+        checklist: checklistText(t.checklist ?? EMPTY_CHECKLIST),
       } : {}),
     }
     c.pages.push(page)

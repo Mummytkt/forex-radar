@@ -125,13 +125,15 @@ check("an unknown book is refused", c.get("/api/entry-tests?book=demo", headers=
 _ck = c.post("/api/entry-tests?book=bt_check", headers=H(owner), json={
     "trade_date": "2020-05-26", "instrument": "EURUSD", "direction": "sell",
     "results": {"lc1_chk": {"outcome": "win", "rr": 3}, "e_direct_chk": {"outcome": "loss", "takes": 2}, "e_cisd15_chk": {"outcome": "win", "rr": 4},
-                "e_cisd1h_chk": {"outcome": "be"}, "e_octgd1h_chk": {"outcome": "none"}, "e_smc5_chk": {"outcome": "win", "rr": 2}},
+                "e_cisd1h_chk": {"outcome": "be"}, "e_octgd1h_chk": {"outcome": "none"}, "e_smc5_chk": {"outcome": "win", "rr": 2},
+                "e_eg1h_smc5_chk": {"outcome": "win", "rr": 5}, "e_smc15_bqm_chk": {"outcome": "loss"}},
     "checklist": {"items": ["sl_kl_poi", "h4_liq"], "ratio": 2}}).json()
 check("a Checklist trade saves its ticks in the list's order",
       _ck["checklist"] == {"items": ["h4_liq", "sl_kl_poi"], "ratio": 2} and _ck["results"]["lc1_chk"]["rr"] == 3)
 check("the Checklist's entry types save on the same trade",
       _ck["results"]["e_direct_chk"] == {"outcome": "loss", "rr": None, "takes": 2} and _ck["results"]["e_cisd15_chk"]["rr"] == 4
-      and _ck["results"]["e_octgd1h_chk"]["outcome"] == "none" and _ck["results"]["e_smc5_chk"]["rr"] == 2)
+      and _ck["results"]["e_octgd1h_chk"]["outcome"] == "none" and _ck["results"]["e_smc5_chk"]["rr"] == 2
+      and _ck["results"]["e_eg1h_smc5_chk"]["rr"] == 5 and _ck["results"]["e_smc15_bqm_chk"]["outcome"] == "loss")
 _ck2 = c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={
     "trade_date": "2020-05-26", "instrument": "EURUSD", "direction": "sell", "notes": "my view"}).json()
 check("a save without the checklist keeps the ticks", _ck2["checklist"] == {"items": ["h4_liq", "sl_kl_poi"], "ratio": 2})

@@ -20,8 +20,7 @@ export interface BookPage {
   rows: BookRow[]
   otherPictures: BookPicture[]  // pictures on a row with no result ticked
   resultWord: string     // the month's list: "Win +3.00R"
-  checklist?: { label: string; on: boolean }[]   // the Checklist journal only
-  ratio?: string         // its Highest Ratio Done: "2R" or "not ticked"
+  checklist?: string     // the Checklist journal only: what was ticked, in words ('' = nothing ticked)
 }
 export interface BookChapter { title: string; summary: string; pages: BookPage[] }
 export interface BookInput {
@@ -55,7 +54,7 @@ function page(p: BookPage): string {
   <div class="script greet">${esc(s.greeting)}</div>
   <p>${esc(s.opening)}${s.noNote ? ` ${esc(s.noNote)}` : ''}</p>
   ${p.note ? `<div class="note">${esc(p.note)}</div>` : ''}
-  ${p.checklist ? `<div class="check">${p.checklist.map(c => `<div class="ci${c.on ? ' on' : ''}"><span class="box">${c.on ? '✓' : ''}</span>${esc(c.label)}</div>`).join('')}<div class="ci on ratio">Highest ratio done: <b>${esc(p.ratio || 'not ticked')}</b></div></div>` : ''}
+  ${p.checklist ? `<p>${esc(p.checklist)}</p>` : ''}
   ${pics(p.topPictures)}
   ${p.rows.map(r => `<p>${esc(r.text)}</p>${pics(r.pictures)}`).join('\n  ')}
   ${pics(p.otherPictures)}
@@ -109,13 +108,6 @@ export function bookHtml(b: BookInput): string {
   .stamp { font-size: 8.5pt; line-height: 1.45; color: #8a8496; text-align: right; }
   .greet { font-size: 21pt; line-height: 1.2; margin-bottom: 3mm; }
   .note { margin: 0 0 4mm; padding: 0.5mm 0 0.5mm 4mm; border-left: 0.7mm solid ${b.accentSoft}; font-style: italic; white-space: pre-wrap; }
-  .check { margin: 0 0 4mm; font-size: 9.5pt; line-height: 1.5; }
-  .ci { display: flex; align-items: center; gap: 2mm; color: #9a94a6; }
-  .ci.on { color: #2f2a3a; }
-  .ci .box { display: inline-flex; align-items: center; justify-content: center; width: 3.4mm; height: 3.4mm; flex-shrink: 0;
-    border: 0.45mm solid #b5afc0; border-radius: 0.8mm; color: #fff; font-size: 7pt; font-weight: 700; line-height: 1; }
-  .ci.on .box { background: ${b.accent}; border-color: ${b.accent}; }
-  .ci.ratio { margin-top: 1mm; }
   .pics { margin: 0 0 4mm; }
   .pics img { display: block; width: 100%; max-height: 120mm; object-fit: contain; margin-bottom: 2.5mm; border-radius: 1.5mm; break-inside: avoid; background: #111; }
   .nopic { font-size: 9pt; color: #8a8496; font-style: italic; }

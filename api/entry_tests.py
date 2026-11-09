@@ -74,17 +74,29 @@ RETIRED_MODELS: list[str] = ["oc1h", "cisd1h", "pcl1h"]
 POIS += NEW_POIS
 ENTRY_TYPES += [(f"{m}_{p}", f"{ml} on {pl}") for p, pl in NEW_POIS for m, ml in NEW_MODELS]
 _LEGACY |= {f"{m}_{p}" for m in RETIRED_MODELS for p, _ in NEW_POIS}
-# 2026-11-08, Checklist journal only: the entry types the owner compares on every trade, to see which suits the
-# strategy. They replaced LC 1 / LC 2 there the same day (lc1_chk / lc2_chk still save, for trades already ticked).
-# Keys are stored, never rename one.
+# Checklist journal only: the entries the owner tries on every trade, to see which suits the POIs best (2026-11-09).
+# Keys are stored, never rename one. Earlier rows (LC 1 / LC 2, then five entry types on 2026-11-08) still save, so
+# trades already ticked on them keep their results.
 CHK_MODELS: list[tuple[str, str]] = [
-    ("e_direct", "Direct entry"),
-    ("e_cisd15", "15M CISD"),
-    ("e_cisd1h", "1H CISD"),
-    ("e_octgd1h", "H1 OCTGD"),
-    ("e_smc5", "5M SMC"),
+    ("e_cisd1h_inst", "1hr CISD, Instant entry"),
+    ("e_cisd1h_lim", "1hr CISD, Limit entry"),
+    ("e_eg1h_inst", "1hr EG, Instant entry"),
+    ("e_eg1h_lim", "1hr EG, Limit entry"),
+    ("e_eg1h_smc5", "1hr EG, 5mins SMC entry"),
+    ("e_octgd1h_inst", "1hr OCTGD, Instant entry"),
+    ("e_octgd1h_lim", "1hr OCTGD, Limit entry"),
+    ("e_pcl1h_lim", "1hr PCL, Limit entry"),
+    ("e_pcl1h_inst", "1hr PCL, Instant entry"),
+    ("e_cisd15_inst", "15mins CISD, Instant entry"),
+    ("e_cisd15_lim", "15mins CISD, Limit entry"),
+    ("e_smc15_bqm", "15mins SMC, Breaker / QM entry"),
+    ("e_cisd5_inst", "5mins CISD, Instant entry"),
+    ("e_smc5_lim", "5mins SMC, Limit entry"),
+    ("e_smc5_inst", "5mins SMC, Instant entry"),
 ]
+CHK_OLD_MODELS = ["lc1", "lc2", "e_direct", "e_cisd15", "e_cisd1h", "e_octgd1h", "e_smc5"]
 ENTRY_TYPES += [(f"{m}_chk", f"{ml} on Checklist") for m, ml in CHK_MODELS]
+_LEGACY |= {f"{m}_chk" for m in CHK_OLD_MODELS}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
 OUTCOMES = ("win", "loss", "be", "none")
 BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key", "bt_scl", "bt_hl_liq", "live_scl", "live_hl_liq",
@@ -201,7 +213,7 @@ _NEW_POI_KEYS = {k for k, _ in NEW_POIS}
 _SLOT_POI = {k: k for k in _POI_KEYS} | {
     f"{m}_{p}": p for p in _POI_KEYS
     for m in ([k for k, _ in NEW_MODELS] + RETIRED_MODELS if p in _NEW_POI_KEYS else [k for k, _ in MODELS])} | {
-    f"{m}_chk": "chk" for m, _ in CHK_MODELS}
+    f"{m}_chk": "chk" for m in [k for k, _ in CHK_MODELS] + CHK_OLD_MODELS}
 MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PER_SLOT = 12
 
