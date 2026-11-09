@@ -67,7 +67,6 @@ const CHK_MODELS: { key: string; label: string }[] = [
   { key: 'e_pcl1h_inst', label: '1hr PCL, Instant entry' },
   { key: 'e_cisd15_inst', label: '15mins CISD, Instant entry' },
   { key: 'e_cisd15_lim', label: '15mins CISD, Limit entry' },
-  { key: 'e_smc15_bqm', label: '15mins SMC, Breaker / QM entry' },
   { key: 'e_smc5_lim', label: '5mins SMC, Limit entry' },
   { key: 'e_smc5_inst', label: '5mins SMC, Instant entry' },
 ]
@@ -80,6 +79,7 @@ const CHK_OLD: { key: string; label: string; retired: true }[] = [
   { key: 'e_octgd1h', label: 'H1 OCTGD (old)', retired: true as const },
   { key: 'e_smc5', label: '5M SMC (old)', retired: true as const },
   { key: 'e_cisd5_inst', label: '5mins CISD, Instant entry (old)', retired: true as const },   // taken off 2026-11-09
+  { key: 'e_smc15_bqm', label: '15mins SMC, Breaker / QM entry (old)', retired: true as const },   // taken off 2026-11-09
 ]
 const MODELS = [...NEW_MODELS, ...CHK_MODELS, ...CHK_OLD.slice(NEW_MODELS.length), ...RETIRED_MODELS, ...OLD_MODELS]
 const POIS: { key: string; label: string; old?: boolean }[] = [
