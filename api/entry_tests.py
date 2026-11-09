@@ -106,8 +106,8 @@ BOOKS = ("backtest", "bt_engulfing", "bt_h4_key", "live_engulfing", "live_h4_key
 CHECK_ITEMS: list[tuple[str, str]] = [
     ("h4_liq", "H4 Liquidity"),
     ("h1_liq_only", "H1 Liquidity"),   # key kept from "H1 Liquidity only" (renamed 2026-11-09)
-    ("ltf_poi", "LTF POI"),
-    ("mtf_poi", "MTF POI"),
+    ("mtf_poi", "H4 POI"),   # first named MTF POI (renamed 2026-11-09)
+    ("ltf_poi", "H1 POI"),   # first named LTF POI (renamed 2026-11-09)
 ]
 # Taken off the checklist: 1hr OCTGD / 1hr CISD on 2026-11-08 (now entries); SL behind KL POI, SL behind 1hr candle and
 # Reaction from an actual key level in the POI on 2026-11-09. A tick already saved on them stays stored, unseen

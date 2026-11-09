@@ -4,8 +4,8 @@
 export const CHECK_ITEMS: { key: string; label: string; says: string }[] = [
   { key: 'h4_liq', label: 'H4 Liquidity', says: 'there was H4 liquidity' },
   { key: 'h1_liq_only', label: 'H1 Liquidity', says: 'there was H1 liquidity' },   // key kept from "H1 Liquidity only"
-  { key: 'ltf_poi', label: 'LTF POI', says: 'there was an LTF POI' },
-  { key: 'mtf_poi', label: 'MTF POI', says: 'there was an MTF POI' },
+  { key: 'mtf_poi', label: 'H4 POI', says: 'there was a H4 POI' },   // first named MTF POI
+  { key: 'ltf_poi', label: 'H1 POI', says: 'there was a H1 POI' },   // first named LTF POI
 ]
 // Taken off on 2026-11-09: SL behind KL POI (sl_kl_poi), SL behind 1hr candle (sl_1h_candle), Reaction from an actual
 // key level in the POI (kl_reaction). Ticks already saved on them stay stored but aren't shown.
