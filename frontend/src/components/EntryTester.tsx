@@ -32,6 +32,7 @@ interface Trade {
   exit_date?: string | null   // YYYY-MM-DD the trade closed
   results: Record<string, EntryResult>
   images: Record<string, number[]>   // {slot: image ids} — slot = a POI key or an entry key
+  image_tags?: Record<string, string[]>   // Checklist pictures box: {image id: entry keys it shows}
   checklist?: Checklist   // the Checklist journal's tick boxes (empty on the other journals)
 }
 
@@ -366,7 +367,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
               <th style={{ ...th, textAlign: 'left' }}>Entry</th>
               <th style={th} title="Setups where this entry was taken">Taken</th>
               <th style={th} title="Trades placed, re-entries included">Trades</th><th style={th}>Win</th><th style={th}>Loss</th><th style={th}>BE</th>
-              <th style={th}>No entry</th><th style={th}>Win %</th><th style={th}>Avg RR (wins)</th>
+              {poi !== 'chk' && <th style={th}>No entry</th>}<th style={th}>Win %</th><th style={th}>Avg RR (wins)</th>
               <th style={th}>Total R</th><th style={th}>R / trade</th>
               <th style={th} title="Wins / losses in a row, counting every entry: the run going now, the longest win run, the longest loss run. BE and no entry don't break a run.">Streak</th>
               <th style={{ ...th, textAlign: 'left' }} title="Each setup's result for this entry, oldest first. Hover a badge for the date and pair.">Results (oldest → newest)</th>
@@ -392,7 +393,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                   <td style={{ ...td, fontWeight: 700, color: SOFT.up }}>{g.w}</td>
                   <td style={{ ...td, fontWeight: 700, color: SOFT.loss }}>{g.l}</td>
                   <td style={{ ...td, fontWeight: 700, color: SOFT.be }}>{g.be}</td>
-                  <td style={{ ...td, color: 'var(--text-muted)' }}>{g.none}</td>
+                  {poi !== 'chk' && <td style={{ ...td, color: 'var(--text-muted)' }}>{g.none}</td>}
                   <td style={{ ...td, fontWeight: 800 }}>{gTaken ? `${((g.w / gTaken) * 100).toFixed(0)}%` : '–'}</td>
                   <td style={td}></td>
                   <td style={{ ...td, fontWeight: 800, color: g.totalR > 0 ? SOFT.up : g.totalR < 0 ? SOFT.loss : 'var(--text-muted)' }}>{gTaken ? fmtR(g.totalR) : '–'}</td>
@@ -408,7 +409,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
                 <td style={{ ...td, color: SOFT.up }}>{r.w}</td>
                 <td style={{ ...td, color: SOFT.loss }}>{r.l}</td>
                 <td style={{ ...td, color: SOFT.be }}>{r.be}</td>
-                <td style={{ ...td, color: 'var(--text-muted)' }}>{r.none}</td>
+                {poi !== 'chk' && <td style={{ ...td, color: 'var(--text-muted)' }}>{r.none}</td>}
                 <td style={{ ...td, fontWeight: 700 }}>{r.winRate == null ? '–' : `${r.winRate.toFixed(0)}%`}</td>
                 <td style={td}>{r.avgRR == null ? '–' : r.avgRR.toFixed(2)}{r.noRR ? <span title="Wins with no RR set" style={{ color: 'var(--text-muted)' }}> ({r.noRR}?)</span> : null}</td>
                 <td style={{ ...td, fontWeight: 800, color: r.totalR > 0 ? SOFT.up : r.totalR < 0 ? SOFT.loss : 'var(--text-muted)' }}>{r.taken ? fmtR(r.totalR) : '–'}</td>
@@ -550,6 +551,108 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact, pickTick = 0
   )
 }
 
+// The Checklist's pictures box (2026-11-09): every screenshot of the trade goes in at once (choose several, drop or
+// paste), then each picture is tagged with the entries it shows; one picture can be on several entries. The server
+// then lists a tagged picture under each of its entries, so the diary page and the book need nothing new
+const CHK_GROUPS = (() => {
+  const out: { name: string; rows: { key: string; sub: string }[] }[] = []
+  for (const t of ENTRY_TYPES.filter(e => e.poi === 'chk' && !e.retired)) {
+    const [name, sub] = t.model.includes(', ') ? t.model.split(/, (.+)/) : [t.model, '']
+    let g = out.find(x => x.name === name)
+    if (!g) out.push(g = { name, rows: [] })
+    g.rows.push({ key: t.key, sub: (sub || name).replace(/ entry$/i, '') })
+  }
+  return out
+})()
+function PicturesBox({ trade, onImages }: { trade: Trade; onImages: (images: Record<string, number[]>, tags: Record<string, string[]>) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const input = useRef<HTMLInputElement>(null)
+  const tags = trade.image_tags || {}
+  const ids = Object.keys(tags).map(Number).sort((a, b) => a - b)
+  // The trade's pictures by slot, rebuilt from the tags the same way the server builds it
+  const apply = (next: Record<string, string[]>) => {
+    const pool = new Set([...Object.keys(tags), ...Object.keys(next)].map(Number))
+    const images: Record<string, number[]> = {}
+    for (const [k, v] of Object.entries(trade.images || {})) {
+      const keep = v.filter(id => !pool.has(id))
+      if (keep.length) images[k] = keep
+    }
+    for (const [id, tg] of Object.entries(next))
+      for (const slot of tg.length ? tg : ['chk']) (images[slot] ||= []).push(Number(id))
+    for (const k of Object.keys(images)) images[k].sort((a, b) => a - b)
+    onImages(images, next)
+  }
+  const upload = async (files: File[]) => {
+    const pics = files.filter(f => f.type.startsWith('image/'))
+    if (!pics.length) { setErr('That is not an image file.'); return }
+    setBusy(true); setErr('')
+    let now = tags
+    for (const f of pics) {
+      const fd = new FormData()
+      fd.append('file', f)
+      try {
+        const r = await fetch(`${API_BASE}/api/entry-tests/${trade.id}/images/chk`, { method: 'POST', headers: authHdr(), body: fd })
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || '')
+        now = { ...now, [String((await r.json()).id)]: [] }
+        apply(now)
+      } catch (e) { setErr((e as Error).message || 'A picture did not upload. Try again.'); break }
+    }
+    setBusy(false)
+  }
+  const toggle = async (id: number, key: string) => {
+    const was = tags[String(id)] || []
+    const tg = was.includes(key) ? was.filter(k => k !== key) : [...was, key]
+    apply({ ...tags, [String(id)]: tg })
+    const r = await fetch(`${API_BASE}/api/entry-tests/images/${id}/tags`, { method: 'PUT', headers: { ...authHdr(), 'Content-Type': 'application/json' }, body: JSON.stringify({ tags: tg }) })
+      .catch(() => null)
+    if (!r?.ok) { setErr('That tag did not save. Try again.'); apply({ ...tags, [String(id)]: was }) }
+  }
+  const remove = async (id: number) => {
+    if (!confirm('Remove this picture from the trade?')) return
+    const r = await fetch(`${API_BASE}/api/entry-tests/images/${id}`, { method: 'DELETE', headers: authHdr() })
+    if (r.ok) { const rest = { ...tags }; delete rest[String(id)]; apply(rest) }
+  }
+  return (
+    <div style={{ padding: '8px 0 10px', borderBottom: '1px dashed var(--border)' }}
+      onPaste={e => { if (e.clipboardData.files.length) upload(Array.from(e.clipboardData.files)) }}
+      onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(Array.from(e.dataTransfer.files)) }}>
+      <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { upload(Array.from(e.target.files || [])); e.target.value = '' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: ids.length ? 6 : 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Pictures{ids.length ? ` · ${ids.length}` : ''}</span>
+        <button onClick={() => input.current?.click()} disabled={busy}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--accent)', background: 'var(--accent-bg)',
+            color: 'var(--accent)', cursor: busy ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700 }}>
+          <Camera size={14} /> {busy ? 'Uploading…' : ids.length ? 'Add more pictures' : 'Add all pictures'}
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {ids.length ? 'Tap the entries each picture shows.' : 'Choose all of this trade’s screenshots at once, or drop / paste them here. Then tap the entries each one shows.'}
+        </span>
+      </div>
+      {ids.map(id => {
+        const tg = tags[String(id)] || []
+        return (
+          <div key={id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '6px 0', flexWrap: 'wrap' }}>
+            <Thumb id={id} label="Chart" onRemove={() => remove(id)} />
+            <div style={{ flex: '1 1 280px', display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 10px', alignItems: 'center' }}>
+              {CHK_GROUPS.map(g => (
+                <div key={g.name} style={{ display: 'contents' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{g.name}</span>
+                  <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {g.rows.map(r => <Chip key={r.key} on={tg.includes(r.key)} color="var(--accent)" bg="var(--accent-bg)" onClick={() => toggle(id, r.key)}>{r.sub}</Chip>)}
+                  </span>
+                </div>
+              ))}
+              {!tg.length && <span style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--text-muted)' }}>Not on an entry yet: it shows as the trade’s chart.</span>}
+            </div>
+          </div>
+        )
+      })}
+      {err && <div style={{ color: 'var(--bearish)', fontSize: 12, marginTop: 4 }}>{err}</div>}
+    </div>
+  )
+}
+
 // ── The Checklist journal ────────────────────────────────────────────────────
 function TickBox({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
   return (
@@ -590,7 +693,7 @@ function ChecklistRead({ value }: { value: Checklist }) {
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 // A saved trade read back as a page of the owner's diary
 function storyOf(trade: Trade, only: string, name?: string) {
-  const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key])
+  const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key] && !(only === 'chk' && trade.results[t.key].outcome === 'none'))
   return buildStory({
     id: trade.id, name, date: trade.trade_date, pair: trade.instrument, direction: trade.direction,
     hasNote: !!trade.notes.trim(), exitDate: trade.exit_date,
@@ -607,9 +710,11 @@ function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeN
   const imgs = trade.images || {}
   const note = trade.notes.trim()
   const story = storyOf(trade, only, user?.name)
-  const pics = (slot: string, label: string) => imgs[slot]?.length
-    ? <div className="dp-pics">{imgs[slot].map(id => <Thumb key={id} id={id} label={label} />)}</div>
-    : null
+  const seen = new Set<number>()   // a picture tagged on several entries shows once, under the first
+  const pics = (slot: string, label: string) => {
+    const ids = (imgs[slot] || []).filter(id => !seen.has(id) && !!seen.add(id))
+    return ids.length ? <div className="dp-pics">{ids.map(id => <Thumb key={id} id={id} label={label} />)}</div> : null
+  }
   let n = 0
   const line = () => ({ animationDelay: `${(n++) * 0.14}s` })   // each line drifts in after the one before
   const journal = only ? POIS.find(p => p.key === only)?.label : ''
@@ -655,7 +760,7 @@ function DiaryPage({ trade, num, onEdit, onDelete }: { trade: Trade; num: TradeN
 
 function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }: {
   trade: Trade; num: TradeNum; open: boolean; onToggle: () => void
-  onChange: (t: Trade) => void; onImages: (images: Record<string, number[]>) => void; onDelete: () => void
+  onChange: (t: Trade) => void; onImages: (images: Record<string, number[]>, tags?: Record<string, string[]>) => void; onDelete: () => void
 }) {
   const only = useContext(OnlyPoi)
   const [customFor, setCustomFor] = useState<string | null>(null)
@@ -737,11 +842,17 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
             })}
           </div>
           {/* H1 / M15 entry: pictures go on LC 1 and LC 2 only. A chart already saved up here still shows, so it can be seen or removed */}
-          {(POIS.find(p => p.key === poi)?.old || !!imgs[poi]?.length) && <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
+          {poi !== 'chk' && (POIS.find(p => p.key === poi)?.old || !!imgs[poi]?.length) && <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
             ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />}
           {poi === 'chk' && <ChecklistBox value={trade.checklist ?? EMPTY_CHECKLIST} onChange={c => onChange({ ...trade, checklist: c })} />}
+          {poi === 'chk' && <PicturesBox trade={trade} onImages={onImages} />}
           {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map((t, i, rows) => {
             const r = trade.results[t.key]
+            // Checklist: no "No entry" and no 📷 per row (pictures come from the pictures box; older per-row pictures still show)
+            const chk = poi === 'chk'
+            const inBox = (id: number) => String(id) in (trade.image_tags || {})
+            const tagged = chk ? (imgs[t.key] || []).filter(inBox).length : 0
+            const own = chk ? (imgs[t.key] || []).filter(id => !inBox(id)) : imgs[t.key] || []
             // Checklist entries are "<model>, <how>" (e.g. "1hr CISD, Instant entry"): the model is written once as a
             // heading and each way of entering sits under it, so the page isn't the same name over and over
             const [grp, sub] = poi === 'chk' && t.model.includes(', ') ? t.model.split(/, (.+)/) : ['', t.model]
@@ -750,16 +861,17 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
               <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: grp ? '5px 0' : '7px 0', borderBottom: grp && rows[i + 1]?.model.startsWith(`${grp}, `) ? 'none' : '1px dashed var(--border)', flexWrap: 'wrap' }}>
                 {grp && grp !== prevGrp && <div style={{ flexBasis: '100%', fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>{grp}</div>}
                 <span style={{ flex: '1 1 210px', fontSize: 13, fontWeight: grp ? 500 : 600, color: grp ? 'var(--text-secondary)' : 'var(--text-primary)', paddingLeft: grp ? 14 : 0 }}>{sub}</span>
-                {OUTCOMES.map(o => (
+                {chk && tagged > 0 && <span title="Pictures tagged with this entry in the pictures box" style={{ fontSize: 12, color: 'var(--accent)', marginRight: 4 }}>📷 {tagged}</span>}
+                {OUTCOMES.filter(o => !chk || o.key !== 'none').map(o => (
                   <Chip key={o.key} on={r?.outcome === o.key} color={o.color} bg={o.bg} onClick={() => tapOutcome(t.key, o.key)}>{o.label}</Chip>
                 ))}
-                <Chip on={picsFor === t.key || !!imgs[t.key]?.length} color="var(--accent)" bg="var(--accent-bg)"
+                {!chk && <Chip on={picsFor === t.key || !!imgs[t.key]?.length} color="var(--accent)" bg="var(--accent-bg)"
                   onClick={() => { setPicsFor(t.key); setPick(p => ({ key: t.key, n: p.n + 1, at: Date.now() })) }}>
                   📷{imgs[t.key]?.length ? ` ${imgs[t.key].length}` : ''}
-                </Chip>
-                {(picsFor === t.key || !!imgs[t.key]?.length) && (
-                  <ImageStrip compact tradeId={trade.id} slot={t.key} label={t.label} ids={imgs[t.key] || []}
-                    onChange={ids => setSlot(t.key, ids)} pickTick={pick.key === t.key ? pick.n : 0} pickAt={pick.at}
+                </Chip>}
+                {((!chk && picsFor === t.key) || own.length > 0) && (
+                  <ImageStrip compact tradeId={trade.id} slot={t.key} label={t.label} ids={own}
+                    onChange={ids => setSlot(t.key, chk ? [...ids, ...(imgs[t.key] || []).filter(inBox)] : ids)} pickTick={pick.key === t.key ? pick.n : 0} pickAt={pick.at}
                     onCancel={() => setPicsFor(cur => (cur === t.key ? null : cur))} />
                 )}
                 {r?.outcome === 'be' && (
@@ -998,7 +1110,7 @@ function periodSummary(list: Trade[], only: string): string {
   return `${plural(list.length, 'setup')} · ${entries} ${entries === 1 ? 'entry' : 'entries'} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
 }
 function resultWord(t: Trade, only: string): string {
-  return ENTRY_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key]).map(e => {
+  return ENTRY_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key] && !(only === 'chk' && t.results[e.key].outcome === 'none')).map(e => {
     const x = t.results[e.key]
     if (x.outcome === 'none') return 'No entry'
     const v = rOf(x)
@@ -1010,7 +1122,8 @@ async function bookInput(opt: BookOptions): Promise<BookInput> {
   const { list, only, name, title, palette, filterNote, nums } = opt
   const chrono = [...list].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
   const pictures = await fetchPictures(chrono.flatMap(t => Object.values(t.images || {}).flat()))
-  const take = (ids?: number[]) => (ids || []).map(id => pictures.get(id) ?? { src: null })
+  let seen = new Set<number>()   // per page: a picture tagged on several entries goes in once
+  const take = (ids?: number[]) => (ids || []).filter(id => !seen.has(id) && !!seen.add(id)).map(id => pictures.get(id) ?? { src: null })
   const chapters: BookChapter[] = []
   for (const t of chrono) {
     const key = t.trade_date.slice(0, 7)
@@ -1020,6 +1133,7 @@ async function bookInput(opt: BookOptions): Promise<BookInput> {
     const story = storyOf(t, only, name)
     const imgs = t.images || {}
     const n = nums.get(t.id) ?? NO_NUM
+    seen = new Set<number>()
     const page: BookPage = {
       monthNum: n.month, yearNum: n.year, monthWord: monthTitle.split(' ')[0], year: key.slice(0, 4), dayLabel: fmtDay(t.trade_date),
       pair: t.instrument, direction: t.direction, note: t.notes.trim(), story,
@@ -1338,7 +1452,7 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
                       <TradeCard key={t.id} trade={t} num={tradeNum.get(t.id) ?? NO_NUM} open={openId === t.id}
                         onToggle={() => setOpenId(openId === t.id ? null : t.id)}
                         onChange={update} onDelete={() => remove(t.id)}
-                        onImages={images => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images } : x))} />
+                        onImages={(images, tags) => setTrades(prev => prev.map(x => x.id === t.id ? { ...x, images, ...(tags ? { image_tags: tags } : {}) } : x))} />
                     ))}
                   </Scoreboard>
                 </div>

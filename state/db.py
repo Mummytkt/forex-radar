@@ -565,7 +565,8 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
                 slot       TEXT    NOT NULL,           -- the POI key, or an entry key under it (e.g. h1_cisd_fvg)
                 file_name  TEXT    NOT NULL,
                 created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                backed_up_at TEXT                      -- when the weekly image backup sent it off-site
+                backed_up_at TEXT,                     -- when the weekly image backup sent it off-site
+                tags       TEXT                        -- pictures box: JSON list of the entry keys it shows
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_test_images ON entry_test_images (test_id, slot)")
@@ -593,6 +594,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             conn.execute("DROP TABLE entry_test_images")
             conn.execute("ALTER TABLE entry_test_images_new RENAME TO entry_test_images")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_test_images ON entry_test_images (test_id, slot)")
+    if "tags" not in {row[1] for row in conn.execute("PRAGMA table_info(entry_test_images)").fetchall()}:
+        # The Checklist's pictures box (2026-11-09): JSON list of the entry keys a picture shows
+        conn.execute("ALTER TABLE entry_test_images ADD COLUMN tags TEXT")
     # 2026-10-27 the backtest Entry Tester became two journals, one per POI, like the live
     # ones: each trade goes to the POI it was ticked on. A trade ticked on both is split:
     # a copy goes to the Fresh Key Levels journal with its fresh-key-level ticks and pictures.

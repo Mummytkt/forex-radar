@@ -198,7 +198,9 @@ def _row(r: sqlite3.Row, images: Optional[dict] = None) -> dict:
     d = dict(r)
     d["results"] = json.loads(d.pop("results_json") or "{}")
     d["checklist"] = json.loads(d.pop("checklist_json", None) or '{"items": [], "ratio": null}')
-    d["images"] = images or {}   # {slot: [image ids]} — slot = a POI key or an entry key
+    images = images or {}
+    d["image_tags"] = images.pop("__tags__", {})   # Checklist pictures box: {image id: [entry keys it shows]}
+    d["images"] = images   # {slot: [image ids]} — slot = a POI key or an entry key
     return d
 
 
@@ -214,6 +216,10 @@ _SLOT_POI = {k: k for k in _POI_KEYS} | {
     f"{m}_chk": "chk" for m in [k for k, _ in CHK_MODELS] + CHK_OLD_MODELS}
 MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PER_SLOT = 12
+# The Checklist's one pictures box per trade (2026-11-09): every screenshot goes in at once, then each is tagged
+# with the entries it shows, instead of a 📷 on every entry row
+POOL_SLOTS = {"chk"}
+MAX_IN_POOL = 40
 
 
 def _img_dir(request: Request) -> Path:
@@ -224,8 +230,15 @@ def _img_dir(request: Request) -> Path:
 
 def _images_by_trade(conn, uid: int) -> dict[int, dict]:
     out: dict[int, dict] = {}
-    for r in conn.execute("SELECT id, test_id, slot FROM entry_test_images WHERE user_id = ? ORDER BY id", (uid,)):
-        out.setdefault(r["test_id"], {}).setdefault(r["slot"], []).append(r["id"])
+    for r in conn.execute("SELECT id, test_id, slot, tags FROM entry_test_images WHERE user_id = ? ORDER BY id", (uid,)):
+        t = out.setdefault(r["test_id"], {})
+        tags = json.loads(r["tags"] or "[]")
+        if r["slot"] in POOL_SLOTS:
+            # A picture in the Checklist's pictures box shows under each entry it was tagged with (the page,
+            # the diary and the book then need nothing new); untagged, it stays the trade's own chart
+            t.setdefault("__tags__", {})[str(r["id"])] = tags
+        for slot in tags or [r["slot"]]:
+            t.setdefault(slot, []).append(r["id"])
     return out
 
 
@@ -341,8 +354,9 @@ async def upload_image(trade_id: int, slot: str, request: Request, file: UploadF
         if not conn.execute("SELECT 1 FROM entry_tests WHERE id = ? AND user_id = ?", (trade_id, u["id"])).fetchone():
             raise HTTPException(404, "Trade not found")
         n = conn.execute("SELECT COUNT(*) FROM entry_test_images WHERE test_id = ? AND slot = ?", (trade_id, slot)).fetchone()[0]
-        if n >= MAX_PER_SLOT:
-            raise HTTPException(400, f"{MAX_PER_SLOT} images is the most for one POI or entry")
+        cap = MAX_IN_POOL if slot in POOL_SLOTS else MAX_PER_SLOT
+        if n >= cap:
+            raise HTTPException(400, f"{cap} images is the most for {'one trade' if slot in POOL_SLOTS else 'one POI or entry'}")
         (_img_dir(request) / name).write_bytes(buf.getvalue())
         cur = conn.execute("INSERT INTO entry_test_images (test_id, user_id, poi, slot, file_name) VALUES (?, ?, ?, ?, ?)",
                            (trade_id, u["id"], poi, slot, name))
@@ -359,6 +373,30 @@ def get_image(image_id: int, request: Request):
     if not path or not path.is_file():
         raise HTTPException(404, "Image not found")
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+class TagsBody(BaseModel):
+    tags: list[str]
+
+
+@router.put("/entry-tests/images/{image_id}/tags")
+def tag_image(image_id: int, body: TagsBody, request: Request):
+    """Say which entries a picture in the Checklist's pictures box shows (none = the trade's own chart)."""
+    u = require_owner(request)
+    with _db(request) as conn:
+        row = conn.execute("SELECT slot FROM entry_test_images WHERE id = ? AND user_id = ?", (image_id, u["id"])).fetchone()
+        if not row:
+            raise HTTPException(404, "Image not found")
+        if row["slot"] not in POOL_SLOTS:
+            raise HTTPException(400, "Only pictures in the pictures box can be tagged")
+        tags: list[str] = []
+        for t in body.tags:
+            if _SLOT_POI.get(t) != row["slot"] or t == row["slot"]:
+                raise HTTPException(400, f"unknown entry: {t}")
+            if t not in tags:
+                tags.append(t)
+        conn.execute("UPDATE entry_test_images SET tags = ? WHERE id = ?", (json.dumps(tags) if tags else None, image_id))
+    return {"id": image_id, "tags": tags}
 
 
 @router.delete("/entry-tests/images/{image_id}")

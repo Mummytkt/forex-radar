@@ -186,6 +186,25 @@ c.delete(f"/api/entry-tests/images/{_img_id}", headers=H(owner))
 check("one image can be removed, the others stay",
       c.get(f"/api/entry-tests/images/{_img_id}", headers=H(owner)).status_code == 404
       and c.get("/api/entry-tests", headers=H(owner)).json()[0]["images"] == {"h4_key": [_up2.json()["id"]], "h1_cisd_h4_key": [_ue.json()["id"]]})
+# The Checklist's pictures box: all pictures go in at once, then each is tagged with the entries it shows
+_pb = c.post("/api/entry-tests?book=bt_check", headers=H(owner), json={"trade_date": "2020-02-03", "instrument": "GBPUSD", "direction": "buy"}).json()["id"]
+_p1 = c.post(f"/api/entry-tests/{_pb}/images/chk", headers=H(owner), files={"file": ("a.png", _png.getvalue(), "image/png")}).json()["id"]
+_p2 = c.post(f"/api/entry-tests/{_pb}/images/chk", headers=H(owner), files={"file": ("b.png", _png.getvalue(), "image/png")}).json()["id"]
+_pbt = lambda: next(t for t in c.get("/api/entry-tests?book=bt_check", headers=H(owner)).json() if t["id"] == _pb)
+check("pictures box: untagged pictures are the trade's chart",
+      _pbt()["images"] == {"chk": [_p1, _p2]} and _pbt()["image_tags"] == {str(_p1): [], str(_p2): []})
+_tg = c.put(f"/api/entry-tests/images/{_p1}/tags", headers=H(owner), json={"tags": ["e_cisd1h_inst_chk", "e_cisd1h_lim_chk", "e_cisd1h_inst_chk"]})
+check("pictures box: one picture can be tagged on several entries",
+      _tg.status_code == 200 and _pbt()["images"] == {"e_cisd1h_inst_chk": [_p1], "e_cisd1h_lim_chk": [_p1], "chk": [_p2]}
+      and _pbt()["image_tags"][str(_p1)] == ["e_cisd1h_inst_chk", "e_cisd1h_lim_chk"])
+check("pictures box: a tag that isn't a Checklist entry is refused",
+      c.put(f"/api/entry-tests/images/{_p2}/tags", headers=H(owner), json={"tags": ["lc1_scl"]}).status_code == 400
+      and c.put(f"/api/entry-tests/images/{_p2}/tags", headers=H(owner), json={"tags": ["chk"]}).status_code == 400
+      and c.put(f"/api/entry-tests/images/{_up2.json()['id']}/tags", headers=H(owner), json={"tags": []}).status_code == 400
+      and c.put(f"/api/entry-tests/images/{_p2}/tags", headers=H(ta), json={"tags": []}).status_code == 403)
+c.put(f"/api/entry-tests/images/{_p1}/tags", headers=H(owner), json={"tags": []})
+check("pictures box: untagging puts the picture back as the trade's chart", _pbt()["images"] == {"chk": [_p1, _p2]})
+c.delete(f"/api/entry-tests/{_pb}", headers=H(owner))
 # every journal's pictures: the chart, and each confirmation under it (5 Nov 2026: the new 1H ones were refused)
 _si = c.post("/api/entry-tests?book=bt_scl", headers=H(owner), json={"trade_date": "2020-01-06", "instrument": "EURUSD", "direction": "sell"}).json()["id"]
 for _poi in ("scl", "hl_liq"):
