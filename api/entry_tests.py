@@ -82,7 +82,6 @@ CHK_MODELS: list[tuple[str, str]] = [
     ("e_cisd1h_lim", "1hr CISD, Limit entry"),
     ("e_eg1h_inst", "1hr EG, Instant entry"),
     ("e_eg1h_lim", "1hr EG, Limit entry"),
-    ("e_eg1h_smc5", "1hr EG, 5mins SMC entry"),
     ("e_octgd1h_inst", "1hr OCTGD, Instant entry"),
     ("e_octgd1h_lim", "1hr OCTGD, Limit entry"),
     ("e_pcl1h_lim", "1hr PCL, Limit entry"),
@@ -93,7 +92,7 @@ CHK_MODELS: list[tuple[str, str]] = [
     ("e_smc5_inst", "5mins SMC, Instant entry"),
 ]
 CHK_OLD_MODELS = ["lc1", "lc2", "e_direct", "e_cisd15", "e_cisd1h", "e_octgd1h", "e_smc5",
-                  "e_cisd5_inst", "e_smc15_bqm"]   # 5mins CISD Instant, 15mins SMC Breaker / QM: taken off 2026-11-09
+                  "e_cisd5_inst", "e_smc15_bqm", "e_eg1h_smc5"]   # taken off 2026-11-09: 5mins CISD Instant, 15mins SMC Breaker / QM, 1hr EG 5mins SMC
 ENTRY_TYPES += [(f"{m}_chk", f"{ml} on Checklist") for m, ml in CHK_MODELS]
 _LEGACY |= {f"{m}_chk" for m in CHK_OLD_MODELS}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
