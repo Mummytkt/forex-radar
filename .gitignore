@@ -39,3 +39,6 @@ htmlcov/
 # Rulebook build intermediates
 docs/rulebook/_img/
 docs/rulebook/_img_story/
+
+# Vercel CLI link (deploys run from the repo root into the "frontend" project)
+.vercel
