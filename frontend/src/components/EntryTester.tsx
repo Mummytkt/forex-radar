@@ -56,6 +56,7 @@ const OLD_MODELS: { key: string; label: string }[] = [
 // The Checklist journal's rows: the entries tried on every trade, to see which suits the POIs best (2026-11-09).
 // Must match CHK_MODELS in api/entry_tests.py (keys are stored)
 const CHK_MODELS: { key: string; label: string }[] = [
+  { key: 'e_direct', label: 'Direct entry' },   // back on 2026-11-09, first in the list (user)
   { key: 'e_cisd1h_inst', label: '1hr CISD, Instant entry' },
   { key: 'e_cisd1h_lim', label: '1hr CISD, Limit entry' },
   { key: 'e_eg1h_inst', label: '1hr EG, Instant entry' },
@@ -72,7 +73,6 @@ const CHK_MODELS: { key: string; label: string }[] = [
 // Its earlier rows: LC 1 / LC 2, then five entry types (2026-11-08). They show only on a trade already ticked there
 const CHK_OLD: { key: string; label: string; retired: true }[] = [
   ...NEW_MODELS.map(m => ({ ...m, label: `${m.label} (old)`, retired: true as const })),
-  { key: 'e_direct', label: 'Direct entry (old)', retired: true as const },
   { key: 'e_cisd15', label: '15M CISD (old)', retired: true as const },
   { key: 'e_cisd1h', label: '1H CISD (old)', retired: true as const },
   { key: 'e_octgd1h', label: 'H1 OCTGD (old)', retired: true as const },
