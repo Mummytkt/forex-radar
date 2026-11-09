@@ -57,14 +57,10 @@ const OLD_MODELS: { key: string; label: string }[] = [
 // The Checklist journal's rows: the entries tried on every trade, to see which suits the POIs best (2026-11-09).
 // Must match CHK_MODELS in api/entry_tests.py (keys are stored)
 const CHK_MODELS: { key: string; label: string }[] = [
-  { key: 'e_cisd1h_inst', label: '1hr CISD, Instant entry' },
-  { key: 'e_cisd1h_lim', label: '1hr CISD, Limit entry' },
   { key: 'e_eg1h_inst', label: '1hr EG, Instant entry' },
   { key: 'e_eg1h_lim', label: '1hr EG, Limit entry' },
   { key: 'e_octgd1h_inst', label: '1hr OCTGD, Instant entry' },
   { key: 'e_octgd1h_lim', label: '1hr OCTGD, Limit entry' },
-  { key: 'e_pcl1h_lim', label: '1hr PCL, Limit entry' },
-  { key: 'e_pcl1h_inst', label: '1hr PCL, Instant entry' },
   { key: 'e_cisd15_inst', label: '15mins CISD, Instant entry' },
   { key: 'e_cisd15_lim', label: '15mins CISD, Limit entry' },
   { key: 'e_smc5_lim', label: '5mins SMC, Limit entry' },
@@ -81,6 +77,10 @@ const CHK_OLD: { key: string; label: string; retired: true }[] = [
   { key: 'e_cisd5_inst', label: '5mins CISD, Instant entry (old)', retired: true as const },   // taken off 2026-11-09
   { key: 'e_smc15_bqm', label: '15mins SMC, Breaker / QM entry (old)', retired: true as const },   // taken off 2026-11-09
   { key: 'e_eg1h_smc5', label: '1hr EG, 5mins SMC entry (old)', retired: true as const },   // taken off 2026-11-09
+  { key: 'e_cisd1h_inst', label: '1hr CISD, Instant entry (old)', retired: true as const },   // taken off 2026-11-09
+  { key: 'e_cisd1h_lim', label: '1hr CISD, Limit entry (old)', retired: true as const },   // taken off 2026-11-09
+  { key: 'e_pcl1h_lim', label: '1hr PCL, Limit entry (old)', retired: true as const },   // taken off 2026-11-09
+  { key: 'e_pcl1h_inst', label: '1hr PCL, Instant entry (old)', retired: true as const },   // taken off 2026-11-09
 ]
 const MODELS = [...NEW_MODELS, ...CHK_MODELS, ...CHK_OLD.slice(NEW_MODELS.length), ...RETIRED_MODELS, ...OLD_MODELS]
 const POIS: { key: string; label: string; old?: boolean }[] = [
@@ -447,7 +447,7 @@ function authHdr(): HeadersInit {
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
-function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove?: () => void }) {
+function Thumb({ id, label, onRemove, w = 150, h = 96 }: { id: number; label: string; onRemove?: () => void; w?: number | string; h?: number }) {
   const [url, setUrl] = useState<string | null>(null)
   const [big, setBig] = useState(false)
   useEffect(() => {
@@ -465,7 +465,7 @@ function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove?: 
     return () => window.removeEventListener('keydown', onKey)
   }, [big])
   return (
-    <div style={{ position: 'relative', width: 150, height: 96, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
+    <div style={{ position: 'relative', width: w, height: h, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
       {url
         ? <img src={url} alt={label} onClick={() => setBig(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} />
         : <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: 8 }}>Loading…</div>}
@@ -614,7 +614,7 @@ function PicturesBox({ trade, onImages }: { trade: Trade; onImages: (images: Rec
     if (r.ok) { const rest = { ...tags }; delete rest[String(id)]; apply(rest) }
   }
   return (
-    <div style={{ padding: '8px 0 10px', borderBottom: '1px dashed var(--border)' }}
+    <div style={{ padding: '8px 0 10px' }}
       onPaste={e => { if (e.clipboardData.files.length) upload(Array.from(e.clipboardData.files)) }}
       onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); upload(Array.from(e.dataTransfer.files)) }}>
       <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { upload(Array.from(e.target.files || [])); e.target.value = '' }} />
@@ -625,22 +625,29 @@ function PicturesBox({ trade, onImages }: { trade: Trade; onImages: (images: Rec
             color: 'var(--accent)', cursor: busy ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700 }}>
           <Camera size={14} /> {busy ? 'Uploading…' : ids.length ? 'Add more pictures' : 'Add all pictures'}
         </button>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', flexBasis: '100%' }}>
           {ids.length ? 'Tap the entries each picture shows.' : 'Choose all of this trade’s screenshots at once, or drop / paste them here. Then tap the entries each one shows.'}
         </span>
       </div>
       {ids.map(id => {
         const tg = tags[String(id)] || []
         return (
-          <div key={id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '6px 0', flexWrap: 'wrap' }}>
-            <Thumb id={id} label="Chart" onRemove={() => remove(id)} />
-            <div style={{ flex: '1 1 280px', display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 10px', alignItems: 'center' }}>
+          <div key={id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0 10px', borderTop: '1px dashed var(--border)' }}>
+            <Thumb id={id} label="Chart" onRemove={() => remove(id)} w="100%" h={180} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 10px', alignItems: 'center' }}>
               {CHK_GROUPS.map(g => (
                 <div key={g.name} style={{ display: 'contents' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{g.name}</span>
                   <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {g.rows.map(r => <Chip key={r.key} on={tg.includes(r.key)} color="var(--accent)" bg="var(--accent-bg)" onClick={() => toggle(id, r.key)}>{r.sub}</Chip>)}
                   </span>
+                </div>
+              ))}
+              {/* Tagged on an entry since taken off the list: still shown, so it can be untagged */}
+              {tg.filter(k => !CHK_GROUPS.some(g => g.rows.some(r => r.key === k))).map(k => (
+                <div key={k} style={{ display: 'contents' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{ENTRY_TYPES.find(e => e.key === k)?.model ?? k}</span>
+                  <span><Chip on color="var(--accent)" bg="var(--accent-bg)" onClick={() => toggle(id, k)}>Untag</Chip></span>
                 </div>
               ))}
               {!tg.length && <span style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--text-muted)' }}>Not on an entry yet: it shows as the trade’s chart.</span>}
@@ -845,7 +852,9 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
           {poi !== 'chk' && (POIS.find(p => p.key === poi)?.old || !!imgs[poi]?.length) && <ImageStrip tradeId={trade.id} slot={poi} label={`${POIS.find(p => p.key === poi)?.label ?? poi} chart`}
             ids={imgs[poi] || []} onChange={ids => setSlot(poi, ids)} />}
           {poi === 'chk' && <ChecklistBox value={trade.checklist ?? EMPTY_CHECKLIST} onChange={c => onChange({ ...trade, checklist: c })} />}
-          {poi === 'chk' && <PicturesBox trade={trade} onImages={onImages} />}
+          <div style={poi === 'chk' ? { display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' } : undefined}>
+          {poi === 'chk' && <div style={{ flex: '0 1 340px', minWidth: 260 }}><PicturesBox trade={trade} onImages={onImages} /></div>}
+          <div style={poi === 'chk' ? { flex: '1 1 440px', minWidth: 0 } : undefined}>
           {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map((t, i, rows) => {
             const r = trade.results[t.key]
             // Checklist: no "No entry" and no 📷 per row (pictures come from the pictures box; older per-row pictures still show)
@@ -935,6 +944,8 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
               </div>
             )
           })}
+          </div>
+          </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Edit the trade's details: pair, date, direction, H4 alert (each saves straight away) */}
             <span style={{ fontSize: 11, color: 'var(--text-muted)', flexBasis: '100%' }}>Trade details</span>
