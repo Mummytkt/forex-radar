@@ -477,12 +477,23 @@ function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove?: 
   )
 }
 
-function ImageStrip({ tradeId, slot, label, ids, onChange, compact }: {
+// pickTick: each time it goes up, the device's picture picker opens straight away (the 📷 button on a row).
+// onCancel: the picker was closed with nothing chosen and the row has no pictures, so the strip can close again
+function ImageStrip({ tradeId, slot, label, ids, onChange, compact, pickTick = 0, onCancel }: {
   tradeId: number; slot: string; label: string; ids: number[]; onChange: (ids: number[]) => void; compact?: boolean
+  pickTick?: number; onCancel?: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const input = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (pickTick) input.current?.click() }, [pickTick])
+  useEffect(() => {
+    const el = input.current
+    if (!el || !onCancel) return
+    const cancelled = () => { if (!ids.length) onCancel() }
+    el.addEventListener('cancel', cancelled)
+    return () => el.removeEventListener('cancel', cancelled)
+  }, [ids.length, onCancel])
 
   const upload = async (files: File[]) => {
     const imgs = files.filter(f => f.type.startsWith('image/'))
@@ -641,6 +652,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
   const [poi, setPoi] = useState(only || POIS[0].key)
   const [customVal, setCustomVal] = useState('')
   const [picsFor, setPicsFor] = useState<string | null>(null)   // entry row whose image strip is open
+  const [pick, setPick] = useState<{ key: string; n: number }>({ key: '', n: 0 })   // 📷 tapped: open the picker on that row
   const [viewing, setViewing] = useState(false)   // reading the page as a story
   const imgs = trade.images || {}
   const setSlot = (slot: string, ids: number[]) => {
@@ -720,12 +732,13 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
                   <Chip key={o.key} on={r?.outcome === o.key} color={o.color} bg={o.bg} onClick={() => tapOutcome(t.key, o.key)}>{o.label}</Chip>
                 ))}
                 <Chip on={picsFor === t.key || !!imgs[t.key]?.length} color="var(--accent)" bg="var(--accent-bg)"
-                  onClick={() => setPicsFor(picsFor === t.key ? null : t.key)}>
+                  onClick={() => { setPicsFor(t.key); setPick(p => ({ key: t.key, n: p.n + 1 })) }}>
                   📷{imgs[t.key]?.length ? ` ${imgs[t.key].length}` : ''}
                 </Chip>
                 {(picsFor === t.key || !!imgs[t.key]?.length) && (
                   <ImageStrip compact tradeId={trade.id} slot={t.key} label={t.label} ids={imgs[t.key] || []}
-                    onChange={ids => setSlot(t.key, ids)} />
+                    onChange={ids => setSlot(t.key, ids)} pickTick={pick.key === t.key ? pick.n : 0}
+                    onCancel={() => setPicsFor(cur => (cur === t.key ? null : cur))} />
                 )}
                 {r?.outcome === 'be' && (
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', flexBasis: '100%', paddingLeft: 4, marginTop: 2 }}>
