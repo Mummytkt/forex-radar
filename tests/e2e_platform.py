@@ -147,6 +147,10 @@ check("a tick saved on a retired checklist item is still accepted",
             "direction": "sell", "checklist": {"items": ["cisd_1h", "h4_liq"], "ratio": 1}}).json()["checklist"]["items"] == ["h4_liq", "cisd_1h"])
 _ck3 = c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={
     "trade_date": "2020-05-26", "instrument": "EURUSD", "direction": "sell", "checklist": {"items": [], "ratio": None}}).json()
+check("the new checklist items save",
+      c.put(f"/api/entry-tests/{_ck['id']}", headers=H(owner), json={"trade_date": "2020-05-26", "instrument": "EURUSD",
+            "direction": "sell", "checklist": {"items": ["mtf_poi", "ltf_poi", "h1_liq_only"], "ratio": None}}).json()["checklist"]["items"]
+      == ["h1_liq_only", "ltf_poi", "mtf_poi"])
 check("ticks can be cleared", _ck3["checklist"] == {"items": [], "ratio": None})
 check("other journals' trades come back with an empty checklist",
       c.get("/api/entry-tests", headers=H(owner)).json()[0]["checklist"] == {"items": [], "ratio": None}
