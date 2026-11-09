@@ -17,7 +17,8 @@ export function timesEntered(t: Numbered): number {
   return Math.max(1, ...n)
 }
 
-export function numberTrades(trades: Numbered[]): Map<number, TradeNum> {
+// onePerSetup: every trade is one number, whatever its rows say (the Checklist journal, whose rows are samples)
+export function numberTrades(trades: Numbered[], onePerSetup = false): Map<number, TradeNum> {
   const seen = new Map<string, number>()
   const next = (key: string, count: number) => {
     const from = seen.get(key) ?? 0
@@ -26,7 +27,7 @@ export function numberTrades(trades: Numbered[]): Map<number, TradeNum> {
   }
   const inOrder = [...trades].sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
   return new Map(inOrder.map(t => {
-    const count = timesEntered(t)
+    const count = onePerSetup ? 1 : timesEntered(t)
     return [t.id, { month: next(t.trade_date.slice(0, 7), count), year: next(t.trade_date.slice(0, 4), count) }]
   }))
 }

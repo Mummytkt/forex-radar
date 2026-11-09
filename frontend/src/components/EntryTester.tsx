@@ -320,12 +320,21 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
         <Trophy size={kind === 'month' ? 14 : 16} color="var(--accent)" />
         <span className="diary-sum" style={{ fontSize: kind === 'month' ? 14 : 15, fontWeight: 800, color: 'var(--text-primary)' }}>{title || 'Which entry holds up best'}</span>
         {note && <span className="diary-sum" style={{ fontSize: 11, fontWeight: 700, color: SOFT.be }}>{note}</span>}
+        {/* The Checklist journal: each trade is one setup taken, its entry rows are samples of the same trade, so the
+            line counts setups only; the entries are compared in the report */}
+        {only === 'chk' ? (
+        <span className="diary-sum" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          <b style={{ color: 'var(--text-secondary)' }}>{trades.length} setup{trades.length === 1 ? '' : 's'} taken</b> · <b style={{ color: SOFT.up }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: SOFT.dn }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
+          {!kind && ' · each entry is tried on every setup; the table compares them, best first'}
+        </span>
+        ) : (
         <span className="diary-sum" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           {trades.length} setup{trades.length === 1 ? '' : 's'} · {tot.w + tot.l + tot.be} {tot.w + tot.l + tot.be === 1 ? 'entry' : 'entries'} · <b style={{ color: SOFT.up }}>{tot.buys} buy{tot.buys === 1 ? '' : 's'}</b> · <b style={{ color: SOFT.dn }}>{tot.sells} sell{tot.sells === 1 ? '' : 's'}</b>
           {' · '}<b style={{ color: SOFT.up }}>{tot.w} W</b> · <b style={{ color: SOFT.loss }}>{tot.l} L</b> · <b style={{ color: SOFT.be }}>{tot.be} BE</b>
           {' · '}<b style={{ color: tot.r > 0 ? SOFT.up : tot.r < 0 ? SOFT.loss : 'var(--text-muted)' }}>{fmtR(tot.r)}</b>
           {!kind && ' · ranked by total R · each stop-out = −1R, BE = the R you closed at (0 if not set)'}
         </span>
+        )}
         {best && <span className="diary-sum" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: best.r < 0 ? SOFT.loss : SOFT.up }}>{kind ? 'Best entry' : 'Leading entry'}: {best.label} · {fmtR(best.r)} · {Math.round((best.w / best.n) * 100)}% wins{only ? '' : ' (all POIs)'}</span>}
       </div>
       {open && children && (
@@ -477,16 +486,17 @@ function Thumb({ id, label, onRemove }: { id: number; label: string; onRemove?: 
   )
 }
 
-// pickTick: each time it goes up, the device's picture picker opens straight away (the 📷 button on a row).
+// pickTick: each time it goes up, the device's picture picker opens straight away (the 📷 button on a row). pickAt is
+// when the button was tapped: a strip that appears later (e.g. the trade opened in Edit again) must not open the picker.
 // onCancel: the picker was closed with nothing chosen and the row has no pictures, so the strip can close again
-function ImageStrip({ tradeId, slot, label, ids, onChange, compact, pickTick = 0, onCancel }: {
+function ImageStrip({ tradeId, slot, label, ids, onChange, compact, pickTick = 0, pickAt = 0, onCancel }: {
   tradeId: number; slot: string; label: string; ids: number[]; onChange: (ids: number[]) => void; compact?: boolean
-  pickTick?: number; onCancel?: () => void
+  pickTick?: number; pickAt?: number; onCancel?: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const input = useRef<HTMLInputElement>(null)
-  useEffect(() => { if (pickTick) input.current?.click() }, [pickTick])
+  useEffect(() => { if (pickTick && Date.now() - pickAt < 1000) input.current?.click() }, [pickTick])   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const el = input.current
     if (!el || !onCancel) return
@@ -652,7 +662,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
   const [poi, setPoi] = useState(only || POIS[0].key)
   const [customVal, setCustomVal] = useState('')
   const [picsFor, setPicsFor] = useState<string | null>(null)   // entry row whose image strip is open
-  const [pick, setPick] = useState<{ key: string; n: number }>({ key: '', n: 0 })   // 📷 tapped: open the picker on that row
+  const [pick, setPick] = useState<{ key: string; n: number; at: number }>({ key: '', n: 0, at: 0 })   // 📷 tapped: open the picker on that row
   const [viewing, setViewing] = useState(false)   // reading the page as a story
   const imgs = trade.images || {}
   const setSlot = (slot: string, ids: number[]) => {
@@ -696,10 +706,17 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
         </span>
         {SHOW_H4_ALERT && trade.alert_type && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>· {trade.alert_type}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
+          {only === 'chk' ? (() => {
+            // The entries tried on this one setup, grouped: how many won, lost or broke even
+            const tried = shownRes.filter(r => r.outcome !== 'none')
+            const n = (o: Outcome) => tried.filter(r => r.outcome === o).length
+            return tried.length ? <>{tried.length} {tried.length === 1 ? 'entry' : 'entries'} tried · <b style={{ color: 'var(--bullish)' }}>{n('win')} W</b> · <b style={{ color: 'var(--loss)' }}>{n('loss')} L</b> · <b style={{ color: '#f59e0b' }}>{n('be')} BE</b></> : <>no entries tried yet</>
+          })() : <>
           {done} ticked
           {tradeR.length > 0 && <> · outcome {tradeR.map((v, i) => (
             <span key={i}>{i > 0 && ' / '}<b style={{ color: v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--loss)' : 'var(--text-muted)' }}>{fmtR(v)}</b></span>
           ))}</>}
+          </>}
         </span>
         <span onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
           <Chip on={viewing} color="var(--accent)" bg="var(--accent-bg)" onClick={() => { if (open) onToggle(); setViewing(!viewing) }}><Eye size={12} /> View</Chip>
@@ -732,12 +749,12 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
                   <Chip key={o.key} on={r?.outcome === o.key} color={o.color} bg={o.bg} onClick={() => tapOutcome(t.key, o.key)}>{o.label}</Chip>
                 ))}
                 <Chip on={picsFor === t.key || !!imgs[t.key]?.length} color="var(--accent)" bg="var(--accent-bg)"
-                  onClick={() => { setPicsFor(t.key); setPick(p => ({ key: t.key, n: p.n + 1 })) }}>
+                  onClick={() => { setPicsFor(t.key); setPick(p => ({ key: t.key, n: p.n + 1, at: Date.now() })) }}>
                   📷{imgs[t.key]?.length ? ` ${imgs[t.key].length}` : ''}
                 </Chip>
                 {(picsFor === t.key || !!imgs[t.key]?.length) && (
                   <ImageStrip compact tradeId={trade.id} slot={t.key} label={t.label} ids={imgs[t.key] || []}
-                    onChange={ids => setSlot(t.key, ids)} pickTick={pick.key === t.key ? pick.n : 0}
+                    onChange={ids => setSlot(t.key, ids)} pickTick={pick.key === t.key ? pick.n : 0} pickAt={pick.at}
                     onCancel={() => setPicsFor(cur => (cur === t.key ? null : cur))} />
                 )}
                 {r?.outcome === 'be' && (
@@ -971,6 +988,7 @@ function periodSummary(list: Trade[], only: string): string {
       r += rOf(x) ?? 0
     }
   const buys = list.filter(t => t.direction === 'buy').length
+  if (only === 'chk') return `${plural(list.length, 'setup')} taken · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')}`
   const entries = w + l + be
   return `${plural(list.length, 'setup')} · ${entries} ${entries === 1 ? 'entry' : 'entries'} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
 }
@@ -1154,7 +1172,8 @@ export default function EntryTester({ tabs, book = 'backtest' }: { tabs?: React.
 
   const shown = trades.filter(t => (!fPair || t.instrument === fPair) && (!fAlert || t.alert_type === fAlert) && (!fDir || t.direction === fDir))
   const pairs = Array.from(new Set(trades.map(t => t.instrument))).sort()
-  const tradeNum = useMemo(() => numberTrades(trades), [trades])
+  // The Checklist journal counts setups: its entry rows are samples of one trade, so each setup is one number
+  const tradeNum = useMemo(() => numberTrades(trades, jr.poi === 'chk'), [trades, jr.poi])
   // The newest month you've logged is still running; earlier months are complete
   const latestMonth = trades.reduce((m, t) => (t.trade_date.slice(0, 7) > m ? t.trade_date.slice(0, 7) : m), '')
   // The remembered pair stays selectable even if it isn't in the standard list
