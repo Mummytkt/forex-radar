@@ -1,0 +1,665 @@
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 9 · ZONES BACKTEST (user's method, 2026-11-10; pictures Documents/Zones_Picture_4.png and _6.png)
+// Every Bias Pointer alert (any kind) clears the zones and builds new ones from the H4 candles
+// (buys after a bullish alert; a bearish alert is the mirror):
+//   · the POI in the leg before the break (the breakout direction: a back-in-the-range trade): every
+//     key level of the leg from its swing low up to the breaking candle: V-shape, OC, the Breaker (the
+//     A-shape the break closed above). Wicks in; levels within one H4 candle size boxed together.
+//   · the opposite zone (SELL above): past the closest liquidity above the breaking candle (an untaken
+//     swing high; none: a single candle liquidity, the high wick of a bearish candle), the closest
+//     fresh key level(s): A-shape, OC, Breaker (a broken V-shape). Wicks in, boxed together.
+// A zone ends when an H4 candle CLOSES through it, or at the next alert. Inside a zone the chosen
+// confirmation gives the trade: Instant (at its close) or a Retest of its level (CISD line, OC level,
+// the engulfed candle's open / close, the PCL candle's open) that waits until the next alert.
+// SL behind the pattern's low (sells: high). TP 1:2 or 1:3. One trade per zone.
+// ═════════════════════════════════════════════════════════════════════════════
+const string G_ZB = "9 · Zones backtest"
+string zb_conf = input.string("M15 CISD", "Confirmation inside the zone", options = ["M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL"], group = G_ZB,
+     tooltip = "Put the chart on this timeframe (M5, M15 or H1) or lower. The lower the chart, the less history TradingView gives.")
+string zb_ent  = input.string("Instant (at the close)", "Entry", options = ["Instant (at the close)", "Retest"], group = G_ZB,
+     tooltip = "Retest: CISD → the CISD line · OCTGD → the OC level · EG → the engulfed candle's open (or close, below) · PCL → the PCL candle's open. The order waits until the next breakout alert, then it is cancelled.")
+string zb_egr  = input.string("Open", "EG retest at the engulfed candle's", options = ["Open", "Close"], group = G_ZB)
+string zb_tpo  = input.string("1:2", "Take profit", options = ["1:2", "1:3"], group = G_ZB)
+string zb_side = input.string("Both", "Zones traded", options = ["Both", "The POI in the leg only", "The opposite zone only"], group = G_ZB)
+int    zb_ow   = input.int(10, "OCTGD: candles allowed from C2 to the close through the level", minval = 1, maxval = 50, group = G_ZB)
+int    zb_cw   = input.int(20, "CISD: candles allowed from the low to the close through the line", minval = 1, maxval = 100, group = G_ZB)
+int    zb_slb  = input.int(0, "SL buffer (ticks beyond the pattern's low / high)", minval = 0, group = G_ZB)
+float  zb_risk = input.float(1.0, "Risk per trade % (for the return figure)", minval = 0.1, step = 0.1, group = G_ZB)
+int    zb_atr  = input.int(14, "H4 candle size = the average range of the last N H4 candles", minval = 1, maxval = 100, group = G_ZB)
+int    zb_scan = input.int(300, "H4 candles searched for the opposite zone", minval = 30, maxval = 1000, group = G_ZB)
+bool   zb_shz  = input.bool(true, "Show the zones", group = G_ZB, inline = "zs")
+int    zb_kz   = input.int(60, "kept", minval = 2, maxval = 300, group = G_ZB, inline = "zs")
+bool   zb_sht  = input.bool(true, "Show the trades", group = G_ZB, inline = "ts")
+int    zb_kt   = input.int(40, "kept", minval = 1, maxval = 100, group = G_ZB, inline = "ts")
+bool   zb_tbo  = input.bool(true, "Results table", group = G_ZB, inline = "rt")
+string zb_tbp  = input.string("Top left", "", options = ["Top right", "Bottom right", "Top left", "Bottom left", "Middle right", "Middle left"], group = G_ZB, inline = "rt")
+bool   zb_mon  = input.bool(true, "Month by month (last 12 months)", group = G_ZB)
+bool   zb_alr  = input.bool(false, "Alert BUY / SELL in real time (create an alert: Any alert() function call)", group = G_ZB)
+color  zb_bc   = input.color(#26A69A, "Buy", group = G_ZB, inline = "zc")
+color  zb_scc  = input.color(#EF5350, "Sell", group = G_ZB, inline = "zc")
+int    zb_op   = input.int(82, "zone opacity %", minval = 0, maxval = 100, group = G_ZB, inline = "zc")
+
+string ZB_TF   = zb_conf == "M5 CISD" ? "5" : zb_conf == "M15 CISD" ? "15" : "60"
+int    ZB_P    = zb_conf == "H1 OCTGD" ? 1 : zb_conf == "H1 EG" ? 2 : zb_conf == "H1 PCL" ? 3 : 0
+bool   zb_inst = zb_ent == "Instant (at the close)"
+float  zb_rr   = zb_tpo == "1:3" ? 3.0 : 2.0
+bool   zb_tfok = timeframe.in_seconds() <= timeframe.in_seconds(ZB_TF)
+
+// ── The confirmation on its own timeframe's candles (the last COMPLETED one, via [1] + lookahead_on) ──
+// For each side: signal, retest level, the pattern's low (sells: high) for the SL, the wick that reached the zone.
+f_zconf(simple int p, simple int ow, simple int cw, simple bool eg_open) =>
+    bool  pbull = close[1] > open[1]
+    bool  pbear = close[1] < open[1]
+    bool  cbull = close > open
+    bool  cbear = close < open
+    bool  bs  = false
+    float bl  = na
+    float bsl = na
+    float btp = na
+    bool  ss  = false
+    float sl_ = na
+    float ssl = na
+    float stp = na
+    var float boc_lv = na
+    var float boc_tp = na
+    var float boc_mn = na
+    var int   boc_b  = na
+    var float soc_lv = na
+    var float soc_tp = na
+    var float soc_mx = na
+    var int   soc_b  = na
+    var float dn_open = na
+    var float dn_low  = na
+    var float bci_ln  = na
+    var float bci_lo  = na
+    var int   bci_b   = na
+    var float up_open = na
+    var float up_high = na
+    var float sci_ln  = na
+    var float sci_hi  = na
+    var int   sci_b   = na
+    if p == 3
+        // PCL: C1 bearish, C2 bullish; C2's wick goes below C1's low and its body closes back above it
+        if pbear and cbull and low < low[1] and close > low[1]
+            bs  := true
+            bl  := open
+            bsl := low
+            btp := low
+        if pbull and cbear and high > high[1] and close < high[1]
+            ss  := true
+            sl_ := open
+            ssl := high
+            stp := high
+    else if p == 2
+        // Engulfing: C1 bearish, C2 bullish, opens at or below C1's close and closes above C1's open
+        if pbear and cbull and open <= close[1] and close > open[1]
+            bs  := true
+            bl  := eg_open ? open[1] : close[1]
+            bsl := math.min(low, low[1])
+            btp := bsl
+        if pbull and cbear and open >= close[1] and close < open[1]
+            ss  := true
+            sl_ := eg_open ? open[1] : close[1]
+            ssl := math.max(high, high[1])
+            stp := ssl
+    else if p == 1
+        // OCTGD: the latest bearish OC (C1 close = C2 open); a bullish close above its level within ow candles
+        if not na(boc_lv)
+            boc_mn := math.min(boc_mn, low)
+            if bar_index - boc_b > ow
+                boc_lv := na
+            else if cbull and close > boc_lv
+                bs  := true
+                bl  := boc_lv
+                bsl := boc_mn
+                btp := boc_tp
+                boc_lv := na
+        if not na(soc_lv)
+            soc_mx := math.max(soc_mx, high)
+            if bar_index - soc_b > ow
+                soc_lv := na
+            else if cbear and close < soc_lv
+                ss  := true
+                sl_ := soc_lv
+                ssl := soc_mx
+                stp := soc_tp
+                soc_lv := na
+        if pbear and cbear
+            boc_lv := close[1]
+            boc_tp := math.min(low, low[1])
+            boc_mn := boc_tp
+            boc_b  := bar_index
+        if pbull and cbull
+            soc_lv := close[1]
+            soc_tp := math.max(high, high[1])
+            soc_mx := soc_tp
+            soc_b  := bar_index
+    else
+        // CISD: the open of the first candle of the bearish run that made the lowest low; a bullish body close above it
+        if not na(bci_ln)
+            if low < bci_lo
+                bci_lo := low
+                bci_b  := bar_index
+            if bar_index - bci_b > cw
+                bci_ln := na
+            else if cbull and close > bci_ln
+                bs  := true
+                bl  := bci_ln
+                bsl := bci_lo
+                btp := bci_lo
+                bci_ln := na
+        if not na(sci_ln)
+            if high > sci_hi
+                sci_hi := high
+                sci_b  := bar_index
+            if bar_index - sci_b > cw
+                sci_ln := na
+            else if cbear and close < sci_ln
+                ss  := true
+                sl_ := sci_ln
+                ssl := sci_hi
+                stp := sci_hi
+                sci_ln := na
+        if cbear
+            if not pbear or na(dn_low)
+                dn_open := open
+                dn_low  := low
+            else
+                dn_low  := math.min(dn_low, low)
+            if not bs and (na(bci_ln) or dn_low <= bci_lo)
+                bci_ln := dn_open
+                bci_lo := dn_low
+                bci_b  := bar_index
+        if cbull
+            if not pbull or na(up_high)
+                up_open := open
+                up_high := high
+            else
+                up_high := math.max(up_high, high)
+            if not ss and (na(sci_ln) or up_high >= sci_hi)
+                sci_ln := up_open
+                sci_hi := up_high
+                sci_b  := bar_index
+    [time[1], close[1], bs[1], bl[1], bsl[1], btp[1], ss[1], sl_[1], ssl[1], stp[1]]
+[zc_t, zc_c, zc_bs, zc_bl, zc_bsl, zc_btp, zc_ss, zc_sl, zc_ssl, zc_stp] = request.security(syminfo.tickerid, ZB_TF, f_zconf(ZB_P, zb_ow, zb_cw, zb_egr == "Open"), lookahead = barmerge.lookahead_on)
+bool zc_new = not na(zc_t) and zc_t != nz(zc_t[1])
+
+// ── H4 candle j seen from direction d (d < 0: prices flipped, so the buy-side rules read the sell side) ──
+f_zh(int j, int d) =>
+    d > 0 ? array.get(q2hw, j) : -array.get(q2lw, j)
+f_zl(int j, int d) =>
+    d > 0 ? array.get(q2lw, j) : -array.get(q2hw, j)
+f_zo(int j, int d) =>
+    d * array.get(q2o, j)
+f_zc(int j, int d) =>
+    d * array.get(q2c, j)
+f_zpush(array<float> lo_, array<float> hi_, array<int> t_, float lo, float hi, int t) =>
+    array.push(lo_, lo)
+    array.push(hi_, hi)
+    array.push(t_, t)
+// levels within `gap` of each other boxed together (lowest first)
+f_zmerge(array<float> lo_, array<float> hi_, array<int> t_, float gap) =>
+    array<float> rlo = array.new<float>()
+    array<float> rhi = array.new<float>()
+    array<int>   rt  = array.new<int>()
+    int n = array.size(lo_)
+    if n > 0
+        array<int> ix = array.sort_indices(lo_, order.ascending)
+        for q = 0 to n - 1
+            int   i = array.get(ix, q)
+            float l = array.get(lo_, i)
+            float h = array.get(hi_, i)
+            int   t = array.get(t_, i)
+            int   m = array.size(rlo)
+            if m > 0 and l <= array.get(rhi, m - 1) + gap
+                array.set(rhi, m - 1, math.max(array.get(rhi, m - 1), h))
+                array.set(rt, m - 1, math.min(array.get(rt, m - 1), t))
+            else
+                array.push(rlo, l)
+                array.push(rhi, h)
+                array.push(rt, t)
+    [rlo, rhi, rt]
+
+// The POI in the leg before the break (flipped prices: a buy zone below). The leg runs back from the
+// breaking candle to its swing low; it stops at a candle whose high is above the breaking close.
+f_zleg(int d, array<float> lo_, array<float> hi_, array<int> t_) =>
+    int nq = array.size(q2t)
+    int k  = nq - 1
+    int s  = k
+    if k >= 2
+        float bc = f_zc(k, d)
+        float mn = f_zl(k, d)
+        int j = k - 1
+        int stop_ = math.max(1, k - 150)
+        while j >= stop_
+            if f_zh(j, d) > bc
+                break
+            if f_zl(j, d) < mn
+                mn := f_zl(j, d)
+                s  := j
+            j -= 1
+        for jj = math.max(1, s) to k
+            float o1 = f_zo(jj - 1, d)
+            float c1 = f_zc(jj - 1, d)
+            float h1 = f_zh(jj - 1, d)
+            float l1 = f_zl(jj - 1, d)
+            float o2 = f_zo(jj, d)
+            float c2 = f_zc(jj, d)
+            float h2 = f_zh(jj, d)
+            float l2 = f_zl(jj, d)
+            float zlo = na
+            float zhi = na
+            bool  brk = false
+            if c1 < o1 and c2 > o2
+                // V-shape: the bearish candle's close, down to the lower wick of the two
+                zlo := math.min(l1, l2)
+                zhi := c1
+            else if c1 > o1 and c2 > o2
+                // OC: the first close / second open, down to the second candle's wick
+                zlo := math.min(l2, c1)
+                zhi := math.max(c1, o2)
+            else if c1 > o1 and c2 < o2 and c1 < bc
+                // the Breaker: an A-shape the break closed above, up to its wick
+                zlo := c1
+                zhi := math.max(h1, h2)
+                brk := true
+            if not na(zlo)
+                // fresh: no close below it since (a Breaker: since it was broken)
+                bool dead  = false
+                bool armed = not brk
+                if jj < k
+                    for m = jj + 1 to k
+                        float cm = f_zc(m, d)
+                        if not armed
+                            armed := cm > zlo
+                        else if cm < zlo
+                            dead := true
+                            break
+                if not dead
+                    f_zpush(lo_, hi_, t_, zlo, zhi, array.get(q2t, jj - 1))
+    s
+
+// The opposite zone (flipped prices: a sell zone above): the closest fresh level(s) past the liquidity above
+// the breaking candle. Returns [lo, hi, time, liquidity].
+f_zopp(int d, int scan, float gap) =>
+    int   nq  = array.size(q2t)
+    int   k   = nq - 1
+    float liq = na
+    float rlo = na
+    float rhi = na
+    int   rt  = na
+    if k >= 3
+        // liquidity: the closest untaken swing high above the breaking candle; none: the closest untaken
+        // high wick of a bearish candle (single candle liquidity); none: the breaking candle's high
+        float hmax  = f_zh(k, d)
+        float sc    = na
+        int   stop_ = math.max(1, k - scan)
+        int   j     = k - 1
+        while j >= stop_ and na(liq)
+            float hj = f_zh(j, d)
+            if hj > hmax
+                if hj > f_zh(j - 1, d) and hj > f_zh(j + 1, d)
+                    liq := hj
+                else if na(sc) and f_zc(j, d) < f_zo(j, d)
+                    sc := hj
+            hmax := math.max(hmax, hj)
+            j -= 1
+        if na(liq)
+            liq := na(sc) ? f_zh(k, d) : sc
+        array<float> clo = array.new<float>()
+        array<float> chi = array.new<float>()
+        array<int>   ct  = array.new<int>()
+        float cmax = f_zc(k, d)     // the highest close after the pair
+        for jj = k - 1 to math.max(1, k - scan)
+            float o1 = f_zo(jj - 1, d)
+            float c1 = f_zc(jj - 1, d)
+            float h1 = f_zh(jj - 1, d)
+            float l1 = f_zl(jj - 1, d)
+            float o2 = f_zo(jj, d)
+            float c2 = f_zc(jj, d)
+            float h2 = f_zh(jj, d)
+            float l2 = f_zl(jj, d)
+            if c1 > o1 and c2 < o2
+                // A-shape: the bullish candle's close, up to the higher wick
+                float zl_ = c1
+                float zh_ = math.max(h1, h2)
+                if zl_ > liq and cmax < zh_
+                    f_zpush(clo, chi, ct, zl_, zh_, array.get(q2t, jj - 1))
+            else if c1 < o1 and c2 < o2
+                // OC: the first close / second open, up to the second candle's wick
+                float zl_ = math.min(c1, o2)
+                float zh_ = math.max(h2, c1)
+                if zl_ > liq and cmax < zh_
+                    f_zpush(clo, chi, ct, zl_, zh_, array.get(q2t, jj - 1))
+            else if c1 < o1 and c2 > o2
+                // the Breaker: a V-shape price later closed below, and has not closed back above since
+                float zl_ = math.min(l1, l2)
+                float zh_ = c1
+                if zl_ > liq
+                    bool broke = false
+                    bool dead  = false
+                    for m = jj + 1 to k
+                        float cm = f_zc(m, d)
+                        if not broke
+                            broke := cm < zl_
+                        else if cm > zh_
+                            dead := true
+                            break
+                    if broke and not dead
+                        f_zpush(clo, chi, ct, zl_, zh_, array.get(q2t, jj - 1))
+            cmax := math.max(cmax, c2)
+        if array.size(clo) > 0
+            [mlo, mhi, mt] = f_zmerge(clo, chi, ct, gap)
+            rlo := array.get(mlo, 0)
+            rhi := array.get(mhi, 0)
+            rt  := array.get(mt, 0)
+    [rlo, rhi, rt, liq]
+
+// ── The zones of the current alert ───────────────────────────────────────────
+var array<float> zn_lo  = array.new<float>()
+var array<float> zn_hi  = array.new<float>()
+var array<int>   zn_dir = array.new<int>()     // +1 buy zone, -1 sell zone
+var array<int>   zn_src = array.new<int>()     // 0 the POI in the leg, 1 the opposite zone
+var array<bool>  zn_ok  = array.new<bool>()    // still alive
+var array<bool>  zn_use = array.new<bool>()    // a trade came from it
+var array<box>   zn_bx  = array.new<box>()
+var array<box>   zn_all = array.new<box>()     // every zone drawn (the oldest go)
+var float zb_sz = na
+var int   zb_t0 = na
+var int   zb_na = 0
+f_zadd(float lo, float hi, int t, int dir, int src) =>
+    array.push(zn_lo, lo)
+    array.push(zn_hi, hi)
+    array.push(zn_dir, dir)
+    array.push(zn_src, src)
+    array.push(zn_ok, true)
+    array.push(zn_use, false)
+    box b = na
+    if zb_shz
+        color c = dir > 0 ? zb_bc : zb_scc
+        b := box.new(t, hi, time, lo, xloc = xloc.bar_time, border_color = color.new(c, 40), bgcolor = color.new(c, zb_op),
+             text = (dir > 0 ? "BUY" : "SELL") + (src == 0 ? " · POI in the leg" : " · opposite zone"), text_color = color.new(c, 10),
+             text_size = size.tiny, text_halign = text.align_right, text_valign = text.align_top)
+        array.push(zn_all, b)
+        while array.size(zn_all) > zb_kz
+            box.delete(array.shift(zn_all))
+    array.push(zn_bx, b)
+
+// the H4 candle size, and the zones an H4 candle closed through
+if x2_new
+    int nq_ = array.size(q2t)
+    if nq_ > 0
+        int   m_ = math.min(zb_atr, nq_)
+        float s_ = 0.0
+        for i = nq_ - m_ to nq_ - 1
+            s_ += array.get(q2hw, i) - array.get(q2lw, i)
+        zb_sz := s_ / m_
+    if array.size(zn_lo) > 0
+        for i = 0 to array.size(zn_lo) - 1
+            if array.get(zn_ok, i) and (array.get(zn_dir, i) > 0 ? x2c < array.get(zn_lo, i) : x2c > array.get(zn_hi, i))
+                array.set(zn_ok, i, false)
+                box b = array.get(zn_bx, i)
+                if not na(b)
+                    box.set_right(b, time)
+                    box.set_border_style(b, line.style_dotted)
+
+// ── Trades: one slot for buys (0), one for sells (1) ─────────────────────────
+var array<int>   tr_st  = array.new<int>(2, 0)     // 0 none · 1 retest order waiting · 2 open
+var array<float> tr_en  = array.new<float>(2, na)
+var array<float> tr_sl  = array.new<float>(2, na)
+var array<float> tr_tp  = array.new<float>(2, na)
+var array<int>   tr_src = array.new<int>(2, 0)
+var array<line>  tr_le  = array.new<line>(2)
+var array<line>  tr_ls  = array.new<line>(2)
+var array<line>  tr_lt  = array.new<line>(2)
+var array<label> tr_lb  = array.new<label>(2)
+var array<line>  zt_l   = array.new<line>()
+var array<label> zt_b   = array.new<label>()
+// results (R: a win = +TP R, a loss = -1R)
+var int   zs_n  = 0
+var int   zs_w  = 0
+var int   zs_l  = 0
+var float zs_r  = 0.0
+var float zs_pk = 0.0
+var float zs_dd = 0.0
+var int   zs_run = 0
+var int   zs_mrun = 0
+var int   zs_cx = 0
+var int   zs_bn = 0
+var float zs_br = 0.0
+var int   zs_sn = 0
+var float zs_sr = 0.0
+var int   zs_ln = 0
+var float zs_lr = 0.0
+var int   zs_on = 0
+var float zs_or = 0.0
+var array<int>   mo_k = array.new<int>()
+var array<int>   mo_n = array.new<int>()
+var array<float> mo_r = array.new<float>()
+f_zdel(int s) =>
+    line.delete(array.get(tr_le, s))
+    line.delete(array.get(tr_ls, s))
+    line.delete(array.get(tr_lt, s))
+    label.delete(array.get(tr_lb, s))
+
+// a Bias Pointer alert: the old zones stop, waiting retest orders are cancelled, new zones are built
+int zb_d = array.get(zb_ev, 0)
+array.set(zb_ev, 0, 0)
+if zb_d != 0
+    zb_na += 1
+    if na(zb_t0)
+        zb_t0 := time
+    if array.size(zn_lo) > 0
+        for i = 0 to array.size(zn_lo) - 1
+            box b = array.get(zn_bx, i)
+            if array.get(zn_ok, i) and not na(b)
+                box.set_right(b, time)
+    array.clear(zn_lo)
+    array.clear(zn_hi)
+    array.clear(zn_dir)
+    array.clear(zn_src)
+    array.clear(zn_ok)
+    array.clear(zn_use)
+    array.clear(zn_bx)
+    for s = 0 to 1
+        if array.get(tr_st, s) == 1
+            array.set(tr_st, s, 0)
+            zs_cx += 1
+            f_zdel(s)
+    float gap = nz(zb_sz)
+    array<float> l_lo = array.new<float>()
+    array<float> l_hi = array.new<float>()
+    array<int>   l_t  = array.new<int>()
+    f_zleg(zb_d, l_lo, l_hi, l_t)
+    [m_lo, m_hi, m_t] = f_zmerge(l_lo, l_hi, l_t, gap)
+    if array.size(m_lo) > 0
+        for q = 0 to array.size(m_lo) - 1
+            float a_ = array.get(m_lo, q)
+            float b_ = array.get(m_hi, q)
+            f_zadd(zb_d > 0 ? a_ : -b_, zb_d > 0 ? b_ : -a_, array.get(m_t, q), zb_d, 0)
+    [o_lo, o_hi, o_t, o_lq] = f_zopp(zb_d, zb_scan, gap)
+    if not na(o_lo)
+        f_zadd(zb_d > 0 ? o_lo : -o_hi, zb_d > 0 ? o_hi : -o_lo, o_t, -zb_d, 1)
+
+// the alive zones run on to the current candle
+if array.size(zn_lo) > 0
+    for i = 0 to array.size(zn_lo) - 1
+        box b = array.get(zn_bx, i)
+        if array.get(zn_ok, i) and not na(b)
+            box.set_right(b, time)
+
+// a confirmation closed: is its wick inside an alive zone of its side? (a wick up to one H4 candle size past the far edge counts)
+if zc_new and zb_tfok and array.size(zn_lo) > 0
+    for s = 0 to 1
+        int  dir = s == 0 ? 1 : -1
+        bool sig = dir > 0 ? zc_bs : zc_ss
+        if sig and array.get(tr_st, s) == 0
+            float tch = dir > 0 ? zc_btp : zc_stp
+            float lvl = dir > 0 ? zc_bl : zc_sl
+            float ext = dir > 0 ? zc_bsl : zc_ssl
+            int   hit = -1
+            for i = 0 to array.size(zn_lo) - 1
+                int  src = array.get(zn_src, i)
+                bool sok = zb_side == "Both" or (src == 0 and zb_side == "The POI in the leg only") or (src == 1 and zb_side == "The opposite zone only")
+                if hit < 0 and sok and array.get(zn_ok, i) and not array.get(zn_use, i) and array.get(zn_dir, i) == dir and not na(tch)
+                    float zl = array.get(zn_lo, i)
+                    float zh = array.get(zn_hi, i)
+                    if dir > 0 ? (tch <= zh and tch >= zl - nz(zb_sz)) : (tch >= zl and tch <= zh + nz(zb_sz))
+                        hit := i
+            if hit >= 0 and not na(ext)
+                float en = zb_inst ? zc_c : lvl
+                float sl = ext - dir * zb_slb * syminfo.mintick
+                float rk = na(en) ? na : dir * (en - sl)
+                if not na(rk) and rk > 0
+                    float tp = en + dir * zb_rr * rk
+                    int   src = array.get(zn_src, hit)
+                    array.set(zn_use, hit, true)
+                    array.set(tr_st, s, zb_inst ? 2 : 1)
+                    array.set(tr_en, s, en)
+                    array.set(tr_sl, s, sl)
+                    array.set(tr_tp, s, tp)
+                    array.set(tr_src, s, src)
+                    string nm = (dir > 0 ? "BUY" : "SELL") + " · " + zb_conf + (zb_inst ? "" : " retest") + (src == 0 ? " · leg POI" : " · opposite zone")
+                    if zb_sht
+                        color c = dir > 0 ? zb_bc : zb_scc
+                        array.set(tr_le, s, line.new(zc_t, en, time, en, xloc = xloc.bar_time, color = color.new(c, 0), width = 2, style = zb_inst ? line.style_solid : line.style_dashed))
+                        array.set(tr_ls, s, line.new(zc_t, sl, time, sl, xloc = xloc.bar_time, color = color.new(zb_scc, 30), width = 1))
+                        array.set(tr_lt, s, line.new(zc_t, tp, time, tp, xloc = xloc.bar_time, color = color.new(zb_bc, 30), width = 1))
+                        array.set(tr_lb, s, label.new(zc_t, ext, nm + (zb_inst ? "" : " · waiting"), xloc = xloc.bar_time, style = dir > 0 ? label.style_label_up : label.style_label_down,
+                             color = color.new(c, 20), textcolor = color.white, size = size.tiny))
+                    if zb_alr and barstate.isrealtime
+                        alert(nm + " " + syminfo.ticker + " · entry " + str.tostring(en, format.mintick) + " · SL " + str.tostring(sl, format.mintick) + " · TP " + str.tostring(tp, format.mintick) + " (1:" + str.tostring(zb_rr, "#") + ")", alert.freq_once_per_bar)
+
+// manage: a waiting retest fills when price comes back to it; SL first when both are touched in one candle
+for s = 0 to 1
+    int dir = s == 0 ? 1 : -1
+    int st  = array.get(tr_st, s)
+    if st > 0
+        float en = array.get(tr_en, s)
+        float sl = array.get(tr_sl, s)
+        float tp = array.get(tr_tp, s)
+        bool  fill_now = false
+        if st == 1 and (dir > 0 ? low <= en : high >= en)
+            st := 2
+            array.set(tr_st, s, 2)
+            fill_now := true
+            label lb = array.get(tr_lb, s)
+            if not na(lb)
+                label.set_text(lb, str.replace_all(label.get_text(lb), " · waiting", " · filled"))
+        bool done = false
+        if st == 2
+            bool h_sl = dir > 0 ? low <= sl : high >= sl
+            bool h_tp = not fill_now and (dir > 0 ? high >= tp : low <= tp)
+            if h_sl or h_tp
+                done := true
+                float r = h_sl ? -1.0 : zb_rr
+                int src = array.get(tr_src, s)
+                zs_n += 1
+                zs_r += r
+                if r > 0
+                    zs_w += 1
+                    zs_run := 0
+                else
+                    zs_l += 1
+                    zs_run += 1
+                    zs_mrun := math.max(zs_mrun, zs_run)
+                zs_pk := math.max(zs_pk, zs_r)
+                zs_dd := math.max(zs_dd, zs_pk - zs_r)
+                if dir > 0
+                    zs_bn += 1
+                    zs_br += r
+                else
+                    zs_sn += 1
+                    zs_sr += r
+                if src == 0
+                    zs_ln += 1
+                    zs_lr += r
+                else
+                    zs_on += 1
+                    zs_or += r
+                int mk = year * 12 + month - 1
+                if array.size(mo_k) == 0 or array.last(mo_k) != mk
+                    array.push(mo_k, mk)
+                    array.push(mo_n, 1)
+                    array.push(mo_r, r)
+                    if array.size(mo_k) > 120
+                        array.shift(mo_k)
+                        array.shift(mo_n)
+                        array.shift(mo_r)
+                else
+                    int lst = array.size(mo_k) - 1
+                    array.set(mo_n, lst, array.get(mo_n, lst) + 1)
+                    array.set(mo_r, lst, array.get(mo_r, lst) + r)
+                array.set(tr_st, s, 0)
+                if zb_sht
+                    for ln in array.from(array.get(tr_le, s), array.get(tr_ls, s), array.get(tr_lt, s))
+                        if not na(ln)
+                            line.set_x2(ln, time)
+                            array.push(zt_l, ln)
+                    label lb = array.get(tr_lb, s)
+                    if not na(lb)
+                        label.set_text(lb, str.replace_all(label.get_text(lb), " · filled", "") + (r > 0 ? " · WIN +" + str.tostring(r, "#") + "R" : " · LOSS -1R"))
+                        label.set_color(lb, color.new(r > 0 ? zb_bc : zb_scc, 10))
+                        array.push(zt_b, lb)
+                    while array.size(zt_b) > zb_kt
+                        label.delete(array.shift(zt_b))
+                    while array.size(zt_l) > zb_kt * 3
+                        line.delete(array.shift(zt_l))
+                    array.set(tr_le, s, line(na))
+                    array.set(tr_ls, s, line(na))
+                    array.set(tr_lt, s, line(na))
+                    array.set(tr_lb, s, label(na))
+        if not done and zb_sht
+            for ln in array.from(array.get(tr_le, s), array.get(tr_ls, s), array.get(tr_lt, s))
+                if not na(ln)
+                    line.set_x2(ln, time)
+
+// ── Results ──────────────────────────────────────────────────────────────────
+var table zb_tb = table.new(f_tpos(zb_tbp), 2, 32, bgcolor = color.new(#0F1120, 8), border_width = 1, border_color = color.new(color.gray, 75))
+f_zr(float x) =>
+    (x >= 0 ? "+" : "") + str.tostring(x, "#.##") + "R"
+f_zrow(int r, string a, string b, color c) =>
+    table.cell(zb_tb, 0, r, a, text_color = color.gray, text_size = size.small, text_halign = text.align_left)
+    table.cell(zb_tb, 1, r, b, text_color = c, text_size = size.small, text_halign = text.align_left)
+if barstate.islast and zb_tbo
+    table.clear(zb_tb, 0, 0, 1, 31)
+    color wc = color.white
+    float mos = na(zb_t0) ? na : (time_close - zb_t0) / (30.4375 * 86400000.0)
+    f_zrow(0, "ZONES BACKTEST", zb_conf + " · " + (zb_inst ? "Instant" : "Retest") + " · TP 1:" + str.tostring(zb_rr, "#") + " · " + zb_side, wc)
+    int r = 1
+    if not zb_tfok
+        f_zrow(r, "Chart", "put the chart on " + (ZB_TF == "60" ? "H1" : "M" + ZB_TF) + " or lower: no trades are taken on a higher chart", zb_scc)
+        r += 1
+    f_zrow(r, "Tested", na(zb_t0) ? "no alert yet on this chart's history" : str.format_time(zb_t0, "dd MMM yyyy", syminfo.timezone) + " → now · " + str.tostring(mos, "#.#") + " months · " + str.tostring(zb_na) + " alerts", wc)
+    r += 1
+    f_zrow(r, "Trades", str.tostring(zs_n) + " closed" + (array.get(tr_st, 0) + array.get(tr_st, 1) > 0 ? " · " + str.tostring((array.get(tr_st, 0) == 2 ? 1 : 0) + (array.get(tr_st, 1) == 2 ? 1 : 0)) + " open · " + str.tostring((array.get(tr_st, 0) == 1 ? 1 : 0) + (array.get(tr_st, 1) == 1 ? 1 : 0)) + " waiting" : ""), wc)
+    r += 1
+    f_zrow(r, "Wins / losses", str.tostring(zs_w) + " / " + str.tostring(zs_l) + (zs_n > 0 ? " · win rate " + str.tostring(100.0 * zs_w / zs_n, "#.#") + "% (break-even " + str.tostring(100.0 / (1 + zb_rr), "#.#") + "%)" : ""), wc)
+    r += 1
+    f_zrow(r, "Net result", f_zr(zs_r) + (zs_n > 0 ? " · " + f_zr(zs_r / zs_n) + " a trade · " + (zs_r >= 0 ? "+" : "") + str.tostring(zs_r * zb_risk, "#.#") + "% at " + str.tostring(zb_risk, "#.#") + "% risk" : ""), zs_r > 0 ? zb_bc : zs_r < 0 ? zb_scc : wc)
+    r += 1
+    f_zrow(r, "Profit factor", zs_l > 0 ? str.tostring(zs_w * zb_rr / zs_l, "#.##") : zs_w > 0 ? "no losses" : "–", wc)
+    r += 1
+    f_zrow(r, "Worst drawdown", "-" + str.tostring(zs_dd, "#.##") + "R · longest losing run " + str.tostring(zs_mrun), wc)
+    r += 1
+    f_zrow(r, "A month", na(mos) or mos <= 0 ? "–" : str.tostring(zs_n / mos, "#.#") + " trades · " + f_zr(zs_r / mos) + " · " + (zs_r >= 0 ? "+" : "") + str.tostring(zs_r * zb_risk / mos, "#.#") + "%", wc)
+    r += 1
+    f_zrow(r, "Buys / sells", str.tostring(zs_bn) + " (" + f_zr(zs_br) + ") / " + str.tostring(zs_sn) + " (" + f_zr(zs_sr) + ")", wc)
+    r += 1
+    f_zrow(r, "Leg POI / opposite", str.tostring(zs_ln) + " (" + f_zr(zs_lr) + ") / " + str.tostring(zs_on) + " (" + f_zr(zs_or) + ")", wc)
+    r += 1
+    if not zb_inst
+        f_zrow(r, "Retests cancelled", str.tostring(zs_cx) + " (price never came back before the next alert)", wc)
+        r += 1
+    if zb_mon and array.size(mo_k) > 0
+        f_zrow(r, "Month", "trades · result", color.gray)
+        r += 1
+        int nm = array.size(mo_k)
+        for i = nm - 1 to math.max(0, nm - 12)
+            int mk = array.get(mo_k, i)
+            int yy = math.floor(mk / 12)
+            int mm = mk - yy * 12 + 1
+            float mr = array.get(mo_r, i)
+            f_zrow(r, str.format_time(timestamp(yy, mm, 1, 0, 0), "MMM yyyy", syminfo.timezone), str.tostring(array.get(mo_n, i)) + " · " + f_zr(mr), mr > 0 ? zb_bc : mr < 0 ? zb_scc : wc)
+            r += 1
