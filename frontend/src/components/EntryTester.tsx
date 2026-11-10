@@ -57,9 +57,9 @@ const OLD_MODELS: { key: string; label: string }[] = [
 // The Checklist journal's rows: the entries tried on every trade, to see which suits the POIs best (2026-11-09).
 // Must match CHK_MODELS in api/entry_tests.py (keys are stored; 2026-11-10 renamed to 1hr / 15mins / 5mins entry, Limit then Instant)
 const CHK_MODELS: { key: string; label: string }[] = [
-  { key: 'e_octgd1h_lim', label: '1hr entry, Limit entry' },
-  { key: 'e_cisd15_lim', label: '15mins entry, Limit entry' },
-  { key: 'e_smc5_lim', label: '5mins entry, Limit entry' },
+  { key: 'e_octgd1h_lim', label: '1hr entry' },
+  { key: 'e_cisd15_lim', label: '15mins entry' },
+  { key: 'e_smc5_lim', label: '5mins entry' },
 ]
 // Its earlier rows: LC 1 / LC 2, then five entry types (2026-11-08). They show only on a trade already ticked there
 const CHK_OLD: { key: string; label: string; retired: true }[] = [
@@ -560,7 +560,7 @@ function ImageStrip({ tradeId, slot, label, ids, onChange, compact, pickTick = 0
 const CHK_GROUPS = (() => {
   const out: { name: string; rows: { key: string; sub: string }[] }[] = []
   for (const t of ENTRY_TYPES.filter(e => e.poi === 'chk' && !e.retired)) {
-    const [name, sub] = t.model.includes(', ') ? t.model.split(/, (.+)/) : [t.model, '']
+    const [name, sub] = t.model.includes(', ') ? t.model.split(/, (.+)/) : ['Entry', t.model]   // plain names share one 'Entry' line
     let g = out.find(x => x.name === name)
     if (!g) out.push(g = { name, rows: [] })
     g.rows.push({ key: t.key, sub: (sub || name).replace(/ entry$/i, '') })

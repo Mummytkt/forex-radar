@@ -78,9 +78,9 @@ _LEGACY |= {f"{m}_{p}" for m in RETIRED_MODELS for p, _ in NEW_POIS}
 # Keys are stored, never rename one. Earlier rows (LC 1 / LC 2, then five entry types on 2026-11-08) still save, so
 # trades already ticked on them keep their results.
 CHK_MODELS: list[tuple[str, str]] = [
-    ("e_octgd1h_lim", "1hr entry, Limit entry"),
-    ("e_cisd15_lim", "15mins entry, Limit entry"),
-    ("e_smc5_lim", "5mins entry, Limit entry"),
+    ("e_octgd1h_lim", "1hr entry"),
+    ("e_cisd15_lim", "15mins entry"),
+    ("e_smc5_lim", "5mins entry"),
 ]
 CHK_OLD_MODELS = ["lc1", "lc2", "e_direct", "e_cisd15", "e_cisd1h", "e_octgd1h", "e_smc5",
                   "e_cisd5_inst", "e_smc15_bqm", "e_eg1h_smc5",
