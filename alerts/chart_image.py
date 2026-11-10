@@ -73,7 +73,7 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
     d = ImageDraw.Draw(img)
     f_title, f_sub, f_lbl, f_ax = _font(22), _font(15), _font(14), _font(13)
 
-    tf_name = "Daily" if tf == "D" else "4H"
+    tf_name = meta.get("tf_title") or ("Daily" if tf == "D" else "4H")
     side = meta.get("side", "")
     d.text((PAD_L, 14), f"{instrument} · {tf_name} · {side}", font=f_title, fill=INK)
     d.text((PAD_L, 44), meta.get("subtitle", ""), font=f_sub, fill=MUTED)
@@ -165,7 +165,7 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
     if off:
         foot += "   ·   Off chart: " + " · ".join(f"{l['label']} {fmt(l['y'])}" for l in off)
     d.text((PAD_L, H - 20), foot, font=f_ax, fill=MUTED)
-    if n < MIN_FULL:
+    if n < MIN_FULL and not meta.get("tf_title"):
         note = f"Only {n} candle{'s' if n != 1 else ''} so far · the full history arrives with the next 4H close"
         d.text((x0 + 8, y0 + 6), note, font=f_sub, fill=(251, 191, 36))
     when = meta.get("fired_at")
@@ -262,3 +262,38 @@ def picture_for_alert(conn, alert_id: int, tf: str, full: bool = False) -> Optio
     png = render(instrument, tf, candles, levels, meta, fmt=lambda v: fmt_price(instrument, v), full=full)
     caption = f"{instrument} · {'Daily' if tf == 'D' else '4H'} · {meta.get('side', '')} · {meta.get('subtitle', '')}"
     return png, caption[:1000], len(candles)
+
+
+# ── Entry confirmation pictures (2026-11-10) ─────────────────────────────────
+# The Entry Confirmations script sends the timeframe's last 30 candles with each alert
+# ("minutes,o,h,l,c;..."), since the server only keeps Daily and H4 candles.
+
+def parse_candles(text: Optional[str]) -> list[tuple]:
+    out = []
+    for part in (text or "").split(";"):
+        try:
+            m, o, h, l, c = part.split(",")
+            ts = datetime.fromtimestamp(int(float(m)) * 60, tz=timezone.utc).isoformat()
+            out.append((ts, float(o), float(h), float(l), float(c)))
+        except Exception:
+            continue
+    out.sort(key=lambda x: x[0])
+    return out
+
+
+def entry_picture(instrument: str, tf_label: str, direction: str, pattern_name: str, candles: list[tuple],
+                  user_level: float, tol_pips: float, line: Optional[float], line_label: str, fmt) -> Optional[bytes]:
+    """The pattern's timeframe candles with the user's level (and its tolerance) and the pattern's line."""
+    if len(candles) < 3:
+        return None
+    levels = [{"y": user_level, "label": "Your level", "kind": "h4", "tf": "both"}]
+    if line is not None and abs(line - user_level) > 1e-12:
+        levels.append({"y": line, "label": line_label, "kind": "source", "tf": "both"})
+    side = "BUY" if direction == "bullish" else "SELL"
+    meta = {"tf_title": tf_label, "side": f"{side} · {pattern_name}",
+            "subtitle": f"Your level {fmt(user_level)} ± {tol_pips:g} pips  ·  the last candle formed it",
+            "fired_at": datetime.now(WAT).strftime("%d %b %H:%M WAT")}
+    try:
+        return render(instrument, tf_label, candles, levels, meta, fmt=fmt, full=True)
+    except Exception:
+        return None

@@ -39,7 +39,7 @@ from alerts.chart_image import save_alert_levels
 from alerts.telegram import chart_button
 from alerts.formatter import _SOURCE_NAMES
 from api.alert_prefs import confirmation_kind, get_alert_prefs, get_alert_style, get_engulf_mode, engulf_wanted
-from alerts.telegram import send_alert
+from alerts.telegram import send_alert, send_photo
 from config import pip_size_for
 from data.models import (
     AlertClassification,
@@ -212,6 +212,7 @@ class TVWebhookPayload(BaseModel):
     pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "octgd" | "cisd" | "engulfing" | "sweep_break" (+ "engulfing_sweep" from v2 scripts)
     kind: Optional[str] = None         # ENTRY_CONFIRMATION engulfing: "wick" | "body" (which kind of engulfing)
     touch_price: Optional[float] = None  # ENTRY_CONFIRMATION: the wick that reached the level (sweep low / high)
+    candles: Optional[str] = None      # ENTRY_CONFIRMATION v6+: that timeframe's last 30 candles "minutes,o,h,l,c;..." for the chart picture
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
     snapshot: Optional[dict] = None    # PRICE_UPDATE: chart stage + levels (Bias Pointer 2026-10-16+)
@@ -1112,7 +1113,41 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
                     instrument, direction, pattern, price, alert_id, alert_price, tol_pips)
 
         if config.telegram_enabled and chat_id:
-            _in_background(send_alert(config.telegram_bot_token, chat_id, alert_text))
+            pic = _entry_chart(instrument, tf_label, direction, pattern, payload, alert_price, tol_pips, swept_level)
+            _in_background(_send_entry(config.telegram_bot_token, chat_id, alert_text, pic))
+
+
+_ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
+                "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
+_ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd": "OC level", "cisd": "CISD line",
+                "engulfing": "Engulfed level", "sweep_break": "Broken level"}
+
+
+def _entry_chart(instrument, tf_label, direction, pattern, payload, level, tol_pips, line):
+    """The chart picture for an entry alert, from the candles the script sent (None if it sent none)."""
+    try:
+        from alerts.chart_image import entry_picture, parse_candles
+        candles = parse_candles(payload.candles)
+        if not candles:
+            return None
+        return entry_picture(instrument, tf_label, direction, _ENTRY_NAMES.get(pattern, pattern), candles,
+                             level, tol_pips, line, _ENTRY_LINES.get(pattern, "Pattern level"),
+                             lambda v: fmt_price(instrument, v))
+    except Exception:
+        logger.exception("%s entry chart picture failed", instrument)
+        return None
+
+
+async def _send_entry(token: str, chat_id, text: str, pic: Optional[bytes]) -> None:
+    """The alert with its chart: one photo message when the text fits a caption, else the chart then the text."""
+    if pic:
+        if len(text) <= 1024:
+            if await send_photo(token, chat_id, pic, text):
+                return
+        elif await send_photo(token, chat_id, pic, text.split(chr(10), 1)[0]):
+            await send_alert(token, chat_id, text)
+            return
+    await send_alert(token, chat_id, text)
 
 
 def _handle_invalidated(conn, instrument: str) -> None:

@@ -1,10 +1,11 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Entry Confirmations v5 — TradingView Edition (2026-11-10)
+// MummyTKT's Entry Confirmations v6 — TradingView Edition (2026-11-10)
 //
 // Companion indicator to MummyTKT's Bias Pointer.
 // MARKS: each timeframe's confirmations show on that timeframe's own chart: H1 ones on
 // an H1 chart, H2 on H2, M15 on M15, M5 on M5 (put the chart on the one you study).
+// CHART: each alert carries that timeframe's last 30 candles, so the Telegram message comes with a chart picture.
 // ALERTS: put it on a 5-minute chart (the smallest timeframe it reads) for each
 // instrument and create ONE alert:
 //   condition = "Any alert() function call"
@@ -229,29 +230,36 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
             s_lv := ss_lv
             s_tp := ss_hi
             ss_on := false
+    // The last 30 candles (oldest first) for the alert's chart picture: "minutes,o,h,l,c;..."
+    string cs = ""
+    if b_pcl or s_pcl or b_en or s_en or b_oc or s_oc or b_sb or s_sb or b_ci or s_ci
+        for i = 29 to 0
+            if not na(close[i]) and not na(time[i])
+                cs += (cs == "" ? "" : ";") + str.tostring(math.floor(time[i] / 60000)) + "," + str.tostring(open[i], format.mintick) + ","
+                     + str.tostring(high[i], format.mintick) + "," + str.tostring(low[i], format.mintick) + "," + str.tostring(close[i], format.mintick)
     [b_pcl, s_pcl, b_en, s_en, b_enw, s_enw, b_oc, s_oc, b_sb, s_sb, close, low, high, low[1], high[1], open[1],
      math.min(low, low[1]), math.max(high, high[1]), b_oclv, b_octp, s_oclv, s_octp, b_lv, b_tp, s_lv, s_tp, time,
-     b_ci, s_ci, b_cilv, b_citp, s_cilv, s_citp]
+     b_ci, s_ci, b_cilv, b_citp, s_cilv, s_citp, cs]
 
 f_prev(simple int n, simple int win, simple int ow, simple int cw) =>
-    [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, a32, a33] = f_forms(n, win, ow, cw)
+    [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, a32, a33, a34] = f_forms(n, win, ow, cw)
     [a1[1], a2[1], a3[1], a4[1], a5[1], a6[1], a7[1], a8[1], a9[1], a10[1], a11[1], a12[1], a13[1], a14[1], a15[1], a16[1], a17[1], a18[1],
-     a19[1], a20[1], a21[1], a22[1], a23[1], a24[1], a25[1], a26[1], a27[1], a28[1], a29[1], a30[1], a31[1], a32[1], a33[1]]
+     a19[1], a20[1], a21[1], a22[1], a23[1], a24[1], a25[1], a26[1], a27[1], a28[1], a29[1], a30[1], a31[1], a32[1], a33[1], a34[1]]
 
-[h1_bpcl, h1_spcl, h1_ben, h1_sen, h1_benw, h1_senw, h1_boc, h1_soc, h1_bsb, h1_ssb, h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_po, h1_lo2, h1_hi2, h1_boclv, h1_boctp, h1_soclv, h1_soctp, h1_blv, h1_btp, h1_slv, h1_stp, h1_t, h1_bci, h1_sci, h1_bcilv, h1_bcitp, h1_scilv, h1_scitp] = request.security(syminfo.tickerid, "60", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
-[h2_bpcl, h2_spcl, h2_ben, h2_sen, h2_benw, h2_senw, h2_boc, h2_soc, h2_bsb, h2_ssb, h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_po, h2_lo2, h2_hi2, h2_boclv, h2_boctp, h2_soclv, h2_soctp, h2_blv, h2_btp, h2_slv, h2_stp, h2_t, h2_bci, h2_sci, h2_bcilv, h2_bcitp, h2_scilv, h2_scitp] = request.security(syminfo.tickerid, "120", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
-[m15_bpcl, m15_spcl, m15_ben, m15_sen, m15_benw, m15_senw, m15_boc, m15_soc, m15_bsb, m15_ssb, m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_po, m15_lo2, m15_hi2, m15_boclv, m15_boctp, m15_soclv, m15_soctp, m15_blv, m15_btp, m15_slv, m15_stp, m15_t, m15_bci, m15_sci, m15_bcilv, m15_bcitp, m15_scilv, m15_scitp] = request.security(syminfo.tickerid, "15", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
-[r5_bpcl, r5_spcl, r5_ben, r5_sen, r5_benw, r5_senw, r5_boc, r5_soc, r5_bsb, r5_ssb, r5_c, r5_l, r5_h, r5_pl, r5_ph, r5_po, r5_lo2, r5_hi2, r5_boclv, r5_boctp, r5_soclv, r5_soctp, r5_blv, r5_btp, r5_slv, r5_stp, r5_t, r5_bci, r5_sci, r5_bcilv, r5_bcitp, r5_scilv, r5_scitp] = request.security(syminfo.tickerid, "5", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
+[h1_bpcl, h1_spcl, h1_ben, h1_sen, h1_benw, h1_senw, h1_boc, h1_soc, h1_bsb, h1_ssb, h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_po, h1_lo2, h1_hi2, h1_boclv, h1_boctp, h1_soclv, h1_soctp, h1_blv, h1_btp, h1_slv, h1_stp, h1_t, h1_bci, h1_sci, h1_bcilv, h1_bcitp, h1_scilv, h1_scitp, h1_cs] = request.security(syminfo.tickerid, "60", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
+[h2_bpcl, h2_spcl, h2_ben, h2_sen, h2_benw, h2_senw, h2_boc, h2_soc, h2_bsb, h2_ssb, h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_po, h2_lo2, h2_hi2, h2_boclv, h2_boctp, h2_soclv, h2_soctp, h2_blv, h2_btp, h2_slv, h2_stp, h2_t, h2_bci, h2_sci, h2_bcilv, h2_bcitp, h2_scilv, h2_scitp, h2_cs] = request.security(syminfo.tickerid, "120", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
+[m15_bpcl, m15_spcl, m15_ben, m15_sen, m15_benw, m15_senw, m15_boc, m15_soc, m15_bsb, m15_ssb, m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_po, m15_lo2, m15_hi2, m15_boclv, m15_boctp, m15_soclv, m15_soctp, m15_blv, m15_btp, m15_slv, m15_stp, m15_t, m15_bci, m15_sci, m15_bcilv, m15_bcitp, m15_scilv, m15_scitp, m15_cs] = request.security(syminfo.tickerid, "15", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
+[r5_bpcl, r5_spcl, r5_ben, r5_sen, r5_benw, r5_senw, r5_boc, r5_soc, r5_bsb, r5_ssb, r5_c, r5_l, r5_h, r5_pl, r5_ph, r5_po, r5_lo2, r5_hi2, r5_boclv, r5_boctp, r5_soclv, r5_soctp, r5_blv, r5_btp, r5_slv, r5_stp, r5_t, r5_bci, r5_sci, r5_bcilv, r5_bcitp, r5_scilv, r5_scitp, r5_cs] = request.security(syminfo.tickerid, "5", f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
 // The chart's own candles: its marks (H1 / H2 / M15 / M5 chart), and on a 5-minute chart the M5 alerts (no one-candle delay)
-[d5_bpcl, d5_spcl, d5_ben, d5_sen, d5_benw, d5_senw, d5_boc, d5_soc, d5_bsb, d5_ssb, d5_c, d5_l, d5_h, d5_pl, d5_ph, d5_po, d5_lo2, d5_hi2, d5_boclv, d5_boctp, d5_soclv, d5_soctp, d5_blv, d5_btp, d5_slv, d5_stp, d5_t, d5_bci, d5_sci, d5_bcilv, d5_bcitp, d5_scilv, d5_scitp] = f_forms(fr_n, sb_win, oc_win, ci_win)
+[d5_bpcl, d5_spcl, d5_ben, d5_sen, d5_benw, d5_senw, d5_boc, d5_soc, d5_bsb, d5_ssb, d5_c, d5_l, d5_h, d5_pl, d5_ph, d5_po, d5_lo2, d5_hi2, d5_boclv, d5_boctp, d5_soclv, d5_soctp, d5_blv, d5_btp, d5_slv, d5_stp, d5_t, d5_bci, d5_sci, d5_bcilv, d5_bcitp, d5_scilv, d5_scitp, d5_cs] = f_forms(fr_n, sb_win, oc_win, ci_win)
 bool m5_own = timeframe.in_seconds() == 300
 
 bool chart_ok = timeframe.in_seconds() <= 300
 
-f_send(string pat, string dir, string tf, float price, float swept, float touch, string kind) =>
+f_send(string pat, string dir, string tf, float price, float swept, float touch, string kind, string cs) =>
     alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"' + pat
          + '","direction":"' + dir + '","timeframe":"' + tf + '","price":' + str.tostring(price) + ',"swept_level":' + str.tostring(swept)
-         + ',"touch_price":' + str.tostring(touch) + (kind != "" ? ',"kind":"' + kind + '"' : '') + '}', alert.freq_once_per_bar)
+         + ',"touch_price":' + str.tostring(touch) + (kind != "" ? ',"kind":"' + kind + '"' : '') + (cs != "" ? ',"candles":"' + cs + '"' : '') + '}', alert.freq_once_per_bar)
 
 f_mark(bool mk, string txt, bool bull, string tip) =>
     if show_mk and mk
@@ -265,70 +273,70 @@ f_tf(bool on, bool mk, bool snd, bool conf, string tf, string nm, int t, bool pc
      bool bpcl, bool spcl, bool ben, bool sen, bool benw, bool senw, bool boc, bool soc, bool bsb, bool ssb,
      float c, float l, float h, float pl, float ph, float po, float lo2, float hi2,
      float boclv, float boctp, float soclv, float soctp, float blv, float btp, float slv, float stp,
-     bool bci, bool sci, float bcilv, float bcitp, float scilv, float scitp) =>
+     bool bci, bool sci, float bcilv, float bcitp, float scilv, float scitp, string cs) =>
     bool newc = not na(t) and t != t[1]
     if on and newc and conf
         bool rt = barstate.isrealtime
         if pcl and bpcl
             f_mark(mk, nm + " PCL", true, nm + " bullish PCL: wick below the bearish candle's low, closed back above it")
             if rt and snd
-                f_send("pcl", "bullish", tf, c, pl, l, "")
+                f_send("pcl", "bullish", tf, c, pl, l, "", cs)
         if pcl and spcl
             f_mark(mk, nm + " PCL", false, nm + " bearish PCL: wick above the bullish candle's high, closed back below it")
             if rt and snd
-                f_send("pcl", "bearish", tf, c, ph, h, "")
+                f_send("pcl", "bearish", tf, c, ph, h, "", cs)
         if oc and boc
             f_mark(mk, nm + " OCTGD", true, nm + " bullish OCTGD: closed above the bearish OC level " + str.tostring(boclv, format.mintick))
             if rt and snd
-                f_send("octgd", "bullish", tf, c, boclv, boctp, "")
+                f_send("octgd", "bullish", tf, c, boclv, boctp, "", cs)
         if oc and soc
             f_mark(mk, nm + " OCTGD", false, nm + " bearish OCTGD: closed below the bullish OC level " + str.tostring(soclv, format.mintick))
             if rt and snd
-                f_send("octgd", "bearish", tf, c, soclv, soctp, "")
+                f_send("octgd", "bearish", tf, c, soclv, soctp, "", cs)
         if en and ben
             f_mark(mk, nm + " Engulf", true, nm + " bullish Engulfing: " + (benw ? "body closed above the bearish candle's high (wick)" : "body covered the bearish candle's body"))
             if rt and snd
-                f_send("engulfing", "bullish", tf, c, benw ? ph : po, lo2, benw ? "wick" : "body")
+                f_send("engulfing", "bullish", tf, c, benw ? ph : po, lo2, benw ? "wick" : "body", cs)
         if en and sen
             f_mark(mk, nm + " Engulf", false, nm + " bearish Engulfing: " + (senw ? "body closed below the bullish candle's low (wick)" : "body covered the bullish candle's body"))
             if rt and snd
-                f_send("engulfing", "bearish", tf, c, senw ? pl : po, hi2, senw ? "wick" : "body")
+                f_send("engulfing", "bearish", tf, c, senw ? pl : po, hi2, senw ? "wick" : "body", cs)
         if ci and bci
             f_mark(mk, nm + " CISD", true, nm + " bullish CISD: closed above the open of the bearish run, " + str.tostring(bcilv, format.mintick))
             if rt and snd
-                f_send("cisd", "bullish", tf, c, bcilv, bcitp, "")
+                f_send("cisd", "bullish", tf, c, bcilv, bcitp, "", cs)
         if ci and sci
             f_mark(mk, nm + " CISD", false, nm + " bearish CISD: closed below the open of the bullish run, " + str.tostring(scilv, format.mintick))
             if rt and snd
-                f_send("cisd", "bearish", tf, c, scilv, scitp, "")
+                f_send("cisd", "bearish", tf, c, scilv, scitp, "", cs)
         if sb and bsb
             f_mark(mk, nm + " S&B", true, nm + " bullish Sweep and Break: low swept at " + str.tostring(btp, format.mintick) + ", lower high broken")
             if rt and snd
-                f_send("sweep_break", "bullish", tf, c, blv, btp, "")
+                f_send("sweep_break", "bullish", tf, c, blv, btp, "", cs)
         if sb and ssb
             f_mark(mk, nm + " S&B", false, nm + " bearish Sweep and Break: high swept at " + str.tostring(stp, format.mintick) + ", higher low broken")
             if rt and snd
-                f_send("sweep_break", "bearish", tf, c, slv, stp, "")
+                f_send("sweep_break", "bearish", tf, c, slv, stp, "", cs)
 
 // ALERTS from a 5-minute (or smaller) chart: H1, H2 and M15 read through their own candles
 // (sent only, no marks: the marks belong on each timeframe's own chart)
 f_tf(use_h1 and chart_ok, false, true, true, "60", "H1", h1_t, true, true, true, false, true,
      h1_bpcl, h1_spcl, h1_ben, h1_sen, h1_benw, h1_senw, h1_boc, h1_soc, h1_bsb, h1_ssb,
      h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_po, h1_lo2, h1_hi2, h1_boclv, h1_boctp, h1_soclv, h1_soctp, h1_blv, h1_btp, h1_slv, h1_stp,
-     h1_bci, h1_sci, h1_bcilv, h1_bcitp, h1_scilv, h1_scitp)
+     h1_bci, h1_sci, h1_bcilv, h1_bcitp, h1_scilv, h1_scitp, h1_cs)
 f_tf(use_h2 and chart_ok, false, true, true, "120", "H2", h2_t, false, false, true, false, false,
      h2_bpcl, h2_spcl, h2_ben, h2_sen, h2_benw, h2_senw, h2_boc, h2_soc, h2_bsb, h2_ssb,
      h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_po, h2_lo2, h2_hi2, h2_boclv, h2_boctp, h2_soclv, h2_soctp, h2_blv, h2_btp, h2_slv, h2_stp,
-     h2_bci, h2_sci, h2_bcilv, h2_bcitp, h2_scilv, h2_scitp)
+     h2_bci, h2_sci, h2_bcilv, h2_bcitp, h2_scilv, h2_scitp, h2_cs)
 f_tf(use_m15 and chart_ok, false, true, true, "15", "M15", m15_t, false, false, false, true, true,
      m15_bpcl, m15_spcl, m15_ben, m15_sen, m15_benw, m15_senw, m15_boc, m15_soc, m15_bsb, m15_ssb,
      m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_po, m15_lo2, m15_hi2, m15_boclv, m15_boctp, m15_soclv, m15_soctp, m15_blv, m15_btp, m15_slv, m15_stp,
-     m15_bci, m15_sci, m15_bcilv, m15_bcitp, m15_scilv, m15_scitp)
+     m15_bci, m15_sci, m15_bcilv, m15_bcitp, m15_scilv, m15_scitp, m15_cs)
 // M5 on a chart below 5 minutes (on a 5-minute chart the call below sends it from the chart's own candles)
 f_tf(use_m5 and chart_ok and not m5_own, false, true, true, "5", "M5", r5_t, false, false, false, true, true,
      false, false, false, false, false, false, false, false, r5_bsb, r5_ssb,
      r5_c, na, na, na, na, na, na, na, na, na, na, na, r5_blv, r5_btp, r5_slv, r5_stp,
-     r5_bci, r5_sci, r5_bcilv, r5_bcitp, r5_scilv, r5_scitp)
+     r5_bci, r5_sci, r5_bcilv, r5_bcitp, r5_scilv, r5_scitp, r5_cs)
 
 // MARKS on the chart's own timeframe: H1 chart = H1 confirmations, H2 = H2, M15 = M15, M5 = M5
 string own_tf  = timeframe.period
@@ -342,7 +350,7 @@ f_tf(own_on, true, own_m5, barstate.isconfirmed, own_tf, own_nm, d5_t,
      own_h1, own_h1, own_h1 or own_h2, own_m15 or own_m5, own_h1 or own_m15 or own_m5,
      d5_bpcl, d5_spcl, d5_ben, d5_sen, d5_benw, d5_senw, d5_boc, d5_soc, d5_bsb, d5_ssb,
      d5_c, d5_l, d5_h, d5_pl, d5_ph, d5_po, d5_lo2, d5_hi2, d5_boclv, d5_boctp, d5_soclv, d5_soctp, d5_blv, d5_btp, d5_slv, d5_stp,
-     d5_bci, d5_sci, d5_bcilv, d5_bcitp, d5_scilv, d5_scitp)
+     d5_bci, d5_sci, d5_bcilv, d5_bcitp, d5_scilv, d5_scitp, d5_cs)
 
 var table note = table.new(position.top_right, 1, 1)
 if barstate.islast and not (own_h1 or own_h2 or own_m15 or own_m5)

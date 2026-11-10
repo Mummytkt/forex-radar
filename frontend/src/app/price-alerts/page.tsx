@@ -501,7 +501,7 @@ function EntryAlertsPanel({ instruments, prices }: {
           <div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>{editing ? 'Edit Entry Alert' : 'New Entry Pattern Alert'}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-              {editing ? 'Change it and save — the old alert is replaced' : 'Notify me when the formations I pick form at my level'}
+              {editing ? 'Change it and save — the old alert is replaced' : 'Notify me (with a chart) when the formations I pick form at my level'}
             </div>
           </div>
           {editing && (
