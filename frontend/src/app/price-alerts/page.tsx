@@ -1,6 +1,6 @@
 'use client'
 import DateInput from '@/components/DateInput'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import useSWR, { mutate } from 'swr'
 import { Target, Trash2, Clock, CheckCircle2, Bell, Pencil, Zap } from 'lucide-react'
 import TopBar from '@/components/TopBar'
@@ -278,6 +278,61 @@ function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id
 
 // ── Entry Pattern Alerts tab content ──────────────────────────────────────────
 
+// Instrument box you can type in: "xag", "gold" style search instead of scrolling (user, 2026-11-10)
+function InstrumentPicker({ instruments, value, onChange }: { instruments: string[]; value: string; onChange: (v: string) => void }) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const [hi, setHi] = useState(0)
+  const box = useRef<HTMLDivElement>(null)
+  const shown = instruments.find(i => i.replace('/', '') === value) ?? value
+  const key = q.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const list = key ? instruments.filter(i => i.replace('/', '').toUpperCase().includes(key)) : instruments
+  const pick = (inst: string) => { onChange(inst.replace('/', '')); setQ(''); setOpen(false) }
+  useEffect(() => {
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) { setOpen(false); setQ('') } }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [])
+  return (
+    <div ref={box} style={{ position: 'relative' }}>
+      <input
+        value={open ? q : shown}
+        placeholder={open ? `Search… (${shown})` : ''}
+        onFocus={() => { setOpen(true); setQ(''); setHi(0) }}
+        onChange={e => { setQ(e.target.value); setOpen(true); setHi(0) }}
+        onKeyDown={e => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); setHi(h => Math.min(h + 1, list.length - 1)) }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setHi(h => Math.max(h - 1, 0)) }
+          else if (e.key === 'Enter') { e.preventDefault(); if (list[hi]) { pick(list[hi]); (e.target as HTMLInputElement).blur() } }
+          else if (e.key === 'Escape') { setOpen(false); setQ(''); (e.target as HTMLInputElement).blur() }
+        }}
+        style={{
+          width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
+          border: '1px solid var(--border)', background: 'var(--bg)',
+          color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
+        }}
+      />
+      {open && (
+        <div style={{
+          position: 'absolute', zIndex: 30, top: 'calc(100% + 4px)', left: 0, right: 0, maxHeight: 260, overflowY: 'auto',
+          background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.35)',
+        }}>
+          {list.length === 0 && <div style={{ padding: '9px 12px', fontSize: 13, color: 'var(--text-muted)' }}>No instrument matches “{q}”</div>}
+          {list.map((inst, i) => (
+            <div key={inst} onMouseDown={e => { e.preventDefault(); pick(inst) }} onMouseEnter={() => setHi(i)}
+              style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer',
+                background: i === hi ? 'var(--accent-bg, rgba(99,102,241,.15))' : 'transparent',
+                color: inst.replace('/', '') === value ? 'var(--accent, #818cf8)' : 'var(--text-primary)',
+                fontWeight: inst.replace('/', '') === value ? 700 : 400 }}>
+              {inst}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function EntryAlertsPanel({ instruments, prices }: {
   instruments: string[]
   prices?: Record<string, { price: number; updated_at: string }>
@@ -399,19 +454,7 @@ function EntryAlertsPanel({ instruments, prices }: {
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
               Instrument
             </label>
-            <select
-              value={instrument}
-              onChange={e => setInstrument(e.target.value)}
-              style={{
-                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
-                border: '1px solid var(--border)', background: 'var(--bg)',
-                color: 'var(--text-primary)', outline: 'none',
-              }}
-            >
-              {instruments.map(inst => (
-                <option key={inst} value={inst.replace('/', '')}>{inst}</option>
-              ))}
-            </select>
+            <InstrumentPicker instruments={instruments} value={instrument} onChange={setInstrument} />
             {currentPrice !== undefined && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
                 Current price: <strong style={{ color: 'var(--text-secondary)' }}>{formatPrice(instrument, currentPrice)}</strong>
@@ -848,19 +891,7 @@ export default function PriceAlertsPage() {
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
                   Instrument
                 </label>
-                <select
-                  value={instrument}
-                  onChange={e => setInstrument(e.target.value)}
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
-                    border: '1px solid var(--border)', background: 'var(--bg)',
-                    color: 'var(--text-primary)', outline: 'none',
-                  }}
-                >
-                  {instruments.map(inst => (
-                    <option key={inst} value={inst.replace('/', '')}>{inst}</option>
-                  ))}
-                </select>
+                <InstrumentPicker instruments={instruments} value={instrument} onChange={setInstrument} />
                 {currentPrice !== undefined && (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Clock size={10} />
