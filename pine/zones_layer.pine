@@ -700,7 +700,7 @@ if barstate.islast and zb_tbo
     f_zcell(2, 0, "from " + str.format_time(zb_from, "dd MMM yyyy", syminfo.timezone), wc, nb)
     f_zcell(3, 0, zb_side, wc, nb)
     f_zcell(4, 0, str.tostring(zb_na) + " alerts", wc, nb)
-    f_zcell(5, 0, "zones built: " + str.tostring(array.get(dg_z, 0)) + " leg POI · " + str.tostring(array.get(dg_z, 1)) + " opposite", wc, nb)
+    f_zcell(5, 0, "zones: " + str.tostring(array.get(dg_z, 0)) + " leg / " + str.tostring(array.get(dg_z, 1)) + " opp", wc, nb)
     int r = 1
     if not (ZCS >= 3600 and chart_ok)
         f_zcell(0, r, "Put the chart on H4", zb_scc, nb)
@@ -709,12 +709,11 @@ if barstate.islast and zb_tbo
     f_zcell(0, r, "Confirmation", gc, nb)
     f_zcell(1, r, "Entry", gc, nb)
     f_zcell(2, r, "Data from", gc, nb)
-    f_zcell(3, r, "Trades", gc, nb)
+    f_zcell(3, r, "Trades  (checks: found / zone alive / in zone)", gc, nb)
     f_zcell(4, r, "Win rate", gc, nb)
     f_zcell(5, r, "Net", gc, nb)
     f_zcell(6, r, "A month", gc, nb)
-    f_zcell(7, r, "Worst drawdown", gc, nb)
-    f_zcell(8, r, "Confirmations: all · zone alive · in the zone", gc, nb)
+    f_zcell(7, r, "Worst DD · losses in a row", gc, nb)
     r += 1
     for y = 0 to NS - 1
         int   p   = math.floor(y / 2)
@@ -727,14 +726,12 @@ if barstate.islast and zb_tbo
         color bg  = y == SHOWN ? hb : nb
         f_zcell(0, r, array.get(ZP, p), wc, bg)
         f_zcell(1, r, y % 2 == 0 ? "Instant" : "Retest", wc, bg)
-        f_zcell(2, r, na(f0) ? "no candles" : str.format_time(f0, "dd MMM yyyy", syminfo.timezone), wc, bg)
-        f_zcell(3, r, str.tostring(n) + (y % 2 == 1 and array.get(y_cx, y) > 0 ? " (" + str.tostring(array.get(y_cx, y)) + " not filled)" : ""), wc, bg)
+        f_zcell(2, r, na(f0) ? "no candles" : str.format_time(f0, "MMM yyyy", syminfo.timezone), wc, bg)
+        f_zcell(3, r, str.tostring(n) + (y % 2 == 1 and array.get(y_cx, y) > 0 ? " (" + str.tostring(array.get(y_cx, y)) + " not filled)" : "") + "  (" + str.tostring(array.get(dg_sig, p)) + " / " + str.tostring(array.get(dg_live, p)) + " / " + str.tostring(array.get(dg_in, p)) + ")", wc, bg)
         f_zcell(4, r, n > 0 ? str.tostring(100.0 * array.get(y_w, y) / n, "#") + "%" : "–", wc, bg)
         f_zcell(5, r, f_zr(tot) + " · " + (tot >= 0 ? "+" : "") + str.tostring(tot * zb_risk, "#.#") + "%", tot > 0 ? zb_bc : tot < 0 ? zb_scc : wc, bg)
         f_zcell(6, r, na(mos) or mos <= 0 ? "–" : str.tostring(n / mos, "#.#") + " trades · " + f_zr(tot / mos), wc, bg)
-        f_zcell(7, r, "-" + str.tostring(array.get(y_dd, y), "#.#") + "R · " + str.tostring(array.get(y_mrn, y)) + " losses in a row", wc, bg)
-        if y % 2 == 0
-            f_zcell(8, r, str.tostring(array.get(dg_sig, p)) + " · " + str.tostring(array.get(dg_live, p)) + " · " + str.tostring(array.get(dg_in, p)), wc, bg)
+        f_zcell(7, r, "-" + str.tostring(array.get(y_dd, y), "#.#") + "R · " + str.tostring(array.get(y_mrn, y)) + "L", wc, bg)
         r += 1
     f_zcell(0, r, "Break-even win rate " + str.tostring(100.0 / (1 + zb_rr), "#") + "%", gc, nb)
     f_zcell(1, r, "Drawn:", gc, nb)
