@@ -28,9 +28,9 @@ int    zb_from = timestamp(zb_fy, zb_fm, 1, 0, 0)
 int    zb_to   = zb_ty == 0 ? timestamp(2100, 1, 1, 0, 0) : zb_tm == 12 ? timestamp(zb_ty + 1, 1, 1, 0, 0) - 1 : timestamp(zb_ty, zb_tm + 1, 1, 0, 0) - 1
 string zb_tpo  = input.string("1:2", "Take profit", options = ["1:2", "1:3"], group = G_ZB)
 string zb_side = input.string("Both", "Zones traded", options = ["Both", "The POI in the leg only", "The opposite zone only"], group = G_ZB)
-string zb_conf = input.string("H1 OCTGD", "Drawn on the chart: confirmation", options = ["M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL"], group = G_ZB, inline = "sh")
-string zb_ent  = input.string("Instant", "entry", options = ["Instant", "Retest"], group = G_ZB, inline = "sh",
-     tooltip = "Instant: at the confirmation's close. Retest: CISD → the CISD line · OCTGD → the OC level · EG → the engulfed candle's open (or close) · PCL → the PCL candle's open. A retest order waits until the next breakout alert, then it is cancelled. The table always shows all 10.")
+string zb_conf = input.string("H1 OCTGD", "Confirmation", options = ["M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL", "All"], group = G_ZB, inline = "sh")
+string zb_ent  = input.string("Instant", "entry", options = ["Instant", "Retest", "Both"], group = G_ZB, inline = "sh",
+     tooltip = "Instant: at the confirmation's close. Retest: CISD → the CISD line · OCTGD → the OC level · EG → the engulfed candle's open (or close) · PCL → the PCL candle's open. A retest order waits until the next breakout alert, then it is cancelled. The table shows what you pick (All / Both to compare). The trades are drawn on the chart when one confirmation and one entry are picked.")
 string zb_egr  = input.string("Open", "EG retest at the engulfed candle's", options = ["Open", "Close"], group = G_ZB)
 int    zb_ow   = input.int(10, "OCTGD: candles allowed from C2 to the close through the level", minval = 1, maxval = 50, group = G_ZB)
 int    zb_cw   = input.int(20, "CISD: candles allowed from the low to the close through the line", minval = 1, maxval = 100, group = G_ZB)
@@ -53,7 +53,10 @@ int    zb_op   = input.int(82, "zone opacity %", minval = 0, maxval = 100, group
 
 float  zb_rr   = zb_tpo == "1:3" ? 3.0 : 2.0
 const int NS   = 10    // setups: confirmation p (0 M5 CISD · 1 M15 CISD · 2 H1 OCTGD · 3 H1 EG · 4 H1 PCL) × entry (0 Instant · 1 Retest)
-int    SHOWN   = (zb_conf == "M5 CISD" ? 0 : zb_conf == "M15 CISD" ? 1 : zb_conf == "H1 OCTGD" ? 2 : zb_conf == "H1 EG" ? 3 : 4) * 2 + (zb_ent == "Instant" ? 0 : 1)
+int    ZB_PI   = zb_conf == "M5 CISD" ? 0 : zb_conf == "M15 CISD" ? 1 : zb_conf == "H1 OCTGD" ? 2 : zb_conf == "H1 EG" ? 3 : zb_conf == "H1 PCL" ? 4 : -1
+int    ZB_EI   = zb_ent == "Instant" ? 0 : zb_ent == "Retest" ? 1 : -1
+// the one setup drawn on the chart (-1: several picked, none drawn)
+int    SHOWN   = ZB_PI >= 0 and ZB_EI >= 0 ? ZB_PI * 2 + ZB_EI : -1
 var array<string> ZP = array.from("M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL")
 int    ZCS     = timeframe.in_seconds()
 bool   zb_ok5  = ZCS <= 300
@@ -707,6 +710,8 @@ if barstate.islast and zb_tbo
         float mos = na(f0) or na(l0) ? na : (l0 - f0) / (30.4375 * 86400000.0)
         int   n   = array.get(y_n, y)
         float tot = array.get(y_r, y)
+        if (ZB_PI >= 0 and p != ZB_PI) or (ZB_EI >= 0 and y % 2 != ZB_EI)
+            continue
         color bg  = y == SHOWN ? hb : nb
         f_zcell(0, r, array.get(ZP, p), wc, bg)
         f_zcell(1, r, y % 2 == 0 ? "Instant" : "Retest", wc, bg)
@@ -718,14 +723,18 @@ if barstate.islast and zb_tbo
         f_zcell(7, r, "-" + str.tostring(array.get(y_dd, y), "#.#") + "R · " + str.tostring(array.get(y_mrn, y)) + "L", wc, bg)
         r += 1
     f_zcell(0, r, "Break-even win rate " + str.tostring(100.0 / (1 + zb_rr), "#") + "%", gc, nb)
-    f_zcell(1, r, "Drawn:", gc, nb)
-    f_zcell(2, r, array.get(ZP, math.floor(SHOWN / 2)) + " " + zb_ent, wc, hb)
-    f_zcell(3, r, "buys " + str.tostring(array.get(sh_n, 0)) + " (" + f_zr(array.get(sh_r, 0)) + ")", wc, nb)
-    f_zcell(4, r, "sells " + str.tostring(array.get(sh_n, 1)) + " (" + f_zr(array.get(sh_r, 1)) + ")", wc, nb)
-    f_zcell(5, r, "leg POI " + str.tostring(array.get(sh_n, 2)) + " (" + f_zr(array.get(sh_r, 2)) + ")", wc, nb)
-    f_zcell(6, r, "opposite " + str.tostring(array.get(sh_n, 3)) + " (" + f_zr(array.get(sh_r, 3)) + ")", wc, nb)
-    r += 1
-    if zb_mon and array.size(mo_k) > 0
+    if SHOWN < 0
+        f_zcell(1, r, "Drawn: none (pick one confirmation and one entry to see its trades on the chart)", gc, nb)
+        r += 1
+    else
+        f_zcell(1, r, "Drawn:", gc, nb)
+        f_zcell(2, r, array.get(ZP, math.floor(SHOWN / 2)) + " " + zb_ent, wc, hb)
+        f_zcell(3, r, "buys " + str.tostring(array.get(sh_n, 0)) + " (" + f_zr(array.get(sh_r, 0)) + ")", wc, nb)
+        f_zcell(4, r, "sells " + str.tostring(array.get(sh_n, 1)) + " (" + f_zr(array.get(sh_r, 1)) + ")", wc, nb)
+        f_zcell(5, r, "leg POI " + str.tostring(array.get(sh_n, 2)) + " (" + f_zr(array.get(sh_r, 2)) + ")", wc, nb)
+        f_zcell(6, r, "opposite " + str.tostring(array.get(sh_n, 3)) + " (" + f_zr(array.get(sh_r, 3)) + ")", wc, nb)
+        r += 1
+    if zb_mon and SHOWN >= 0 and array.size(mo_k) > 0
         int nm = array.size(mo_k)
         for i = nm - 1 to math.max(0, nm - 12)
             int   mk = array.get(mo_k, i)
