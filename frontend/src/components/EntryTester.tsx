@@ -55,16 +55,14 @@ const OLD_MODELS: { key: string; label: string }[] = [
   { key: 'm15_cisd', label: '15M SMC' },
 ]
 // The Checklist journal's rows: the entries tried on every trade, to see which suits the POIs best (2026-11-09).
-// Must match CHK_MODELS in api/entry_tests.py (keys are stored)
+// Must match CHK_MODELS in api/entry_tests.py (keys are stored; 2026-11-10 renamed to 1hr / 15mins / 5mins entry, Limit then Instant)
 const CHK_MODELS: { key: string; label: string }[] = [
-  { key: 'e_eg1h_inst', label: '1hr EG, Instant entry' },
-  { key: 'e_eg1h_lim', label: '1hr EG, Limit entry' },
-  { key: 'e_octgd1h_inst', label: '1hr OCTGD, Instant entry' },
-  { key: 'e_octgd1h_lim', label: '1hr OCTGD, Limit entry' },
-  { key: 'e_cisd15_inst', label: '15mins CISD, Instant entry' },
-  { key: 'e_cisd15_lim', label: '15mins CISD, Limit entry' },
-  { key: 'e_smc5_lim', label: '5mins SMC, Limit entry' },
-  { key: 'e_smc5_inst', label: '5mins SMC, Instant entry' },
+  { key: 'e_octgd1h_lim', label: '1hr entry, Limit entry' },
+  { key: 'e_octgd1h_inst', label: '1hr entry, Instant entry' },
+  { key: 'e_cisd15_lim', label: '15mins entry, Limit entry' },
+  { key: 'e_cisd15_inst', label: '15mins entry, Instant entry' },
+  { key: 'e_smc5_lim', label: '5mins entry, Limit entry' },
+  { key: 'e_smc5_inst', label: '5mins entry, Instant entry' },
 ]
 // Its earlier rows: LC 1 / LC 2, then five entry types (2026-11-08). They show only on a trade already ticked there
 const CHK_OLD: { key: string; label: string; retired: true }[] = [
@@ -81,6 +79,8 @@ const CHK_OLD: { key: string; label: string; retired: true }[] = [
   { key: 'e_cisd1h_lim', label: '1hr CISD, Limit entry (old)', retired: true as const },   // taken off 2026-11-09
   { key: 'e_pcl1h_lim', label: '1hr PCL, Limit entry (old)', retired: true as const },   // taken off 2026-11-09
   { key: 'e_pcl1h_inst', label: '1hr PCL, Instant entry (old)', retired: true as const },   // taken off 2026-11-09
+  { key: 'e_eg1h_inst', label: '1hr EG, Instant entry (old)', retired: true as const },   // taken off 2026-11-10
+  { key: 'e_eg1h_lim', label: '1hr EG, Limit entry (old)', retired: true as const },   // taken off 2026-11-10
 ]
 const MODELS = [...NEW_MODELS, ...CHK_MODELS, ...CHK_OLD.slice(NEW_MODELS.length), ...RETIRED_MODELS, ...OLD_MODELS]
 const POIS: { key: string; label: string; old?: boolean }[] = [

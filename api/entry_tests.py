@@ -78,19 +78,18 @@ _LEGACY |= {f"{m}_{p}" for m in RETIRED_MODELS for p, _ in NEW_POIS}
 # Keys are stored, never rename one. Earlier rows (LC 1 / LC 2, then five entry types on 2026-11-08) still save, so
 # trades already ticked on them keep their results.
 CHK_MODELS: list[tuple[str, str]] = [
-    ("e_eg1h_inst", "1hr EG, Instant entry"),
-    ("e_eg1h_lim", "1hr EG, Limit entry"),
-    ("e_octgd1h_inst", "1hr OCTGD, Instant entry"),
-    ("e_octgd1h_lim", "1hr OCTGD, Limit entry"),
-    ("e_cisd15_inst", "15mins CISD, Instant entry"),
-    ("e_cisd15_lim", "15mins CISD, Limit entry"),
-    ("e_smc5_lim", "5mins SMC, Limit entry"),
-    ("e_smc5_inst", "5mins SMC, Instant entry"),
+    ("e_octgd1h_lim", "1hr entry, Limit entry"),
+    ("e_octgd1h_inst", "1hr entry, Instant entry"),
+    ("e_cisd15_lim", "15mins entry, Limit entry"),
+    ("e_cisd15_inst", "15mins entry, Instant entry"),
+    ("e_smc5_lim", "5mins entry, Limit entry"),
+    ("e_smc5_inst", "5mins entry, Instant entry"),
 ]
 CHK_OLD_MODELS = ["lc1", "lc2", "e_direct", "e_cisd15", "e_cisd1h", "e_octgd1h", "e_smc5",
                   "e_cisd5_inst", "e_smc15_bqm", "e_eg1h_smc5",
-                  "e_cisd1h_inst", "e_cisd1h_lim", "e_pcl1h_lim", "e_pcl1h_inst"]
-# taken off 2026-11-09: 5mins CISD Instant, 15mins SMC Breaker / QM, 1hr EG 5mins SMC; later that day 1hr CISD and 1hr PCL (user)
+                  "e_cisd1h_inst", "e_cisd1h_lim", "e_pcl1h_lim", "e_pcl1h_inst",
+                  "e_eg1h_inst", "e_eg1h_lim"]
+# taken off 2026-11-09: 5mins CISD Instant, 15mins SMC Breaker / QM, 1hr EG 5mins SMC; later that day 1hr CISD and 1hr PCL; 2026-11-10 1hr EG (user)
 ENTRY_TYPES += [(f"{m}_chk", f"{ml} on Checklist") for m, ml in CHK_MODELS]
 _LEGACY |= {f"{m}_chk" for m in CHK_OLD_MODELS}
 _KEYS = {k for k, _ in ENTRY_TYPES} | _LEGACY
