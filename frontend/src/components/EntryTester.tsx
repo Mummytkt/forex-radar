@@ -94,6 +94,9 @@ const ENTRY_TYPES: { key: string; label: string; model: string; mkey: string; po
   (p.old ? OLD_MODELS : p.key === 'chk' ? [...CHK_MODELS, ...CHK_OLD] : [...NEW_MODELS, ...RETIRED_MODELS]).map(m => ({
     key: `${m.key}_${p.key}`, label: `${m.label} on ${p.label}`, model: m.label, mkey: m.key, poi: p.key, poiLabel: p.label,
     retired: 'retired' in m })))
+// Checklist entries taken off are hidden everywhere in that journal (user, 2026-11-10); their results stay saved
+const SHOWN_TYPES = ENTRY_TYPES.filter(t => !(t.poi === 'chk' && t.retired))
+const CHK_HIDDEN = new Set(ENTRY_TYPES.filter(t => t.poi === 'chk' && t.retired).map(t => t.key))
 // The H4 alert picker is hidden for now (2026-11-06: the owner writes it in the notes). true brings all of it back:
 // the add bar, the filter, the trade's details and its header. Alerts on trades already saved stay stored.
 const SHOW_H4_ALERT = false
@@ -262,7 +265,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       }
     return { w, l, be, r, buys: trades.filter(t => t.direction === 'buy').length, sells: trades.filter(t => t.direction === 'sell').length }
   }, [trades, only])
-  const all = useMemo(() => ENTRY_TYPES.filter(t => !poi || t.poi === poi).map(t => {
+  const all = useMemo(() => SHOWN_TYPES.filter(t => !poi || t.poi === poi).map(t => {
     let w = 0, l = 0, be = 0, none = 0, totalR = 0, rrSum = 0, rrN = 0, noRR = 0, trades_ = 0, setups = 0
     // Each trade's result for this entry, oldest first: the run of wins and losses
     const seq: { o: Outcome; r: number | null; takes?: number; tip: string }[] = []
@@ -300,7 +303,7 @@ function Scoreboard({ trades, title, kind, note, children, openWith }: {
       for (const tr of trades)
         for (const p of POIS.filter(x => !only || x.key === only)) {
           const x = tr.results[`${m.key}_${p.key}`]
-          if (!x || x.outcome === 'none') continue
+          if (!x || CHK_HIDDEN.has(`${m.key}_${p.key}`) || x.outcome === 'none') continue
           const e = entriesIn(x)
           n += e.w + e.l + e.be
           w += e.w
@@ -700,7 +703,7 @@ function ChecklistRead({ value }: { value: Checklist }) {
 // ── One trade: tick each entry pattern's result ──────────────────────────────
 // A saved trade read back as a page of the owner's diary
 function storyOf(trade: Trade, only: string, name?: string) {
-  const types = ENTRY_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key] && !(only === 'chk' && trade.results[t.key].outcome === 'none'))
+  const types = SHOWN_TYPES.filter(t => (!only || t.poi === only) && trade.results[t.key] && !(only === 'chk' && trade.results[t.key].outcome === 'none'))
   return buildStory({
     id: trade.id, name, date: trade.trade_date, pair: trade.instrument, direction: trade.direction,
     hasNote: !!trade.notes.trim(), exitDate: trade.exit_date,
@@ -785,7 +788,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
   }
   // Every picture under a POI: its own and its entries'
   const poiPics = (p: string) => Object.entries(imgs).filter(([k]) => k === p || k.endsWith(`_${p}`)).reduce((n, [, v]) => n + v.length, 0)
-  const shownRes = ENTRY_TYPES.filter(t => !only || t.poi === only).map(t => trade.results[t.key]).filter((r): r is EntryResult => !!r)   // hidden old keys not counted
+  const shownRes = SHOWN_TYPES.filter(t => !only || t.poi === only).map(t => trade.results[t.key]).filter((r): r is EntryResult => !!r)   // hidden old keys not counted
   const done = shownRes.length
   const tradeR = shownRes.map(rOf).filter((v): v is number => v != null)
 
@@ -840,7 +843,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
         <div style={{ borderTop: '1px solid var(--border)', padding: '10px 14px 12px' }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
             {POIS.filter(p => !only).map(p => {
-              const n = ENTRY_TYPES.filter(t => t.poi === p.key && trade.results[t.key]).length
+              const n = SHOWN_TYPES.filter(t => t.poi === p.key && trade.results[t.key]).length
               return (
                 <Chip key={p.key} on={poi === p.key} color="var(--accent)" bg="var(--accent-bg)" onClick={() => setPoi(p.key)}>
                   {p.label}{n ? ` · ${n}` : ''}{poiPics(p.key) ? ` · 📷${poiPics(p.key)}` : ''}
@@ -855,7 +858,7 @@ function TradeCard({ trade, num, open, onToggle, onChange, onImages, onDelete }:
           <div style={poi === 'chk' ? { display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' } : undefined}>
           {poi === 'chk' && <div style={{ flex: '0 1 340px', minWidth: 260 }}><PicturesBox trade={trade} onImages={onImages} /></div>}
           <div style={poi === 'chk' ? { flex: '1 1 440px', minWidth: 0 } : undefined}>
-          {ENTRY_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map((t, i, rows) => {
+          {SHOWN_TYPES.filter(t => t.poi === poi && (!t.retired || trade.results[t.key] || imgs[t.key]?.length)).map((t, i, rows) => {
             const r = trade.results[t.key]
             // Checklist: no "No entry" and no 📷 per row (pictures come from the pictures box; older per-row pictures still show)
             const chk = poi === 'chk'
@@ -1121,7 +1124,7 @@ function periodSummary(list: Trade[], only: string): string {
   return `${plural(list.length, 'setup')} · ${entries} ${entries === 1 ? 'entry' : 'entries'} · ${plural(buys, 'buy')} · ${plural(list.length - buys, 'sell')} · ${w} W · ${l} L · ${be} BE · ${fmtR(r)}`
 }
 function resultWord(t: Trade, only: string): string {
-  return ENTRY_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key] && !(only === 'chk' && t.results[e.key].outcome === 'none')).map(e => {
+  return SHOWN_TYPES.filter(e => (!only || e.poi === only) && t.results[e.key] && !(only === 'chk' && t.results[e.key].outcome === 'none')).map(e => {
     const x = t.results[e.key]
     if (x.outcome === 'none') return 'No entry'
     const v = rOf(x)
