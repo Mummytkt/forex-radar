@@ -1311,6 +1311,33 @@ check("an H1 sweep closes the level watching H1 sweep, and an older level (no li
       _ea["id"] not in _a and _old["id"] not in _a and _eb["id"] in _a)
 for _x in (_ea, _eb, _old):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
+# v3 confirmations (2026-11-10): PCL (= the Sweep), OCTGD, Engulfing
+_ec = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "GBPUSD", "direction": "bearish", "price": 1.3000,
+             "tolerance_pips": 10, "watches": ["H1:octgd", "H1:engulfing", "H2:engulfing"], "keep_open": True}).json()
+_es = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "GBPUSD", "direction": "bearish", "price": 1.3000,
+             "tolerance_pips": 10, "watches": ["H1:sweep"]}).json()
+check("the new confirmations can be watched", _ec.get("watches") == ["H1:octgd", "H1:engulfing", "H2:engulfing"])
+tv(type="ENTRY_CONFIRMATION", instrument="GBPUSD", direction="bearish", pattern="octgd", timeframe="60",
+   price=1.2960, swept_level=1.2985, touch_price=1.3004)
+_g = {a["id"]: a for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"]}
+check("an H1 OCTGD fires the level watching it (matched on the OC's wick), not the PCL level",
+      _g[_ec["id"]]["triggered_pattern"] == "octgd" and _g[_ec["id"]]["triggered_tf"] == "H1" and _g[_es["id"]]["triggered_at"] is None)
+tv(type="ENTRY_CONFIRMATION", instrument="GBPUSD", direction="bearish", pattern="engulfing", timeframe="120", kind="wick",
+   price=1.2950, swept_level=1.2990, touch_price=1.3008)
+_g = {a["id"]: a for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"]}
+check("an H2 Engulfing fires the level watching it", _g[_ec["id"]]["triggered_pattern"] == "engulfing" and _g[_ec["id"]]["triggered_tf"] == "H2")
+tv(type="ENTRY_CONFIRMATION", instrument="GBPUSD", direction="bearish", pattern="pcl", timeframe="60",
+   price=1.2980, swept_level=1.2998, touch_price=1.3003)
+_g = {a["id"]: a for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"]}
+check("a PCL fires a level saved with the old 'H1 Sweep' (they are the same formation now)", _es["id"] not in _g)
+from alerts.formatter import format_entry_alert as _fea
+_m = _fea("GBPUSD", "bearish", "engulfing", "120", 1.2950, 1.2990, kind="wick")
+_m2 = _fea("GBPUSD", "bullish", "octgd", "60", 1.3050, 1.3010)
+check("entry messages name OCTGD and the kind of engulfing",
+      "Engulfing (wick) · H2 · Bearish" in _m and "below the previous bullish candle's low" in _m
+      and "OCTGD · H1 · Bullish" in _m2 and "OC level:" in _m2 and "closed above it" in _m2)
+for _x in (_ec, _es):
+    c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
 
 passed = sum(ok for _, ok in results)
 for name, ok in results:

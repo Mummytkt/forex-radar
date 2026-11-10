@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "5 November 2026 (script v14: the MTF story, with the numbered pullback map. Daily breakout, H4 continuations, the pullback line, pullback confirmed, the H4 range, reaction zones and the ten story alerts)"
+VERSION = "10 November 2026 (script v14: the MTF story, with the numbered pullback map. Daily breakout, H4 continuations, the pullback line, pullback confirmed, the H4 range, reaction zones and the ten story alerts. Entry Confirmations v3: PCL, OCTGD, Sweep and Break, Engulfing)"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -262,14 +262,23 @@ def make_images():
         levels=[(13.5, "breakout level", ACCENT), (10.5, "other side of the broken range", RED)],
         notes=[(1, 11.35, "back inside the range\n→ still VALID", GREEN, (1.0, 10.85)), (3, 8.9, "daily close below the low\n→ new SELL breakout", RED)],
         labels=["breakout", "Daily", "Daily", "Daily"], ylim=(8.2, 15.6))
-    im["pcl"] = chart("pcl", [(16, 16.5, 13, 13.5), (13.5, 16.9, 13.2, 15.6)],
-        levels=[(16, "C1 body high (swept level)", ACCENT)],
-        notes=[(1, 17.2, "wick sweeps above", ACCENT), (1.55, 15.6, "closes back at/below\n→ bullish PCL", GREEN, (2.3, 14.4))],
-        labels=["C1 down", "C2 up"], ylim=(12.6, 17.8))
-    im["engulf"] = chart("engulf", [(16, 16.6, 13, 13.4), (13.4, 17.5, 12.4, 17.0)],
-        levels=[(16.6, "C1 high", RED), (13.0, "C1 low (swept)", ACCENT)],
-        notes=[(1, 12.0, "wick sweeps below C1 low", ACCENT), (1.3, 17.0, "body closes above C1 high\n→ bullish Engulfing Sweep", GREEN, (2.9, 14.9))],
-        labels=["C1 down", "C2 up"], ylim=(11.5, 18.1))
+    im["pcl"] = chart("pcl", [(16, 16.5, 13, 13.5), (13.4, 15.3, 12.2, 15.0)],
+        levels=[(13, "C1 low (swept)", ACCENT)],
+        notes=[(1, 11.6, "wick sweeps below C1's low", ACCENT), (1.3, 15.0, "body closes back above it\n→ bullish PCL", GREEN, (2.6, 16.3))],
+        labels=["C1 down", "C2 up"], ylim=(11.2, 17.2))
+    im["octgd"] = chart("octgd", [(18.6, 18.8, 17.4, 17.6), (17.6, 17.8, 16.2, 16.4), (16.4, 16.6, 14.6, 14.8), (14.8, 15.6, 14.5, 15.3), (15.3, 15.5, 14.8, 15.0), (15.0, 17.5, 14.9, 17.2)],
+        levels=[(16.4, "OC level (C1 close = C2 open)", ACCENT, 0.6, 5.4)], zones=[(13.8, 15.2, "POI", ZONE)],
+        notes=[(1.5, 13.3, "C1 + C2: the last two down candles at the POI", MUTED), (5, 17.8, "closes above the OC level\n→ bullish OCTGD", GREEN)],
+        labels=["", "C1", "C2", "", "", "break"], ylim=(12.8, 19.4))
+    im["sweepbreak"] = chart("sweepbreak", [(19, 19.3, 17.2, 17.5), (17.5, 17.6, 15.6, 15.9), (15.9, 16.0, 14.6, 14.8), (14.8, 16.6, 14.7, 16.3), (16.3, 16.8, 15.9, 16.2),
+                                             (16.2, 16.3, 15.2, 15.4), (15.4, 15.5, 13.9, 15.1), (15.1, 16.4, 15.0, 16.2), (16.2, 18.0, 16.1, 17.8)],
+        levels=[(14.6, "low at the level", ACCENT, 2, 6.4), (16.8, "last lower high", RED, 4, 8.4)],
+        notes=[(6, 13.4, "the sweep: wick below, closes back above", ACCENT), (8, 18.3, "body closes above\nthe lower high → BUY", GREEN)],
+        labels=["", "", "low", "", "LH", "", "sweep", "", "break"], ylim=(12.8, 19.6))
+    im["engulf"] = chart("engulf", [(16, 16.6, 13, 13.4), (13.3, 16.9, 12.9, 16.3)],
+        levels=[(16.6, "C1 high (closing above it: covers the wick too)", RED), (16.0, "C1 open (closing above it: covers the body)", ACCENT)],
+        notes=[(1.3, 12.2, "C2 opens at or below C1's close", MUTED)],
+        labels=["C1 down", "C2 up"], ylim=(11.6, 17.6))
     im["entrylevel"] = chart("entrylevel", [(16, 16.5, 13, 13.5), (13.5, 16.9, 13.2, 15.6), None, (19.5, 20, 17.5, 18), (18, 20.6, 17.8, 19.4)],
         levels=[(15.0, "your watched level", ACCENT)], zones=[(13.6, 16.4, "± your tolerance", ZONE)],
         notes=[(0.5, 17.4, "pattern inside your band → ALERT", GREEN), (3.5, 21.0, "same pattern far away → ignored", MUTED)],
@@ -400,19 +409,32 @@ def make_rules(im):
          "Zones that touch or sit within a few pips of each other merge into one, named after its parts, to keep the chart clean.",
          "H4 FVG+OC+V", "H4 FVG+OC+A",
          "Twelve zones show by default, newest first; change it in the script settings.", im["s_merge"]),
-        ("E. Entry patterns", "PCL — sweep that holds",
-         "A two-candle pattern measured on the previous candle's <b>body edge</b>. The new candle's wick sweeps past it, but its body closes back inside.",
-         "Down candle, then up candle: its high goes above C1's body high, and it closes at or below that body high",
-         "Up candle, then down candle: its low goes below C1's body low, and it closes at or above that body low",
+        ("E. Entry patterns", "PCL — H1 (the same as the H1 Sweep)",
+         "Measured on the previous candle's <b>low</b> (high for sells). The new candle's wick sweeps past it, and its body closes back inside.",
+         "Down candle, then up candle: its wick goes below C1's low, and its body closes back above that low",
+         "Up candle, then down candle: its wick goes above C1's high, and its body closes back below that high",
          "The two candles must be opposite colours. Fires on candle close.", im["pcl"]),
-        ("E. Entry patterns", "Engulfing Sweep — full engulf",
-         "Measured on the previous candle's <b>full high and low</b>. The new candle's wick sweeps one extreme, and its body closes beyond the other.",
-         "Down candle, then up candle: wick below C1's low, body closes above C1's high",
-         "Up candle, then down candle: wick above C1's high, body closes below C1's low",
+        ("E. Entry patterns", "OCTGD — H1: the Open-Close that got disrespected",
+         "The <b>last two same-colour candles</b> as price touches your POI form an OC (C2 is the candle that touches it, or both form inside it). "
+         "Its level is where C1 closes and C2 opens. Within a few candles, a candle closes through that level the other way.",
+         "Two down candles at the POI (bearish OC), then an up candle closes above the OC level",
+         "Two up candles at the POI (bullish OC), then a down candle closes below the OC level",
+         "An OC that formed before price reached the POI does not count. A newer OC replaces the older one.", im["octgd"]),
+        ("E. Entry patterns", "Sweep and Break — M15 / M5",
+         "A low forms at your level (a fractal low: below the 2 candles on each side). A wick sweeps it and closes back above. "
+         "Then, before a close below the sweep wick, a body closes above the last lower high.",
+         "Low at the level, its sweep, then a close above the last lower high",
+         "High at the level, its sweep, then a close below the last higher low",
+         "Up to 20 candles from the sweep to the break. Fires on candle close.", im["sweepbreak"]),
+        ("E. Entry patterns", "Engulfing — H1 / H2",
+         "C2 opens at or below C1's close and its <b>body covers C1's body</b> (closes beyond C1's open). When it also closes beyond C1's high (low), "
+         "it covers the wick too. One confirmation: whichever kind shows, and the alert says which.",
+         "Down candle, then up candle: closes above C1's open (body), or above C1's high (wick)",
+         "Up candle, then down candle: closes below C1's open (body), or below C1's low (wick)",
          "The two candles must be opposite colours. Fires on candle close.", im["engulf"]),
         ("E. Entry patterns", "When an entry alert fires",
-         "Entry patterns only alert at a level <b>you chose</b> in Price Alerts → Entry Pattern Alerts: same direction, and the pattern's close within your tolerance "
-         "(default 20 pips). The alert fires once, then closes.",
+         "Entry patterns only alert at a level <b>you chose</b> in Price Alerts → Entry Pattern Alerts: same direction, a confirmation you ticked for that level, and the wick that reached it "
+         "within your tolerance (default 20 pips). The first one closes the alert, unless you chose to keep watching the others.",
          "Set a Buy entry alert at your level", "Set a Sell entry alert at your level",
          "Entry alerts don't check the bias state — you decide when and where to watch.", im["entrylevel"]),
         ("F. Timing and delivery", "When alerts arrive",

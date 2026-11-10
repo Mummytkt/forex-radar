@@ -189,16 +189,18 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
 
 // The formations a level can watch: "<timeframe>:<pattern>"
 const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
-  { key: 'H1:sweep',        label: 'H1 Sweep',            hint: "a bullish candle wicks below the bearish candle before it and closes back above that low (sell: mirror)" },
-  { key: 'H2:sweep',        label: 'H2 Sweep',            hint: 'the same on 2-hour candles' },
+  { key: 'H1:pcl',          label: 'H1 PCL',              hint: "a bullish candle wicks below the bearish candle before it and closes back above that low (sell: mirror)" },
+  { key: 'H1:octgd',        label: 'H1 OCTGD',            hint: 'the last two bearish candles at the level form an OC; a bullish candle later closes above its level (sell: mirror)' },
   { key: 'M15:sweep_break', label: 'M15 Sweep and Break', hint: 'a low at the level, its sweep, then a close above the last lower high' },
   { key: 'M5:sweep_break',  label: 'M5 Sweep and Break',  hint: 'the same on 5-minute candles' },
-  { key: 'H1:pcl',          label: 'H1 PCL',              hint: "MummyTKT's PCL on H1" },
-  { key: 'H2:pcl',          label: 'H2 PCL',              hint: "MummyTKT's PCL on H2" },
+  { key: 'H1:engulfing',    label: 'H1 Engulfing',        hint: "the body covers the previous candle's body, or its wick too" },
+  { key: 'H2:engulfing',    label: 'H2 Engulfing',        hint: 'the same on 2-hour candles' },
 ]
-const ENTRY_DEFAULT_WATCHES = ['H1:sweep', 'H2:sweep', 'M15:sweep_break', 'M5:sweep_break']
-const watchLabel = (k: string) => ENTRY_WATCHES.find(w => w.key === k)?.label ?? k
-const patternLabel = (p: string) => p === 'pcl' ? 'PCL' : p === 'sweep_break' ? 'Sweep and Break' : 'Sweep'
+// Saved before 2026-11-10: the Sweep is now the PCL; H2 Sweep / H2 PCL are no longer offered
+const OLD_WATCH_LABELS: Record<string, string> = { 'H1:sweep': 'H1 PCL', 'H2:sweep': 'H2 Sweep (old)', 'H2:pcl': 'H2 PCL (old)' }
+const ENTRY_DEFAULT_WATCHES = ENTRY_WATCHES.map(w => w.key)
+const watchLabel = (k: string) => ENTRY_WATCHES.find(w => w.key === k)?.label ?? OLD_WATCH_LABELS[k] ?? k
+const patternLabel = (p: string) => ({ pcl: 'PCL', engulfing_sweep: 'PCL', octgd: 'OCTGD', sweep_break: 'Sweep and Break', engulfing: 'Engulfing' } as Record<string, string>)[p] ?? p
 
 function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id: number) => void }) {
   const triggered = !!item.triggered_at
@@ -237,7 +239,7 @@ function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {item.watches ? item.watches.map(watchLabel).join(' · ') : 'PCL or Engulfing Sweep · H1/H2'}
+            {item.watches ? item.watches.map(watchLabel).join(' · ') : 'PCL · H1/H2'}
             {item.keep_open ? ' · keeps watching' : ''}
           </span>
           {item.note && (
@@ -499,8 +501,10 @@ function EntryAlertsPanel({ instruments, prices }: {
               })}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-              Each one is checked on its own timeframe, at this level, once the candle has closed. Sweep: a bullish candle wicks below the bearish candle before it and closes back above that low (sells: mirror).
-              Sweep and Break: a low (a high for sells) at the level, its sweep, then a close through the last lower high (higher low).
+              Each one is checked on its own timeframe, at this level, once the candle has closed (sells are the mirror). PCL: a bullish candle wicks below the bearish candle before it and closes back above that low.
+              OCTGD: the last two bearish candles as price touches the level form an OC; within a few candles a bullish candle closes above where the first closed and the second opened.
+              Sweep and Break: a low at the level, its sweep, then a close through the last lower high.
+              Engulfing: a bullish body covers the bearish candle's body (closes above its open), or its wick too (closes above its high), whichever shows.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
               {([[false, 'Close it at the first one'], [true, 'Keep watching the others']] as const).map(([val, lbl]) => (
@@ -1128,7 +1132,7 @@ export default function PriceAlertsPage() {
           <Clock size={13} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
             {mainTab === 'entry'
-              ? 'Entry Pattern alerts fire when a formation you picked (H1 / H2 Sweep, M15 / M5 Sweep and Break, or PCL) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others.'
+              ? 'Entry Pattern alerts fire when a confirmation you picked (H1 PCL, H1 OCTGD, M15 / M5 Sweep and Break, H1 / H2 Engulfing) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others.'
               : 'On touch alerts fire within 5 minutes of the level being crossed. Candle close alerts fire only at the close of your chosen timeframe candle.'}
           </span>
         </div>

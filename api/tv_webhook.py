@@ -209,7 +209,8 @@ class TVWebhookPayload(BaseModel):
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
     cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | inline_break | breaker_origin | breaker_cont | oc_cont
     price: Optional[float] = None      # current close price (PRICE_UPDATE / ENTRY_CONFIRMATION)
-    pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "engulfing_sweep" | "sweep_break"
+    pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "octgd" | "engulfing" | "sweep_break" (+ "engulfing_sweep" from v2 scripts)
+    kind: Optional[str] = None         # ENTRY_CONFIRMATION engulfing: "wick" | "body" (which kind of engulfing)
     touch_price: Optional[float] = None  # ENTRY_CONFIRMATION: the wick that reached the level (sweep low / high)
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
@@ -1028,7 +1029,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     price = payload.price
     swept_level = payload.swept_level
 
-    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "engulfing_sweep", "sweep_break"):
+    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "octgd", "engulfing", "engulfing_sweep", "sweep_break"):
         logger.warning("%s ENTRY_CONFIRMATION ignored — bad direction/pattern (%s/%s)",
                        instrument, direction, pattern)
         return
@@ -1057,8 +1058,12 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         return
 
     tf_label = {"60": "H1", "120": "H2", "15": "M15", "5": "M5"}.get(tf, tf)
-    # the formation as a level names it in its watch list (Engulfing Sweep = "sweep")
-    watch_key = f"{tf_label}:{'sweep' if pattern == 'engulfing_sweep' else pattern}"
+    # the formation as a level names it in its watch list. Since v3 (2026-11-10) the PCL IS the Sweep, so a
+    # level that still watches "Sweep" hears the PCL, and a v2 script's sweep counts for "PCL" levels too
+    if pattern in ("pcl", "engulfing_sweep"):
+        watch_keys = {f"{tf_label}:pcl", f"{tf_label}:sweep"}
+    else:
+        watch_keys = {f"{tf_label}:{pattern}"}
     # how close to the level: the wick that reached it when the script sends it, else the close
     touch = payload.touch_price if payload.touch_price is not None else price
 
@@ -1073,7 +1078,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
 
         watches = [w for w in (row["watches"] or "").split(",") if w]
         if watches:
-            if watch_key not in watches:
+            if not watch_keys & set(watches):
                 continue  # this level doesn't watch this formation on this timeframe
         elif pattern not in ("pcl", "engulfing_sweep") or tf_label not in ("H1", "H2"):
             continue  # an older level: PCL / Engulfing Sweep on H1 / H2 only
@@ -1098,6 +1103,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             timeframe=tf,
             price=price,
             swept_level=swept_level,
+            kind=payload.kind,
         )
         if note:
             alert_text += f"\n\nYour note: {note}"

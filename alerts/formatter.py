@@ -944,12 +944,14 @@ def format_story_alert(instrument: str, event: str, direction: Direction, top: D
         "", "⚠️ Directional bias only — not an entry signal. Wait for the entry model.", "", _signature()])
 
 
-# ── Entry confirmation alert (PCL / Engulfing Sweep) ──────────────────────────
+# ── Entry confirmation alert (PCL / OCTGD / Sweep and Break / Engulfing) ──────
 
 _ENTRY_PATTERN_NAMES: dict[str, str] = {
-    "pcl":              "MummyTKT's PCL",
-    "engulfing_sweep":  "Sweep",
+    "pcl":              "PCL",
+    "engulfing_sweep":  "PCL",          # a v2 script's Sweep: the same formation as the PCL since 2026-11-10
+    "octgd":            "OCTGD",
     "sweep_break":      "Sweep and Break",
+    "engulfing":        "Engulfing",
 }
 
 _TF_LABELS: dict[str, str] = {
@@ -964,59 +966,62 @@ _TF_LABELS: dict[str, str] = {
 def format_entry_alert(
     instrument: str,
     direction: str,          # "bullish" | "bearish"
-    pattern: str,            # "pcl" | "engulfing_sweep"
+    pattern: str,            # "pcl" | "octgd" | "sweep_break" | "engulfing" (or a v2 "engulfing_sweep")
     timeframe: str,          # pine's timeframe.period, e.g. "60" / "120"
     price: float,
     swept_level: float,
+    kind: str | None = None,  # engulfing: "wick" | "body"
 ) -> str:
-    """Build the Telegram message for a PCL or Engulfing Sweep entry confirmation."""
+    """Build the Telegram message for an entry confirmation at the user's level."""
     direction_label = "Bullish" if direction == "bullish" else "Bearish"
     direction_lower = direction_label.lower()
     bias_side = "Buy" if direction == "bullish" else "Sell"
+    bear = direction == "bearish"
 
     pattern_name = _ENTRY_PATTERN_NAMES.get(pattern, pattern.replace("_", " ").title())
+    if pattern == "engulfing" and kind == "wick":
+        pattern_name = "Engulfing (wick)"
+    elif pattern == "engulfing":
+        pattern_name = "Engulfing (body)"
     tf_label = _TF_LABELS.get(timeframe, timeframe)
 
     price_str = _fmt_level(instrument, price)
     swept_str = _fmt_level(instrument, swept_level)
+    level_label = "Swept level"
 
-    if pattern == "pcl":
-        if direction == "bearish":
-            desc = (
-                f"The {tf_label} candle wicked below the previous bullish body low "
-                f"@ {swept_str} but closed back above it — a liquidity sweep "
-                f"without a body close-through."
-            )
+    if pattern in ("pcl", "engulfing_sweep"):
+        if bear:
+            desc = (f"The {tf_label} bearish candle wicked above the previous bullish candle's high "
+                    f"@ {swept_str} and closed back below it — PCL.")
         else:
-            desc = (
-                f"The {tf_label} candle wicked above the previous bearish body high "
-                f"@ {swept_str} but closed back below it — a liquidity sweep "
-                f"without a body close-through."
-            )
+            desc = (f"The {tf_label} bullish candle wicked below the previous bearish candle's low "
+                    f"@ {swept_str} and closed back above it — PCL.")
+    elif pattern == "octgd":
+        level_label = "OC level"
+        if bear:
+            desc = (f"The last two {tf_label} bullish candles at your level formed an OC @ {swept_str}; "
+                    f"a bearish candle has now closed below it — the OC got disrespected (OCTGD).")
+        else:
+            desc = (f"The last two {tf_label} bearish candles at your level formed an OC @ {swept_str}; "
+                    f"a bullish candle has now closed above it — the OC got disrespected (OCTGD).")
     elif pattern == "sweep_break":
-        if direction == "bearish":
-            desc = (
-                f"On {tf_label}, price made a high at your level, a wick swept it "
-                f"@ {swept_str} and closed back below, then a candle body closed below "
-                f"the last higher low — sweep and break."
-            )
+        if bear:
+            desc = (f"On {tf_label}, price made a high at your level, a wick swept it "
+                    f"@ {swept_str} and closed back below, then a candle body closed below "
+                    f"the last higher low — sweep and break.")
         else:
-            desc = (
-                f"On {tf_label}, price made a low at your level, a wick swept it "
-                f"@ {swept_str} and closed back above, then a candle body closed above "
-                f"the last lower high — sweep and break."
-            )
-    else:  # engulfing_sweep: the sweep (wick beyond the previous candle, closed back)
-        if direction == "bearish":
-            desc = (
-                f"The {tf_label} bearish candle wicked above the previous bullish "
-                f"candle's high @ {swept_str} and closed back below it — a sweep."
-            )
+            desc = (f"On {tf_label}, price made a low at your level, a wick swept it "
+                    f"@ {swept_str} and closed back above, then a candle body closed above "
+                    f"the last lower high — sweep and break.")
+    else:  # engulfing
+        if kind == "wick":
+            level_label = "Previous candle's low" if bear else "Previous candle's high"
+            desc = (f"The {tf_label} {direction_lower} candle's body closed {'below' if bear else 'above'} the previous "
+                    f"{'bullish' if bear else 'bearish'} candle's {'low' if bear else 'high'} @ {swept_str}, wick included — engulfing.")
         else:
-            desc = (
-                f"The {tf_label} bullish candle wicked below the previous bearish "
-                f"candle's low @ {swept_str} and closed back above it — a sweep."
-            )
+            level_label = "Previous candle's open"
+            desc = (f"The {tf_label} {direction_lower} candle's body covered the previous "
+                    f"{'bullish' if bear else 'bearish'} candle's body, closing {'below' if bear else 'above'} its open @ {swept_str} — engulfing.")
 
     lines = [
         f"ENTRY CONFIRMATION — {tagged(instrument)}",
@@ -1024,7 +1029,7 @@ def format_entry_alert(
         "",
         f"Pattern: {pattern_name} ({direction_lower})",
         f"Timeframe: {tf_label}",
-        f"Swept level: {swept_str}",
+        f"{level_label}: {swept_str}",
         f"Confirmation close: {price_str}",
         "",
         desc,

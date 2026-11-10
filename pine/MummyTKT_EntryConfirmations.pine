@@ -1,59 +1,105 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Entry Confirmations v2 — TradingView Edition (2026-10-30)
+// MummyTKT's Entry Confirmations v3 — TradingView Edition (2026-11-10)
 //
 // Companion indicator to MummyTKT's Bias Pointer. Put it on a 5-minute chart (the
 // smallest timeframe it reads) for each instrument and create ONE alert:
 //   condition = "Any alert() function call"
 //   webhook   = https://forex-radar.fly.dev/api/tv-webhook
-// It checks four timeframes from that one chart (each on its own candles) and sends
-// every formation with its timeframe. The dashboard's entry alerts decide which ones
-// you hear about: each level watches the formations you tick (H1 Sweep, H2 Sweep,
-// M15 Sweep and Break, M5 Sweep and Break, H1 / H2 PCL), within your tolerance.
+// It reads H1, H2, M15 and M5 from that one chart (each on its own candles) and sends
+// every confirmation with its timeframe. The dashboard's entry alerts decide which ones
+// you hear about: each level (your POI) watches the confirmations you tick, within your
+// tolerance.
 //
-// Formations (buys; sells are the mirror):
-//   Sweep — H1 / H2 (only once the candle has closed)
-//       The previous candle is bearish; this bullish candle's wick goes BELOW its low
-//       (the sweep) and the candle closes back ABOVE that low. It doesn't have to close
-//       above the whole candle.
+// Confirmations (buys; sells are the mirror). Each is judged when its candle closes.
+//   PCL — H1 (the same as the H1 Sweep)
+//       C1 is bearish. C2 is bullish: its wick goes BELOW C1's low and its body closes
+//       back ABOVE that low.
+//   OCTGD (Open Close That Got Disrespected) — H1
+//       The last two bearish candles (C1, C2) form a bearish OC; its level is where C1
+//       closes and C2 opens. C2 is the candle that touched the POI (or both formed
+//       inside it). Then, within a few candles, a bullish candle closes ABOVE that level.
+//       A newer bearish OC replaces the older one.
 //   Sweep and Break — M15 / M5
 //       A fractal low forms (a low below the 2 candles on each side). A candle's wick
 //       goes below it and closes back above (the sweep). Then, before a close below
 //       the sweep wick, a candle body closes above the last fractal high before the
 //       sweep (the last lower high): the break.
-//   MummyTKT's PCL — H1 / H2
-//       The previous candle is bearish; this bullish candle wicks above its body high
-//       but closes at or below it.
-// Each webhook carries "touch_price" (the wick that reached the level: the sweep low
-// for buys, the sweep high for sells); the server checks your tolerance against it.
+//   Engulfing — H1 / H2 (one confirmation, whichever kind shows)
+//       C1 is bearish. C2 is bullish, opens at or below C1's close and closes above C1's
+//       open (its body covers C1's body). When it also closes above C1's HIGH, its body
+//       covers the wick too, and the alert says so.
+// Each webhook carries "touch_price" (the wick that reached your level); the server
+// checks your tolerance against it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 indicator("MummyTKT Entry Confirmations", overlay = true, max_bars_back = 500, max_labels_count = 200)
 
 string wh_secret = input.string("", "Webhook Secret", tooltip = "Paste your TV_WEBHOOK_SECRET value here")
-bool   use_h1  = input.bool(true, "H1 (Sweep, PCL)", group = "Timeframes read from this chart", inline = "t1")
-bool   use_h2  = input.bool(true, "H2 (Sweep, PCL)", group = "Timeframes read from this chart", inline = "t1")
+bool   use_h1  = input.bool(true, "H1 (PCL, OCTGD, Engulfing)", group = "Timeframes read from this chart", inline = "t1")
+bool   use_h2  = input.bool(true, "H2 (Engulfing)", group = "Timeframes read from this chart", inline = "t1")
 bool   use_m15 = input.bool(true, "M15 (Sweep and Break)", group = "Timeframes read from this chart", inline = "t2")
 bool   use_m5  = input.bool(true, "M5 (Sweep and Break)", group = "Timeframes read from this chart", inline = "t2")
 int    fr_n    = input.int(2, "Sweep and Break: fractal candles each side", minval = 1, maxval = 5, group = "Sweep and Break")
 int    sb_win  = input.int(20, "Candles allowed from the sweep to the break", minval = 1, maxval = 100, group = "Sweep and Break")
-bool   show_mk = input.bool(true, "Show the formations on the chart", group = "Markers")
+int    oc_win  = input.int(10, "OCTGD: candles allowed from C2 to the close through the level", minval = 1, maxval = 50, group = "OCTGD")
+bool   show_mk = input.bool(true, "Show the confirmations on the chart", group = "Markers")
 color  bull_col = input.color(color.new(color.green, 10), "Bullish", group = "Markers", inline = "mc")
 color  bear_col = input.color(color.new(color.red, 10), "Bearish", group = "Markers", inline = "mc")
 
-// ── The formations on one timeframe's candles ────────────────────────────────
-// Returns this timeframe's last COMPLETED candle (through [1] + lookahead_on below):
-// [bull sweep, bear sweep, bull pcl, bear pcl, bull s&b, bear s&b, close, low, high,
-//  swept level (sweep), swept level (pcl), s&b swept level, s&b touch, time]
-f_forms(simple int n, simple int win) =>
+// ── The confirmations on one timeframe's candles ─────────────────────────────
+// Returns this timeframe's last COMPLETED candle (through [1] + lookahead_on below)
+f_forms(simple int n, simple int win, simple int ow) =>
     bool pbull = close[1] > open[1]
     bool pbear = close[1] < open[1]
     bool cbull = close > open
     bool cbear = close < open
-    bool b_sw  = pbear and cbull and low < low[1] and close > low[1]
-    bool s_sw  = pbull and cbear and high > high[1] and close < high[1]
-    bool b_pcl = pbear and cbull and high > math.max(open[1], close[1]) and close <= math.max(open[1], close[1])
-    bool s_pcl = pbull and cbear and low < math.min(open[1], close[1]) and close >= math.min(open[1], close[1])
+    // PCL (= the Sweep): wick past C1's low (high), body closes back above (below) it
+    bool b_pcl = pbear and cbull and low < low[1] and close > low[1]
+    bool s_pcl = pbull and cbear and high > high[1] and close < high[1]
+    // Engulfing: C2's body covers C1's body; "wick" when it also closes beyond C1's high (low)
+    bool b_en  = pbear and cbull and open <= close[1] and close > open[1]
+    bool s_en  = pbull and cbear and open >= close[1] and close < open[1]
+    bool b_enw = b_en and close > high[1]
+    bool s_enw = s_en and close < low[1]
+    // OCTGD: the latest OC waits for a close through its level the other way
+    var float boc_lv = na    // bearish OC (for a buy): C1 close = C2 open
+    var float boc_tp = na    // its wick at the POI: the lower low of C1 / C2
+    var int   boc_b  = na
+    var float soc_lv = na    // bullish OC (for a sell)
+    var float soc_tp = na
+    var int   soc_b  = na
+    bool  b_oc = false
+    bool  s_oc = false
+    float b_oclv = na
+    float b_octp = na
+    float s_oclv = na
+    float s_octp = na
+    // checked before this candle can start a new OC (a candle is never both)
+    if not na(boc_lv)
+        if bar_index - boc_b > ow
+            boc_lv := na
+        else if cbull and close > boc_lv
+            b_oc   := true
+            b_oclv := boc_lv
+            b_octp := boc_tp
+            boc_lv := na
+    if not na(soc_lv)
+        if bar_index - soc_b > ow
+            soc_lv := na
+        else if cbear and close < soc_lv
+            s_oc   := true
+            s_oclv := soc_lv
+            s_octp := soc_tp
+            soc_lv := na
+    if pbear and cbear
+        boc_lv := close[1]
+        boc_tp := math.min(low, low[1])
+        boc_b  := bar_index
+    if pbull and cbull
+        soc_lv := close[1]
+        soc_tp := math.max(high, high[1])
+        soc_b  := bar_index
     // Sweep and Break
     var float fl  = na    // latest fractal low not yet swept
     var float fh  = na    // latest fractal high not yet swept
@@ -113,25 +159,24 @@ f_forms(simple int n, simple int win) =>
             s_lv := ss_lv
             s_tp := ss_hi
             ss_on := false
-    [b_sw, s_sw, b_pcl, s_pcl, b_sb, s_sb, close, low, high, low[1], high[1],
-     math.max(open[1], close[1]), math.min(open[1], close[1]), b_lv, b_tp, s_lv, s_tp, time]
+    [b_pcl, s_pcl, b_en, s_en, b_enw, s_enw, b_oc, s_oc, b_sb, s_sb, close, low, high, low[1], high[1], open[1],
+     math.min(low, low[1]), math.max(high, high[1]), b_oclv, b_octp, s_oclv, s_octp, b_lv, b_tp, s_lv, s_tp, time]
 
-f_prev(simple int n, simple int win) =>
-    [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18] = f_forms(n, win)
-    [a1[1], a2[1], a3[1], a4[1], a5[1], a6[1], a7[1], a8[1], a9[1], a10[1], a11[1], a12[1], a13[1], a14[1], a15[1], a16[1], a17[1], a18[1]]
+f_prev(simple int n, simple int win, simple int ow) =>
+    [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27] = f_forms(n, win, ow)
+    [a1[1], a2[1], a3[1], a4[1], a5[1], a6[1], a7[1], a8[1], a9[1], a10[1], a11[1], a12[1], a13[1], a14[1], a15[1], a16[1], a17[1], a18[1],
+     a19[1], a20[1], a21[1], a22[1], a23[1], a24[1], a25[1], a26[1], a27[1]]
 
-[h1_bsw, h1_ssw, h1_bpcl, h1_spcl, h1_bsb, h1_ssb, h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_pbh, h1_pbl, h1_blv, h1_btp, h1_slv, h1_stp, h1_t] = request.security(syminfo.tickerid, "60", f_prev(fr_n, sb_win), lookahead = barmerge.lookahead_on)
-[h2_bsw, h2_ssw, h2_bpcl, h2_spcl, h2_bsb, h2_ssb, h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_pbh, h2_pbl, h2_blv, h2_btp, h2_slv, h2_stp, h2_t] = request.security(syminfo.tickerid, "120", f_prev(fr_n, sb_win), lookahead = barmerge.lookahead_on)
-[m15_bsw, m15_ssw, m15_bpcl, m15_spcl, m15_bsb, m15_ssb, m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_pbh, m15_pbl, m15_blv, m15_btp, m15_slv, m15_stp, m15_t] = request.security(syminfo.tickerid, "15", f_prev(fr_n, sb_win), lookahead = barmerge.lookahead_on)
-[r5_bsw, r5_ssw, r5_bpcl, r5_spcl, r5_bsb, r5_ssb, r5_c, r5_l, r5_h, r5_pl, r5_ph, r5_pbh, r5_pbl, r5_blv, r5_btp, r5_slv, r5_stp, r5_t] = request.security(syminfo.tickerid, "5", f_prev(fr_n, sb_win), lookahead = barmerge.lookahead_on)
+[h1_bpcl, h1_spcl, h1_ben, h1_sen, h1_benw, h1_senw, h1_boc, h1_soc, h1_bsb, h1_ssb, h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_po, h1_lo2, h1_hi2, h1_boclv, h1_boctp, h1_soclv, h1_soctp, h1_blv, h1_btp, h1_slv, h1_stp, h1_t] = request.security(syminfo.tickerid, "60", f_prev(fr_n, sb_win, oc_win), lookahead = barmerge.lookahead_on)
+[h2_bpcl, h2_spcl, h2_ben, h2_sen, h2_benw, h2_senw, h2_boc, h2_soc, h2_bsb, h2_ssb, h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_po, h2_lo2, h2_hi2, h2_boclv, h2_boctp, h2_soclv, h2_soctp, h2_blv, h2_btp, h2_slv, h2_stp, h2_t] = request.security(syminfo.tickerid, "120", f_prev(fr_n, sb_win, oc_win), lookahead = barmerge.lookahead_on)
+[m15_bpcl, m15_spcl, m15_ben, m15_sen, m15_benw, m15_senw, m15_boc, m15_soc, m15_bsb, m15_ssb, m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_po, m15_lo2, m15_hi2, m15_boclv, m15_boctp, m15_soclv, m15_soctp, m15_blv, m15_btp, m15_slv, m15_stp, m15_t] = request.security(syminfo.tickerid, "15", f_prev(fr_n, sb_win, oc_win), lookahead = barmerge.lookahead_on)
+[r5_bpcl, r5_spcl, r5_ben, r5_sen, r5_benw, r5_senw, r5_boc, r5_soc, r5_bsb, r5_ssb, r5_c, r5_l, r5_h, r5_pl, r5_ph, r5_po, r5_lo2, r5_hi2, r5_boclv, r5_boctp, r5_soclv, r5_soctp, r5_blv, r5_btp, r5_slv, r5_stp, r5_t] = request.security(syminfo.tickerid, "5", f_prev(fr_n, sb_win, oc_win), lookahead = barmerge.lookahead_on)
 // On a 5-minute chart, M5 is read from the chart's own candles (no one-candle delay)
-[d5_bsw, d5_ssw, d5_bpcl, d5_spcl, d5_bsb, d5_ssb, d5_c, d5_l, d5_h, d5_pl, d5_ph, d5_pbh, d5_pbl, d5_blv, d5_btp, d5_slv, d5_stp, d5_t] = f_forms(fr_n, sb_win)
+[d5_bpcl, d5_spcl, d5_ben, d5_sen, d5_benw, d5_senw, d5_boc, d5_soc, d5_bsb, d5_ssb, d5_c, d5_l, d5_h, d5_pl, d5_ph, d5_po, d5_lo2, d5_hi2, d5_boclv, d5_boctp, d5_soclv, d5_soctp, d5_blv, d5_btp, d5_slv, d5_stp, d5_t] = f_forms(fr_n, sb_win, oc_win)
 bool m5_own = timeframe.in_seconds() == 300
 bool  m5_bsb = m5_own ? d5_bsb : r5_bsb
 bool  m5_ssb = m5_own ? d5_ssb : r5_ssb
 float m5_c   = m5_own ? d5_c : r5_c
-float m5_l   = m5_own ? d5_l : r5_l
-float m5_h   = m5_own ? d5_h : r5_h
 float m5_blv = m5_own ? d5_blv : r5_blv
 float m5_btp = m5_own ? d5_btp : r5_btp
 float m5_slv = m5_own ? d5_slv : r5_slv
@@ -140,10 +185,10 @@ int   m5_t   = m5_own ? d5_t : r5_t
 
 bool chart_ok = timeframe.in_seconds() <= 300
 
-f_send(string pat, string dir, string tf, float price, float swept, float touch) =>
+f_send(string pat, string dir, string tf, float price, float swept, float touch, string kind) =>
     alert('{"secret":"' + wh_secret + '","type":"ENTRY_CONFIRMATION","instrument":"' + syminfo.ticker + '","pattern":"' + pat
          + '","direction":"' + dir + '","timeframe":"' + tf + '","price":' + str.tostring(price) + ',"swept_level":' + str.tostring(swept)
-         + ',"touch_price":' + str.tostring(touch) + '}', alert.freq_once_per_bar)
+         + ',"touch_price":' + str.tostring(touch) + (kind != "" ? ',"kind":"' + kind + '"' : '') + '}', alert.freq_once_per_bar)
 
 f_mark(string txt, bool bull, string tip) =>
     if show_mk
@@ -151,42 +196,61 @@ f_mark(string txt, bool bull, string tip) =>
              style = bull ? label.style_label_up : label.style_label_down, color = bull ? bull_col : bear_col,
              textcolor = color.white, size = size.tiny, tooltip = tip)
 
-// One timeframe: on its first chart candle after it closes, mark and send what formed
-f_tf(bool on, bool conf, string tf, string nm, int t, bool bsw, bool ssw, bool bpcl, bool spcl, bool bsb, bool ssb,
-     float c, float l, float h, float pl, float ph, float pbh, float pbl, float blv, float btp, float slv, float stp) =>
+// One timeframe: on its first chart candle after it closes, mark and send what formed.
+// pcl / oc / en / sb say which confirmations this timeframe watches.
+f_tf(bool on, bool conf, string tf, string nm, int t, bool pcl, bool oc, bool en, bool sb,
+     bool bpcl, bool spcl, bool ben, bool sen, bool benw, bool senw, bool boc, bool soc, bool bsb, bool ssb,
+     float c, float l, float h, float pl, float ph, float po, float lo2, float hi2,
+     float boclv, float boctp, float soclv, float soctp, float blv, float btp, float slv, float stp) =>
     bool newc = not na(t) and t != t[1]
     if on and newc and conf
         bool rt = barstate.isrealtime
-        if bsw
-            f_mark(nm + " Sweep", true, nm + " bullish Sweep: wick below the bearish candle's low, closed back above it")
+        if pcl and bpcl
+            f_mark(nm + " PCL", true, nm + " bullish PCL: wick below the bearish candle's low, closed back above it")
             if rt
-                f_send("engulfing_sweep", "bullish", tf, c, pl, l)
-        if ssw
-            f_mark(nm + " Sweep", false, nm + " bearish Sweep: wick above the bullish candle's high, closed back below it")
+                f_send("pcl", "bullish", tf, c, pl, l, "")
+        if pcl and spcl
+            f_mark(nm + " PCL", false, nm + " bearish PCL: wick above the bullish candle's high, closed back below it")
             if rt
-                f_send("engulfing_sweep", "bearish", tf, c, ph, h)
-        if bpcl
-            f_mark(nm + " PCL", true, nm + " bullish PCL")
+                f_send("pcl", "bearish", tf, c, ph, h, "")
+        if oc and boc
+            f_mark(nm + " OCTGD", true, nm + " bullish OCTGD: closed above the bearish OC level " + str.tostring(boclv, format.mintick))
             if rt
-                f_send("pcl", "bullish", tf, c, pbh, h)
-        if spcl
-            f_mark(nm + " PCL", false, nm + " bearish PCL")
+                f_send("octgd", "bullish", tf, c, boclv, boctp, "")
+        if oc and soc
+            f_mark(nm + " OCTGD", false, nm + " bearish OCTGD: closed below the bullish OC level " + str.tostring(soclv, format.mintick))
             if rt
-                f_send("pcl", "bearish", tf, c, pbl, l)
-        if bsb
+                f_send("octgd", "bearish", tf, c, soclv, soctp, "")
+        if en and ben
+            f_mark(nm + " Engulf", true, nm + " bullish Engulfing: " + (benw ? "body closed above the bearish candle's high (wick)" : "body covered the bearish candle's body"))
+            if rt
+                f_send("engulfing", "bullish", tf, c, benw ? ph : po, lo2, benw ? "wick" : "body")
+        if en and sen
+            f_mark(nm + " Engulf", false, nm + " bearish Engulfing: " + (senw ? "body closed below the bullish candle's low (wick)" : "body covered the bullish candle's body"))
+            if rt
+                f_send("engulfing", "bearish", tf, c, senw ? pl : po, hi2, senw ? "wick" : "body")
+        if sb and bsb
             f_mark(nm + " S&B", true, nm + " bullish Sweep and Break: low swept at " + str.tostring(btp, format.mintick) + ", lower high broken")
             if rt
-                f_send("sweep_break", "bullish", tf, c, blv, btp)
-        if ssb
+                f_send("sweep_break", "bullish", tf, c, blv, btp, "")
+        if sb and ssb
             f_mark(nm + " S&B", false, nm + " bearish Sweep and Break: high swept at " + str.tostring(stp, format.mintick) + ", higher low broken")
             if rt
-                f_send("sweep_break", "bearish", tf, c, slv, stp)
+                f_send("sweep_break", "bearish", tf, c, slv, stp, "")
 
 // Called on every candle (they look back one candle); "on" decides whether anything is sent
-f_tf(use_h1 and chart_ok,  true, "60",  "H1",  h1_t,  h1_bsw,  h1_ssw,  h1_bpcl,  h1_spcl,  false,   false,   h1_c,  h1_l,  h1_h,  h1_pl,  h1_ph,  h1_pbh,  h1_pbl,  h1_blv,  h1_btp,  h1_slv,  h1_stp)
-f_tf(use_h2 and chart_ok,  true, "120", "H2",  h2_t,  h2_bsw,  h2_ssw,  h2_bpcl,  h2_spcl,  false,   false,   h2_c,  h2_l,  h2_h,  h2_pl,  h2_ph,  h2_pbh,  h2_pbl,  h2_blv,  h2_btp,  h2_slv,  h2_stp)
-f_tf(use_m15 and chart_ok, true, "15",  "M15", m15_t, false,   false,   false,    false,    m15_bsb, m15_ssb, m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_pbh, m15_pbl, m15_blv, m15_btp, m15_slv, m15_stp)
-f_tf(use_m5 and chart_ok,  not m5_own or barstate.isconfirmed, "5", "M5", m5_t, false, false, false, false, m5_bsb, m5_ssb, m5_c, m5_l, m5_h, na, na, na, na, m5_blv, m5_btp, m5_slv, m5_stp)
+f_tf(use_h1 and chart_ok, true, "60", "H1", h1_t, true, true, true, false,
+     h1_bpcl, h1_spcl, h1_ben, h1_sen, h1_benw, h1_senw, h1_boc, h1_soc, h1_bsb, h1_ssb,
+     h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_po, h1_lo2, h1_hi2, h1_boclv, h1_boctp, h1_soclv, h1_soctp, h1_blv, h1_btp, h1_slv, h1_stp)
+f_tf(use_h2 and chart_ok, true, "120", "H2", h2_t, false, false, true, false,
+     h2_bpcl, h2_spcl, h2_ben, h2_sen, h2_benw, h2_senw, h2_boc, h2_soc, h2_bsb, h2_ssb,
+     h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_po, h2_lo2, h2_hi2, h2_boclv, h2_boctp, h2_soclv, h2_soctp, h2_blv, h2_btp, h2_slv, h2_stp)
+f_tf(use_m15 and chart_ok, true, "15", "M15", m15_t, false, false, false, true,
+     m15_bpcl, m15_spcl, m15_ben, m15_sen, m15_benw, m15_senw, m15_boc, m15_soc, m15_bsb, m15_ssb,
+     m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_po, m15_lo2, m15_hi2, m15_boclv, m15_boctp, m15_soclv, m15_soctp, m15_blv, m15_btp, m15_slv, m15_stp)
+f_tf(use_m5 and chart_ok, not m5_own or barstate.isconfirmed, "5", "M5", m5_t, false, false, false, true,
+     false, false, false, false, false, false, false, false, m5_bsb, m5_ssb,
+     m5_c, na, na, na, na, na, na, na, na, na, na, na, m5_blv, m5_btp, m5_slv, m5_stp)
 
 var table warn = table.new(position.top_right, 1, 1)
 if barstate.islast and not chart_ok
