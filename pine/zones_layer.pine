@@ -18,9 +18,13 @@
 // All 10 setups (5 confirmations × Instant / Retest) are tested side by side; one is drawn.
 // ═════════════════════════════════════════════════════════════════════════════
 const string G_ZB = "9 · Zones backtest"
-int    zb_from = input.time(timestamp("01 Jan 2020 00:00 +0000"), "Count trades from", group = G_ZB,
-     tooltip = "Only confirmations from this date on are traded and counted. Each setup can only start where TradingView has its M5 / M15 / H1 candles: see 'Data from' in the table.")
-int    zb_to   = input.time(timestamp("31 Dec 2099 00:00 +0000"), "until", group = G_ZB)
+int    zb_fy   = input.int(2020, "Count trades from: year", minval = 1990, maxval = 2100, group = G_ZB, inline = "fr")
+int    zb_fm   = input.int(1, "month", minval = 1, maxval = 12, group = G_ZB, inline = "fr",
+     tooltip = "Only confirmations from the 1st of this month on are traded and counted. Each setup can only start where TradingView has its M5 / M15 / H1 candles: see 'Data from' in the table.")
+int    zb_ty   = input.int(0, "Until: year (0 = today)", minval = 0, maxval = 2100, group = G_ZB, inline = "to")
+int    zb_tm   = input.int(12, "month (to its end)", minval = 1, maxval = 12, group = G_ZB, inline = "to")
+int    zb_from = timestamp(zb_fy, zb_fm, 1, 0, 0)
+int    zb_to   = zb_ty == 0 ? timestamp(2100, 1, 1, 0, 0) : zb_tm == 12 ? timestamp(zb_ty + 1, 1, 1, 0, 0) - 1 : timestamp(zb_ty, zb_tm + 1, 1, 0, 0) - 1
 string zb_tpo  = input.string("1:2", "Take profit", options = ["1:2", "1:3"], group = G_ZB)
 string zb_side = input.string("Both", "Zones traded", options = ["Both", "The POI in the leg only", "The opposite zone only"], group = G_ZB)
 string zb_conf = input.string("H1 OCTGD", "Drawn on the chart: confirmation", options = ["M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL"], group = G_ZB, inline = "sh")
@@ -228,6 +232,7 @@ var array<box>   zn_bx  = array.new<box>(2)
 var array<box>   zn_old = array.new<box>()
 var float zb_sz = na
 var int   zb_na = 0
+var array<int> dg_z = array.new<int>(2, 0)   // zones built: the POI in the leg, the opposite zone
 f_zset(int z, float lo, float hi, int t, int dir) =>
     array.set(zn_lo, z, lo)
     array.set(zn_hi, z, hi)
@@ -318,9 +323,11 @@ if zb_d != 0
                 f_ddel(q % 2)
     [l_lo, l_hi, l_t] = f_zleg(zb_d)
     if not na(l_lo)
+        array.set(dg_z, 0, array.get(dg_z, 0) + 1)
         f_zset(0, zb_d > 0 ? l_lo : -l_hi, zb_d > 0 ? l_hi : -l_lo, l_t, zb_d)
     [o_lo, o_hi, o_t] = f_zopp(zb_d, zb_scan, nz(zb_sz))
     if not na(o_lo)
+        array.set(dg_z, 1, array.get(dg_z, 1) + 1)
         f_zset(1, zb_d > 0 ? o_lo : -o_hi, zb_d > 0 ? o_hi : -o_lo, o_t, -zb_d)
 
 // the alive zones run on through this candle
@@ -486,6 +493,10 @@ f_h1(array<float> s, float o, float h, float l, float c, int ow, bool eg_open, a
 
 // a confirmation of pattern p closed (candle time t, close c): its wick inside an alive zone of its side
 // (up to one H4 candle size past the far edge) opens a trade on both entries of that pattern
+// checks for the table: confirmations seen, with a zone of their side alive, inside it (per pattern)
+var array<int> dg_sig  = array.new<int>(5, 0)
+var array<int> dg_live = array.new<int>(5, 0)
+var array<int> dg_in   = array.new<int>(5, 0)
 f_try(int p, int t, float c, array<float> x) =>
     if t >= zb_from and t <= zb_to
         for side = 0 to 1
@@ -495,13 +506,21 @@ f_try(int p, int t, float c, array<float> x) =>
                 float ext = array.get(x, side * 4 + 2)
                 float tch = array.get(x, side * 4 + 3)
                 int   z   = -1
+                bool  lv_ = false
+                array.set(dg_sig, p, array.get(dg_sig, p) + 1)
                 for zz = 0 to 1
                     bool sok = zz == 0 ? zb_side != "The opposite zone only" : zb_side != "The POI in the leg only"
+                    if sok and array.get(zn_ok, zz) and array.get(zn_dir, zz) == dir
+                        lv_ := true
                     if z < 0 and sok and array.get(zn_ok, zz) and array.get(zn_dir, zz) == dir and not na(tch)
                         float zl = array.get(zn_lo, zz)
                         float zh = array.get(zn_hi, zz)
                         if dir > 0 ? (tch <= zh and tch >= zl - nz(zb_sz)) : (tch >= zl and tch <= zh + nz(zb_sz))
                             z := zz
+                if lv_
+                    array.set(dg_live, p, array.get(dg_live, p) + 1)
+                if z >= 0
+                    array.set(dg_in, p, array.get(dg_in, p) + 1)
                 if z >= 0 and not na(ext)
                     for e = 0 to 1
                         int y = p * 2 + e
@@ -665,13 +684,13 @@ if zb_ok60
             f_try(4, it, array.get(a60c, i), xpc)
 
 // ── Results ──────────────────────────────────────────────────────────────────
-var table zb_tb = table.new(f_tpos(zb_tbp), 8, 32, bgcolor = color.new(#0F1120, 8), border_width = 1, border_color = color.new(color.gray, 75))
+var table zb_tb = table.new(f_tpos(zb_tbp), 9, 32, bgcolor = color.new(#0F1120, 8), border_width = 1, border_color = color.new(color.gray, 75))
 f_zr(float x) =>
     (x >= 0 ? "+" : "") + str.tostring(x, "#.#") + "R"
 f_zcell(int col, int row, string s, color c, color bg) =>
     table.cell(zb_tb, col, row, s, text_color = c, text_size = size.small, text_halign = text.align_left, bgcolor = bg)
 if barstate.islast and zb_tbo
-    table.clear(zb_tb, 0, 0, 7, 31)
+    table.clear(zb_tb, 0, 0, 8, 31)
     color wc = color.white
     color gc = color.gray
     color nb = color.new(color.black, 100)
@@ -681,6 +700,7 @@ if barstate.islast and zb_tbo
     f_zcell(2, 0, "from " + str.format_time(zb_from, "dd MMM yyyy", syminfo.timezone), wc, nb)
     f_zcell(3, 0, zb_side, wc, nb)
     f_zcell(4, 0, str.tostring(zb_na) + " alerts", wc, nb)
+    f_zcell(5, 0, "zones built: " + str.tostring(array.get(dg_z, 0)) + " leg POI · " + str.tostring(array.get(dg_z, 1)) + " opposite", wc, nb)
     int r = 1
     if not (ZCS >= 3600 and chart_ok)
         f_zcell(0, r, "Put the chart on H4", zb_scc, nb)
@@ -694,6 +714,7 @@ if barstate.islast and zb_tbo
     f_zcell(5, r, "Net", gc, nb)
     f_zcell(6, r, "A month", gc, nb)
     f_zcell(7, r, "Worst drawdown", gc, nb)
+    f_zcell(8, r, "Confirmations: all · zone alive · in the zone", gc, nb)
     r += 1
     for y = 0 to NS - 1
         int   p   = math.floor(y / 2)
@@ -712,6 +733,8 @@ if barstate.islast and zb_tbo
         f_zcell(5, r, f_zr(tot) + " · " + (tot >= 0 ? "+" : "") + str.tostring(tot * zb_risk, "#.#") + "%", tot > 0 ? zb_bc : tot < 0 ? zb_scc : wc, bg)
         f_zcell(6, r, na(mos) or mos <= 0 ? "–" : str.tostring(n / mos, "#.#") + " trades · " + f_zr(tot / mos), wc, bg)
         f_zcell(7, r, "-" + str.tostring(array.get(y_dd, y), "#.#") + "R · " + str.tostring(array.get(y_mrn, y)) + " losses in a row", wc, bg)
+        if y % 2 == 0
+            f_zcell(8, r, str.tostring(array.get(dg_sig, p)) + " · " + str.tostring(array.get(dg_live, p)) + " · " + str.tostring(array.get(dg_in, p)), wc, bg)
         r += 1
     f_zcell(0, r, "Break-even win rate " + str.tostring(100.0 / (1 + zb_rr), "#") + "%", gc, nb)
     f_zcell(1, r, "Drawn:", gc, nb)
