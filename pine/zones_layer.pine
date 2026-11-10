@@ -39,8 +39,12 @@ float  zb_risk = input.float(1.0, "Risk per trade % (for the return figure)", mi
 int    zb_atr  = input.int(14, "H4 candle size = the average range of the last N H4 candles (a wick this far past a zone still counts)", minval = 1, maxval = 100, group = G_ZB)
 int    zb_scan = input.int(300, "H4 candles searched for the opposite zone", minval = 30, maxval = 1000, group = G_ZB)
 bool   zb_shz  = input.bool(true, "Show the zones and their liquidity", group = G_ZB)
-bool   zb_mk   = input.bool(true, "Mark every confirmation of the picked pattern inside a zone", group = G_ZB, inline = "mk")
+bool   zb_mk   = input.bool(true, "Triangles: mark each confirmation inside a zone", group = G_ZB, inline = "mk")
 int    zb_km   = input.int(150, "kept", minval = 10, maxval = 300, group = G_ZB, inline = "mk")
+string zb_mkp  = input.string("Same as the Confirmation above", "Triangles for", options = ["Same as the Confirmation above", "M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL", "All"], group = G_ZB,
+     tooltip = "Which confirmation's triangles are drawn. Hover a triangle for its time, wick, close, retest level and SL.")
+string zb_mkz  = input.string("Both zones", "Triangles at", options = ["Both zones", "The POI in the leg", "The opposite zone"], group = G_ZB, inline = "mz")
+string zb_mks  = input.string("Buys and sells", "", options = ["Buys and sells", "Buys", "Sells"], group = G_ZB, inline = "mz")
 bool   zb_sht  = input.bool(true, "Show the trades", group = G_ZB, inline = "ts")
 int    zb_kt   = input.int(40, "kept", minval = 1, maxval = 100, group = G_ZB, inline = "ts")
 bool   zb_tbo  = input.bool(true, "Results table", group = G_ZB, inline = "rt")
@@ -55,6 +59,7 @@ int    zb_op   = input.int(82, "zone opacity %", minval = 0, maxval = 100, group
 float  zb_rr   = zb_tpo == "1:3" ? 3.0 : 2.0
 const int NS   = 10    // setups: confirmation p (0 M5 CISD · 1 M15 CISD · 2 H1 OCTGD · 3 H1 EG · 4 H1 PCL) × entry (0 Instant · 1 Retest)
 int    ZB_PI   = zb_conf == "M5 CISD" ? 0 : zb_conf == "M15 CISD" ? 1 : zb_conf == "H1 OCTGD" ? 2 : zb_conf == "H1 EG" ? 3 : zb_conf == "H1 PCL" ? 4 : -1
+int    ZB_MP   = zb_mkp == "M5 CISD" ? 0 : zb_mkp == "M15 CISD" ? 1 : zb_mkp == "H1 OCTGD" ? 2 : zb_mkp == "H1 EG" ? 3 : zb_mkp == "H1 PCL" ? 4 : zb_mkp == "All" ? -1 : ZB_PI
 int    ZB_EI   = zb_ent == "Instant" ? 0 : zb_ent == "Retest" ? 1 : -1
 // the one setup drawn on the chart (-1: several picked, none drawn)
 int    SHOWN   = ZB_PI >= 0 and ZB_EI >= 0 ? ZB_PI * 2 + ZB_EI : -1
@@ -636,7 +641,9 @@ f_try(int p, int t, float c, array<float> x) =>
                     array.set(dg_live, p, array.get(dg_live, p) + 1)
                 if z >= 0
                     array.set(dg_in, p, array.get(dg_in, p) + 1)
-                    if zb_mk and (ZB_PI < 0 or p == ZB_PI)
+                    bool mz_ok = zb_mkz == "Both zones" or (z == 0) == (zb_mkz == "The POI in the leg")
+                    bool ms_ok = zb_mks == "Buys and sells" or (dir > 0) == (zb_mks == "Buys")
+                    if zb_mk and (ZB_MP < 0 or p == ZB_MP) and mz_ok and ms_ok
                         array.push(zm_b, label.new(t, tch, "", xloc = xloc.bar_time, style = dir > 0 ? label.style_triangleup : label.style_triangledown,
                              color = color.new(dir > 0 ? zb_bc : zb_scc, 0), size = size.tiny,
                              tooltip = array.get(ZP, p) + (dir > 0 ? " BUY" : " SELL") + " at the " + (z == 0 ? "POI in the leg" : "opposite zone")
