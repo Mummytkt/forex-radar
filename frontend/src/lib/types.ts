@@ -84,7 +84,7 @@ export interface EntryAlertItem {
   expires_at: string | null
   is_active: boolean
   triggered_at: string | null
-  triggered_pattern: string | null  // 'pcl' | 'octgd' | 'sweep_break' | 'engulfing' (older: 'engulfing_sweep')
+  triggered_pattern: string | null  // 'pcl' | 'octgd' | 'cisd' | 'sweep_break' | 'engulfing' (older: 'engulfing_sweep')
   triggered_tf: string | null       // 'H1' | 'H2' | 'M15' | 'M5'
   created_at: string
   watches: string[] | null          // e.g. ['H1:pcl', 'M15:sweep_break']; null = PCL on H1 / H2

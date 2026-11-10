@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"   # hand-checked pictures kept in the repo (the Weekly chain)
 IMG = HERE / "_img"
 OUT = HERE / "MummyTKT_Strategy_Rulebook.pdf"
-VERSION = "10 November 2026 (script v14: the MTF story, with the numbered pullback map. Daily breakout, H4 continuations, the pullback line, pullback confirmed, the H4 range, reaction zones and the ten story alerts. Entry Confirmations v3: PCL, OCTGD, Sweep and Break, Engulfing)"
+VERSION = "10 November 2026 (script v14: the MTF story, with the numbered pullback map. Daily breakout, H4 continuations, the pullback line, pullback confirmed, the H4 range, reaction zones and the ten story alerts. Entry Confirmations v4: PCL, OCTGD, CISD, Sweep and Break, Engulfing)"
 
 GREEN, RED, LEVEL, ACCENT, INK, MUTED = "#1a9e6c", "#d6455a", "#7d8796", "#3b5bdb", "#182230", "#5d6b7e"
 ZONE, FAIL = "#3b5bdb22", "#d6455a22"
@@ -275,6 +275,11 @@ def make_images():
         levels=[(14.6, "low at the level", ACCENT, 2, 6.4), (16.8, "last lower high", RED, 4, 8.4)],
         notes=[(6, 13.4, "the sweep: wick below, closes back above", ACCENT), (8, 18.3, "body closes above\nthe lower high → BUY", GREEN)],
         labels=["", "", "low", "", "LH", "", "sweep", "", "break"], ylim=(12.8, 19.6))
+    im["cisd"] = chart("cisd", [(97.6, 99.6, 97.3, 99.4), (99.4, 99.8, 98.8, 99.0), (99.0, 99.2, 96.1, 96.4), (96.4, 96.9, 95.6, 95.8),
+                                 (95.8, 96.0, 92.9, 93.4), (93.4, 94.6, 92.5, 94.3), (94.3, 98.6, 94.0, 98.2), (98.2, 99.1, 97.4, 97.8), (97.8, 100.6, 97.6, 100.3)],
+        levels=[(99.4, "CISD line = open of the run's first candle", ACCENT, 0.6, 8.4)],
+        notes=[(2.5, 91.3, "the run of down candles", MUTED), (6, 99.9, "not yet", MUTED), (8, 101.0, "body closes above → CISD", GREEN)],
+        labels=["", "1st", "", "", "low", "", "", "", "CISD"], ylim=(90.6, 101.8))
     im["engulf"] = chart("engulf", [(16, 16.6, 13, 13.4), (13.3, 16.9, 12.9, 16.3)],
         levels=[(16.6, "C1 high (closing above it: covers the wick too)", RED), (16.0, "C1 open (closing above it: covers the body)", ACCENT)],
         notes=[(1.3, 12.2, "C2 opens at or below C1's close", MUTED)],
@@ -426,6 +431,12 @@ def make_rules(im):
          "Low at the level, its sweep, then a close above the last lower high",
          "High at the level, its sweep, then a close below the last higher low",
          "Up to 20 candles from the sweep to the break. Fires on candle close.", im["sweepbreak"]),
+        ("E. Entry patterns", "CISD — H1 / M15 / M5: Change in State of Delivery",
+         "A run of same-colour candles delivers price to your level. The <b>CISD line</b> is the open of the first candle of the run that made the low "
+         "(a smaller pullback run that doesn't go lower doesn't replace it). A body closing beyond that line is the CISD.",
+         "Down run to the level, then an up candle's body closes above the open of the run's first candle",
+         "Up run to the level, then a down candle's body closes below the open of the run's first candle",
+         "Opens and closes only, not wicks. Up to 20 candles from the low to the close through the line.", im["cisd"]),
         ("E. Entry patterns", "Engulfing — H1 / H2",
          "C2 opens at or below C1's close and its <b>body covers C1's body</b> (closes beyond C1's open). When it also closes beyond C1's high (low), "
          "it covers the wick too. One confirmation: whichever kind shows, and the alert says which.",

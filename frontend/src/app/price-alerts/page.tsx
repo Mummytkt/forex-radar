@@ -191,6 +191,9 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
 const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
   { key: 'H1:pcl',          label: 'H1 PCL',              hint: "a bullish candle wicks below the bearish candle before it and closes back above that low (sell: mirror)" },
   { key: 'H1:octgd',        label: 'H1 OCTGD',            hint: 'the last two bearish candles at the level form an OC; a bullish candle later closes above its level (sell: mirror)' },
+  { key: 'H1:cisd',         label: 'H1 CISD',             hint: 'a bullish body closes above the open of the first candle of the bearish run that reached the level (sell: mirror)' },
+  { key: 'M15:cisd',        label: 'M15 CISD',            hint: 'the same on 15-minute candles' },
+  { key: 'M5:cisd',         label: 'M5 CISD',             hint: 'the same on 5-minute candles' },
   { key: 'M15:sweep_break', label: 'M15 Sweep and Break', hint: 'a low at the level, its sweep, then a close above the last lower high' },
   { key: 'M5:sweep_break',  label: 'M5 Sweep and Break',  hint: 'the same on 5-minute candles' },
   { key: 'H1:engulfing',    label: 'H1 Engulfing',        hint: "the body covers the previous candle's body, or its wick too" },
@@ -200,7 +203,7 @@ const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
 const OLD_WATCH_LABELS: Record<string, string> = { 'H1:sweep': 'H1 PCL', 'H2:sweep': 'H2 Sweep (old)', 'H2:pcl': 'H2 PCL (old)' }
 const ENTRY_DEFAULT_WATCHES = ENTRY_WATCHES.map(w => w.key)
 const watchLabel = (k: string) => ENTRY_WATCHES.find(w => w.key === k)?.label ?? OLD_WATCH_LABELS[k] ?? k
-const patternLabel = (p: string) => ({ pcl: 'PCL', engulfing_sweep: 'PCL', octgd: 'OCTGD', sweep_break: 'Sweep and Break', engulfing: 'Engulfing' } as Record<string, string>)[p] ?? p
+const patternLabel = (p: string) => ({ pcl: 'PCL', engulfing_sweep: 'PCL', octgd: 'OCTGD', cisd: 'CISD', sweep_break: 'Sweep and Break', engulfing: 'Engulfing' } as Record<string, string>)[p] ?? p
 
 function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id: number) => void }) {
   const triggered = !!item.triggered_at
@@ -503,6 +506,7 @@ function EntryAlertsPanel({ instruments, prices }: {
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
               Each one is checked on its own timeframe, at this level, once the candle has closed (sells are the mirror). PCL: a bullish candle wicks below the bearish candle before it and closes back above that low.
               OCTGD: the last two bearish candles as price touches the level form an OC; within a few candles a bullish candle closes above where the first closed and the second opened.
+              CISD: a run of bearish candles brings price to the level; a bullish body then closes above the open of the run's first candle.
               Sweep and Break: a low at the level, its sweep, then a close through the last lower high.
               Engulfing: a bullish body covers the bearish candle's body (closes above its open), or its wick too (closes above its high), whichever shows.
             </div>
@@ -1132,7 +1136,7 @@ export default function PriceAlertsPage() {
           <Clock size={13} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
             {mainTab === 'entry'
-              ? 'Entry Pattern alerts fire when a confirmation you picked (H1 PCL, H1 OCTGD, M15 / M5 Sweep and Break, H1 / H2 Engulfing) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others.'
+              ? 'Entry Pattern alerts fire when a confirmation you picked (H1 PCL, H1 OCTGD, H1 / M15 / M5 CISD, M15 / M5 Sweep and Break, H1 / H2 Engulfing) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others.'
               : 'On touch alerts fire within 5 minutes of the level being crossed. Candle close alerts fire only at the close of your chosen timeframe candle.'}
           </span>
         </div>

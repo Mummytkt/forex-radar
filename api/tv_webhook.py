@@ -209,7 +209,7 @@ class TVWebhookPayload(BaseModel):
     h4_level: Optional[float] = None    # H4 formation level (CONFIRMED / H4_CONTINUATION)
     cont_type: Optional[str] = None    # H4_CONTINUATION sub-type: breakout_cont | inline_break | breaker_origin | breaker_cont | oc_cont
     price: Optional[float] = None      # current close price (PRICE_UPDATE / ENTRY_CONFIRMATION)
-    pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "octgd" | "engulfing" | "sweep_break" (+ "engulfing_sweep" from v2 scripts)
+    pattern: Optional[str] = None      # ENTRY_CONFIRMATION: "pcl" | "octgd" | "cisd" | "engulfing" | "sweep_break" (+ "engulfing_sweep" from v2 scripts)
     kind: Optional[str] = None         # ENTRY_CONFIRMATION engulfing: "wick" | "body" (which kind of engulfing)
     touch_price: Optional[float] = None  # ENTRY_CONFIRMATION: the wick that reached the level (sweep low / high)
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
@@ -1029,7 +1029,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     price = payload.price
     swept_level = payload.swept_level
 
-    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "octgd", "engulfing", "engulfing_sweep", "sweep_break"):
+    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "octgd", "cisd", "engulfing", "engulfing_sweep", "sweep_break"):
         logger.warning("%s ENTRY_CONFIRMATION ignored — bad direction/pattern (%s/%s)",
                        instrument, direction, pattern)
         return

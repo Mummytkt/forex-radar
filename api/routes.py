@@ -1360,10 +1360,11 @@ _MAX_ACTIVE_ENTRY_ALERTS = 20
 #   pcl          = PCL (since 2026-11-10 the same as the Sweep): wick past the opposite candle's low (high), closed back
 #   octgd        = OCTGD: the last OC at the level, then a close through its level the other way
 #   sweep_break  = a low (high) at the level, its sweep, then the break of the last lower high (higher low)
+#   cisd         = CISD: a body closes beyond the open of the first candle of the run that delivered price to its low (high)
 #   engulfing    = Engulfing: the body covers the previous candle's body (or its wick too)
 #   sweep        = the old name of the PCL; levels saved with it still work
 ENTRY_WATCH_TFS = ("H1", "H2", "M15", "M5")
-ENTRY_WATCH_PATTERNS = ("pcl", "octgd", "sweep_break", "engulfing", "sweep")
+ENTRY_WATCH_PATTERNS = ("pcl", "octgd", "cisd", "sweep_break", "engulfing", "sweep")
 
 
 class EntryAlertItem(BaseModel):

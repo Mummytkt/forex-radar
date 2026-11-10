@@ -950,6 +950,7 @@ _ENTRY_PATTERN_NAMES: dict[str, str] = {
     "pcl":              "PCL",
     "engulfing_sweep":  "PCL",          # a v2 script's Sweep: the same formation as the PCL since 2026-11-10
     "octgd":            "OCTGD",
+    "cisd":             "CISD",
     "sweep_break":      "Sweep and Break",
     "engulfing":        "Engulfing",
 }
@@ -1004,6 +1005,14 @@ def format_entry_alert(
         else:
             desc = (f"The last two {tf_label} bearish candles at your level formed an OC @ {swept_str}; "
                     f"a bullish candle has now closed above it — the OC got disrespected (OCTGD).")
+    elif pattern == "cisd":
+        level_label = "CISD line"
+        if bear:
+            desc = (f"A run of {tf_label} bullish candles delivered price up to your level; a bearish candle's body "
+                    f"has now closed below the open of the first candle of that run @ {swept_str} — CISD.")
+        else:
+            desc = (f"A run of {tf_label} bearish candles delivered price down to your level; a bullish candle's body "
+                    f"has now closed above the open of the first candle of that run @ {swept_str} — CISD.")
     elif pattern == "sweep_break":
         if bear:
             desc = (f"On {tf_label}, price made a high at your level, a wick swept it "

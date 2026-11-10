@@ -1338,6 +1338,21 @@ check("entry messages name OCTGD and the kind of engulfing",
       and "OCTGD · H1 · Bullish" in _m2 and "OC level:" in _m2 and "closed above it" in _m2)
 for _x in (_ec, _es):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
+# CISD on H1 / M15 / M5 (2026-11-10)
+_ci = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDUSD", "direction": "bullish", "price": 0.6500,
+             "tolerance_pips": 10, "watches": ["M15:cisd", "M5:cisd"]}).json()
+check("CISD can be watched on M15 / M5", _ci.get("watches") == ["M15:cisd", "M5:cisd"])
+tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="60",
+   price=0.6540, swept_level=0.6530, touch_price=0.6498)
+check("an H1 CISD doesn't fire a level watching only M15 / M5 CISD",
+      next(a for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"] if a["id"] == _ci["id"])["triggered_at"] is None)
+tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="15",
+   price=0.6540, swept_level=0.6530, touch_price=0.6498)
+check("an M15 CISD fires it (matched on the run's low at the level)",
+      _ci["id"] not in {a["id"] for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"]})
+_m3 = _fea("AUDUSD", "bullish", "cisd", "15", 0.6540, 0.6530)
+check("the CISD message names the line", "CISD · M15 · Bullish" in _m3 and "CISD line:" in _m3 and "open of the first candle" in _m3)
+c.delete(f"/api/entry-alerts/{_ci['id']}", headers=H(owner))
 
 passed = sum(ok for _, ok in results)
 for name, ok in results:
