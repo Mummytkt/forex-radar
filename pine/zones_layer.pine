@@ -40,7 +40,7 @@ int    zb_atr  = input.int(14, "H4 candle size = the average range of the last N
 int    zb_scan = input.int(300, "H4 candles searched for the opposite zone", minval = 30, maxval = 1000, group = G_ZB)
 bool   zb_shz  = input.bool(true, "Show the zones and their liquidity", group = G_ZB)
 bool   zb_mk   = input.bool(true, "Triangles: mark each confirmation inside a zone", group = G_ZB, inline = "mk")
-int    zb_km   = input.int(150, "kept", minval = 10, maxval = 300, group = G_ZB, inline = "mk")
+int    zb_km   = input.int(150, "kept", minval = 1, maxval = 300, group = G_ZB, inline = "mk")
 string zb_mkp  = input.string("Same as the Confirmation above", "Triangles for", options = ["Same as the Confirmation above", "M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL", "All"], group = G_ZB,
      tooltip = "Which confirmation's triangles are drawn. Hover a triangle for its time, wick, close, retest level and SL.")
 string zb_mkz  = input.string("Both zones", "Triangles at", options = ["Both zones", "The POI in the leg", "The opposite zone"], group = G_ZB, inline = "mz")
