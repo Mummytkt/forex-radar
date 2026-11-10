@@ -102,6 +102,21 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
+// Time until a future moment, e.g. "3d left" (timeAgo only counts backwards)
+function timeLeft(iso: string): string {
+  const m = Math.floor((new Date(iso).getTime() - Date.now()) / 60000)
+  if (m < 1) return 'now'
+  if (m < 60) return `in ${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `in ${h}h`
+  return `in ${Math.floor(h / 24)}d`
+}
+
+const fmtExpiry = (iso: string) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+// Deleting asks first: the bin button is easy to press by mistake (user, 2026-11-10)
+const sureDelete = (what: string) => window.confirm(`Delete this ${what}? This can't be undone.`)
+
 // ── Alert row component ───────────────────────────────────────────────────────
 
 function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: (id: number) => void; onEdit: (item: PriceAlertItem) => void }) {
@@ -146,7 +161,7 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
           )}
           {!triggered && item.expires_at && (
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              · Expires {timeAgo(item.expires_at).replace('ago', 'left')}
+              · Expires {timeLeft(item.expires_at)}
             </span>
           )}
         </div>
@@ -205,7 +220,7 @@ const ENTRY_DEFAULT_WATCHES = ENTRY_WATCHES.map(w => w.key)
 const watchLabel = (k: string) => ENTRY_WATCHES.find(w => w.key === k)?.label ?? OLD_WATCH_LABELS[k] ?? k
 const patternLabel = (p: string) => ({ pcl: 'PCL', engulfing_sweep: 'PCL', octgd: 'OCTGD', cisd: 'CISD', sweep_break: 'Sweep and Break', engulfing: 'Engulfing' } as Record<string, string>)[p] ?? p
 
-function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id: number) => void }) {
+function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDelete: (id: number) => void; onEdit: (item: EntryAlertItem) => void }) {
   const triggered = !!item.triggered_at
   const dirLabel = item.direction === 'bullish' ? 'Buy' : 'Sell'
   const dirColor = item.direction === 'bullish' ? 'var(--bullish)' : 'var(--bearish)'
@@ -255,11 +270,24 @@ function EntryAlertRow({ item, onDelete }: { item: EntryAlertItem; onDelete: (id
           )}
           {!triggered && item.expires_at && (
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              · Expires {timeAgo(item.expires_at).replace('ago', 'left')}
+              · Expires {timeLeft(item.expires_at)}
             </span>
           )}
         </div>
       </div>
+      {!triggered && (
+        <button
+          onClick={() => onEdit(item)}
+          style={{
+            width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer',
+            background: 'var(--border)', color: 'var(--text-muted)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          title="Edit"
+        >
+          <Pencil size={11} />
+        </button>
+      )}
       <button
         onClick={() => onDelete(item.id)}
         style={{
@@ -349,6 +377,7 @@ function EntryAlertsPanel({ instruments, prices }: {
   const [keepOpen, setKeepOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
+  const [editing, setEditing] = useState<EntryAlertItem | null>(null)   // saving replaces this alert
 
   const { data: entryData, mutate: mutateEntry } = useSWR<EntryAlertsList>(
     `/api/entry-alerts?tab=${tab}`, fetcher, { refreshInterval: 30000 }
@@ -380,7 +409,9 @@ function EntryAlertsPanel({ instruments, prices }: {
       return
     }
     let expiresAt: string | null = null
-    if (expiry === 'custom') {
+    if (expiry === 'keep') {
+      expiresAt = editing?.expires_at ?? null
+    } else if (expiry === 'custom') {
       if (!customExpiry) { setFormError('Choose a custom expiry date.'); return }
       expiresAt = new Date(customExpiry).toISOString()
     } else if (expiry !== 'never') {
@@ -407,6 +438,12 @@ function EntryAlertsPanel({ instruments, prices }: {
         setFormError(err.detail || 'Failed to create alert.')
         return
       }
+      // Editing: the new alert is saved, so the old one goes
+      if (editing) {
+        await fetch(`${API_BASE}/api/entry-alerts/${editing.id}`, { method: 'DELETE', headers: authHeaders() })
+        setEditing(null)
+        setExpiry('1week')
+      }
       setPrice('')
       setNote('')
       setTab('active')
@@ -418,10 +455,31 @@ function EntryAlertsPanel({ instruments, prices }: {
     }
   }
 
+  function handleEdit(item: EntryAlertItem) {
+    setInstrument(item.instrument)
+    setDirection(item.direction as 'bullish' | 'bearish')
+    setPrice(String(item.price))
+    setTolerance(String(item.tolerance_pips))
+    setWatches(item.watches && item.watches.length ? item.watches : ENTRY_DEFAULT_WATCHES)
+    setKeepOpen(!!item.keep_open)
+    setNote(item.note ?? '')
+    setExpiry(item.expires_at ? 'keep' : 'never')
+    setCustomExpiry('')
+    setFormError('')
+    setEditing(item)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditing(null); setPrice(''); setNote(''); setExpiry('1week'); setFormError('')
+  }
+
   async function handleDelete(id: number) {
+    if (!sureDelete('entry alert')) return
     await fetch(`${API_BASE}/api/entry-alerts/${id}`, {
       method: 'DELETE', headers: authHeaders(),
     })
+    if (editing?.id === id) cancelEdit()
     mutateEntry()
   }
 
@@ -441,11 +499,17 @@ function EntryAlertsPanel({ instruments, prices }: {
             <Zap size={14} color="var(--accent-hover)" />
           </div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>New Entry Pattern Alert</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{editing ? 'Edit Entry Alert' : 'New Entry Pattern Alert'}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-              Notify me when the formations I pick form at my level
+              {editing ? 'Change it and save — the old alert is replaced' : 'Notify me when the formations I pick form at my level'}
             </div>
           </div>
+          {editing && (
+            <button type="button" onClick={cancelEdit}
+              style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+              Cancel
+            </button>
+          )}
         </div>
 
         <form onSubmit={handleCreate} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -578,6 +642,7 @@ function EntryAlertsPanel({ instruments, prices }: {
                 color: 'var(--text-primary)', outline: 'none',
               }}
             >
+              {editing?.expires_at && <option value="keep">Keep current ({fmtExpiry(editing.expires_at)})</option>}
               <option value="eod">End of day</option>
               <option value="1week">1 week</option>
               <option value="1month">1 month</option>
@@ -627,7 +692,7 @@ function EntryAlertsPanel({ instruments, prices }: {
               opacity: submitting ? 0.6 : 1,
             }}
           >
-            {submitting ? 'Creating…' : 'Create Entry Alert'}
+            {submitting ? (editing ? 'Saving…' : 'Creating…') : (editing ? 'Save Changes' : 'Create Entry Alert')}
           </button>
 
         </form>
@@ -694,7 +759,7 @@ function EntryAlertsPanel({ instruments, prices }: {
         {entryData && entryData.items.length > 0 && (
           <div>
             {entryData.items.map(item => (
-              <EntryAlertRow key={item.id} item={item} onDelete={handleDelete} />
+              <EntryAlertRow key={item.id} item={item} onDelete={handleDelete} onEdit={handleEdit} />
             ))}
           </div>
         )}
@@ -809,6 +874,7 @@ export default function PriceAlertsPage() {
   }
 
   async function handleDelete(id: number) {
+    if (!sureDelete('alert')) return
     await fetch(`${API_BASE}/api/price-alerts/${id}`, {
       method: 'DELETE',
       headers: authHeaders(),
