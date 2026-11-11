@@ -33,6 +33,7 @@ rep('f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string
 # the results table needs a corner: the key and story tables start off (switchable)
 rep('bool   ky_on    = input.bool(true, "Key table"', 'bool   ky_on    = input.bool(false, "Key table"')
 rep('bool   sk_on    = input.bool(true, "Story table"', 'bool   sk_on    = input.bool(false, "Story table"')
+rep('bool   tb_on    = input.bool(true, "Status table"', 'bool   tb_on    = input.bool(false, "Status table"')
 s = s.rstrip('\n') + '\n' + layer
 open(os.path.join(R, 'MummyTKT_ZonesBacktest.pine'), 'w', encoding='utf-8', newline='\n').write(s)
 print('ok', s.count('\n'), 'lines')
