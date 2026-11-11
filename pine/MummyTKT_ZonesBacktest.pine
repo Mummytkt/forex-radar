@@ -1728,7 +1728,9 @@ f_zopp(int d, int scan) =>
             liq := f_zh(k, d)
             lqt := array.get(q2t, k)
             lqk := 2
-        float cmax = f_zc(k, d)     // the highest close after the pair
+        // FRESH = not tapped into (user, 2026-11-11): no candle before the break has reached the level, not even with
+        // a wick; the breaking candle only by a close (the same as the liquidity)
+        float wmax = f_zc(k, d)     // after the pair: the breaking candle's close, then the highest wick
         // the highest / lowest close from candle m to the breaking candle, once (index m - b0): the Breaker
         // check reads them instead of walking the later candles again for every V-shape
         int b0 = math.max(1, k - scan)
@@ -1736,7 +1738,8 @@ f_zopp(int d, int scan) =>
         array<float> sfn = array.new<float>(k - b0 + 2, na)
         for m = k to b0
             float cm = f_zc(m, d)
-            array.set(sfx, m - b0, m < k ? math.max(cm, array.get(sfx, m - b0 + 1)) : cm)
+            // sfx: the highest wick from candle m on (the breaking candle: its close)
+            array.set(sfx, m - b0, m < k ? math.max(f_zh(m, d), array.get(sfx, m - b0 + 1)) : cm)
             array.set(sfn, m - b0, m < k ? math.min(cm, array.get(sfn, m - b0 + 1)) : cm)
         for jj = k - 1 to math.max(1, k - scan)
             float o1 = f_zo(jj - 1, d)
@@ -1752,13 +1755,13 @@ f_zopp(int d, int scan) =>
             int   kd  = -1
             if c1 > o1 and c2 < o2
                 // A-shape: the bullish candle's close, up to the higher wick
-                if c1 > liq and cmax < math.max(h1, h2)
+                if c1 > liq and wmax < c1
                     zl_ := c1
                     zh_ := math.max(h1, h2)
                     kd  := 0
             else if c1 < o1 and c2 < o2
                 // OC: the first close / second open, up to the second candle's wick
-                if math.min(c1, o2) > liq and cmax < math.max(h2, c1)
+                if math.min(c1, o2) > liq and wmax < math.min(c1, o2)
                     zl_ := math.min(c1, o2)
                     zh_ := math.max(h2, c1)
                     kd  := 1
@@ -1770,8 +1773,8 @@ f_zopp(int d, int scan) =>
                     int m = jj + 1
                     while f_zc(m, d) >= vlo
                         m += 1
-                    // broken at candle m; alive if no close above it from there on
-                    if array.get(sfx, m - b0) <= c1
+                    // broken at candle m; fresh if no candle after it has come back up to it (a wick too)
+                    if m >= k or array.get(sfx, m + 1 - b0) < vlo
                         zl_ := math.min(l1, l2)
                         zh_ := c1
                         kd  := 2
@@ -1780,7 +1783,7 @@ f_zopp(int d, int scan) =>
                 rhi := zh_
                 rt  := array.get(q2t, jj - 1)
                 rk  := kd
-            cmax := math.max(cmax, c2)
+            wmax := math.max(wmax, h2)
     [rlo, rhi, rt, rk, liq, lqt, lqk]
 
 // ── The two zones: 0 the POI in the leg, 1 the opposite zone (with their liquidity lines) ──
