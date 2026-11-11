@@ -1387,6 +1387,7 @@ class EntryAlertItem(BaseModel):
     tp_r: float = 2
     be_r: Optional[float] = None          # breakeven alert at this many R (None: no breakeven alert)
     sl_buffer_pips: float = 0
+    must_reach: bool = False              # the wick must reach the level (tolerance = how far past it)
     follow_status: Optional[str] = None   # the latest followed trade of this level, one line
 
 
@@ -1409,6 +1410,7 @@ class EntryAlertCreate(BaseModel):
     tp_r: float = 2
     be_r: Optional[float] = None
     sl_buffer_pips: float = 0
+    must_reach: bool = False
 
 
 def _row_to_entry_alert(row: sqlite3.Row, follow_status: Optional[str] = None) -> EntryAlertItem:
@@ -1432,6 +1434,7 @@ def _row_to_entry_alert(row: sqlite3.Row, follow_status: Optional[str] = None) -
         tp_r=d.get("tp_r") or 2,
         be_r=d.get("be_r"),
         sl_buffer_pips=d.get("sl_buffer_pips") or 0,
+        must_reach=bool(d.get("must_reach") or 0),
         follow_status=follow_status,
     )
 
@@ -1521,11 +1524,12 @@ def create_entry_alert(body: EntryAlertCreate, request: Request):
         cur = conn.execute("""
             INSERT INTO entry_pattern_alerts
                 (user_id, instrument, direction, price, tolerance_pips, note, expires_at, created_at, watches, keep_open,
-                 follow, tp_r, be_r, sl_buffer_pips)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 follow, tp_r, be_r, sl_buffer_pips, must_reach)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (uid, instrument, direction, body.price, body.tolerance_pips, body.note, body.expires_at, now,
               watches, 1 if body.keep_open else 0,
-              1 if body.follow else 0, body.tp_r, body.be_r if body.follow else None, body.sl_buffer_pips))
+              1 if body.follow else 0, body.tp_r, body.be_r if body.follow else None, body.sl_buffer_pips,
+              1 if body.must_reach else 0))
         row = conn.execute("SELECT * FROM entry_pattern_alerts WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row_to_entry_alert(row)
 

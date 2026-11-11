@@ -93,6 +93,7 @@ export interface EntryAlertItem {
   tp_r: number
   be_r: number | null               // breakeven alert at this many R (null: none)
   sl_buffer_pips: number
+  must_reach: boolean               // the wick must reach the level; tolerance = how far past it
   follow_status: string | null      // the latest followed trade of this level
 }
 

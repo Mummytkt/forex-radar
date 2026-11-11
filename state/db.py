@@ -516,7 +516,9 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE entry_pattern_alerts ADD COLUMN keep_open INTEGER NOT NULL DEFAULT 0")
     # Follow the trade (2026-11-11): TP / SL / breakeven / re-entry messages after the level's confirmation
     for col_def in ("follow INTEGER NOT NULL DEFAULT 0", "tp_r REAL NOT NULL DEFAULT 2", "be_r REAL",
-                    "sl_buffer_pips REAL NOT NULL DEFAULT 0"):
+                    "sl_buffer_pips REAL NOT NULL DEFAULT 0",
+                    # 2026-11-11: the wick must reach the level (tolerance = how far past it), not just come near
+                    "must_reach INTEGER NOT NULL DEFAULT 0"):
         if col_def.split()[0] not in epa_cols:
             conn.execute(f"ALTER TABLE entry_pattern_alerts ADD COLUMN {col_def}")
     from alerts.trade_follow import SCHEMA as _FOLLOW_SCHEMA

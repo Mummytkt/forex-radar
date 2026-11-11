@@ -1066,7 +1066,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     # Find every active, matching, non-expired entry alert for this instrument + direction
     rows = conn.execute("""
         SELECT epa.id, epa.price, epa.tolerance_pips, epa.note, epa.watches, epa.keep_open,
-               epa.follow, epa.tp_r, epa.be_r, epa.sl_buffer_pips,
+               epa.follow, epa.tp_r, epa.be_r, epa.sl_buffer_pips, epa.must_reach,
                u.telegram_chat_id, epa.user_id, u.role, u.plan, u.plan_expires_at
         FROM entry_pattern_alerts epa
         LEFT JOIN users u ON u.id = epa.user_id
@@ -1108,7 +1108,12 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             continue  # an older level: PCL / Engulfing Sweep on H1 / H2 only
 
         proximity = tol_pips * pip_size
-        if abs(touch - alert_price) > proximity:
+        if row["must_reach"]:
+            # the wick has to reach the level itself (a buy: at or below it), and no further past it than the tolerance
+            reached = (alert_price - proximity <= touch <= alert_price) if direction == "bullish"                 else (alert_price <= touch <= alert_price + proximity)
+            if not reached:
+                continue  # the pattern's wick did not reach this user's level
+        elif abs(touch - alert_price) > proximity:
             continue  # pattern formed too far from this user's watched level
 
         # The first formation closes the level, unless it keeps watching the others
