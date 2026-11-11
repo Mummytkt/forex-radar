@@ -8,9 +8,10 @@ A level on the dashboard (an entry pattern alert) can follow the trade its confi
 The price monitor (every 5 minutes, 5-minute candles) then sends:
   - the breakeven point reached (once)
   - TP hit, or SL hit
-  - after an SL: the level is armed again for a RE-ENTRY for as long as price stays inside the level's
-    zone (level +/- tolerance). It ends when a candle closes beyond the zone, or when price goes on to the
-    TP without a re-entry (that is reported: the stop was a shake-out).
+  - after an SL: the level is armed again for a RE-ENTRY (user, 2026-11-11): the SAME pattern on the same
+    timeframe, with its wick past the old SL (a buy: below it), still inside the level's zone (level +/-
+    tolerance). The watch ends when a candle closes outside the zone, when price goes on to the TP without
+    one (reported: the stop was a shake-out), when the level expires, or after WATCH_DAYS.
 
 Statuses: open -> tp | sl (stopped, watching) -> sl_tp | left | reentered | expired
 """
@@ -134,8 +135,39 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     if _to_yf_ticker(instrument) is None:
         lines.append("Note: there is no 5-minute price feed for this instrument, so its SL / TP can't be watched.")
     else:
-        lines.append("You'll get a message at breakeven, at TP and at SL. After an SL the level is watched for a re-entry while price stays in its zone.")
+        lines.append("You'll get a message at breakeven, at TP and at SL. After an SL, the same pattern forming again past the SL and still in this zone comes as a RE-ENTRY.")
     return "\n".join(lines)
+
+
+_PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
+              "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
+_SAME = {"engulfing_sweep": "pcl", "sweep": "pcl"}
+
+
+def stopped_follow(conn: sqlite3.Connection, alert_id: int) -> Optional[dict]:
+    """The level's stopped trade still watching for a re-entry, if any."""
+    r = conn.execute("SELECT * FROM trade_follows WHERE alert_id = ? AND status = 'sl' ORDER BY id DESC LIMIT 1",
+                     (alert_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def is_reentry(fo: dict, pattern: str, tf_label: str, touch: Optional[float]) -> bool:
+    """A re-entry (user, 2026-11-11): the same pattern on the same timeframe as the stopped trade, with its
+    wick past that trade's SL (a buy: below it; a sell: above it), and still inside the level's zone."""
+    if touch is None or tf_label != fo.get("tf"):
+        return False
+    if _SAME.get(pattern, pattern) != _SAME.get(fo.get("pattern") or "", fo.get("pattern")):
+        return False
+    past = touch < fo["sl"] if fo["direction"] == "bullish" else touch > fo["sl"]
+    inside = fo.get("zone_lo") is None or fo["zone_lo"] <= touch <= fo["zone_hi"]
+    return past and inside
+
+
+def _outside(fo: dict, close: float, bull: bool) -> bool:
+    """A candle closed beyond the level's zone (a buy: below it): the re-entry watch ends."""
+    if fo.get("zone_lo") is None:
+        return False
+    return close < fo["zone_lo"] if bull else close > fo["zone_hi"]
 
 
 # ── One follow, the candles since it was last checked ────────────────────────
@@ -158,8 +190,7 @@ def step(fo: dict, bars: list, now: datetime) -> list[str]:
             hit_sl = l <= fo["sl"] if bull else h >= fo["sl"]
             if hit_sl:
                 fo["status"], fo["sl_at"] = "sl", _iso(t)
-                out = fo.get("zone_lo") is not None and (c < fo["zone_lo"] if bull else c > fo["zone_hi"])
-                if out:
+                if _outside(fo, c, bull):
                     fo["status"], fo["closed_at"] = "left", _iso(t)
                     events.append("sl_left")
                     break
@@ -177,7 +208,7 @@ def step(fo: dict, bars: list, now: datetime) -> list[str]:
                 fo["status"], fo["closed_at"] = "sl_tp", _iso(t)
                 events.append("sl_tp")
                 break
-            if fo.get("zone_lo") is not None and (c < fo["zone_lo"] if bull else c > fo["zone_hi"]):
+            if _outside(fo, c, bull):
                 fo["status"], fo["closed_at"] = "left", _iso(t)
                 events.append("left")
                 break
@@ -198,18 +229,21 @@ def _text(fo: dict, ev: str) -> Optional[str]:
     if ev == "tp":
         return f"✅ Take profit hit: {head}\n\nPrice reached TP {f(fo['tp'])}: +{tp_r}R."
     if ev == "sl":
+        pat = _PAT_NAMES.get(fo.get("pattern") or "", fo.get("pattern") or "pattern")
+        past = "below" if fo["direction"] == "bullish" else "above"
         return (f"🛑 Stop loss hit: {head}\n\nPrice reached SL {f(fo['sl'])}: -1R.\n"
-                f"Price is still inside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}), so the level is armed again: "
-                f"you'll get the next confirmation there as a RE-ENTRY. I'll also tell you if price goes on to the TP {f(fo['tp'])} without one.")
+                f"Re-entry watch: if the same {fo.get('tf') or ''} {pat} forms again with its wick {past} {f(fo['sl'])}, "
+                f"still inside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}), you'll get it as a RE-ENTRY. "
+                f"A close outside the zone ends the watch. I'll also tell you if price goes on to the TP {f(fo['tp'])} without one.")
     if ev == "sl_left":
         return (f"🛑 Stop loss hit: {head}\n\nPrice reached SL {f(fo['sl'])}: -1R.\n"
                 f"The candle closed outside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}), so no re-entry is watched.")
+    if ev == "left":
+        return (f"↩️ Re-entry watch ended: {head}\n\nA candle closed outside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}) "
+                f"after the stop, so the level is no longer watched for a re-entry.")
     if ev == "sl_tp":
         return (f"ℹ️ Price went on to the TP after your stop: {head}\n\nAfter the SL at {f(fo['sl'])}, price reached the TP {f(fo['tp'])} "
                 f"with no new confirmation at your level. The stop was a shake-out: a re-entry would have won.")
-    if ev == "left":
-        return (f"↩️ Re-entry watch ended: {head}\n\nA candle closed outside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}) "
-                f"after the stop. The level is no longer watched for a re-entry.")
     return None
 
 
@@ -270,6 +304,6 @@ def summary(fo: dict) -> str:
     """One line for the dashboard: the latest follow of a level."""
     f = lambda v: fmt_price(fo["instrument"], v)
     state = {"open": "open" + (" · breakeven point reached" if fo.get("be_sent") else ""),
-             "tp": "TP hit", "sl": "SL hit · watching for a re-entry", "sl_tp": "SL hit, then price reached the TP",
+             "tp": "TP hit", "sl": "SL hit · watching for the same pattern past the SL, in the zone", "sl_tp": "SL hit, then price reached the TP",
              "left": "SL hit · price left the zone", "reentered": "SL hit · re-entered", "expired": "ended"}.get(fo["status"], fo["status"])
     return f"Entry {f(fo['entry'])} · SL {f(fo['sl'])} · TP {f(fo['tp'])} · {state}"

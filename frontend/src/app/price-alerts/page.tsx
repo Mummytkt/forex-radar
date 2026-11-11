@@ -680,8 +680,9 @@ function EntryAlertsPanel({ instruments, prices }: {
             </label>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
               Entry = the confirmation candle&apos;s close. Stop loss = behind the pattern&apos;s wick. You get a Telegram message at the
-              breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry for as long as
-              price stays inside your zone (your level ± the tolerance). If price then goes on to the take profit without one, you&apos;re told.
+              breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry: the same pattern on the same timeframe, with its wick
+              past your old stop loss and still inside your zone (your level ± the pips above). A close outside the zone ends the watch.
+              If price goes on to the take profit without a re-entry, you&apos;re told.
               Checked on 5-minute candles, so a message can come a few minutes after the touch.
             </div>
             {follow && (
