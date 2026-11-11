@@ -362,7 +362,7 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
     elif event_type == "ENTRY_CONFIRMATION":
         await _handle_entry_confirmation(conn, config, instrument, payload)
     elif event_type == "PRICE_UPDATE":
-        _store_candles(conn, instrument, payload)
+        _store_candles(conn, instrument, payload, config)
         await _handle_price_update(conn, config, instrument, payload)
     elif event_type == "HISTORY":
         tf = candles_tf_name(payload.tf)
@@ -414,11 +414,27 @@ def _save_chart_levels(conn, instrument: str, alert_id: int, direction: Directio
         logger.warning("Chart levels not saved for alert %s: %s", alert_id, exc)
 
 
-def _store_candles(conn, instrument: str, payload: "TVWebhookPayload") -> None:
+def _check_liquidity(conn, config, instrument: str) -> None:
+    """A new H4 candle: send the liquidity that formed after the last H4 alert (Alert Filters: off by default)."""
+    try:
+        from alerts.liquidity_watch import check
+        texts = check(conn, instrument)
+    except Exception:
+        logger.exception("%s liquidity check failed", instrument)
+        return
+    for t in texts:
+        logger.info("%s liquidity alert: %s", instrument, t.split(chr(10), 1)[0])
+        if config.telegram_enabled:
+            _in_background(_deliver_alert(conn, config, instrument, t, pref="liquidity"))
+
+
+def _store_candles(conn, instrument: str, payload: "TVWebhookPayload", config=None) -> None:
     """Keep the candles the chart just closed, for chart pictures. Never blocks alerts."""
     try:
         if payload.bar:
             upsert_candles(conn, instrument, "H4", [payload.bar])
+            if config is not None:
+                _check_liquidity(conn, config, instrument)
         if payload.dbar:
             upsert_candles(conn, instrument, "D", [payload.dbar])
     except Exception as exc:
@@ -892,6 +908,12 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
     _save_chart_levels(conn, instrument, alert_id, direction, breakout.broken_level,
                        h4=(payload.level, title), subtitle=title)
     logger.info("%s STORY %s %s @ %s: alert stored", instrument, event, direction.value, payload.level)
+    # the liquidity after this break is watched from the next H4 candle on
+    try:
+        from alerts.liquidity_watch import start as start_liq_watch
+        start_liq_watch(conn, instrument, direction.value, title)
+    except Exception:
+        logger.exception("%s liquidity watch could not start", instrument)
 
     if config.telegram_enabled:
         _in_background(_deliver_alert(conn, config, instrument, alert_text, alert_id=alert_id, pref=story_type))

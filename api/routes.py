@@ -725,7 +725,7 @@ def get_preferences(request: Request):
                             ocAfterRetest=prefs["oc_after_retest"], dailyBreakout=prefs["daily_breakout"],
                             storyCont=prefs["story_cont"], storyPullback=prefs["story_pullback"],
                             storyAgainst=prefs["story_against"], storyAlign=prefs["story_align"],
-                            storyAligned=prefs["story_aligned"], storyInRange=prefs["story_in_range"], alertStyle=style,
+                            storyAligned=prefs["story_aligned"], storyInRange=prefs["story_in_range"], liquidity=prefs["liquidity"], alertStyle=style,
                             engulfMode=engulf, dEngulfMode=d_engulf)
 
 
@@ -748,7 +748,8 @@ def update_preferences(request: Request, body: AlertPreferencesUpdate):
                             ("ocAfterRetest", "oc_after_retest"), ("dailyBreakout", "daily_breakout"),
                             ("storyCont", "story_cont"), ("storyPullback", "story_pullback"),
                             ("storyAgainst", "story_against"), ("storyAlign", "story_align"),
-                            ("storyAligned", "story_aligned"), ("storyInRange", "story_in_range")):
+                            ("storyAligned", "story_aligned"), ("storyInRange", "story_in_range"),
+                            ("liquidity", "liquidity")):
             value = getattr(body, field)
             if value is not None:
                 set_alert_pref(conn, uid, kind, value)

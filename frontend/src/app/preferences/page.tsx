@@ -24,7 +24,7 @@ function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled?: 
   )
 }
 
-type Key = 'newsAlerts' | 'dailyBreakout' | 'storyCont' | 'storyPullback' | 'storyAgainst' | 'storyAlign' | 'storyAligned' | 'storyInRange'
+type Key = 'newsAlerts' | 'dailyBreakout' | 'storyCont' | 'storyPullback' | 'storyAgainst' | 'storyAlign' | 'storyAligned' | 'storyInRange' | 'liquidity'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 
 const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
@@ -35,13 +35,14 @@ const TYPES: { key: Key; label: string; desc: string; group?: string }[] = [
   { key: 'storyAlign', label: 'H4 pullback: back in alignment', desc: 'An H4 candle closed beyond the H4 key level. H4 is with the Daily again and the H4 range is set.' },
   { key: 'storyAligned', label: 'H4 continuation in alignment', desc: 'Each H4 continuation in the Daily direction, inside the H4 range.' },
   { key: 'storyInRange', label: 'Inside the H4 range: H4 against the Daily', desc: 'A pullback break inside the H4 range, and each H4 continuation against the Daily after it.' },
+  { key: 'liquidity', group: 'Liquidity', label: 'Liquidity after a break', desc: 'After each alert above, a message when liquidity forms in the H4 candles after the break: single candle liquidity (after a bullish break, a bullish candle’s low wick in the first 3 candles; bearish: a bearish candle’s high wick) and low / high liquidity (a V-shape on the closes after a bullish break, an A-shape after a bearish one). Titled by what formed and the alert it follows, for example: Single candle liquidity after the H4 bullish continuation after the Daily breakout. Only for the instruments you picked. Off until you switch it on.' },
   { key: 'newsAlerts', group: 'News', label: 'High-impact news', desc: 'A morning summary (07:00 WAT) of the high-impact economic news for the currencies in your pairs, plus a reminder 30 minutes before each one.' },
 ]
 
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Record<Key, boolean> | null>(null)
   const [loadError, setLoadError] = useState(false)
-  const [status, setStatus] = useState<Record<Key, Status>>({ newsAlerts: 'idle', dailyBreakout: 'idle', storyCont: 'idle', storyPullback: 'idle', storyAgainst: 'idle', storyAlign: 'idle', storyAligned: 'idle', storyInRange: 'idle' })
+  const [status, setStatus] = useState<Record<Key, Status>>({ newsAlerts: 'idle', dailyBreakout: 'idle', storyCont: 'idle', storyPullback: 'idle', storyAgainst: 'idle', storyAlign: 'idle', storyAligned: 'idle', storyInRange: 'idle', liquidity: 'idle' })
 
   const { user } = useAuth()
   useEffect(() => { markOnboarding(user?.id, 'prefs') }, [user?.id])
@@ -51,7 +52,7 @@ export default function PreferencesPage() {
       .then(r => (r.ok ? r.json() : Promise.reject()))
       .then(d => setPrefs({ newsAlerts: d.newsAlerts !== false, dailyBreakout: d.dailyBreakout !== false, storyCont: d.storyCont !== false,
         storyPullback: d.storyPullback !== false, storyAgainst: d.storyAgainst !== false, storyAlign: d.storyAlign !== false, storyAligned: d.storyAligned !== false,
-        storyInRange: d.storyInRange !== false }))
+        storyInRange: d.storyInRange !== false, liquidity: d.liquidity === true }))
       .catch(() => setLoadError(true))
   }, [])
 

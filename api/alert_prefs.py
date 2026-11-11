@@ -28,13 +28,15 @@ _KEYS = {"external": "pref_alert_external", "internal": "pref_alert_internal",
          "daily_breakout": "pref_alert_daily_breakout", "story_cont": "pref_alert_story_cont",
          "story_pullback": "pref_alert_story_pullback", "story_against": "pref_alert_story_against",
          "story_align": "pref_alert_story_align", "story_aligned": "pref_alert_story_aligned",
-         "story_in_range": "pref_alert_story_in_range"}
+         "story_in_range": "pref_alert_story_in_range",
+         # Liquidity forming after each H4 alert (single candle / high or low), off until switched on
+         "liquidity": "pref_alert_liquidity"}
 
 
 # Everything is on until switched off, except Internal H4 breakouts: External
 # only by default; each person can switch Internal on. The H4 FVG and OC formed
 # notifications are off for subscribers (they opt in) and on for the owner.
-_DEFAULTS = {"internal": False, "oc_after_retest": False}
+_DEFAULTS = {"internal": False, "oc_after_retest": False, "liquidity": False}
 _OWNER_ONLY_DEFAULT = {"h4_fvg", "d_oc_formed", "h4_oc_formed"}
 
 

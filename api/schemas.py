@@ -63,6 +63,7 @@ class AlertPreferences(BaseModel):
     storyAlign: bool = True
     storyAligned: bool = True
     storyInRange: bool = True
+    liquidity: bool = False             # liquidity alerts after each H4 alert
     alertStyle: str = "short"           # "full" | "short" (subscribers default to short)
     engulfMode: str = "wick"            # "wick" | "body" | "both"
     dEngulfMode: str = "wick"           # Daily engulfing: "wick" | "body" | "both"
@@ -90,6 +91,7 @@ class AlertPreferencesUpdate(BaseModel):
     storyAlign: bool | None = None
     storyAligned: bool | None = None
     storyInRange: bool | None = None
+    liquidity: bool | None = None
     alertStyle: str | None = None
     engulfMode: str | None = None
     dEngulfMode: str | None = None
