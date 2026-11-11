@@ -1698,9 +1698,9 @@ f_zopp(int d, int scan) =>
     int   rt  = na
     int   rk  = -1
     if k >= 3
-        // liquidity: the closest swing high above the breaking candle's close that no candle has CLOSED above
-        // since (a wick through it, the breaking candle's too, does not take it - user, 2026-11-11); none: the
-        // closest such high wick of a bearish candle (single candle liquidity); none: the breaking candle's high
+        // liquidity: the CLOSEST swing high or single candle (the high wick of a bearish candle) above the breaking
+        // candle's close that no candle has CLOSED above since (a wick through it, the breaking candle's too, does
+        // not take it); the closer one wins (user, 2026-11-11); none: the breaking candle's high
         float hmax  = f_zc(k, d)     // the highest close after candle j
         float sc    = na
         int   sct   = na
@@ -1719,10 +1719,14 @@ f_zopp(int d, int scan) =>
                     sct := array.get(q2t, j)
             hmax := math.max(hmax, f_zc(j, d))
             j -= 1
+        if not na(sc) and (na(liq) or sc < liq)
+            liq := sc
+            lqt := sct
+            lqk := 1
         if na(liq)
-            liq := na(sc) ? f_zh(k, d) : sc
-            lqt := na(sc) ? array.get(q2t, k) : sct
-            lqk := na(sc) ? 2 : 1
+            liq := f_zh(k, d)
+            lqt := array.get(q2t, k)
+            lqk := 2
         float cmax = f_zc(k, d)     // the highest close after the pair
         // the highest / lowest close from candle m to the breaking candle, once (index m - b0): the Breaker
         // check reads them instead of walking the later candles again for every V-shape
