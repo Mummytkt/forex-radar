@@ -18,7 +18,7 @@ def rep(a, b):
 
 
 rep('indicator("MummyTKT Bias Pointer", overlay = true, calc_bars_count = 3000, behind_chart = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 100, max_bars_back = 5000)',
-    'indicator("MummyTKT Zones Backtest", overlay = true, behind_chart = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 5000)')
+    'indicator("MummyTKT Zones Backtest", overlay = true, behind_chart = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2000)')  # 2000 = the most the story looks back (f_bt); less memory
 rep('// MummyTKT\'s Bias Pointer v14: the MTF Storyline with alerts · 2026-11-04\n',
     '// MummyTKT\'s Zones Backtest (2026-11-10): the Bias Pointer v14 story + the BUY / SELL zones after every\n'
     '// alert and a backtest of trading them (section 9 at the end). Built by pine/make_zones_backtest.py.\n'

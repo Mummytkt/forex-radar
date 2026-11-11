@@ -14,8 +14,9 @@
 //     fresh key level (A-shape, OC, Breaker = a broken V-shape), wicks in.
 // The liquidity of each is drawn (yellow). A zone ends when an H4 candle CLOSES through it, or at the next
 // alert. Inside a zone a confirmation gives the trade: Instant (at its close) or a Retest of its level
-// (CISD line, OC level, the engulfed candle's open / close, the PCL candle's open) that waits until the
+// (CISD line, OC level) that waits until the
 // next alert. SL behind the pattern's low (sells: high). TP 1:2 or 1:3. One trade per zone per setup.
+// Confirmations tested: M5 CISD, M15 CISD, H1 OCTGD (EG / PCL taken out 2026-11-11: memory limit).
 // Every confirmation of the picked pattern inside a zone is marked (a triangle; hover for the details).
 // ═════════════════════════════════════════════════════════════════════════════
 const string G_ZB = "9 · Zones backtest"
@@ -28,10 +29,9 @@ int    zb_from = timestamp(zb_fy, zb_fm, 1, 0, 0)
 int    zb_to   = zb_ty == 0 ? timestamp(2100, 1, 1, 0, 0) : zb_tm == 12 ? timestamp(zb_ty + 1, 1, 1, 0, 0) - 1 : timestamp(zb_ty, zb_tm + 1, 1, 0, 0) - 1
 string zb_tpo  = input.string("1:2", "Take profit", options = ["1:2", "1:3"], group = G_ZB)
 string zb_side = input.string("Both", "Zones traded", options = ["Both", "The POI in the leg only", "The opposite zone only"], group = G_ZB)
-string zb_conf = input.string("H1 OCTGD", "Confirmation", options = ["M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL", "All"], group = G_ZB, inline = "sh")
+string zb_conf = input.string("H1 OCTGD", "Confirmation", options = ["M5 CISD", "M15 CISD", "H1 OCTGD", "All"], group = G_ZB, inline = "sh")
 string zb_ent  = input.string("Instant", "entry", options = ["Instant", "Retest", "Both"], group = G_ZB, inline = "sh",
-     tooltip = "Instant: at the confirmation's close. Retest: CISD → the CISD line · OCTGD → the OC level · EG → the engulfed candle's open (or close) · PCL → the PCL candle's open. A retest order waits until the next breakout alert, then it is cancelled. The table shows what you pick (All / Both to compare). The trades are drawn on the chart when one confirmation and one entry are picked.")
-string zb_egr  = input.string("Open", "EG retest at the engulfed candle's", options = ["Open", "Close"], group = G_ZB)
+     tooltip = "Instant: at the confirmation's close. Retest: CISD → the CISD line · OCTGD → the OC level. A retest order waits until the next breakout alert, then it is cancelled. The table shows what you pick (All / Both to compare). The trades are drawn on the chart when one confirmation and one entry are picked.")
 int    zb_ow   = input.int(10, "OCTGD: candles allowed from C2 to the close through the level", minval = 1, maxval = 50, group = G_ZB)
 int    zb_cw   = input.int(20, "CISD: candles allowed from the low to the close through the line", minval = 1, maxval = 100, group = G_ZB)
 int    zb_slb  = input.int(0, "SL buffer (ticks beyond the pattern's low / high)", minval = 0, group = G_ZB)
@@ -41,7 +41,7 @@ int    zb_scan = input.int(300, "H4 candles searched for the opposite zone", min
 bool   zb_shz  = input.bool(true, "Show the zones and their liquidity", group = G_ZB)
 bool   zb_mk   = input.bool(true, "Triangles: mark each confirmation inside a zone", group = G_ZB, inline = "mk")
 int    zb_km   = input.int(150, "kept", minval = 1, maxval = 300, group = G_ZB, inline = "mk")
-string zb_mkp  = input.string("Same as the Confirmation above", "Triangles for", options = ["Same as the Confirmation above", "M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL", "All"], group = G_ZB,
+string zb_mkp  = input.string("Same as the Confirmation above", "Triangles for", options = ["Same as the Confirmation above", "M5 CISD", "M15 CISD", "H1 OCTGD", "All"], group = G_ZB,
      tooltip = "Which confirmation's triangles are drawn. Hover a triangle for its time, wick, close, retest level and SL.")
 string zb_mkz  = input.string("Both zones", "Triangles at", options = ["Both zones", "The POI in the leg", "The opposite zone"], group = G_ZB, inline = "mz")
 string zb_mks  = input.string("Buys and sells", "", options = ["Buys and sells", "Buys", "Sells"], group = G_ZB, inline = "mz")
@@ -57,13 +57,13 @@ color  zb_lqc  = input.color(#F7C948, "Liquidity", group = G_ZB, inline = "zc")
 int    zb_op   = input.int(82, "zone opacity %", minval = 0, maxval = 100, group = G_ZB, inline = "zc")
 
 float  zb_rr   = zb_tpo == "1:3" ? 3.0 : 2.0
-const int NS   = 10    // setups: confirmation p (0 M5 CISD · 1 M15 CISD · 2 H1 OCTGD · 3 H1 EG · 4 H1 PCL) × entry (0 Instant · 1 Retest)
-int    ZB_PI   = zb_conf == "M5 CISD" ? 0 : zb_conf == "M15 CISD" ? 1 : zb_conf == "H1 OCTGD" ? 2 : zb_conf == "H1 EG" ? 3 : zb_conf == "H1 PCL" ? 4 : -1
-int    ZB_MP   = zb_mkp == "M5 CISD" ? 0 : zb_mkp == "M15 CISD" ? 1 : zb_mkp == "H1 OCTGD" ? 2 : zb_mkp == "H1 EG" ? 3 : zb_mkp == "H1 PCL" ? 4 : zb_mkp == "All" ? -1 : ZB_PI
+const int NS   = 6     // setups: confirmation p (0 M5 CISD · 1 M15 CISD · 2 H1 OCTGD) × entry (0 Instant · 1 Retest)
+int    ZB_PI   = zb_conf == "M5 CISD" ? 0 : zb_conf == "M15 CISD" ? 1 : zb_conf == "H1 OCTGD" ? 2 : -1
+int    ZB_MP   = zb_mkp == "M5 CISD" ? 0 : zb_mkp == "M15 CISD" ? 1 : zb_mkp == "H1 OCTGD" ? 2 : zb_mkp == "All" ? -1 : ZB_PI
 int    ZB_EI   = zb_ent == "Instant" ? 0 : zb_ent == "Retest" ? 1 : -1
 // the one setup drawn on the chart (-1: several picked, none drawn)
 int    SHOWN   = ZB_PI >= 0 and ZB_EI >= 0 ? ZB_PI * 2 + ZB_EI : -1
-var array<string> ZP = array.from("M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL")
+var array<string> ZP = array.from("M5 CISD", "M15 CISD", "H1 OCTGD")
 int    ZCS     = timeframe.in_seconds()
 // a confirmation timeframe smaller than the chart is read from the candles inside each chart candle
 // (only up to an H4 chart: above it the story can't run and the small candles inside a Daily / Weekly candle are too many)
@@ -594,21 +594,19 @@ f_zconf(simple int p, simple int ow, simple int cw, simple bool eg_open, simple 
     float o_c   = lag ? close[1] : close
     float o_h   = lag ? high[1] : high
     float o_l   = lag ? low[1] : low
-    float o_bs  = lag ? bs[1] : bs
     float o_bl  = lag ? bl[1] : bl
     float o_bsl = lag ? bsl[1] : bsl
     float o_btp = lag ? btp[1] : btp
-    float o_ss  = lag ? ss[1] : ss
     float o_sl  = lag ? sl_[1] : sl_
     float o_ssl = lag ? ssl[1] : ssl
     float o_stp = lag ? stp[1] : stp
-    [o_t, o_c, o_h, o_l, o_bs, o_bl, o_bsl, o_btp, o_ss, o_sl, o_ssl, o_stp]
-f_x(array<float> x, float bs, float bl, float bsl, float btp, float ss, float sl_, float ssl, float stp) =>
-    array.set(x, 0, bs)
+    [o_t, o_c, o_h, o_l, o_bl, o_bsl, o_btp, o_sl, o_ssl, o_stp]
+f_x(array<float> x, float bl, float bsl, float btp, float sl_, float ssl, float stp) =>
+    array.set(x, 0, na(bl) ? na : 1.0)
     array.set(x, 1, bl)
     array.set(x, 2, bsl)
     array.set(x, 3, btp)
-    array.set(x, 4, ss)
+    array.set(x, 4, na(sl_) ? na : 1.0)
     array.set(x, 5, sl_)
     array.set(x, 6, ssl)
     array.set(x, 7, stp)
@@ -771,18 +769,14 @@ f_seen(int k, int t) =>
             array.set(sm_f, k, t)
         array.set(sm_l, k, t)
 
-// the five confirmations: from the candles inside each chart candle when their timeframe is smaller than the
+// the three confirmations: from the candles inside each chart candle when their timeframe is smaller than the
 // chart, else the last closed candle of their timeframe; trades run on those candles / on the chart's
-[za0t, za0c, za0h, za0l, za0bs, za0bl, za0bsl, za0btp, za0ss, za0sl, za0ssl, za0stp] = request.security(syminfo.tickerid, ZL0 or not ZOK ? timeframe.period : "5", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi0t, zi0c, zi0h, zi0l, zi0bs, zi0bl, zi0bsl, zi0btp, zi0ss, zi0sl, zi0ssl, zi0stp] = request.security_lower_tf(syminfo.tickerid, ZL0 ? "5" : "12M", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
-[za1t, za1c, za1h, za1l, za1bs, za1bl, za1bsl, za1btp, za1ss, za1sl, za1ssl, za1stp] = request.security(syminfo.tickerid, ZL1 or not ZOK ? timeframe.period : "15", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi1t, zi1c, zi1h, zi1l, zi1bs, zi1bl, zi1bsl, zi1btp, zi1ss, zi1sl, zi1ssl, zi1stp] = request.security_lower_tf(syminfo.tickerid, ZL1 ? "15" : "12M", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
-[za2t, za2c, za2h, za2l, za2bs, za2bl, za2bsl, za2btp, za2ss, za2sl, za2ssl, za2stp] = request.security(syminfo.tickerid, ZL2 or not ZOK ? timeframe.period : "60", f_zconf(1, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi2t, zi2c, zi2h, zi2l, zi2bs, zi2bl, zi2bsl, zi2btp, zi2ss, zi2sl, zi2ssl, zi2stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : "12M", f_zconf(1, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
-[za3t, za3c, za3h, za3l, za3bs, za3bl, za3bsl, za3btp, za3ss, za3sl, za3ssl, za3stp] = request.security(syminfo.tickerid, ZL2 or not ZOK ? timeframe.period : "60", f_zconf(2, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi3t, zi3c, zi3h, zi3l, zi3bs, zi3bl, zi3bsl, zi3btp, zi3ss, zi3sl, zi3ssl, zi3stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : "12M", f_zconf(2, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
-[za4t, za4c, za4h, za4l, za4bs, za4bl, za4bsl, za4btp, za4ss, za4sl, za4ssl, za4stp] = request.security(syminfo.tickerid, ZL2 or not ZOK ? timeframe.period : "60", f_zconf(3, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi4t, zi4c, zi4h, zi4l, zi4bs, zi4bl, zi4bsl, zi4btp, zi4ss, zi4sl, zi4ssl, zi4stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : "12M", f_zconf(3, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
+[za0t, za0c, za0h, za0l, za0bl, za0bsl, za0btp, za0sl, za0ssl, za0stp] = request.security(syminfo.tickerid, ZL0 or not ZOK ? timeframe.period : "5", f_zconf(0, zb_ow, zb_cw, true, true), lookahead = barmerge.lookahead_on)
+[zi0t, zi0c, zi0h, zi0l, zi0bl, zi0bsl, zi0btp, zi0sl, zi0ssl, zi0stp] = request.security_lower_tf(syminfo.tickerid, ZL0 ? "5" : "12M", f_zconf(0, zb_ow, zb_cw, true, false), ignore_invalid_timeframe = true)
+[za1t, za1c, za1h, za1l, za1bl, za1bsl, za1btp, za1sl, za1ssl, za1stp] = request.security(syminfo.tickerid, ZL1 or not ZOK ? timeframe.period : "15", f_zconf(0, zb_ow, zb_cw, true, true), lookahead = barmerge.lookahead_on)
+[zi1t, zi1c, zi1h, zi1l, zi1bl, zi1bsl, zi1btp, zi1sl, zi1ssl, zi1stp] = request.security_lower_tf(syminfo.tickerid, ZL1 ? "15" : "12M", f_zconf(0, zb_ow, zb_cw, true, false), ignore_invalid_timeframe = true)
+[za2t, za2c, za2h, za2l, za2bl, za2bsl, za2btp, za2sl, za2ssl, za2stp] = request.security(syminfo.tickerid, ZL2 or not ZOK ? timeframe.period : "60", f_zconf(1, zb_ow, zb_cw, true, true), lookahead = barmerge.lookahead_on)
+[zi2t, zi2c, zi2h, zi2l, zi2bl, zi2bsl, zi2btp, zi2sl, zi2ssl, zi2stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : "12M", f_zconf(1, zb_ow, zb_cw, true, false), ignore_invalid_timeframe = true)
 var array<float> xq = array.new<float>(8, na)
 f_zn(array<int> a) =>
     int n = array.size(a)
@@ -794,12 +788,12 @@ if ZL0
             int it = array.get(zi0t, j)
             f_seen(0, it)
             f_mng(0, 1, it, array.get(zi0h, j), array.get(zi0l, j))
-            f_x(xq, array.get(zi0bs, j), array.get(zi0bl, j), array.get(zi0bsl, j), array.get(zi0btp, j), array.get(zi0ss, j), array.get(zi0sl, j), array.get(zi0ssl, j), array.get(zi0stp, j))
+            f_x(xq, array.get(zi0bl, j), array.get(zi0bsl, j), array.get(zi0btp, j), array.get(zi0sl, j), array.get(zi0ssl, j), array.get(zi0stp, j))
             f_try(0, it, array.get(zi0c, j), xq)
 else if ZOK
     f_seen(0, time)
     if not na(za0t) and za0t != nz(za0t[1])
-        f_x(xq, za0bs, za0bl, za0bsl, za0btp, za0ss, za0sl, za0ssl, za0stp)
+        f_x(xq, za0bl, za0bsl, za0btp, za0sl, za0ssl, za0stp)
         f_try(0, za0t, za0c, xq)
     f_mng(0, 1, time, high, low)
 if ZL1
@@ -809,12 +803,12 @@ if ZL1
             int it = array.get(zi1t, j)
             f_seen(1, it)
             f_mng(2, 3, it, array.get(zi1h, j), array.get(zi1l, j))
-            f_x(xq, array.get(zi1bs, j), array.get(zi1bl, j), array.get(zi1bsl, j), array.get(zi1btp, j), array.get(zi1ss, j), array.get(zi1sl, j), array.get(zi1ssl, j), array.get(zi1stp, j))
+            f_x(xq, array.get(zi1bl, j), array.get(zi1bsl, j), array.get(zi1btp, j), array.get(zi1sl, j), array.get(zi1ssl, j), array.get(zi1stp, j))
             f_try(1, it, array.get(zi1c, j), xq)
 else if ZOK
     f_seen(1, time)
     if not na(za1t) and za1t != nz(za1t[1])
-        f_x(xq, za1bs, za1bl, za1bsl, za1btp, za1ss, za1sl, za1ssl, za1stp)
+        f_x(xq, za1bl, za1bsl, za1btp, za1sl, za1ssl, za1stp)
         f_try(1, za1t, za1c, xq)
     f_mng(2, 3, time, high, low)
 if ZL2
@@ -824,44 +818,14 @@ if ZL2
             int it = array.get(zi2t, j)
             f_seen(2, it)
             f_mng(4, 5, it, array.get(zi2h, j), array.get(zi2l, j))
-            f_x(xq, array.get(zi2bs, j), array.get(zi2bl, j), array.get(zi2bsl, j), array.get(zi2btp, j), array.get(zi2ss, j), array.get(zi2sl, j), array.get(zi2ssl, j), array.get(zi2stp, j))
+            f_x(xq, array.get(zi2bl, j), array.get(zi2bsl, j), array.get(zi2btp, j), array.get(zi2sl, j), array.get(zi2ssl, j), array.get(zi2stp, j))
             f_try(2, it, array.get(zi2c, j), xq)
 else if ZOK
     f_seen(2, time)
     if not na(za2t) and za2t != nz(za2t[1])
-        f_x(xq, za2bs, za2bl, za2bsl, za2btp, za2ss, za2sl, za2ssl, za2stp)
+        f_x(xq, za2bl, za2bsl, za2btp, za2sl, za2ssl, za2stp)
         f_try(2, za2t, za2c, xq)
     f_mng(4, 5, time, high, low)
-if ZL2
-    int n = f_zn(zi3t)
-    if n > 0
-        for j = 0 to n - 1
-            int it = array.get(zi3t, j)
-            f_seen(3, it)
-            f_mng(6, 7, it, array.get(zi3h, j), array.get(zi3l, j))
-            f_x(xq, array.get(zi3bs, j), array.get(zi3bl, j), array.get(zi3bsl, j), array.get(zi3btp, j), array.get(zi3ss, j), array.get(zi3sl, j), array.get(zi3ssl, j), array.get(zi3stp, j))
-            f_try(3, it, array.get(zi3c, j), xq)
-else if ZOK
-    f_seen(3, time)
-    if not na(za3t) and za3t != nz(za3t[1])
-        f_x(xq, za3bs, za3bl, za3bsl, za3btp, za3ss, za3sl, za3ssl, za3stp)
-        f_try(3, za3t, za3c, xq)
-    f_mng(6, 7, time, high, low)
-if ZL2
-    int n = f_zn(zi4t)
-    if n > 0
-        for j = 0 to n - 1
-            int it = array.get(zi4t, j)
-            f_seen(4, it)
-            f_mng(8, 9, it, array.get(zi4h, j), array.get(zi4l, j))
-            f_x(xq, array.get(zi4bs, j), array.get(zi4bl, j), array.get(zi4bsl, j), array.get(zi4btp, j), array.get(zi4ss, j), array.get(zi4sl, j), array.get(zi4ssl, j), array.get(zi4stp, j))
-            f_try(4, it, array.get(zi4c, j), xq)
-else if ZOK
-    f_seen(4, time)
-    if not na(za4t) and za4t != nz(za4t[1])
-        f_x(xq, za4bs, za4bl, za4bsl, za4btp, za4ss, za4sl, za4ssl, za4stp)
-        f_try(4, za4t, za4c, xq)
-    f_mng(8, 9, time, high, low)
 
 // ── Results ──────────────────────────────────────────────────────────────────
 var table zb_tb = table.new(f_tpos(zb_tbp), 9, 32, bgcolor = color.new(#0F1120, 8), border_width = 1, border_color = color.new(color.gray, 75))
