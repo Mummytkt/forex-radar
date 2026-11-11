@@ -1699,9 +1699,10 @@ f_zopp(int d, int scan) =>
     int   rk  = -1
     if k >= 3
         // liquidity: the CLOSEST swing high or single candle (the high wick of a bearish candle) above the breaking
-        // candle's close that no candle has CLOSED above since (a wick through it, the breaking candle's too, does
+        // candle's close that is still untaken: no candle BEFORE the break has gone above it, not even with a wick
+        // (a past wick through it took it), and the breaking candle has not CLOSED above it (its wick alone does
         // not take it); the closer one wins (user, 2026-11-11); none: the breaking candle's high
-        float hmax  = f_zc(k, d)     // the highest close after candle j
+        float hmax  = f_zc(k, d)     // the breaking candle's close, then the highest wick after candle j
         float sc    = na
         int   sct   = na
         int   stop_ = math.max(1, k - scan)
@@ -1717,7 +1718,7 @@ f_zopp(int d, int scan) =>
                 else if f_zc(j, d) < f_zo(j, d) and (na(sc) or hj < sc)
                     sc  := hj
                     sct := array.get(q2t, j)
-            hmax := math.max(hmax, f_zc(j, d))
+            hmax := math.max(hmax, f_zh(j, d))
             j -= 1
         if not na(sc) and (na(liq) or sc < liq)
             liq := sc
