@@ -2,16 +2,19 @@
 // ═════════════════════════════════════════════════════════════════════════════
 // 9 · ZONES BACKTEST (user's method, 2026-11-10; pictures Documents/Zones_Picture_4.png and _6.png)
 // Works on the H4 chart (it reads the M5 / M15 / H1 candles inside each H4 candle) or on a lower chart.
-// Every Bias Pointer alert (any kind) clears the zones (buys after a bullish alert; bearish = the mirror):
-//   · the POI in the leg before the break (a back-in-the-range trade). The key levels of the leg from its
-//     swing low up to the breaking candle (V-shape, OC, the Breaker = the A-shape the break closed
-//     above, wicks in) are found at the alert, but NO POI is marked until liquidity forms after the
-//     break: a single candle liquidity (the low wick of a bullish candle) or a swing low. The POI is
-//     then the ONE level of the leg closest below that liquidity. A deeper liquidity before the next
-//     alert moves it. Each level is its own box (no merging).
-//   · the opposite zone (SELL above): past the closest liquidity above the breaking candle (an untaken
-//     swing high; none: a single candle liquidity, the high wick of a bearish candle), the closest
-//     fresh key level (A-shape, OC, Breaker = a broken V-shape), wicks in.
+// Every Bias Pointer alert (any kind) is a BREAK. It clears the zones and builds two new ones (user's 14
+// annotated EURUSD screenshots, 2026-11-11; a bullish break here, bearish = the mirror):
+//   · the POI in the broken leg (BUY, back into the range): the key levels of the leg (V-shape, OC, and the
+//     Breaker = ONLY the level of the structure line this break broke). Liquidity: until a new one forms
+//     after the break, the LAST bullish candle's low wick of the leg (the breaking candle included); after
+//     the break, the NEWEST liquidity (a swing low, or a bullish candle's low wick in the first N candles)
+//     - it moves each time a new one forms. A wick that already sits inside a key level is not liquidity.
+//     The POI = the fresh key level closest below the liquidity.
+//   · the opposite zone (SELL, where price is heading): inside the range of the last break the OTHER way
+//     (bearish), the newest untaken liquidity that formed AFTER that break's breakout candle (never before
+//     it), and the fresh key level of that range closest beyond it (levels formed after its breakout candle
+//     don't count). Untaken: no wick through it before this break, and this breaking candle did not CLOSE
+//     through it. Fresh: no wick into it since that break. None there: the break before it, and so on.
 // The liquidity of each is drawn (yellow). A zone ends (clears off) when an H4 candle CLOSES through it, or at the next
 // alert. Inside a zone a confirmation gives the trade: Instant (at its close) or a Retest of its level
 // (CISD line, OC level) that waits until the
@@ -84,12 +87,10 @@ f_zc(int j, int d) =>
 f_kn(int k, bool buy) =>
     k == 0 ? (buy ? "V-shape" : "A-shape") : k == 1 ? "OC" : "Breaker"
 
-// The key levels of the leg before the break, each on its own (flipped prices: buy levels below).
+// The key levels of the leg of the break at candle k, each on its own (flipped prices: buy levels below).
 // The leg runs back from the breaking candle to its swing low; it stops at a candle whose high is above
-// the breaking close.
-f_zleg(int d, array<float> lo_, array<float> hi_, array<int> t_, array<int> k_) =>
-    int nq = array.size(q2t)
-    int k  = nq - 1
+// the breaking close. lvl = the level the break broke (its structure line): the Breaker is the A-shape at it.
+f_zleg(int d, int k, float lvl, array<float> lo_, array<float> hi_, array<int> t_, array<int> k_) =>
     int st0 = na
     if k >= 2
         int   s  = k
@@ -108,11 +109,9 @@ f_zleg(int d, array<float> lo_, array<float> hi_, array<int> t_, array<int> k_) 
         for jj = math.max(1, s) to k
             float o1 = f_zo(jj - 1, d)
             float c1 = f_zc(jj - 1, d)
-            float h1 = f_zh(jj - 1, d)
             float l1 = f_zl(jj - 1, d)
             float o2 = f_zo(jj, d)
             float c2 = f_zc(jj, d)
-            float h2 = f_zh(jj, d)
             float l2 = f_zl(jj, d)
             float zlo = na
             float zhi = na
@@ -127,21 +126,12 @@ f_zleg(int d, array<float> lo_, array<float> hi_, array<int> t_, array<int> k_) 
                 zlo := math.min(l2, c1)
                 zhi := math.max(c1, o2)
                 kd  := 1
-            else if c1 > o1 and c2 < o2 and c1 < bc
-                // the Breaker: an A-shape the break closed above, up to its wick
-                zlo := c1
-                zhi := math.max(h1, h2)
-                kd  := 2
             if kd >= 0
-                // fresh: no close below it since (a Breaker: since it was broken)
-                bool dead  = false
-                bool armed = kd != 2
+                // fresh up to the break: no close below it
+                bool dead = false
                 if jj < k
                     for m = jj + 1 to k
-                        float cm = f_zc(m, d)
-                        if not armed
-                            armed := cm > zlo
-                        else if cm < zlo
+                        if f_zc(m, d) < zlo
                             dead := true
                             break
                 if not dead
@@ -149,108 +139,87 @@ f_zleg(int d, array<float> lo_, array<float> hi_, array<int> t_, array<int> k_) 
                     array.push(hi_, zhi)
                     array.push(t_, array.get(q2t, jj - 1))
                     array.push(k_, kd)
+        // the Breaker (user, 2026-11-11): only the level of the structure line this break broke - the candle
+        // whose high is that line, from its body top (the A-shape's bullish close) up to that high
+        if not na(lvl)
+            float lf  = d * lvl
+            int   jb  = -1
+            for m = k - 1 to math.max(1, k - zb_scan)
+                if math.abs(f_zh(m, d) - lf) <= syminfo.mintick * 2
+                    jb := m
+                    break
+            if jb >= 1
+                bool bu = f_zc(jb, d) > f_zo(jb, d)
+                bool pu = f_zc(jb - 1, d) > f_zo(jb - 1, d)
+                array.push(lo_, bu ? f_zc(jb, d) : pu ? f_zc(jb - 1, d) : f_zo(jb, d))
+                array.push(hi_, f_zh(jb, d))
+                array.push(t_, array.get(q2t, bu or not pu ? jb : jb - 1))
+                array.push(k_, 2)
     st0
 
-// The opposite zone (flipped prices: a sell zone above): the closest fresh level past the liquidity above the
-// breaking candle. Returns [lo, hi, time, kind, liquidity, its time, its kind (0 swing, 1 single candle, 2 the
-// breaking candle's high)].
-f_zopp(int d, int scan) =>
-    int   nq  = array.size(q2t)
-    int   k   = nq - 1
-    float liq = na
-    int   lqt = na
-    int   lqk = 0
+// the index of the H4 candle that opened at time t (-1: not in the arrays any more)
+f_zix(int t) =>
+    int j = array.size(q2t) - 1
+    while j >= 0 and array.get(q2t, j) > t
+        j -= 1
+    j >= 0 and array.get(q2t, j) == t ? j : -1
+
+// The opposite zone, in the range of an earlier break R (at candle kr, direction d, its line lvl; flipped
+// by d: its POI below, its liquidity lows above it). k = the candle breaking now (the other way).
+// Liquidity: formed AFTER R's breakout candle (a swing low, or a bullish candle's low wick in the first N
+// candles after it), untaken (no wick below it before candle k; candle k: no close below it), not inside a
+// key level; the newest such. POI: R's key level closest below it that is fresh (no wick into it since R).
+// Returns [lo, hi, time, kind, liquidity, its time, its kind (1 swing, 3 single candle)].
+f_zopp(int d, int kr, float lvl, int k) =>
     float rlo = na
     float rhi = na
     int   rt  = na
     int   rk  = -1
-    if k >= 3
-        // liquidity: the CLOSEST swing high or single candle (the high wick of a bearish candle) above the breaking
-        // candle's close that is still untaken: no candle BEFORE the break has gone above it, not even with a wick
-        // (a past wick through it took it), and the breaking candle has not CLOSED above it (its wick alone does
-        // not take it); the closer one wins (user, 2026-11-11); none: the breaking candle's high
-        float hmax  = f_zc(k, d)     // the breaking candle's close, then the highest wick after candle j
-        float sc    = na
-        int   sct   = na
-        int   stop_ = math.max(1, k - scan)
-        int   j     = k - 1
-        while j >= stop_
-            float hj = f_zh(j, d)
-            if hj > hmax
-                if hj > f_zh(j - 1, d) and hj > f_zh(j + 1, d)
-                    if na(liq) or hj < liq
-                        liq := hj
+    float liq = na
+    int   lqt = na
+    int   lqk = 0
+    if kr >= 2 and kr < k - 1
+        array<float> m_lo = array.new<float>()
+        array<float> m_hi = array.new<float>()
+        array<int>   m_t  = array.new<int>()
+        array<int>   m_k  = array.new<int>()
+        f_zleg(d, kr, lvl, m_lo, m_hi, m_t, m_k)
+        int nl = array.size(m_lo)
+        if nl > 0
+            // smn: the lowest low from candle i to k - 1, then candle k's close (index i - kr)
+            array<float> smn = array.new<float>(k - kr + 1, na)
+            array.set(smn, k - kr, f_zc(k, d))
+            for i = k - 1 to kr + 1
+                array.set(smn, i - kr, math.min(f_zl(i, d), array.get(smn, i - kr + 1)))
+            float aft = array.get(smn, 1)
+            array<bool> ok = array.new<bool>(nl, false)
+            for i = 0 to nl - 1
+                array.set(ok, i, aft > array.get(m_hi, i))
+            for j = k - 1 to kr + 1
+                float lj  = f_zl(j, d)
+                bool  one = j <= kr + zb_scn and f_zc(j, d) > f_zo(j, d)
+                bool  swg = lj < f_zl(j - 1, d) and lj < f_zl(j + 1, d)
+                if (one or swg) and array.get(smn, j + 1 - kr) >= lj
+                    float bh  = na
+                    int   bi  = -1
+                    bool  ins = false
+                    for i = 0 to nl - 1
+                        if array.get(ok, i)
+                            float hi_i = array.get(m_hi, i)
+                            if lj >= array.get(m_lo, i) and lj <= hi_i
+                                ins := true
+                            else if hi_i < lj and (na(bh) or hi_i > bh)
+                                bh := hi_i
+                                bi := i
+                    if not ins and bi >= 0
+                        rlo := array.get(m_lo, bi)
+                        rhi := array.get(m_hi, bi)
+                        rt  := array.get(m_t, bi)
+                        rk  := array.get(m_k, bi)
+                        liq := lj
                         lqt := array.get(q2t, j)
-                        lqk := 0
-                else if f_zc(j, d) < f_zo(j, d) and (na(sc) or hj < sc)
-                    sc  := hj
-                    sct := array.get(q2t, j)
-            hmax := math.max(hmax, f_zh(j, d))
-            j -= 1
-        if not na(sc) and (na(liq) or sc < liq)
-            liq := sc
-            lqt := sct
-            lqk := 1
-        if na(liq)
-            liq := f_zh(k, d)
-            lqt := array.get(q2t, k)
-            lqk := 2
-        // FRESH = not tapped into (user, 2026-11-11): no candle before the break has reached the level, not even with
-        // a wick; the breaking candle only by a close (the same as the liquidity)
-        float wmax = f_zc(k, d)     // after the pair: the breaking candle's close, then the highest wick
-        // the highest / lowest close from candle m to the breaking candle, once (index m - b0): the Breaker
-        // check reads them instead of walking the later candles again for every V-shape
-        int b0 = math.max(1, k - scan)
-        array<float> sfx = array.new<float>(k - b0 + 2, na)
-        array<float> sfn = array.new<float>(k - b0 + 2, na)
-        for m = k to b0
-            float cm = f_zc(m, d)
-            // sfx: the highest wick from candle m on (the breaking candle: its close)
-            array.set(sfx, m - b0, m < k ? math.max(f_zh(m, d), array.get(sfx, m - b0 + 1)) : cm)
-            array.set(sfn, m - b0, m < k ? math.min(cm, array.get(sfn, m - b0 + 1)) : cm)
-        for jj = k - 1 to math.max(1, k - scan)
-            float o1 = f_zo(jj - 1, d)
-            float c1 = f_zc(jj - 1, d)
-            float h1 = f_zh(jj - 1, d)
-            float l1 = f_zl(jj - 1, d)
-            float o2 = f_zo(jj, d)
-            float c2 = f_zc(jj, d)
-            float h2 = f_zh(jj, d)
-            float l2 = f_zl(jj, d)
-            float zl_ = na
-            float zh_ = na
-            int   kd  = -1
-            if c1 > o1 and c2 < o2
-                // A-shape: the bullish candle's close, up to the higher wick
-                if c1 > liq and wmax < c1
-                    zl_ := c1
-                    zh_ := math.max(h1, h2)
-                    kd  := 0
-            else if c1 < o1 and c2 < o2
-                // OC: the first close / second open, up to the second candle's wick
-                if math.min(c1, o2) > liq and wmax < math.min(c1, o2)
-                    zl_ := math.min(c1, o2)
-                    zh_ := math.max(h2, c1)
-                    kd  := 1
-            else if c1 < o1 and c2 > o2
-                // the Breaker: a V-shape price later closed below, and has not closed back above since
-                float vlo = math.min(l1, l2)
-                // (only if it would be closer than the zone found so far, and some later close went below it)
-                if vlo > liq and (na(rlo) or vlo < rlo) and array.get(sfn, jj + 1 - b0) < vlo
-                    int m = jj + 1
-                    while f_zc(m, d) >= vlo
-                        m += 1
-                    // broken at candle m; fresh if no candle after it has come back up to it (a wick too)
-                    if m >= k or array.get(sfx, m + 1 - b0) < vlo
-                        zl_ := math.min(l1, l2)
-                        zh_ := c1
-                        kd  := 2
-            if kd >= 0 and (na(rlo) or zl_ < rlo)
-                rlo := zl_
-                rhi := zh_
-                rt  := array.get(q2t, jj - 1)
-                rk  := kd
-            wmax := math.max(wmax, h2)
+                        lqk := swg ? 1 : 3
+                        break
     [rlo, rhi, rt, rk, liq, lqt, lqk]
 
 // ── The two zones: 0 the POI in the leg, 1 the opposite zone (with their liquidity lines) ──
@@ -276,6 +245,10 @@ var int   zg_st  = na      // the time the leg before the break starts (its swin
 var float zg_lq  = na
 var int   zg_lqt = na
 var int   zg_pi  = -1
+// the breaks so far (the last 8): direction, the breaking candle's time, the level it broke
+var array<int>   bh_d = array.new<int>()
+var array<int>   bh_t = array.new<int>()
+var array<float> bh_l = array.new<float>()
 var float zb_sz  = na
 var int   zb_na  = 0
 var array<int> dg_z = array.new<int>(2, 0)   // POIs marked in the leg, opposite zones
@@ -382,8 +355,9 @@ if x2_new
                 array.set(zv_ok, i, false)
 
 // a Bias Pointer alert: the old zones go, waiting retest orders are cancelled, the leg's levels and the
-// opposite zone are found (the leg's POI waits for liquidity)
-int zb_d = array.get(zb_ev, 0)
+// opposite zone are found (the leg's POI is marked on the next candle, from its liquidity)
+int   zb_d = array.get(zb_ev, 0)
+float zb_l = array.get(zb_lv, 0)
 array.set(zb_ev, 0, 0)
 if zb_d != 0
     zb_na += 1
@@ -402,6 +376,7 @@ if zb_d != 0
             array.set(y_cx, y, array.get(y_cx, y) + 1)
             if y == SHOWN
                 f_ddel(q % 2)
+    int k_ = array.size(q2t) - 1
     // the leg's levels (real prices)
     array.clear(zv_lo)
     array.clear(zv_hi)
@@ -412,7 +387,7 @@ if zb_d != 0
     array<float> m_hi = array.new<float>()
     array<int>   m_t  = array.new<int>()
     array<int>   m_k  = array.new<int>()
-    zg_st := f_zleg(zb_d, m_lo, m_hi, m_t, m_k)
+    zg_st := f_zleg(zb_d, k_, zb_l, m_lo, m_hi, m_t, m_k)
     int nm_ = array.size(m_lo)
     if nm_ > 0
         for i = 0 to nm_ - 1
@@ -422,27 +397,59 @@ if zb_d != 0
             array.push(zv_k, array.get(m_k, i))
             array.push(zv_ok, true)
     zg_d   := zb_d
-    zg_bt  := array.get(q2t, array.size(q2t) - 1)
+    zg_bt  := array.get(q2t, k_)
     zg_lq  := na
     zg_lqt := na
     zg_pi  := -1
-    // the opposite zone and its liquidity
-    [o_lo, o_hi, o_t, o_k, o_lq, o_lqt, o_lqk] = f_zopp(zb_d, zb_scan)
-    if not na(o_lq)
-        f_zliq(1, zb_d * o_lq, o_lqt, (o_lqk == 0 ? (zb_d > 0 ? "swing high" : "swing low") : o_lqk == 1 ? "single candle" : "breakout candle's " + (zb_d > 0 ? "high" : "low")) + " liquidity (opposite)"
-             + (na(o_lo) ? ": no fresh level beyond it in the last " + str.tostring(zb_scan) + " H4 candles" : ""))
-    if not na(o_lo)
-        array.set(dg_z, 1, array.get(dg_z, 1) + 1)
-        f_zset(1, zb_d > 0 ? o_lo : -o_hi, zb_d > 0 ? o_hi : -o_lo, o_t, -zb_d, (zb_d > 0 ? "SELL · opposite · " : "BUY · opposite · ") + f_kn(o_k, zb_d < 0))
+    // the opposite zone: in the range of the last break the other way (none there: the one before it ...)
+    int nh_ = array.size(bh_d)
+    if nh_ > 0
+        for h = nh_ - 1 to 0
+            if array.get(bh_d, h) == -zb_d
+                int kr = f_zix(array.get(bh_t, h))
+                if kr >= 0 and kr >= k_ - zb_scan
+                    [o_lo, o_hi, o_t, o_k, o_lq, o_lqt, o_lqk] = f_zopp(-zb_d, kr, array.get(bh_l, h), k_)
+                    if not na(o_lo)
+                        int dr = -zb_d
+                        f_zliq(1, dr * o_lq, o_lqt, (o_lqk == 1 ? (dr > 0 ? "swing low" : "swing high") : "single candle") + " liquidity (opposite, after the "
+                             + str.format_time(array.get(bh_t, h), "dd MMM HH:mm", syminfo.timezone) + " break)")
+                        array.set(dg_z, 1, array.get(dg_z, 1) + 1)
+                        f_zset(1, dr > 0 ? o_lo : -o_hi, dr > 0 ? o_hi : -o_lo, o_t, dr, (dr > 0 ? "BUY · opposite · " : "SELL · opposite · ") + f_kn(o_k, dr > 0))
+                        break
+    // this break joins the list
+    array.push(bh_d, zb_d)
+    array.push(bh_t, array.get(q2t, k_))
+    array.push(bh_l, zb_l)
+    if array.size(bh_d) > 8
+        array.shift(bh_d)
+        array.shift(bh_t)
+        array.shift(bh_l)
 
-// The leg's liquidity and its POI (user, 2026-11-11; flipped prices: buys, lows). Liquidity:
-//   · on the LEFT (the leg before the break, up to the breaking candle): a single candle (the low wick of a
-//     bullish candle) or a swing low;
-//   · just after the break (the first zb_scn candles): a single candle too;
-//   · further RIGHT: only a swing low = engineered liquidity (a single candle there is not).
-// The POI = the alive level of the leg closest to price that has liquidity before it (above it); its
-// liquidity = the one closest to it. When a POI is closed through, the next level with liquidity before it
-// becomes the POI, by the same rule.
+// The leg's liquidity and its POI (user, 2026-11-11; flipped prices: buys, lows), every H4 candle:
+//   · after the break: the NEWEST liquidity (a swing low, or a bullish candle's low wick in the first
+//     zb_scn candles after the break): it moves each time a new one forms;
+//   · none yet: the LAST bullish candle's low wick of the leg (the breaking candle included) that no later
+//     candle up to the break went below.
+// A wick inside an alive key level is not liquidity (it already tapped it). The POI = the alive key level
+// of the leg closest below the liquidity. A POI closed through goes; the next one below the liquidity follows.
+// the alive leg level closest below v (flipped), and whether v sits inside one
+f_zbelow(float v) =>
+    int   bi  = -1
+    float bh  = na
+    bool  ins = false
+    int   nv  = array.size(zv_lo)
+    if nv > 0
+        for i = 0 to nv - 1
+            if array.get(zv_ok, i)
+                float mh = zg_d > 0 ? array.get(zv_hi, i) : -array.get(zv_lo, i)
+                float ml = zg_d > 0 ? array.get(zv_lo, i) : -array.get(zv_hi, i)
+                if v >= ml and v <= mh
+                    ins := true
+                else if mh < v and (na(bh) or mh > bh)
+                    bh := mh
+                    bi := i
+    [bi, ins]
+
 if x2_new and zg_d != 0 and not na(zg_st)
     int nq = array.size(q2t)
     int kb = nq - 1
@@ -452,60 +459,45 @@ if x2_new and zg_d != 0 and not na(zg_st)
     while js > 0 and array.get(q2t, js) > zg_st
         js -= 1
     if array.get(q2t, kb) == zg_bt
-        array<float> cl = array.new<float>()
-        array<int>   ct = array.new<int>()
-        array<int>   ck = array.new<int>()     // 0 single candle · 1 swing (left) · 2 engineered (swing on the right)
-        // liquidity is UNTAKEN (user, 2026-11-11: "an old level that price had broken through" is not liquidity):
-        // a level in the leg counts only if no later candle up to the break has gone below it (a wick too);
-        // smn = the lowest low from candle i to the breaking candle
-        int js0 = math.max(1, js)
-        array<float> smn = array.new<float>(math.max(1, kb - js0 + 2), na)
-        if kb >= js0
-            for i = kb to js0
-                float li = f_zl(i, zg_d)
-                array.set(smn, i - js0, i < kb ? math.min(li, array.get(smn, i - js0 + 1)) : li)
-        for j = js0 to nq - 1
-            float lj  = f_zl(j, zg_d)
-            bool  one = j <= kb + zb_scn and f_zc(j, zg_d) > f_zo(j, zg_d)
-            bool  swg = j < nq - 1 and lj < f_zl(j - 1, zg_d) and lj < f_zl(j + 1, zg_d)
-            bool  unt = j >= kb or array.get(smn, j + 1 - js0) >= lj
-            if (one or swg) and unt
-                array.push(cl, lj)
-                array.push(ct, array.get(q2t, j))
-                array.push(ck, swg ? (j > kb ? 2 : 1) : j > kb ? 3 : 0)
         int   best = -1
-        float bh   = na
         float lq   = na
         int   lqt  = na
         int   lqk  = 0
-        int   nv   = array.size(zv_lo)
-        int   nc   = array.size(cl)
-        if nv > 0 and nc > 0
-            for i = 0 to nv - 1
-                if array.get(zv_ok, i)
-                    float mh = zg_d > 0 ? array.get(zv_hi, i) : -array.get(zv_lo, i)
-                    if na(bh) or mh > bh
-                        // the liquidity closest before this level
-                        float cq  = na
-                        int   cqi = -1
-                        for c_ = 0 to nc - 1
-                            float v = array.get(cl, c_)
-                            if v > mh and (na(cq) or v < cq)
-                                cq  := v
-                                cqi := c_
-                        if cqi >= 0
-                            best := i
-                            bh   := mh
-                            lq   := cq
-                            lqt  := array.get(ct, cqi)
-                            lqk  := array.get(ck, cqi)
+        // after the break: the newest liquidity
+        if nq - 1 > kb
+            for j = nq - 1 to kb + 1
+                float lj  = f_zl(j, zg_d)
+                bool  one = j <= kb + zb_scn and f_zc(j, zg_d) > f_zo(j, zg_d)
+                bool  swg = j < nq - 1 and lj < f_zl(j - 1, zg_d) and lj < f_zl(j + 1, zg_d)
+                if one or swg
+                    [bi, ins] = f_zbelow(lj)
+                    if not ins and bi >= 0
+                        best := bi
+                        lq   := lj
+                        lqt  := array.get(q2t, j)
+                        lqk  := swg ? 2 : 3
+                        break
+        // none yet: the last bullish candle of the leg, untaken up to the break
+        if na(lq) and kb >= math.max(1, js)
+            float mna = na
+            for j = kb to math.max(1, js)
+                float lj = f_zl(j, zg_d)
+                if f_zc(j, zg_d) > f_zo(j, zg_d) and (na(mna) or mna >= lj)
+                    [bi, ins] = f_zbelow(lj)
+                    if not ins and bi >= 0
+                        best := bi
+                        lq   := lj
+                        lqt  := array.get(q2t, j)
+                        lqk  := 0
+                        break
+                mna := na(mna) ? lj : math.min(mna, lj)
         if not na(lq)
             float lqr = zg_d * lq
             // (na(...) first: a comparison with na is never true)
             if na(zg_lq) or na(zg_lqt) or lqr != zg_lq or lqt != zg_lqt
                 zg_lq  := lqr
                 zg_lqt := lqt
-                f_zliq(0, lqr, lqt, lqk == 0 ? "single candle liquidity" : lqk == 3 ? "single candle liquidity (just after the break)" : lqk == 1 ? (zg_d > 0 ? "swing low" : "swing high") + " liquidity" : "engineered liquidity (" + (zg_d > 0 ? "swing low" : "swing high") + " after the break)")
+                f_zliq(0, lqr, lqt, lqk == 0 ? "single candle liquidity (the leg, before the break)" : lqk == 3 ? "single candle liquidity (after the break)" : (zg_d > 0 ? "swing low" : "swing high") + " liquidity (after the break)")
         else if not na(zg_lq)
             zg_lq  := na
             zg_lqt := na

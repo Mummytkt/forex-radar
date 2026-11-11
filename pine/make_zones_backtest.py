@@ -28,8 +28,10 @@ rep('bool al_ok = T1 == "D" and T2 == "240" and timeframe.period == "240"',
 rep('f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>\n    if on\n',
     '// every alert (any kind) starts the zones backtest: its direction, read at the end of the candle\n'
     'var array<int> zb_ev = array.from(0)\n'
+    'var array<float> zb_lv = array.from(0.0)   // the level it broke (its structure line)\n'
     'f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>\n    if on\n'
-    '        array.set(zb_ev, 0, dir)\n')
+    '        array.set(zb_ev, 0, dir)\n'
+    '        array.set(zb_lv, 0, lvl)\n')
 # no tables in the backtest copy (user, 2026-11-11: lighter): their settings, the tables and their drawing go
 L = s.split('\n')
 TBL_IN = ('bool   sk_on ', 'string sk_pos ', 'int    sk_n ', 'color  sk_bg ', 'color  sk_tx ', 'bool   tb_on ', 'string tb_pos ',
