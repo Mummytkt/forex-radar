@@ -1790,6 +1790,15 @@ f_zopp(int d, int scan) =>
             lqt := na(sc) ? array.get(q2t, k) : sct
             lqk := na(sc) ? 2 : 1
         float cmax = f_zc(k, d)     // the highest close after the pair
+        // the highest / lowest close from candle m to the breaking candle, once (index m - b0): the Breaker
+        // check reads them instead of walking the later candles again for every V-shape
+        int b0 = math.max(1, k - scan)
+        array<float> sfx = array.new<float>(k - b0 + 2, na)
+        array<float> sfn = array.new<float>(k - b0 + 2, na)
+        for m = k to b0
+            float cm = f_zc(m, d)
+            array.set(sfx, m - b0, m < k ? math.max(cm, array.get(sfx, m - b0 + 1)) : cm)
+            array.set(sfn, m - b0, m < k ? math.min(cm, array.get(sfn, m - b0 + 1)) : cm)
         for jj = k - 1 to math.max(1, k - scan)
             float o1 = f_zo(jj - 1, d)
             float c1 = f_zc(jj - 1, d)
@@ -1816,17 +1825,14 @@ f_zopp(int d, int scan) =>
                     kd  := 1
             else if c1 < o1 and c2 > o2
                 // the Breaker: a V-shape price later closed below, and has not closed back above since
-                if math.min(l1, l2) > liq
-                    bool broke = false
-                    bool dead  = false
-                    for m = jj + 1 to k
-                        float cm = f_zc(m, d)
-                        if not broke
-                            broke := cm < math.min(l1, l2)
-                        else if cm > c1
-                            dead := true
-                            break
-                    if broke and not dead
+                float vlo = math.min(l1, l2)
+                // (only if it would be closer than the zone found so far, and some later close went below it)
+                if vlo > liq and (na(rlo) or vlo < rlo) and array.get(sfn, jj + 1 - b0) < vlo
+                    int m = jj + 1
+                    while f_zc(m, d) >= vlo
+                        m += 1
+                    // broken at candle m; alive if no close above it from there on
+                    if array.get(sfx, m - b0) <= c1
                         zl_ := math.min(l1, l2)
                         zh_ := c1
                         kd  := 2
