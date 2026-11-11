@@ -315,6 +315,7 @@ var array<label> d_lb  = array.new<label>(2)
 var array<line>  zt_l  = array.new<line>()
 var array<label> zt_b  = array.new<label>()
 var array<label> zm_b  = array.new<label>()        // the confirmation marks
+var array<label> zx_m  = array.new<label>()        // the x where a zone was closed through (the last 30)
 f_ddel(int side) =>
     for k = 0 to 2
         line.delete(array.get(d_ln, side * 3 + k))
@@ -341,6 +342,14 @@ if x2_new
                 zg_pi := -1
             else
                 f_zliq(1, na, na, "")
+            // a small x where the close went through, so a cleared zone can still be checked
+            if zb_shz
+                bool zbuy = array.get(zn_dir, z) > 0
+                array.push(zx_m, label.new(time, x2c, "✕", xloc = xloc.bar_time, style = label.style_none, textcolor = color.new(zbuy ? zb_bc : zb_scc, 20), size = size.small,
+                     tooltip = (zbuy ? "BUY " : "SELL ") + (z == 0 ? "POI in the leg" : "opposite zone") + " " + str.tostring(array.get(zn_lo, z), format.mintick) + " – " + str.tostring(array.get(zn_hi, z), format.mintick)
+                     + " cleared: an H4 candle closed " + (zbuy ? "below" : "above") + " it at " + str.tostring(x2c, format.mintick)))
+                while array.size(zx_m) > 30
+                    label.delete(array.shift(zx_m))
     int nv_ = array.size(zv_lo)
     if nv_ > 0
         for i = 0 to nv_ - 1
@@ -395,7 +404,8 @@ if zb_d != 0
     // the opposite zone and its liquidity
     [o_lo, o_hi, o_t, o_k, o_lq, o_lqt, o_lqk] = f_zopp(zb_d, zb_scan)
     if not na(o_lq)
-        f_zliq(1, zb_d * o_lq, o_lqt, (o_lqk == 0 ? (zb_d > 0 ? "swing high" : "swing low") : o_lqk == 1 ? "single candle" : "breakout candle's " + (zb_d > 0 ? "high" : "low")) + " liquidity (opposite)")
+        f_zliq(1, zb_d * o_lq, o_lqt, (o_lqk == 0 ? (zb_d > 0 ? "swing high" : "swing low") : o_lqk == 1 ? "single candle" : "breakout candle's " + (zb_d > 0 ? "high" : "low")) + " liquidity (opposite)"
+             + (na(o_lo) ? ": no fresh level beyond it in the last " + str.tostring(zb_scan) + " H4 candles" : ""))
     if not na(o_lo)
         array.set(dg_z, 1, array.get(dg_z, 1) + 1)
         f_zset(1, zb_d > 0 ? o_lo : -o_hi, zb_d > 0 ? o_hi : -o_lo, o_t, -zb_d, (zb_d > 0 ? "SELL · opposite · " : "BUY · opposite · ") + f_kn(o_k, zb_d < 0))
