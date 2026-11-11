@@ -1614,7 +1614,7 @@ if barstate.islast
 //   · the opposite zone (SELL above): past the closest liquidity above the breaking candle (an untaken
 //     swing high; none: a single candle liquidity, the high wick of a bearish candle), the closest
 //     fresh key level (A-shape, OC, Breaker = a broken V-shape), wicks in.
-// The liquidity of each is drawn (yellow). A zone ends when an H4 candle CLOSES through it, or at the next
+// The liquidity of each is drawn (yellow). A zone ends (clears off) when an H4 candle CLOSES through it, or at the next
 // alert. Inside a zone a confirmation gives the trade: Instant (at its close) or a Retest of its level
 // (CISD line, OC level) that waits until the
 // next alert. SL behind the pattern's low (sells: high). TP 1:2 or 1:3. One trade per zone per setup.
@@ -1852,7 +1852,7 @@ var array<bool>  zn_ok  = array.new<bool>(2, false)
 var array<box>   zn_bx  = array.new<box>(2)
 var array<line>  zn_ll  = array.new<line>(2)
 var array<label> zn_lb  = array.new<label>(2)
-var array<box>   zx_bx  = array.new<box>()       // every box since the alert (a POI closed through stays, dotted)
+var array<box>   zx_bx  = array.new<box>()       // every box since the alert
 // the levels of the current leg (real prices) and its liquidity
 var array<float> zv_lo  = array.new<float>()
 var array<float> zv_hi  = array.new<float>()
@@ -1935,14 +1935,14 @@ if x2_new
         zb_sz := s_ / m_
     for z = 0 to 1
         if array.get(zn_ok, z) and (array.get(zn_dir, z) > 0 ? x2c < array.get(zn_lo, z) : x2c > array.get(zn_hi, z))
+            // closed through: the zone clears off the chart (the opposite zone with its liquidity line)
             array.set(zn_ok, z, false)
-            box b = array.get(zn_bx, z)
-            if not na(b)
-                box.set_right(b, time)
-                box.set_border_style(b, line.style_dotted)
+            box.delete(array.get(zn_bx, z))
             array.set(zn_bx, z, box(na))
             if z == 0
                 zg_pi := -1
+            else
+                f_zliq(1, na, na, "")
     int nv_ = array.size(zv_lo)
     if nv_ > 0
         for i = 0 to nv_ - 1
