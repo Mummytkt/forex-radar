@@ -165,24 +165,26 @@ f_zopp(int d, int scan) =>
     int   rt  = na
     int   rk  = -1
     if k >= 3
-        // liquidity: the closest untaken swing high above the breaking candle; none: the closest untaken
-        // high wick of a bearish candle (single candle liquidity); none: the breaking candle's high
-        float hmax  = f_zh(k, d)
+        // liquidity: the closest swing high above the breaking candle's close that no candle has CLOSED above
+        // since (a wick through it, the breaking candle's too, does not take it - user, 2026-11-11); none: the
+        // closest such high wick of a bearish candle (single candle liquidity); none: the breaking candle's high
+        float hmax  = f_zc(k, d)     // the highest close after candle j
         float sc    = na
         int   sct   = na
         int   stop_ = math.max(1, k - scan)
         int   j     = k - 1
-        while j >= stop_ and na(liq)
+        while j >= stop_
             float hj = f_zh(j, d)
             if hj > hmax
                 if hj > f_zh(j - 1, d) and hj > f_zh(j + 1, d)
-                    liq := hj
-                    lqt := array.get(q2t, j)
-                    lqk := 0
-                else if na(sc) and f_zc(j, d) < f_zo(j, d)
+                    if na(liq) or hj < liq
+                        liq := hj
+                        lqt := array.get(q2t, j)
+                        lqk := 0
+                else if f_zc(j, d) < f_zo(j, d) and (na(sc) or hj < sc)
                     sc  := hj
                     sct := array.get(q2t, j)
-            hmax := math.max(hmax, hj)
+            hmax := math.max(hmax, f_zc(j, d))
             j -= 1
         if na(liq)
             liq := na(sc) ? f_zh(k, d) : sc
