@@ -1901,7 +1901,8 @@ f_zliq(int z, float y, int t, string txt) =>
     array.set(zn_lb, z, label(na))
     if zb_shz and not na(y) and not na(t)
         array.set(zn_ll, z, line.new(t, y, time_close, y, xloc = xloc.bar_time, color = zb_lqc, style = line.style_dotted, width = 2))
-        array.set(zn_lb, z, label.new(t, y, txt, xloc = xloc.bar_time, style = label.style_label_right, color = color.new(color.black, 100), textcolor = zb_lqc, size = size.tiny,
+        // the label sits at the right end of its line and moves with it
+        array.set(zn_lb, z, label.new(time_close, y, txt, xloc = xloc.bar_time, style = label.style_label_left, color = color.new(color.black, 100), textcolor = zb_lqc, size = size.tiny,
              tooltip = txt + " " + str.tostring(y, format.mintick)))
 
 // ── The setups: two slots each (q = setup * 2 + side; side 0 buy, 1 sell) and their results ──
@@ -2117,6 +2118,9 @@ for z = 0 to 1
     line ll = array.get(zn_ll, z)
     if not na(ll)
         line.set_x2(ll, time_close)
+    label lt = array.get(zn_lb, z)
+    if not na(lt)
+        label.set_x(lt, time_close)
 
 // ── Confirmations ────────────────────────────────────────────────────────────
 // The confirmation on its own timeframe's candles: the last COMPLETED one ([1] + lookahead_on) when the chart
