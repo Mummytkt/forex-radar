@@ -1639,6 +1639,8 @@ int    zb_cw   = input.int(20, "CISD: candles allowed from the low to the close 
 int    zb_slb  = input.int(0, "SL buffer (ticks beyond the pattern's low / high)", minval = 0, group = G_ZB)
 float  zb_risk = input.float(1.0, "Risk per trade % (for the return figure)", minval = 0.1, step = 0.1, group = G_ZB)
 int    zb_atr  = input.int(14, "H4 candle size = the average range of the last N H4 candles (a wick this far past a zone still counts)", minval = 1, maxval = 100, group = G_ZB)
+int    zb_scn  = input.int(3, "Single candle liquidity after the break: only in the first N candles after it", minval = 0, maxval = 20, group = G_ZB,
+     tooltip = "A single candle (buys: a bullish candle's low wick; sells: a bearish candle's high wick) counts as liquidity in the leg before the break, or just after the break (this many H4 candles). Further right only a swing counts (engineered liquidity).")
 int    zb_scan = input.int(300, "H4 candles searched for the opposite zone", minval = 30, maxval = 1000, group = G_ZB)
 bool   zb_shz  = input.bool(true, "Show the zones and their liquidity", group = G_ZB)
 bool   zb_mk   = input.bool(true, "Triangles: mark each confirmation inside a zone", group = G_ZB, inline = "mk")
@@ -2030,7 +2032,8 @@ if zb_d != 0
 // The leg's liquidity and its POI (user, 2026-11-11; flipped prices: buys, lows). Liquidity:
 //   · on the LEFT (the leg before the break, up to the breaking candle): a single candle (the low wick of a
 //     bullish candle) or a swing low;
-//   · on the RIGHT (after the break): only a swing low = engineered liquidity (a single candle there is not).
+//   · just after the break (the first zb_scn candles): a single candle too;
+//   · further RIGHT: only a swing low = engineered liquidity (a single candle there is not).
 // The POI = the alive level of the leg closest to price that has liquidity before it (above it); its
 // liquidity = the one closest to it. When a POI is closed through, the next level with liquidity before it
 // becomes the POI, by the same rule.
@@ -2048,12 +2051,12 @@ if x2_new and zg_d != 0 and not na(zg_st)
         array<int>   ck = array.new<int>()     // 0 single candle · 1 swing (left) · 2 engineered (swing on the right)
         for j = math.max(1, js) to nq - 1
             float lj  = f_zl(j, zg_d)
-            bool  one = j <= kb and f_zc(j, zg_d) > f_zo(j, zg_d)
+            bool  one = j <= kb + zb_scn and f_zc(j, zg_d) > f_zo(j, zg_d)
             bool  swg = j < nq - 1 and lj < f_zl(j - 1, zg_d) and lj < f_zl(j + 1, zg_d)
             if one or swg
                 array.push(cl, lj)
                 array.push(ct, array.get(q2t, j))
-                array.push(ck, swg ? (j > kb ? 2 : 1) : 0)
+                array.push(ck, swg ? (j > kb ? 2 : 1) : j > kb ? 3 : 0)
         int   best = -1
         float bh   = na
         float lq   = na
@@ -2086,7 +2089,7 @@ if x2_new and zg_d != 0 and not na(zg_st)
             if na(zg_lq) or na(zg_lqt) or lqr != zg_lq or lqt != zg_lqt
                 zg_lq  := lqr
                 zg_lqt := lqt
-                f_zliq(0, lqr, lqt, lqk == 0 ? "single candle liquidity" : lqk == 1 ? (zg_d > 0 ? "swing low" : "swing high") + " liquidity" : "engineered liquidity (" + (zg_d > 0 ? "swing low" : "swing high") + " after the break)")
+                f_zliq(0, lqr, lqt, lqk == 0 ? "single candle liquidity" : lqk == 3 ? "single candle liquidity (just after the break)" : lqk == 1 ? (zg_d > 0 ? "swing low" : "swing high") + " liquidity" : "engineered liquidity (" + (zg_d > 0 ? "swing low" : "swing high") + " after the break)")
         else if not na(zg_lq)
             zg_lq  := na
             zg_lqt := na
