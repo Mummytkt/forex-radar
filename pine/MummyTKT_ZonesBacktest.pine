@@ -2023,7 +2023,8 @@ if x2_new and zg_d != 0
                 lqk := swg ? 0 : 1
         if not na(lq)
             float lqr = zg_d * lq
-            if lqr != zg_lq or lqt != zg_lqt
+            // (na(...) first: a comparison with na is never true, so the first liquidity after an alert was never drawn)
+            if na(zg_lq) or na(zg_lqt) or lqr != zg_lq or lqt != zg_lqt
                 zg_lq  := lqr
                 zg_lqt := lqt
                 f_zliq(0, lqr, lqt, (lqk == 0 ? (zg_d > 0 ? "swing low" : "swing high") : "single candle") + " liquidity")
