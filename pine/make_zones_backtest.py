@@ -30,10 +30,22 @@ rep('f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string
     'var array<int> zb_ev = array.from(0)\n'
     'f_al(bool on, string ev, string txt, int dir, float lvl, bool with_, string ab) =>\n    if on\n'
     '        array.set(zb_ev, 0, dir)\n')
-# the results table needs a corner: the key and story tables start off (switchable)
-rep('bool   ky_on    = input.bool(true, "Key table"', 'bool   ky_on    = input.bool(false, "Key table"')
-rep('bool   sk_on    = input.bool(true, "Story table"', 'bool   sk_on    = input.bool(false, "Story table"')
-rep('bool   tb_on    = input.bool(true, "Status table"', 'bool   tb_on    = input.bool(false, "Status table"')
+# no tables in the backtest copy (user, 2026-11-11: lighter): their settings, the tables and their drawing go
+L = s.split('\n')
+TBL_IN = ('bool   sk_on ', 'string sk_pos ', 'int    sk_n ', 'color  sk_bg ', 'color  sk_tx ', 'bool   tb_on ', 'string tb_pos ',
+          'color  tb_bg ', 'color  tb_tx ', 'bool   ky_on ', 'string ky_pos ')
+n0 = len(L)
+L = [l for l in L if not l.startswith(TBL_IN)]
+assert n0 - len(L) == len(TBL_IN), n0 - len(L)
+a = L.index('var table sk = table.new(f_tpos(sk_pos), 2, 11, bgcolor = sk_bg, border_width = 1, border_color = color.new(color.gray, 75))')
+b = next(k for k in range(a, len(L)) if L[k].startswith('    table.cell(tb, 1, r, b,'))
+del L[a:b + 1]
+c = L.index('    // the story table and the status table (one table per corner: in the same corner the story goes under the status)')
+L = L[:c]
+s = '\n'.join(L)
+assert 'table.' not in s and 'f_row(' not in s and 'f_key(' not in s, 'a table is left'
+s = s.replace('const string G_ST = "2 · Story notes and tables"', 'const string G_ST = "2 · Story notes"')
+s = s.replace('"Short tags (abbreviations, explained in the key table)"', '"Short tags (abbreviations)"')
 s = s.rstrip('\n') + '\n' + layer
 open(os.path.join(R, 'MummyTKT_ZonesBacktest.pine'), 'w', encoding='utf-8', newline='\n').write(s)
 print('ok', s.count('\n'), 'lines')

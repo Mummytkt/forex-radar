@@ -24,7 +24,7 @@
 indicator("MummyTKT Zones Backtest", overlay = true, behind_chart = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2000)
 
 const string G_PL = "1 · Plan and breaks"
-const string G_ST = "2 · Story notes and tables"
+const string G_ST = "2 · Story notes"
 const string G_T1 = "3 · Top-timeframe lines"
 const string G_T2 = "4 · Story-timeframe lines"
 const string G_BR = "5 · Break lines (cont / pullback)"
@@ -51,15 +51,6 @@ int    st_op    = input.int(90, "opacity %", minval = 0, maxval = 100, group = G
 color  st_tx    = input.color(color.white, "Note text", group = G_ST, inline = "st")
 string st_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_ST, inline = "st")
 color  st_dot   = input.color(#26C6DA, "Note dots", group = G_ST)
-bool   sk_on    = input.bool(false, "Story table", group = G_ST, inline = "sk")
-string sk_pos   = input.string("Bottom right", "", options = ["Top right", "Bottom right", "Top left", "Bottom left", "Middle right", "Middle left"], group = G_ST, inline = "sk")
-int    sk_n     = input.int(3, "Notes in the story table (newest first)", minval = 1, maxval = 10, group = G_ST)
-color  sk_bg    = input.color(color.new(#0E3B43, 10), "Story table background", group = G_ST, inline = "sc")
-color  sk_tx    = input.color(color.white, "text", group = G_ST, inline = "sc")
-bool   tb_on    = input.bool(false, "Status table", group = G_ST, inline = "tb")
-string tb_pos   = input.string("Top right", "", options = ["Top right", "Bottom right", "Top left", "Bottom left"], group = G_ST, inline = "tb")
-color  tb_bg    = input.color(color.new(#0F1120, 10), "Status table background", group = G_ST, inline = "tc")
-color  tb_tx    = input.color(color.white, "text", group = G_ST, inline = "tc")
 
 bool   x_on     = input.bool(true, "External high / low", group = G_T1, inline = "x")
 color  x_col    = input.color(#E0E0E0, "", group = G_T1, inline = "x")
@@ -75,9 +66,7 @@ color  sh_bear  = input.color(#EF5350, "sells half", group = G_T1, inline = "sh"
 int    sh_op    = input.int(5, "opacity %", minval = 0, maxval = 100, group = G_T1, inline = "sh")
 color  lv_tx    = input.color(#E0E0E0, "Line label text", group = G_T1, inline = "lt")
 string lv_sz    = input.string("Small", "size", options = ["Tiny", "Small", "Normal"], group = G_T1, inline = "lt")
-bool   ab_on    = input.bool(true, "Short tags (abbreviations, explained in the key table)", group = G_ST)
-bool   ky_on    = input.bool(false, "Key table", group = G_ST, inline = "ky")
-string ky_pos   = input.string("Bottom left", "", options = ["Top right", "Bottom right", "Top left", "Bottom left", "Middle right", "Middle left"], group = G_ST, inline = "ky")
+bool   ab_on    = input.bool(true, "Short tags (abbreviations)", group = G_ST)
 bool   lv_px    = input.bool(true, "Show prices on line labels", group = G_T1)
 
 bool   pl_on    = input.bool(true, "Pullback line (with the top timeframe)", group = G_T2, inline = "pl")
@@ -1419,15 +1408,6 @@ f_lvl(int t, float y, string txt, color c, string st, int wd) =>
              color = color.new(color.black, 100), textcolor = lv_tx, size = f_sz(lv_sz)))
 f_tpos(string p) =>
     p == "Top right" ? position.top_right : p == "Bottom right" ? position.bottom_right : p == "Top left" ? position.top_left : p == "Middle right" ? position.middle_right : p == "Middle left" ? position.middle_left : position.bottom_left
-var table sk = table.new(f_tpos(sk_pos), 2, 11, bgcolor = sk_bg, border_width = 1, border_color = color.new(color.gray, 75))
-var table ky = table.new(f_tpos(ky_pos), 2, 16, bgcolor = tb_bg, border_width = 1, border_color = color.new(color.gray, 75))
-f_key(int r, string a, string b) =>
-    table.cell(ky, 0, r, a, text_color = tb_tx, text_size = size.tiny, text_halign = text.align_left)
-    table.cell(ky, 1, r, b, text_color = color.gray, text_size = size.tiny, text_halign = text.align_left)
-var table tb = table.new(f_tpos(tb_pos), 2, 20, bgcolor = tb_bg, border_width = 1, border_color = color.new(color.gray, 75))
-f_row(int r, string a, string b) =>
-    table.cell(tb, 0, r, a, text_color = color.gray, text_size = size.small, text_halign = text.align_left)
-    table.cell(tb, 1, r, b, text_color = tb_tx, text_size = size.small, text_halign = text.align_left)
 
 if barstate.islast
     for l in cl
@@ -1551,55 +1531,6 @@ if barstate.islast
                     array.push(cb, label.new(bar_index + 3, (zh + zl) / 2, N2 + " " + ks + (lv_px ? "  " + str.tostring(zl, format.mintick) + " – " + str.tostring(zh, format.mintick) : ""), style = label.style_label_left, color = color.new(color.black, 100), textcolor = lv_tx, size = f_sz(lv_sz)))
                 else
                     f_lvl(array.get(mz_t, q), zl, N2 + " " + ks, zc, rz_sty, rz_w)
-    // the story table and the status table (one table per corner: in the same corner the story goes under the status)
-    bool  sk_same = sk_pos == tb_pos
-    table st_tb   = sk_same ? tb : sk
-    int   so      = sk_same and tb_on ? 8 : 0
-    table.clear(sk, 0, 0, 1, 10)
-    table.clear(tb, 0, 0, 1, 19)
-    table.clear(ky, 0, 0, 1, 15)
-    if ky_on and ab_on and chart_ok and D != 0
-        f_key(0, "KEY", "")
-        f_key(1, A1 + "." + BW + " XH / XL", N1 + " " + DW + " external high / low (f = still forming); after the pullback: the " + N1 + " range")
-        f_key(2, A1 + ".EQ", N1 + " range 0.5 (premium above / discount below)")
-        f_key(3, A1 + ".BO", N1 + " breakout")
-        f_key(4, "PL / " + N2 + ".PL", "pullback line: the " + N2 + " " + LO + " that broke the last " + HI + " (b = the broken " + HI + " itself)")
-        f_key(5, N2 + ".C", N2 + " continuation (al = in alignment, pb = in the pullback, in = against the " + N1 + " inside the " + N2 + " range)")
-        f_key(6, "PB / PB.in", "pullback break: " + N2 + " close beyond the pullback line (in = inside the " + N2 + " range)")
-        f_key(7, A1 + ".PC", N1 + " pullback confirmed")
-        f_key(8, N2 + ".P · BIA", N2 + " pullback: back in alignment with the " + N1)
-        f_key(9, N2 + ".R" + HC + " / " + N2 + ".R" + LC, N2 + " range " + HI + " / " + LO + " (f = forming, ? = the range " + LO + " if the pullback line breaks)")
-        f_key(10, N2 + ".R" + HC + "B · " + A1 + ".C", N2 + " range " + HI + " broken: the " + N1 + " continues")
-        f_key(11, N2 + ".R" + LC + "B", N2 + " range " + LO + " broken: " + N2 + " " + AW + " again")
-        f_key(12, N2 + "." + LC + " f", N2 + " " + LO + " still forming")
-        f_key(13, "FVG / OC / V / A", "reaction zones (FVG, OC, V-shape, A-shape; + = merged)")
-        f_key(14, "!", "alert point")
-        f_key(15, N2 + ".P+C", N2 + " pullback and continuation closed by one candle: one alert")
-    if sk_on and chart_ok
-        table.cell(st_tb, 0, so, "STORY", text_color = sk_tx, text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
-        table.cell(st_tb, 1, so, PLAN, text_color = color.new(sk_tx, 40), text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
-        int nh = array.size(st_h)
-        if nh == 0
-            table.cell(st_tb, 1, so + 1, "Waiting for a " + N1 + " breakout", text_color = sk_tx, text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
-        else
-            for j = 0 to math.min(sk_n, nh) - 1
-                int ix = nh - 1 - j
-                table.cell(st_tb, 0, so + j + 1, str.format_time(array.get(st_ht, ix), "dd MMM HH:mm"), text_color = color.new(sk_tx, 40), text_size = size.tiny, text_halign = text.align_left, bgcolor = sk_bg)
-                table.cell(st_tb, 1, so + j + 1, array.get(st_h, ix), text_color = j == 0 ? sk_tx : color.new(sk_tx, 35), text_size = size.small, text_halign = text.align_left, bgcolor = sk_bg)
-    if tb_on
-        if not chart_ok
-            f_row(0, PLAN, "On this chart: the " + N1 + " external high / low. Put the chart on " + N2 + " or lower for the story")
-        else
-            string phs = sph == 0 ? "waiting for a " + N1 + " breakout" : sph == 1 ? N1 + " " + DW + " breakout: " + N2 + " with it; a close beyond the pullback line = the " + N1 + " pullback" : sph == 2 ? N1 + " pullback: " + N2 + " " + AW + "; a close beyond its last " + HI + " = " + N2 + " pullback" : "inside the " + N2 + " range: beyond its " + HI + " the " + N1 + " " + DW + " story continues; a close beyond its " + LO + " = " + N2 + " " + AW + " cont"
-            f_row(0, "Plan", PLAN + " · breaks: " + N1 + " " + (t1_wick ? "wick" : "body close") + ", " + N2 + " " + (t2_wick ? "wick" : "body close"))
-            f_row(1, N1, D > 0 ? "bullish" : D < 0 ? "bearish" : "—")
-            f_row(2, "Story", phs)
-            if sph >= 1 and not na(XH) and not na(XL)
-                f_row(3, N1 + " range", str.tostring(XL, format.mintick) + " – " + str.tostring(XH, format.mintick))
-            if sph >= 1 and not na(tk_ln)
-                f_row(4, sph == 2 ? N2 + " pullback line" : "Pullback line", str.tostring(f_lw(tk_lt, tk_ln, tk_bk, w < 0), format.mintick))
-            if sph >= 2 and not na(rg_hi)
-                f_row(5, N2 + " range", (not na(rg_lo) ? str.tostring(rg_lo, format.mintick) + (rg_lf ? " (forming)" : "") + " – " : HI + " ") + str.tostring(rg_hi, format.mintick))
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 9 · ZONES BACKTEST (user's method, 2026-11-10; pictures Documents/Zones_Picture_4.png and _6.png)
@@ -1624,7 +1555,7 @@ if barstate.islast
 const string G_ZB = "9 · Zones backtest"
 int    zb_fy   = input.int(2020, "Count trades from: year", minval = 1990, maxval = 2100, group = G_ZB, inline = "fr")
 int    zb_fm   = input.int(1, "month", minval = 1, maxval = 12, group = G_ZB, inline = "fr",
-     tooltip = "Only confirmations from the 1st of this month on are traded and counted. Each setup can only start where TradingView has its M5 / M15 / H1 candles: see 'Data from' in the table.")
+     tooltip = "Only confirmations from the 1st of this month on are traded and counted. A confirmation can only fire where TradingView has its candles: put the chart on M5 / M15 / H1 (or use Bar Replay there) for the older years.")
 int    zb_ty   = input.int(0, "Until: year (0 = today)", minval = 0, maxval = 2100, group = G_ZB, inline = "to")
 int    zb_tm   = input.int(12, "month (to its end)", minval = 1, maxval = 12, group = G_ZB, inline = "to")
 int    zb_from = timestamp(zb_fy, zb_fm, 1, 0, 0)
@@ -1633,7 +1564,7 @@ string zb_tpo  = input.string("1:2", "Take profit", options = ["1:2", "1:3"], gr
 string zb_side = input.string("Both", "Zones traded", options = ["Both", "The POI in the leg only", "The opposite zone only"], group = G_ZB)
 string zb_conf = input.string("H1 OCTGD", "Confirmation", options = ["M5 CISD", "M15 CISD", "H1 OCTGD", "All"], group = G_ZB, inline = "sh")
 string zb_ent  = input.string("Instant", "entry", options = ["Instant", "Retest", "Both"], group = G_ZB, inline = "sh",
-     tooltip = "Instant: at the confirmation's close. Retest: CISD → the CISD line · OCTGD → the OC level. A retest order waits until the next breakout alert, then it is cancelled. The table shows what you pick (All / Both to compare). The trades are drawn on the chart when one confirmation and one entry are picked.")
+     tooltip = "Instant: at the confirmation's close. Retest: CISD → the CISD line · OCTGD → the OC level. A retest order waits until the next breakout alert, then it is cancelled. The trades (and their result on the POI) are drawn when one confirmation and one entry are picked.")
 int    zb_ow   = input.int(10, "OCTGD: candles allowed from C2 to the close through the level", minval = 1, maxval = 50, group = G_ZB)
 int    zb_cw   = input.int(20, "CISD: candles allowed from the low to the close through the line", minval = 1, maxval = 100, group = G_ZB)
 int    zb_slb  = input.int(0, "SL buffer (ticks beyond the pattern's low / high)", minval = 0, group = G_ZB)
@@ -1651,9 +1582,6 @@ string zb_mkz  = input.string("Both zones", "Triangles at", options = ["Both zon
 string zb_mks  = input.string("Buys and sells", "", options = ["Buys and sells", "Buys", "Sells"], group = G_ZB, inline = "mz")
 bool   zb_sht  = input.bool(true, "Show the trades", group = G_ZB, inline = "ts")
 int    zb_kt   = input.int(40, "kept", minval = 1, maxval = 100, group = G_ZB, inline = "ts")
-bool   zb_tbo  = input.bool(false, "Results table", group = G_ZB, inline = "rt")
-string zb_tbp  = input.string("Bottom left", "", options = ["Top right", "Bottom right", "Top left", "Bottom left", "Middle right", "Middle left"], group = G_ZB, inline = "rt")
-bool   zb_mon  = input.bool(true, "Month by month for the drawn setup (last 12 months)", group = G_ZB)
 bool   zb_alr  = input.bool(false, "Alert BUY / SELL of the drawn setup in real time (alert: Any alert() function call)", group = G_ZB)
 color  zb_bc   = input.color(#26A69A, "Buy", group = G_ZB, inline = "zc")
 color  zb_scc  = input.color(#EF5350, "Sell", group = G_ZB, inline = "zc")
@@ -2282,7 +2210,7 @@ f_x(array<float> x, float bl, float bsl, float btp, float sl_, float ssl, float 
 
 // a confirmation of pattern p closed (candle time t, close c): its wick inside an alive zone of its side
 // (up to one H4 candle size past the far edge) opens a trade on both entries of that pattern
-// checks for the table: confirmations seen, with a zone of their side alive, inside it (per pattern)
+// counts per pattern: confirmations seen, with a zone of their side alive, inside it
 var array<int> dg_sig  = array.new<int>(5, 0)
 var array<int> dg_live = array.new<int>(5, 0)
 var array<int> dg_in   = array.new<int>(5, 0)
@@ -2508,78 +2436,3 @@ else if ZOK
         f_x(xq, za2bl, za2bsl, za2btp, za2sl, za2ssl, za2stp)
         f_try(2, za2t, za2c, xq)
     f_mng(4, 5, time, high, low)
-
-// ── Results ──────────────────────────────────────────────────────────────────
-var table zb_tb = table.new(f_tpos(zb_tbp), 9, 32, bgcolor = color.new(#0F1120, 8), border_width = 1, border_color = color.new(color.gray, 75))
-f_zr(float x) =>
-    (x >= 0 ? "+" : "") + str.tostring(x, "#.#") + "R"
-f_zcell(int col, int row, string s, color c, color bg) =>
-    table.cell(zb_tb, col, row, s, text_color = c, text_size = size.small, text_halign = text.align_left, bgcolor = bg)
-if barstate.islast and zb_tbo
-    table.clear(zb_tb, 0, 0, 8, 31)
-    color wc = color.white
-    color gc = color.gray
-    color nb = color.new(color.black, 100)
-    color hb = color.new(#FFB300, 75)
-    f_zcell(0, 0, "ZONES BACKTEST", wc, nb)
-    f_zcell(1, 0, "TP 1:" + str.tostring(zb_rr, "#"), wc, nb)
-    f_zcell(2, 0, "from " + str.format_time(zb_from, "dd MMM yyyy", syminfo.timezone), wc, nb)
-    f_zcell(3, 0, zb_side, wc, nb)
-    f_zcell(4, 0, str.tostring(zb_na) + " alerts", wc, nb)
-    f_zcell(5, 0, "POIs: " + str.tostring(array.get(dg_z, 0)) + " leg / " + str.tostring(array.get(dg_z, 1)) + " opposite", wc, nb)
-    int r = 1
-    if not chart_ok
-        f_zcell(0, r, "Put the chart on H4 or lower", zb_scc, nb)
-        r += 1
-    f_zcell(0, r, "Confirmation", gc, nb)
-    f_zcell(1, r, "Entry", gc, nb)
-    f_zcell(2, r, "Data from", gc, nb)
-    f_zcell(3, r, "Trades  (checks: found / zone alive / in zone)", gc, nb)
-    f_zcell(4, r, "Win rate", gc, nb)
-    f_zcell(5, r, "Net", gc, nb)
-    f_zcell(6, r, "A month", gc, nb)
-    f_zcell(7, r, "Worst DD · losses in a row", gc, nb)
-    r += 1
-    for y = 0 to NS - 1
-        int   p   = math.floor(y / 2)
-        int   sm  = p
-        int   f0  = array.get(sm_f, sm)
-        int   l0  = array.get(sm_l, sm)
-        float mos = na(f0) or na(l0) ? na : (l0 - f0) / (30.4375 * 86400000.0)
-        int   n   = array.get(y_n, y)
-        float tot = array.get(y_r, y)
-        if (ZB_PI >= 0 and p != ZB_PI) or (ZB_EI >= 0 and y % 2 != ZB_EI)
-            continue
-        color bg  = y == SHOWN ? hb : nb
-        f_zcell(0, r, array.get(ZP, p), wc, bg)
-        f_zcell(1, r, y % 2 == 0 ? "Instant" : "Retest", wc, bg)
-        f_zcell(2, r, na(f0) ? "no candles" : str.format_time(f0, "MMM yyyy", syminfo.timezone), wc, bg)
-        f_zcell(3, r, str.tostring(n) + (y % 2 == 1 and array.get(y_cx, y) > 0 ? " (" + str.tostring(array.get(y_cx, y)) + " not filled)" : "") + "  (" + str.tostring(array.get(dg_sig, p)) + " / " + str.tostring(array.get(dg_live, p)) + " / " + str.tostring(array.get(dg_in, p)) + ")", wc, bg)
-        f_zcell(4, r, n > 0 ? str.tostring(100.0 * array.get(y_w, y) / n, "#") + "%" : "–", wc, bg)
-        f_zcell(5, r, f_zr(tot) + " · " + (tot >= 0 ? "+" : "") + str.tostring(tot * zb_risk, "#.#") + "%", tot > 0 ? zb_bc : tot < 0 ? zb_scc : wc, bg)
-        f_zcell(6, r, na(mos) or mos <= 0 ? "–" : str.tostring(n / mos, "#.#") + " trades · " + f_zr(tot / mos), wc, bg)
-        f_zcell(7, r, "-" + str.tostring(array.get(y_dd, y), "#.#") + "R · " + str.tostring(array.get(y_mrn, y)) + "L", wc, bg)
-        r += 1
-    f_zcell(0, r, "Break-even win rate " + str.tostring(100.0 / (1 + zb_rr), "#") + "%", gc, nb)
-    if SHOWN < 0
-        f_zcell(1, r, "Drawn: none (pick one confirmation and one entry to see its trades on the chart)", gc, nb)
-        r += 1
-    else
-        f_zcell(1, r, "Drawn:", gc, nb)
-        f_zcell(2, r, array.get(ZP, math.floor(SHOWN / 2)) + " " + zb_ent, wc, hb)
-        f_zcell(3, r, "buys " + str.tostring(array.get(sh_n, 0)) + " (" + f_zr(array.get(sh_r, 0)) + ")", wc, nb)
-        f_zcell(4, r, "sells " + str.tostring(array.get(sh_n, 1)) + " (" + f_zr(array.get(sh_r, 1)) + ")", wc, nb)
-        f_zcell(5, r, "leg POI " + str.tostring(array.get(sh_n, 2)) + " (" + f_zr(array.get(sh_r, 2)) + ")", wc, nb)
-        f_zcell(6, r, "opposite " + str.tostring(array.get(sh_n, 3)) + " (" + f_zr(array.get(sh_r, 3)) + ")", wc, nb)
-        r += 1
-    if zb_mon and SHOWN >= 0 and array.size(mo_k) > 0
-        int nm = array.size(mo_k)
-        for i = nm - 1 to math.max(0, nm - 12)
-            int   mk = array.get(mo_k, i)
-            int   yy = math.floor(mk / 12)
-            int   mm = mk - yy * 12 + 1
-            float mr = array.get(mo_r, i)
-            f_zcell(0, r, str.format_time(timestamp(yy, mm, 1, 0, 0), "MMM yyyy", syminfo.timezone), gc, nb)
-            f_zcell(1, r, str.tostring(array.get(mo_n, i)) + " trades", wc, nb)
-            f_zcell(2, r, f_zr(mr), mr > 0 ? zb_bc : mr < 0 ? zb_scc : wc, nb)
-            r += 1
