@@ -455,11 +455,21 @@ if x2_new and zg_d != 0 and not na(zg_st)
         array<float> cl = array.new<float>()
         array<int>   ct = array.new<int>()
         array<int>   ck = array.new<int>()     // 0 single candle · 1 swing (left) · 2 engineered (swing on the right)
-        for j = math.max(1, js) to nq - 1
+        // liquidity is UNTAKEN (user, 2026-11-11: "an old level that price had broken through" is not liquidity):
+        // a level in the leg counts only if no later candle up to the break has gone below it (a wick too);
+        // smn = the lowest low from candle i to the breaking candle
+        int js0 = math.max(1, js)
+        array<float> smn = array.new<float>(math.max(1, kb - js0 + 2), na)
+        if kb >= js0
+            for i = kb to js0
+                float li = f_zl(i, zg_d)
+                array.set(smn, i - js0, i < kb ? math.min(li, array.get(smn, i - js0 + 1)) : li)
+        for j = js0 to nq - 1
             float lj  = f_zl(j, zg_d)
             bool  one = j <= kb + zb_scn and f_zc(j, zg_d) > f_zo(j, zg_d)
             bool  swg = j < nq - 1 and lj < f_zl(j - 1, zg_d) and lj < f_zl(j + 1, zg_d)
-            if one or swg
+            bool  unt = j >= kb or array.get(smn, j + 1 - js0) >= lj
+            if (one or swg) and unt
                 array.push(cl, lj)
                 array.push(ct, array.get(q2t, j))
                 array.push(ck, swg ? (j > kb ? 2 : 1) : j > kb ? 3 : 0)
