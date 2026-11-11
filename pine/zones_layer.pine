@@ -66,9 +66,11 @@ int    SHOWN   = ZB_PI >= 0 and ZB_EI >= 0 ? ZB_PI * 2 + ZB_EI : -1
 var array<string> ZP = array.from("M5 CISD", "M15 CISD", "H1 OCTGD", "H1 EG", "H1 PCL")
 int    ZCS     = timeframe.in_seconds()
 // a confirmation timeframe smaller than the chart is read from the candles inside each chart candle
-bool   ZL0     = ZCS > 300
-bool   ZL1     = ZCS > 900
-bool   ZL2     = ZCS > 3600
+// (only up to an H4 chart: above it the story can't run and the small candles inside a Daily / Weekly candle are too many)
+bool   ZOK     = ZCS <= 14400
+bool   ZL0     = ZOK and ZCS > 300
+bool   ZL1     = ZOK and ZCS > 900
+bool   ZL2     = ZOK and ZCS > 3600
 
 // ── H4 candle j seen from direction d (d < 0: prices flipped, so the buy-side rules read the sell side) ──
 f_zh(int j, int d) =>
@@ -772,15 +774,15 @@ f_seen(int k, int t) =>
 // the five confirmations: from the candles inside each chart candle when their timeframe is smaller than the
 // chart, else the last closed candle of their timeframe; trades run on those candles / on the chart's
 [za0t, za0c, za0h, za0l, za0bs, za0bl, za0bsl, za0btp, za0ss, za0sl, za0ssl, za0stp] = request.security(syminfo.tickerid, ZL0 ? timeframe.period : "5", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi0t, zi0c, zi0h, zi0l, zi0bs, zi0bl, zi0bsl, zi0btp, zi0ss, zi0sl, zi0ssl, zi0stp] = request.security_lower_tf(syminfo.tickerid, ZL0 ? "5" : timeframe.period, f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", false))
+[zi0t, zi0c, zi0h, zi0l, zi0bs, zi0bl, zi0bsl, zi0btp, zi0ss, zi0sl, zi0ssl, zi0stp] = request.security_lower_tf(syminfo.tickerid, ZL0 ? "5" : "12M", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
 [za1t, za1c, za1h, za1l, za1bs, za1bl, za1bsl, za1btp, za1ss, za1sl, za1ssl, za1stp] = request.security(syminfo.tickerid, ZL1 ? timeframe.period : "15", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi1t, zi1c, zi1h, zi1l, zi1bs, zi1bl, zi1bsl, zi1btp, zi1ss, zi1sl, zi1ssl, zi1stp] = request.security_lower_tf(syminfo.tickerid, ZL1 ? "15" : timeframe.period, f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", false))
+[zi1t, zi1c, zi1h, zi1l, zi1bs, zi1bl, zi1bsl, zi1btp, zi1ss, zi1sl, zi1ssl, zi1stp] = request.security_lower_tf(syminfo.tickerid, ZL1 ? "15" : "12M", f_zconf(0, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
 [za2t, za2c, za2h, za2l, za2bs, za2bl, za2bsl, za2btp, za2ss, za2sl, za2ssl, za2stp] = request.security(syminfo.tickerid, ZL2 ? timeframe.period : "60", f_zconf(1, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi2t, zi2c, zi2h, zi2l, zi2bs, zi2bl, zi2bsl, zi2btp, zi2ss, zi2sl, zi2ssl, zi2stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : timeframe.period, f_zconf(1, zb_ow, zb_cw, zb_egr == "Open", false))
+[zi2t, zi2c, zi2h, zi2l, zi2bs, zi2bl, zi2bsl, zi2btp, zi2ss, zi2sl, zi2ssl, zi2stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : "12M", f_zconf(1, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
 [za3t, za3c, za3h, za3l, za3bs, za3bl, za3bsl, za3btp, za3ss, za3sl, za3ssl, za3stp] = request.security(syminfo.tickerid, ZL2 ? timeframe.period : "60", f_zconf(2, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi3t, zi3c, zi3h, zi3l, zi3bs, zi3bl, zi3bsl, zi3btp, zi3ss, zi3sl, zi3ssl, zi3stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : timeframe.period, f_zconf(2, zb_ow, zb_cw, zb_egr == "Open", false))
+[zi3t, zi3c, zi3h, zi3l, zi3bs, zi3bl, zi3bsl, zi3btp, zi3ss, zi3sl, zi3ssl, zi3stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : "12M", f_zconf(2, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
 [za4t, za4c, za4h, za4l, za4bs, za4bl, za4bsl, za4btp, za4ss, za4sl, za4ssl, za4stp] = request.security(syminfo.tickerid, ZL2 ? timeframe.period : "60", f_zconf(3, zb_ow, zb_cw, zb_egr == "Open", true), lookahead = barmerge.lookahead_on)
-[zi4t, zi4c, zi4h, zi4l, zi4bs, zi4bl, zi4bsl, zi4btp, zi4ss, zi4sl, zi4ssl, zi4stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : timeframe.period, f_zconf(3, zb_ow, zb_cw, zb_egr == "Open", false))
+[zi4t, zi4c, zi4h, zi4l, zi4bs, zi4bl, zi4bsl, zi4btp, zi4ss, zi4sl, zi4ssl, zi4stp] = request.security_lower_tf(syminfo.tickerid, ZL2 ? "60" : "12M", f_zconf(3, zb_ow, zb_cw, zb_egr == "Open", false), ignore_invalid_timeframe = true)
 var array<float> xq = array.new<float>(8, na)
 f_zn(array<int> a) =>
     int n = array.size(a)
