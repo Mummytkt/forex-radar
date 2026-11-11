@@ -514,6 +514,14 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE entry_pattern_alerts ADD COLUMN watches TEXT")
     if "keep_open" not in epa_cols:
         conn.execute("ALTER TABLE entry_pattern_alerts ADD COLUMN keep_open INTEGER NOT NULL DEFAULT 0")
+    # Follow the trade (2026-11-11): TP / SL / breakeven / re-entry messages after the level's confirmation
+    for col_def in ("follow INTEGER NOT NULL DEFAULT 0", "tp_r REAL NOT NULL DEFAULT 2", "be_r REAL",
+                    "sl_buffer_pips REAL NOT NULL DEFAULT 0"):
+        if col_def.split()[0] not in epa_cols:
+            conn.execute(f"ALTER TABLE entry_pattern_alerts ADD COLUMN {col_def}")
+    from alerts.trade_follow import SCHEMA as _FOLLOW_SCHEMA
+    conn.execute(_FOLLOW_SCHEMA)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_follows_live ON trade_follows (status, instrument)")
 
     # When the owner paid out a commission (Business page → Mark paid)
     if "commissions" in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:

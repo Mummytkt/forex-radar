@@ -335,7 +335,9 @@ async def run_price_check(db_path: str, config) -> None:
               AND (expires_at IS NULL OR expires_at > ?)
         """, (now_iso,)).fetchall()
 
-        if not rows:
+        from alerts.trade_follow import follow_instruments, check_follows
+        follow_insts = follow_instruments(conn)
+        if not rows and not follow_insts:
             return
 
         # Daily / Weekly candle-close alerts: from the stored TradingView Daily candles
@@ -344,7 +346,7 @@ async def run_price_check(db_path: str, config) -> None:
         except Exception as exc:
             logger.warning("Daily / Weekly level check failed: %s", exc)
 
-        instruments = [r[0] for r in rows]
+        instruments = list(dict.fromkeys([r[0] for r in rows] + follow_insts))
         logger.debug("Price monitor checking %d instrument(s): %s", len(instruments), instruments)
 
         # Step 2: Fetch prices
@@ -353,6 +355,13 @@ async def run_price_check(db_path: str, config) -> None:
         if not prices:
             logger.debug("Price monitor: no prices returned for %s", instruments)
             return
+
+        # Followed trades: breakeven, TP, SL and the re-entry watch, on the new 5-minute candles
+        if follow_insts:
+            try:
+                await check_follows(conn, config, prices, datetime.now(timezone.utc))
+            except Exception as exc:
+                logger.warning("Trade follow check failed: %s", exc)
 
         # Step 3 & 4: Update prices + check alerts
         for instrument, candle_data in prices.items():

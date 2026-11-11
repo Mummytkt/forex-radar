@@ -259,7 +259,11 @@ function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDel
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             {item.watches ? item.watches.map(watchLabel).join(' · ') : 'PCL · H1/H2'}
             {item.keep_open ? ' · keeps watching' : ''}
+            {item.follow ? ` · follows the trade (1:${item.tp_r}${item.be_r != null ? `, breakeven at ${item.be_r}R` : ''})` : ''}
           </span>
+          {item.follow_status && (
+            <span style={{ fontSize: 11, color: 'var(--accent-hover)' }}>· {item.follow_status}</span>
+          )}
           {item.note && (
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {item.note}</span>
           )}
@@ -375,6 +379,10 @@ function EntryAlertsPanel({ instruments, prices }: {
   const [note, setNote] = useState('')
   const [watches, setWatches] = useState<string[]>(ENTRY_DEFAULT_WATCHES)
   const [keepOpen, setKeepOpen] = useState(false)
+  const [follow, setFollow] = useState(false)
+  const [tpR, setTpR] = useState('2')
+  const [beR, setBeR] = useState('1')            // empty = no breakeven alert
+  const [slBuf, setSlBuf] = useState('0')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const [editing, setEditing] = useState<EntryAlertItem | null>(null)   // saving replaces this alert
@@ -408,6 +416,16 @@ function EntryAlertsPanel({ instruments, prices }: {
       setFormError('Tolerance has to be at least 1 pip (0 would only fire on the exact price). Leave it empty to use 20 pips.')
       return
     }
+    const tpVal = parseFloat(tpR)
+    const beVal = beR.trim() === '' ? null : parseFloat(beR)
+    const bufVal = slBuf.trim() === '' ? 0 : parseFloat(slBuf)
+    if (follow) {
+      if (isNaN(tpVal) || tpVal <= 0) { setFormError('Enter the take profit ratio, for example 2 for 1:2.'); return }
+      if (beVal !== null && (isNaN(beVal) || beVal <= 0 || beVal >= tpVal)) {
+        setFormError('The breakeven point must be above 0 and below the take profit ratio (leave it empty for no breakeven alert).'); return
+      }
+      if (isNaN(bufVal) || bufVal < 0) { setFormError('The stop loss buffer must be 0 or more pips.'); return }
+    }
     let expiresAt: string | null = null
     if (expiry === 'keep') {
       expiresAt = editing?.expires_at ?? null
@@ -431,6 +449,10 @@ function EntryAlertsPanel({ instruments, prices }: {
           expires_at: expiresAt,
           watches,
           keep_open: keepOpen,
+          follow,
+          tp_r: follow ? tpVal : 2,
+          be_r: follow ? beVal : null,
+          sl_buffer_pips: follow ? bufVal : 0,
         }),
       })
       if (!res.ok) {
@@ -462,6 +484,10 @@ function EntryAlertsPanel({ instruments, prices }: {
     setTolerance(String(item.tolerance_pips))
     setWatches(item.watches && item.watches.length ? item.watches : ENTRY_DEFAULT_WATCHES)
     setKeepOpen(!!item.keep_open)
+    setFollow(!!item.follow)
+    setTpR(String(item.tp_r ?? 2))
+    setBeR(item.be_r != null ? String(item.be_r) : '')
+    setSlBuf(String(item.sl_buffer_pips ?? 0))
     setNote(item.note ?? '')
     setExpiry(item.expires_at ? 'keep' : 'never')
     setCustomExpiry('')
@@ -627,6 +653,44 @@ function EntryAlertsPanel({ instruments, prices }: {
                 }}>{lbl}</button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} />
+              Follow the trade after the confirmation
+            </label>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+              Entry = the confirmation candle&apos;s close. Stop loss = behind the pattern&apos;s wick. You get a Telegram message at the
+              breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry for as long as
+              price stays inside your zone (your level ± the tolerance). If price then goes on to the take profit without one, you&apos;re told.
+              Checked on 5-minute candles, so a message can come a few minutes after the touch.
+            </div>
+            {follow && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10 }}>
+                {([
+                  ['Take profit (R)', tpR, setTpR, '2 = 1:2'],
+                  ['Breakeven alert at (R)', beR, setBeR, 'empty = none'],
+                  ['SL buffer (pips)', slBuf, setSlBuf, '0'],
+                ] as const).map(([lbl, val, set, ph]) => (
+                  <div key={lbl}>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>{lbl}</div>
+                    <input type="number" step="0.1" value={val} placeholder={ph}
+                      onChange={e => (set as (v: string) => void)(e.target.value)}
+                      style={{
+                        width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 13,
+                        border: '1px solid var(--border)', background: 'var(--bg)',
+                        color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
+                      }} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {follow && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                Breakeven at 1 = when price has moved as far in your favour as your stop is from the entry. Use 0.5 for halfway to 1R.
+              </div>
+            )}
           </div>
 
           <div>

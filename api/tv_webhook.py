@@ -1044,6 +1044,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     # Find every active, matching, non-expired entry alert for this instrument + direction
     rows = conn.execute("""
         SELECT epa.id, epa.price, epa.tolerance_pips, epa.note, epa.watches, epa.keep_open,
+               epa.follow, epa.tp_r, epa.be_r, epa.sl_buffer_pips,
                u.telegram_chat_id, epa.user_id, u.role, u.plan, u.plan_expires_at
         FROM entry_pattern_alerts epa
         LEFT JOIN users u ON u.id = epa.user_id
@@ -1108,6 +1109,15 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         )
         if note:
             alert_text += f"\n\nYour note: {note}"
+        if row["follow"]:
+            try:
+                from alerts.trade_follow import open_follow
+                fl = open_follow(conn, dict(row), instrument, direction, pattern,
+                                 tf_label, price, payload.touch_price, swept_level)
+                if fl:
+                    alert_text += "\n\n" + fl
+            except Exception:
+                logger.exception("%s trade follow could not start (alert_id=%d)", instrument, alert_id)
 
         logger.info("%s ENTRY_CONFIRMATION %s %s @ %.5f matched alert_id=%d (watched @ %.5f, tol %.1f pips)",
                     instrument, direction, pattern, price, alert_id, alert_price, tol_pips)

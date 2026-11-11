@@ -1382,6 +1382,11 @@ class EntryAlertItem(BaseModel):
     created_at: str
     watches: Optional[list[str]] = None   # e.g. ["H1:sweep", "M15:sweep_break"]; None = PCL / Engulfing Sweep on H1 / H2
     keep_open: bool = False               # stay active after the first formation (fires each one)
+    follow: bool = False                  # follow the trade: breakeven / TP / SL / re-entry messages
+    tp_r: float = 2
+    be_r: Optional[float] = None          # breakeven alert at this many R (None: no breakeven alert)
+    sl_buffer_pips: float = 0
+    follow_status: Optional[str] = None   # the latest followed trade of this level, one line
 
 
 class EntryAlertsList(BaseModel):
@@ -1399,9 +1404,13 @@ class EntryAlertCreate(BaseModel):
     expires_at: Optional[str] = None
     watches: Optional[list[str]] = None
     keep_open: bool = False
+    follow: bool = False
+    tp_r: float = 2
+    be_r: Optional[float] = None
+    sl_buffer_pips: float = 0
 
 
-def _row_to_entry_alert(row: sqlite3.Row) -> EntryAlertItem:
+def _row_to_entry_alert(row: sqlite3.Row, follow_status: Optional[str] = None) -> EntryAlertItem:
     d = dict(row)
     return EntryAlertItem(
         id=d["id"],
@@ -1418,7 +1427,23 @@ def _row_to_entry_alert(row: sqlite3.Row) -> EntryAlertItem:
         created_at=d["created_at"],
         watches=[w for w in (d.get("watches") or "").split(",") if w] or None,
         keep_open=bool(d.get("keep_open") or 0),
+        follow=bool(d.get("follow") or 0),
+        tp_r=d.get("tp_r") or 2,
+        be_r=d.get("be_r"),
+        sl_buffer_pips=d.get("sl_buffer_pips") or 0,
+        follow_status=follow_status,
     )
+
+
+def _follow_status(conn, alert_id: int) -> Optional[str]:
+    try:
+        fo = conn.execute("SELECT * FROM trade_follows WHERE alert_id = ? ORDER BY id DESC LIMIT 1", (alert_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not fo:
+        return None
+    from alerts.trade_follow import summary
+    return summary(dict(fo))
 
 
 @router.get("/entry-alerts", response_model=EntryAlertsList)
@@ -1441,8 +1466,9 @@ def list_entry_alerts(request: Request, tab: str = Query("active")):
             active_count = conn.execute(
                 "SELECT COUNT(*) FROM entry_pattern_alerts WHERE user_id IS NULL AND is_active = 1"
             ).fetchone()[0]
+        items = [_row_to_entry_alert(r, _follow_status(conn, r["id"]) if r["follow"] else None) for r in rows]
     return EntryAlertsList(
-        items=[_row_to_entry_alert(r) for r in rows],
+        items=items,
         active_count=active_count,
         max_alerts=_MAX_ACTIVE_ENTRY_ALERTS,
     )
@@ -1469,6 +1495,13 @@ def create_entry_alert(body: EntryAlertCreate, request: Request):
         if not clean:
             raise HTTPException(status_code=400, detail="Pick at least one formation to watch")
         watches = ",".join(clean)
+    if body.follow:
+        if body.tp_r <= 0:
+            raise HTTPException(status_code=400, detail="The take profit ratio must be above 0")
+        if body.be_r is not None and not (0 < body.be_r < body.tp_r):
+            raise HTTPException(status_code=400, detail="The breakeven point must be between 0 and the take profit ratio")
+        if body.sl_buffer_pips < 0:
+            raise HTTPException(status_code=400, detail="The stop loss buffer can't be negative")
     with _db_write(request) as conn:
         if uid:
             count = conn.execute(
@@ -1486,10 +1519,12 @@ def create_entry_alert(body: EntryAlertCreate, request: Request):
         now = datetime.now(timezone.utc).isoformat()
         cur = conn.execute("""
             INSERT INTO entry_pattern_alerts
-                (user_id, instrument, direction, price, tolerance_pips, note, expires_at, created_at, watches, keep_open)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, instrument, direction, price, tolerance_pips, note, expires_at, created_at, watches, keep_open,
+                 follow, tp_r, be_r, sl_buffer_pips)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (uid, instrument, direction, body.price, body.tolerance_pips, body.note, body.expires_at, now,
-              watches, 1 if body.keep_open else 0))
+              watches, 1 if body.keep_open else 0,
+              1 if body.follow else 0, body.tp_r, body.be_r if body.follow else None, body.sl_buffer_pips))
         row = conn.execute("SELECT * FROM entry_pattern_alerts WHERE id = ?", (cur.lastrowid,)).fetchone()
     return _row_to_entry_alert(row)
 

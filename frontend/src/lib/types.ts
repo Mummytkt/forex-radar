@@ -89,6 +89,11 @@ export interface EntryAlertItem {
   created_at: string
   watches: string[] | null          // e.g. ['H1:pcl', 'M15:sweep_break']; null = PCL on H1 / H2
   keep_open: boolean                // stays active after the first formation
+  follow: boolean                   // follow the trade: breakeven / TP / SL / re-entry messages
+  tp_r: number
+  be_r: number | null               // breakeven alert at this many R (null: none)
+  sl_buffer_pips: number
+  follow_status: string | null      // the latest followed trade of this level
 }
 
 export interface EntryAlertsList {
