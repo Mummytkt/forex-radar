@@ -107,7 +107,8 @@ def _resolve_chat(config, user_id, chat_id, role, plan, plan_expires_at):
 async def _deliver_alert(conn, config, instrument: str, alert_text: str,
                          h4_class: Optional[str] = None, alert_id: Optional[int] = None,
                          pref: Optional[str] = None, engulf_wick: Optional[bool] = None,
-                         engulf_key: str = "pref_engulf_mode", after_retest: Optional[bool] = None) -> None:
+                         engulf_key: str = "pref_engulf_mode", after_retest: Optional[bool] = None,
+                         markup=None) -> None:
     """Send alert_text to every active user whose watched_instruments includes instrument.
 
     h4_class: External / Internal of the H4 confirmation this alert belongs to
@@ -147,7 +148,8 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
             short_chats.add(rec["telegram_chat_id"])
 
     # "📊 View chart" under the alert: tapping it sends the chart picture
-    markup = chart_button(alert_id) if alert_id else None
+    if markup is None and alert_id:
+        markup = chart_button(alert_id)
     short = short_text(alert_text)
 
     # Many chats at once, paced under Telegram's limit (see alerts/telegram.py)
@@ -422,10 +424,12 @@ def _check_liquidity(conn, config, instrument: str) -> None:
     except Exception:
         logger.exception("%s liquidity check failed", instrument)
         return
-    for t in texts:
+    from alerts.telegram import liq_chart_button
+    for t, liq_id in texts:
         logger.info("%s liquidity alert: %s", instrument, t.split(chr(10), 1)[0])
         if config.telegram_enabled:
-            _in_background(_deliver_alert(conn, config, instrument, t, pref="liquidity"))
+            _in_background(_deliver_alert(conn, config, instrument, t, pref="liquidity",
+                                          markup=liq_chart_button(liq_id) if liq_id else None))
 
 
 def _store_candles(conn, instrument: str, payload: "TVWebhookPayload", config=None) -> None:

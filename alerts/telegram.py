@@ -124,6 +124,15 @@ def chart_button(alert_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("📊 View chart", callback_data=f"ch:{alert_id}:D")]])
 
 
+def liq_chart_button(liq_id: int) -> InlineKeyboardMarkup:
+    """Under a liquidity alert: its 4H picture with the liquidity line."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("📊 View chart", callback_data=f"lq:{liq_id}")]])
+
+
+def close_button() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Close", callback_data="chx")]])
+
+
 def chart_controls(alert_id: int, tf: str) -> InlineKeyboardMarkup:
     mark = lambda t, name: ("✓ " if t == tf else "") + name
     return InlineKeyboardMarkup([

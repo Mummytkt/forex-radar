@@ -42,8 +42,26 @@ CREATE TABLE IF NOT EXISTS liq_watch (
 """
 
 
+# each liquidity alert sent, so its "📊 View chart" button can draw it later
+SENT_SCHEMA = """
+CREATE TABLE IF NOT EXISTS liq_sent (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    instrument  TEXT NOT NULL,
+    direction   TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    kind        TEXT NOT NULL,           -- 'single' | 'swing'
+    level       REAL NOT NULL,
+    ts          TEXT NOT NULL,           -- the candle that formed it
+    break_ts    TEXT NOT NULL,           -- the breaking H4 candle
+    sent_at     TEXT NOT NULL,
+    file_id     TEXT                     -- the picture, once Telegram has it
+)
+"""
+
+
 def ensure_table(conn) -> None:
     conn.execute(SCHEMA)
+    conn.execute(SENT_SCHEMA)
 
 
 def start(conn, instrument: str, direction: str, title: str, now: Optional[datetime] = None) -> None:
@@ -113,8 +131,9 @@ def text(instrument: str, direction: str, title: str, liq: dict) -> str:
             f"into it is the setup.")
 
 
-def check(conn, instrument: str) -> list[str]:
-    """After an H4 candle is stored: the liquidity that formed since the last check, as alert texts."""
+def check(conn, instrument: str, now: Optional[datetime] = None) -> list[tuple[str, Optional[int]]]:
+    """After an H4 candle is stored: the liquidity that formed since the last check, as
+    (alert text, liq_sent id for the chart button)."""
     try:
         w = conn.execute("SELECT * FROM liq_watch WHERE instrument = ?", (instrument,)).fetchone()
     except Exception:
@@ -151,5 +170,52 @@ def check(conn, instrument: str) -> list[str]:
             sent_v.add(liq["ts"])
     conn.execute("UPDATE liq_watch SET sent_single = ?, sent_v = ? WHERE instrument = ?",
                  (w["sent_single"], ",".join(sorted(sent_v)), instrument))
+    sent_at = (now or datetime.now(timezone.utc)).isoformat()
+    out = []
+    for liq in new:
+        lid = None
+        try:
+            conn.execute(SENT_SCHEMA)
+            lid = conn.execute(
+                "INSERT INTO liq_sent (instrument, direction, title, kind, level, ts, break_ts, sent_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (instrument, w["direction"], w["title"], liq["kind"], liq["level"], liq["ts"], break_ts, sent_at)).lastrowid
+        except Exception:
+            logger.exception("%s liquidity not logged for its chart", instrument)
+        out.append((text(instrument, w["direction"], w["title"], liq), lid))
     conn.commit()
-    return [text(instrument, w["direction"], w["title"], liq) for liq in new]
+    return out
+
+
+def picture(conn, liq_id: int) -> Optional[tuple[bytes, str, Optional[str]]]:
+    """(png, caption, cached file id) for a liquidity alert's "📊 View chart": the H4 candles
+    from before the break up to when it was sent, the break candle marked, the liquidity line
+    drawn from the candle that formed it."""
+    from alerts.chart_image import render
+    try:
+        r = conn.execute("SELECT * FROM liq_sent WHERE id = ?", (liq_id,)).fetchone()
+    except Exception:
+        return None
+    if not r:
+        return None
+    r = dict(r)
+    inst = r["instrument"]
+    rows = conn.execute("SELECT ts, o, h, l, c FROM candles WHERE instrument = ? AND tf = 'H4' AND ts <= ? "
+                        "ORDER BY ts DESC LIMIT 60", (inst, r["sent_at"])).fetchall()
+    candles = [tuple(x) for x in reversed(rows)]
+    bull = r["direction"] == "bullish"
+    name = ("Single candle liquidity" if r["kind"] == "single"
+            else ("Low liquidity" if bull else "High liquidity"))
+    level = {"y": r["level"], "label": name, "kind": "liq", "tf": "both", "t0": r["ts"]}
+    meta = {"tf_title": "4H", "side": f"{'BUY' if bull else 'SELL'} · {name}",
+            "subtitle": f"after the {r['title']}",
+            "marks": [(r["break_ts"], "break")],
+            "fired_at": _wat(r["sent_at"])}
+    png = render(inst, "H4", candles, [level], meta, fmt=lambda v: fmt_price(inst, v), full=True)
+    caption = f"{inst} · 4H · {name} {fmt_price(inst, r['level'])} after the {r['title']}"
+    return png, caption[:1000], r["file_id"]
+
+
+def remember_file_id(conn, liq_id: int, file_id: str) -> None:
+    conn.execute("UPDATE liq_sent SET file_id = ? WHERE id = ?", (file_id, liq_id))
+    conn.commit()

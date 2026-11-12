@@ -519,6 +519,21 @@ async def _handle_chart_button(request: Request, config, cq: dict) -> None:
     if data == "chx":
         await delete_message(token, str(chat_id), mid)
         return await answer_button(token, cq.get("id", ""))
+    if data.startswith("lq:"):   # a liquidity alert's 4H picture
+        from alerts.liquidity_watch import picture as liq_picture, remember_file_id as liq_remember
+        from alerts.telegram import close_button
+        lid = data[3:]
+        if not lid.isdigit():
+            return await answer_button(token, cq.get("id", ""))
+        with _db_write(request) as conn:
+            pic = liq_picture(conn, int(lid))
+            if not pic:
+                return await answer_button(token, cq.get("id", ""), "No chart is available for this alert.")
+            png, caption, cached = pic
+            fid = await send_photo(token, chat_id, cached or png, caption, close_button(), reply_to=mid)
+            if fid and not cached:
+                liq_remember(conn, int(lid), fid)
+        return await answer_button(token, cq.get("id", ""))
     parts = data.split(":")
     if len(parts) != 3 or parts[0] != "ch" or not parts[1].isdigit() or parts[2] not in ("D", "H4"):
         return await answer_button(token, cq.get("id", ""))

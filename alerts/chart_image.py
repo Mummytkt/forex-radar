@@ -23,12 +23,13 @@ UP, DOWN = (34, 197, 94), (239, 68, 68)
 COLORS = {
     "breaker": (248, 113, 113), "source": (52, 211, 153), "h4": (251, 191, 36),
     "ext": (167, 139, 250), "daily": (96, 165, 250), "h4lvl": (251, 146, 60),
+    "liq": (56, 189, 248),
 }
 N_CANDLES = {"D": 45, "H4": 60}
 MIN_FULL = 25   # fewer candles than this: say history is still arriving, and don't cache the picture
 # The alert's own levels: all a subscriber sees. The owner also sees the chart's
 # External high/low, D.A/D.V and H4.A/H4.V.
-ALERT_KINDS = {"breaker", "source", "h4"}
+ALERT_KINDS = {"breaker", "source", "h4", "liq"}
 WAT = timezone(timedelta(hours=1))
 
 
@@ -116,6 +117,15 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
         d.line([(cx, py(h)), (cx, py(l))], fill=col, width=1)
         top, bot = py(max(o, c)), py(min(o, c))
         d.rectangle([cx - bw / 2, top, cx + bw / 2, max(bot, top + 1)], fill=col)
+
+    # extra candle markers (meta "marks": [(candle open time, text)]), e.g. the break candle
+    for mts, mtxt in meta.get("marks") or []:
+        im = max((i for i, cd in enumerate(candles) if cd[0] <= mts), default=None)
+        if im is not None:
+            mx = x0 + step * (im + 0.5)
+            for ys in range(int(y0), int(y1), 10):
+                d.line([(mx, ys), (mx, min(ys + 5, y1))], fill=(148, 163, 184), width=1)
+            d.text((mx + 4, y0 + 4), mtxt, font=f_ax, fill=(148, 163, 184))
 
     # alert marker on the last candle
     lx = x0 + step * (n - 0.5)
