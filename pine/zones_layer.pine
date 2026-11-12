@@ -209,6 +209,28 @@ f_ustart(int z, bool on, string dir_, int t0, float top, float bot, int lt, floa
 f_ustart(0, u1_on, u1_dir, u1_t, u1_top, u1_bot, u1_lt, u1_lq)
 f_ustart(1, u2_on, u2_dir, u2_t, u2_top, u2_bot, u2_lt, u2_lq)
 
+// the names of the points you drag (the blue circles / squares when the script is selected), so each one is
+// clear: TOP (drag it to the candle and price where the zone starts), BOTTOM (up / down), LIQUIDITY
+var array<label> u_lb = array.new<label>()
+f_ulab(int t, float y, string txt, color cc) =>
+    if y > 0
+        array.push(u_lb, label.new(t, y, txt, xloc = xloc.bar_time, style = label.style_label_left, color = color.new(cc, 15),
+             textcolor = color.white, size = size.small))
+if barstate.islast and ZOK
+    for l in u_lb
+        label.delete(l)
+    array.clear(u_lb)
+    if u1_on
+        color c1 = u1_dir == "Buy" ? zb_bc : zb_scc
+        f_ulab(u1_t, u1_top, "Zone 1 TOP ⇕ drag me", c1)
+        f_ulab(u1_t, u1_bot, "Zone 1 BOTTOM ⇕", c1)
+        f_ulab(u1_lt, u1_lq, "Zone 1 LIQUIDITY ⇕", color.new(zb_lqc, 30))
+    if u2_on
+        color c2 = u2_dir == "Buy" ? zb_bc : zb_scc
+        f_ulab(u2_t, u2_top, "Zone 2 TOP ⇕ drag me", c2)
+        f_ulab(u2_t, u2_bot, "Zone 2 BOTTOM ⇕", c2)
+        f_ulab(u2_lt, u2_lq, "Zone 2 LIQUIDITY ⇕", color.new(zb_lqc, 30))
+
 // the alive zones and the liquidity lines run on through this candle
 for z = 0 to 1
     box b = array.get(zn_bx, z)
