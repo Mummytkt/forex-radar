@@ -106,8 +106,8 @@ def text(instrument: str, direction: str, title: str, liq: dict) -> str:
                 else f"an A-shape on the closes ({_wat(liq['ts'])}): its high")
     t = title if title.startswith(("H4", "Daily")) else title[0].lower() + title[1:]
     side = "below it" if bull else "above it"
-    return (f"💧 {name} after the {t}\n\n"
-            f"{tagged(instrument)}\n"
+    # the pair and the price on the first two lines: the Short style keeps only those
+    return (f"💧 {tagged(instrument)} · {name} after the {t}\n"
             f"Liquidity: {fmt_price(instrument, liq['level'])}, {what}.\n\n"
             f"The {'BUY' if bull else 'SELL'} POI is the fresh key level of the leg just {side}: price sweeping this liquidity "
             f"into it is the setup.")
