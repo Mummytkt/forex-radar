@@ -134,7 +134,7 @@ string br_sty   = input.string("Dotted", "Break line style", ''' + STY + ''', gr
 int    br_w     = input.int(1, "width", minval = 1, maxval = 4, group = G_BR, inline = "bs")
 color  br_tx    = input.color(#E0E0E0, "Break text", group = G_BR, inline = "bt")
 string br_sz    = input.string("Small", "size", ''' + SZ + ''', group = G_BR, inline = "bt")
-int    br_n     = input.int(12, "Break lines kept", minval = 1, maxval = 60, group = G_BR)
+int    br_n     = input.int(12, "Break lines kept", minval = 1, maxval = 100, group = G_BR)
 
 bool   tg_bo    = input.bool(true, "Top-timeframe breakout", group = G_TG, inline = "t1")
 color  tg_boc   = input.color(#212121, "", group = G_TG, inline = "t1")
