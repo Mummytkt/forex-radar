@@ -282,7 +282,7 @@ def picture_for_alert(conn, alert_id: int, tf: str, full: bool = False) -> Optio
 
 def parse_candles(text: Optional[str]) -> list[tuple]:
     out = []
-    for part in (text or "").split(";"):
+    for part in (text or "").split("|")[0].split(";"):   # after "|": a Sweep and Break's breakers (not candles)
         try:
             m, o, h, l, c = part.split(",")
             ts = datetime.fromtimestamp(int(float(m)) * 60, tz=timezone.utc).isoformat()

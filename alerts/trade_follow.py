@@ -196,6 +196,14 @@ def limit_for(pattern: str, direction: str, close: float, pattern_level: Optiona
     from alerts.chart_image import parse_candles
     pat = _SAME.get(pattern, pattern)
     lim = None
+    if limit_price is None and pat == "sweep_break" and candles and "|" in candles:
+        # the script sends "<candles>|<buy breaker>|<sell breaker>"
+        parts = candles.split("|")
+        try:
+            raw = parts[1] if direction == "bullish" else parts[2]
+            limit_price = float(raw) if raw.strip() else None
+        except (IndexError, ValueError):
+            limit_price = None
     if limit_price is not None:
         lim = limit_price
     elif pat in ("cisd", "octgd"):
