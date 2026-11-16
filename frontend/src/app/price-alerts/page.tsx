@@ -92,6 +92,37 @@ function triggerLabel(t: string, tf?: string): string {
   return 'On touch'
 }
 
+// "✓ Entry alert created …": a pop-up at the bottom of the screen, so it is seen without scrolling up
+function useNotice(): [React.ReactNode, (text: string) => void] {
+  const [text, setText] = useState('')
+  useEffect(() => {
+    if (!text) return
+    const t = setTimeout(() => setText(''), 5000)
+    return () => clearTimeout(t)
+  }, [text])
+  const node = text ? (
+    <div role="status" onClick={() => setText('')} style={{
+      position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 1000,
+      maxWidth: 'calc(100vw - 32px)', padding: '12px 18px', borderRadius: 10, cursor: 'pointer',
+      background: 'var(--card)', border: '1px solid var(--bullish)', color: 'var(--text-primary)',
+      boxShadow: '0 8px 28px rgba(0,0,0,0.35)', fontSize: 13, fontWeight: 600,
+    }}>
+      <span style={{ color: 'var(--bullish)', marginRight: 8 }}>✓</span>{text}
+    </div>
+  ) : null
+  return [node, setText]
+}
+
+// When an alert was set, with the exact time on hover
+function SetAgo({ iso }: { iso: string }) {
+  if (!iso) return null
+  return (
+    <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title={new Date(iso).toLocaleString()}>
+      · Set {timeAgo(iso)}
+    </span>
+  )
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
@@ -159,6 +190,7 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
           {triggered && item.triggered_at && (
             <span style={{ fontSize: 11, color: 'var(--bullish)' }}>· Triggered {timeAgo(item.triggered_at)}</span>
           )}
+          <SetAgo iso={item.created_at} />
           {!triggered && item.expires_at && (
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               · Expires {timeLeft(item.expires_at)}
@@ -272,6 +304,7 @@ function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDel
               · {patternLabel(item.triggered_pattern)} on {item.triggered_tf} · {timeAgo(item.triggered_at!)}
             </span>
           )}
+          <SetAgo iso={item.created_at} />
           {!triggered && item.expires_at && (
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               · Expires {timeLeft(item.expires_at)}
@@ -400,6 +433,8 @@ function EntryAlertsPanel({ instruments, prices }: {
 
   const currentPrice: number | undefined = instrument ? prices?.[instrument]?.price : undefined
 
+  const [notice, showNotice] = useNotice()
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setFormError('')
@@ -462,6 +497,8 @@ function EntryAlertsPanel({ instruments, prices }: {
         setFormError(err.detail || 'Failed to create alert.')
         return
       }
+      const what = `${instrument} ${direction === 'bullish' ? 'Buy' : 'Sell'} at ${priceVal}`
+      showNotice(editing ? `Entry alert updated: ${what}` : `Entry alert created: ${what}`)
       // Editing: the new alert is saved, so the old one goes
       if (editing) {
         await fetch(`${API_BASE}/api/entry-alerts/${editing.id}`, { method: 'DELETE', headers: authHeaders() })
@@ -778,6 +815,7 @@ function EntryAlertsPanel({ instruments, prices }: {
           >
             {submitting ? (editing ? 'Saving…' : 'Creating…') : (editing ? 'Save Changes' : 'Create Entry Alert')}
           </button>
+          {notice}
 
         </form>
       </div>
@@ -889,6 +927,8 @@ export default function PriceAlertsPage() {
   const instruments = overview?.map(o => o.instrument) ?? []
   const currentPrice: number | undefined = instrument ? prices?.[instrument]?.price : undefined
 
+  const [notice, showNotice] = useNotice()
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setFormError('')
@@ -924,6 +964,7 @@ export default function PriceAlertsPage() {
         setFormError(err.detail || 'Failed to create alert.')
         return
       }
+      showNotice(`${editingId !== null ? 'Level alert updated' : 'Level alert created'}: ${instrument} ${conditionLabel(condition).toLowerCase()} ${priceVal}`)
       // If editing, delete the old alert now that the new one is saved
       if (editingId !== null) {
         await fetch(`${API_BASE}/api/price-alerts/${editingId}`, {
@@ -1231,6 +1272,7 @@ export default function PriceAlertsPage() {
               >
                 {submitting ? (editingId ? 'Updating…' : 'Creating…') : (editingId ? 'Update Alert' : 'Create Alert')}
               </button>
+              {notice}
 
             </form>
           </div>
