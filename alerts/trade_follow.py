@@ -8,10 +8,11 @@ A level on the dashboard (an entry pattern alert) can follow the trade its confi
 The price monitor (every 5 minutes, 5-minute candles) then sends:
   - the breakeven point reached (once)
   - TP hit, or SL hit
-  - after an SL: the level is armed again for a RE-ENTRY (user, 2026-11-11): the SAME pattern on the same
-    timeframe, with its wick past the old SL (a buy: below it), still inside the level's zone (level +/-
-    tolerance). The watch ends when a candle closes outside the zone, when price goes on to the TP without
-    one (reported: the stop was a shake-out), when the level expires, or after WATCH_DAYS.
+  - after an SL: the level is armed again for a RE-ENTRY (user, 2026-11-11 / 2026-11-16): the SAME pattern on
+    the same timeframe, formed past the old SL (a buy: its wick below the SL; a sell: above it). No distance
+    limit. The watch runs until an H4 candle (the POI timeframe) CLOSES with its body beyond the level (a buy:
+    closes below it; a sell: above it), H4 candle after H4 candle; or until price goes on to the TP without one
+    (reported: the stop was a shake-out), the level expires, or WATCH_DAYS.
 
 Statuses: open -> tp | sl (stopped, watching) -> sl_tp | left | reentered | expired
 """
@@ -135,7 +136,7 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     if _to_yf_ticker(instrument) is None:
         lines.append("Note: there is no 5-minute price feed for this instrument, so its SL / TP can't be watched.")
     else:
-        lines.append("You'll get a message at breakeven, at TP and at SL. After an SL, the same pattern forming again past the SL and still in this zone comes as a RE-ENTRY.")
+        lines.append("You'll get a message at breakeven, at TP and at SL. After an SL, the same pattern forming again past the SL comes as a RE-ENTRY, until an H4 candle closes with its body beyond your level.")
     return "\n".join(lines)
 
 
@@ -152,33 +153,77 @@ def stopped_follow(conn: sqlite3.Connection, alert_id: int) -> Optional[dict]:
 
 
 def is_reentry(fo: dict, pattern: str, tf_label: str, touch: Optional[float]) -> bool:
-    """A re-entry (user, 2026-11-11): the same pattern on the same timeframe as the stopped trade, with its
-    wick past that trade's SL (a buy: below it; a sell: above it), and still inside the level's zone."""
+    """A re-entry (user, 2026-11-16): the same pattern on the same timeframe as the stopped trade, formed past
+    that trade's SL (a buy: its wick below it; a sell: above it). How far past does not matter."""
     if touch is None or tf_label != fo.get("tf"):
         return False
     if _SAME.get(pattern, pattern) != _SAME.get(fo.get("pattern") or "", fo.get("pattern")):
         return False
-    past = touch < fo["sl"] if fo["direction"] == "bullish" else touch > fo["sl"]
-    inside = fo.get("zone_lo") is None or fo["zone_lo"] <= touch <= fo["zone_hi"]
-    return past and inside
+    return touch < fo["sl"] if fo["direction"] == "bullish" else touch > fo["sl"]
 
 
-def _outside(fo: dict, close: float, bull: bool) -> bool:
-    """A candle closed beyond the level's zone (a buy: below it): the re-entry watch ends."""
-    if fo.get("zone_lo") is None:
-        return False
-    return close < fo["zone_lo"] if bull else close > fo["zone_hi"]
+def level_of(fo: dict) -> Optional[float]:
+    """The level the follow came from (the middle of its stored zone)."""
+    if fo.get("zone_lo") is None or fo.get("zone_hi") is None:
+        return None
+    return (fo["zone_lo"] + fo["zone_hi"]) / 2
+
+
+H4 = timedelta(hours=4)
+
+
+def h4_failed_at(fo: dict, h4: list, now: datetime) -> Optional[datetime]:
+    """When the POI failed after the stop: the close time of the first H4 candle (the one the SL happened in
+    counts) that closed with its body beyond the level (a buy: close below it; a sell: close above it).
+    h4: closed H4 candles (open datetime, o, h, l, c). None if none has yet."""
+    lvl = level_of(fo)
+    if lvl is None or not fo.get("sl_at"):
+        return None
+    sl_at = _parse(fo["sl_at"])
+    bull = fo["direction"] == "bullish"
+    for t, _o, _h, _l, c in sorted(h4, key=lambda x: x[0]):
+        end = t + H4
+        if end <= sl_at or end > now:
+            continue
+        if (c < lvl) if bull else (c > lvl):
+            return end
+    return None
+
+
+def h4_from_bars(bars: list, now: datetime) -> list:
+    """Closed H4 candles built from 5-minute candles, aligned like the forex H4 chart (17:00 New York + 4n),
+    for instruments whose H4 candles don't come from TradingView."""
+    from zoneinfo import ZoneInfo
+    ny = ZoneInfo("America/New_York")
+    buckets: dict = {}
+    for b in bars:
+        ln = b[0].astimezone(ny)
+        anchor = ln.replace(hour=17, minute=0, second=0, microsecond=0)
+        if anchor > ln:
+            anchor -= timedelta(days=1)
+        start = anchor + H4 * int((ln - anchor) / H4)
+        k = start.astimezone(timezone.utc)
+        if k in buckets:
+            o, h, l, _c = buckets[k]
+            buckets[k] = (o, max(h, b[2]), min(l, b[3]), b[4])
+        else:
+            buckets[k] = (b[1], b[2], b[3], b[4])
+    return [(k, *v) for k, v in sorted(buckets.items()) if k + H4 <= now]
 
 
 # ── One follow, the candles since it was last checked ────────────────────────
 
-def step(fo: dict, bars: list, now: datetime) -> list[str]:
+def step(fo: dict, bars: list, now: datetime, h4: Optional[list] = None) -> list[str]:
     """
     Advance one follow over the completed 5-minute candles after fo['last_bar_at'].
     Mutates fo (status, be_sent, last_bar_at, sl_at, closed_at) and returns the events, in order:
-    'be' | 'tp' | 'sl' | 'sl_left' | 'sl_tp' | 'left' | 'expired'.
+    'be' | 'tp' | 'sl' | 'sl_tp' | 'left' | 'expired'.
     A candle that touches both the SL and the TP counts as the SL (the cautious reading).
+    h4: closed H4 candles (open datetime, o, h, l, c); after the SL, the first one closing beyond the level
+    ends the re-entry watch ('left'). Defaults to H4 candles built from the 5-minute ones.
     """
+    if h4 is None:
+        h4 = h4_from_bars(bars, now)
     events: list[str] = []
     bull = fo["direction"] == "bullish"
     last = _parse(fo["last_bar_at"])
@@ -190,10 +235,6 @@ def step(fo: dict, bars: list, now: datetime) -> list[str]:
             hit_sl = l <= fo["sl"] if bull else h >= fo["sl"]
             if hit_sl:
                 fo["status"], fo["sl_at"] = "sl", _iso(t)
-                if _outside(fo, c, bull):
-                    fo["status"], fo["closed_at"] = "left", _iso(t)
-                    events.append("sl_left")
-                    break
                 events.append("sl")
                 continue
             if fo.get("be") is not None and not fo.get("be_sent") and (h >= fo["be"] if bull else l <= fo["be"]):
@@ -204,14 +245,20 @@ def step(fo: dict, bars: list, now: datetime) -> list[str]:
                 events.append("tp")
                 break
         elif fo["status"] == "sl":
+            failed = h4_failed_at(fo, h4, now)
+            if failed is not None and t >= failed:
+                fo["status"], fo["closed_at"] = "left", _iso(failed)
+                events.append("left")
+                break
             if h >= fo["tp"] if bull else l <= fo["tp"]:
                 fo["status"], fo["closed_at"] = "sl_tp", _iso(t)
                 events.append("sl_tp")
                 break
-            if _outside(fo, c, bull):
-                fo["status"], fo["closed_at"] = "left", _iso(t)
-                events.append("left")
-                break
+    if fo["status"] == "sl":     # an H4 close beyond the level after the last 5-minute candle
+        failed = h4_failed_at(fo, h4, now)
+        if failed is not None:
+            fo["status"], fo["closed_at"] = "left", _iso(failed)
+            events.append("left")
     if fo["status"] in OPEN_STATES and now - _parse(fo["opened_at"]) > timedelta(days=WATCH_DAYS):
         fo["status"], fo["closed_at"] = "expired", _iso(now)
         events.append("expired")
@@ -230,17 +277,20 @@ def _text(fo: dict, ev: str) -> Optional[str]:
         return f"✅ Take profit hit: {head}\n\nPrice reached TP {f(fo['tp'])}: +{tp_r}R."
     if ev == "sl":
         pat = _PAT_NAMES.get(fo.get("pattern") or "", fo.get("pattern") or "pattern")
-        past = "below" if fo["direction"] == "bullish" else "above"
+        bull = fo["direction"] == "bullish"
+        past = "below" if bull else "above"
+        lvl = level_of(fo)
+        end = (f"The watch runs until an H4 candle closes with its body {past} your level {f(lvl)}. "
+               if lvl is not None else "")
         return (f"🛑 Stop loss hit: {head}\n\nPrice reached SL {f(fo['sl'])}: -1R.\n"
-                f"Re-entry watch: if the same {fo.get('tf') or ''} {pat} forms again with its wick {past} {f(fo['sl'])}, "
-                f"still inside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}), you'll get it as a RE-ENTRY. "
-                f"A close outside the zone ends the watch. I'll also tell you if price goes on to the TP {f(fo['tp'])} without one.")
-    if ev == "sl_left":
-        return (f"🛑 Stop loss hit: {head}\n\nPrice reached SL {f(fo['sl'])}: -1R.\n"
-                f"The candle closed outside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}), so no re-entry is watched.")
+                f"Re-entry watch: if the same {fo.get('tf') or ''} {pat} forms again {past} the old SL {f(fo['sl'])}, "
+                f"you'll get it as a RE-ENTRY. {end}"
+                f"I'll also tell you if price goes on to the TP {f(fo['tp'])} without one.")
     if ev == "left":
-        return (f"↩️ Re-entry watch ended: {head}\n\nA candle closed outside your zone ({f(fo['zone_lo'])} – {f(fo['zone_hi'])}) "
-                f"after the stop, so the level is no longer watched for a re-entry.")
+        bull = fo["direction"] == "bullish"
+        lvl = level_of(fo)
+        return (f"↩️ Re-entry watch ended: {head}\n\nAn H4 candle closed with its body {'below' if bull else 'above'} "
+                f"your level{' ' + f(lvl) if lvl is not None else ''} after the stop: the POI failed, so no re-entry is watched.")
     if ev == "sl_tp":
         return (f"ℹ️ Price went on to the TP after your stop: {head}\n\nAfter the SL at {f(fo['sl'])}, price reached the TP {f(fo['tp'])} "
                 f"with no new confirmation at your level. The stop was a shake-out: a re-entry would have won.")
@@ -254,6 +304,20 @@ def follow_instruments(conn: sqlite3.Connection) -> list[str]:
         return [r[0] for r in conn.execute("SELECT DISTINCT instrument FROM trade_follows WHERE status IN ('open','sl')")]
     except sqlite3.OperationalError:
         return []
+
+
+def _stored_h4(conn: sqlite3.Connection, fo: dict, now: datetime) -> Optional[list]:
+    """The closed H4 candles TradingView sent for the instrument since the follow opened; None when it
+    sends none, so the H4 candles are built from the 5-minute ones instead."""
+    try:
+        since = (_parse(fo["opened_at"]) - H4).isoformat()
+        rows = conn.execute("SELECT ts, o, h, l, c FROM candles WHERE instrument = ? AND tf = 'H4' AND ts > ? ORDER BY ts",
+                            (fo["instrument"], since)).fetchall()
+    except sqlite3.OperationalError:
+        return None
+    if not rows:
+        return None
+    return [(_parse(r[0]), r[1], r[2], r[3], r[4]) for r in rows if _parse(r[0]) + H4 <= now]
 
 
 async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: datetime) -> None:
@@ -271,7 +335,7 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
         fo = dict(row)
         data = prices.get(fo["instrument"])
         bars = (data or {}).get("bars") or []
-        events = step(fo, bars, now)
+        events = step(fo, bars, now, _stored_h4(conn, fo, now))
         conn.execute("UPDATE trade_follows SET status = ?, be_sent = ?, last_bar_at = ?, sl_at = ?, closed_at = ? WHERE id = ?",
                      (fo["status"], fo["be_sent"], fo["last_bar_at"], fo["sl_at"], fo["closed_at"], fo["id"]))
         now_iso = _iso(now)
@@ -304,6 +368,7 @@ def summary(fo: dict) -> str:
     """One line for the dashboard: the latest follow of a level."""
     f = lambda v: fmt_price(fo["instrument"], v)
     state = {"open": "open" + (" · breakeven point reached" if fo.get("be_sent") else ""),
-             "tp": "TP hit", "sl": "SL hit · watching for the same pattern past the SL, in the zone", "sl_tp": "SL hit, then price reached the TP",
-             "left": "SL hit · price left the zone", "reentered": "SL hit · re-entered", "expired": "ended"}.get(fo["status"], fo["status"])
+             "tp": "TP hit", "sl": "SL hit · watching for the same pattern past the SL until an H4 close beyond the level",
+             "sl_tp": "SL hit, then price reached the TP",
+             "left": "SL hit · an H4 candle closed beyond the level", "reentered": "SL hit · re-entered", "expired": "ended"}.get(fo["status"], fo["status"])
     return f"Entry {f(fo['entry'])} · SL {f(fo['sl'])} · TP {f(fo['tp'])} · {state}"

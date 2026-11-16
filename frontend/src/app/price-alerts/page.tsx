@@ -627,7 +627,7 @@ function EntryAlertsPanel({ instruments, prices }: {
             />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
               {mustReach
-                ? <>The pattern&apos;s wick has to touch your price or go through it (a buy: at or below your level; a sell: at or above). A wick that stops short never counts. This number only limits how far through your level it may go. Default 20 pips. With Follow the trade, it is also the zone watched for a re-entry after a stop.</>
+                ? <>The pattern&apos;s wick has to touch your price or go through it (a buy: at or below your level; a sell: at or above). A wick that stops short never counts. This number only limits how far through your level it may go. Default 20 pips.</>
                 : <>How close the pattern must form to your level, on either side. Default 20 pips covers
               normal overshoots. Use smaller (5-10) for tight levels, larger (30-50)
               for wider zones.</>}
@@ -680,8 +680,9 @@ function EntryAlertsPanel({ instruments, prices }: {
             </label>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
               Entry = the confirmation candle&apos;s close. Stop loss = behind the pattern&apos;s wick. You get a Telegram message at the
-              breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry: the same pattern on the same timeframe, with its wick
-              past your old stop loss and still inside your zone (your level ± the pips above). A close outside the zone ends the watch.
+              breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry: the same pattern on the same timeframe, formed past your
+              old stop loss (a buy: below it; a sell: above it). The watch runs until an H4 candle closes with its body beyond your
+              level (a buy: below it; a sell: above it). SL buffer = how many pips behind the pattern&apos;s wick your stop loss goes.
               If price goes on to the take profit without a re-entry, you&apos;re told.
               Checked on 5-minute candles, so a message can come a few minutes after the touch.
             </div>
