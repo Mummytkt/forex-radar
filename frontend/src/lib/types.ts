@@ -94,6 +94,7 @@ export interface EntryAlertItem {
   be_r: number | null               // breakeven alert at this many R (null: none)
   sl_buffer_pips: number
   must_reach: boolean               // the wick must reach the level; tolerance = how far past it
+  entry_mode?: 'instant' | 'limit'  // limit = a limit order at the pattern's level (followed trades)
   follow_status: string | null      // the latest followed trade of this level
 }
 

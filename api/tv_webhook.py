@@ -217,6 +217,7 @@ class TVWebhookPayload(BaseModel):
     candles: Optional[str] = None      # ENTRY_CONFIRMATION v6+: that timeframe's last 30 candles "minutes,o,h,l,c;..." for the chart picture
     timeframe: Optional[str] = None    # ENTRY_CONFIRMATION: pine timeframe.period ("60" / "120")
     swept_level: Optional[float] = None  # ENTRY_CONFIRMATION: body level that was swept
+    limit_price: Optional[float] = None  # ENTRY_CONFIRMATION (Sweep and Break, 2026-11-16): the breaker = a limit entry's price
     snapshot: Optional[dict] = None    # PRICE_UPDATE: chart stage + levels (Bias Pointer 2026-10-16+)
     source_kind: Optional[str] = None  # inside_range reactions: "v_shape" | "a_shape" | "oc"
     level_type: Optional[str] = None   # which daily level broke: external | internal | inner_internal | sub_internal
@@ -1070,7 +1071,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     # Find every active, matching, non-expired entry alert for this instrument + direction
     rows = conn.execute("""
         SELECT epa.id, epa.price, epa.tolerance_pips, epa.note, epa.watches, epa.keep_open,
-               epa.follow, epa.tp_r, epa.be_r, epa.sl_buffer_pips, epa.must_reach,
+               epa.follow, epa.tp_r, epa.be_r, epa.sl_buffer_pips, epa.must_reach, epa.entry_mode,
                u.telegram_chat_id, epa.user_id, u.role, u.plan, u.plan_expires_at
         FROM entry_pattern_alerts epa
         LEFT JOIN users u ON u.id = epa.user_id
@@ -1156,7 +1157,8 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             try:
                 from alerts.trade_follow import open_follow
                 fl = open_follow(conn, dict(row), instrument, direction, pattern,
-                                 tf_label, price, payload.touch_price, swept_level, payload.candles)
+                                 tf_label, price, payload.touch_price, swept_level, payload.candles,
+                                 payload.limit_price)
                 if fl:
                     alert_text += "\n\n" + fl
             except Exception:
@@ -1189,12 +1191,12 @@ _ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd":
 def _follow_lines(conn, alert_id: int) -> Optional[list]:
     """The entry, SL, TP and breakeven of the trade this alert just opened (for its chart)."""
     try:
-        fo = conn.execute("SELECT entry, sl, tp, be, tp_r, be_r FROM trade_follows WHERE alert_id = ? AND status = 'open' "
-                          "ORDER BY id DESC LIMIT 1", (alert_id,)).fetchone()
+        fo = conn.execute("SELECT entry, sl, tp, be, tp_r, be_r, mode FROM trade_follows WHERE alert_id = ? "
+                          "AND status IN ('open','pending') ORDER BY id DESC LIMIT 1", (alert_id,)).fetchone()
         if not fo:
             return None
         from alerts.follow_chart import trade_levels
-        return trade_levels(None, fo[0], fo[1], fo[2], fo[3], fo[4], fo[5])
+        return trade_levels(None, fo[0], fo[1], fo[2], fo[3], fo[4], fo[5], "Limit" if fo[6] == "limit" else "Entry")
     except Exception:
         return None
 

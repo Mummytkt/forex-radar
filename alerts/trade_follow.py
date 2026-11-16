@@ -14,7 +14,14 @@ The price monitor (every 5 minutes, 5-minute candles) then sends:
     closes below it; a sell: above it), H4 candle after H4 candle; or until price goes on to the TP without one
     (reported: the stop was a shake-out), the level expires, or WATCH_DAYS.
 
-Statuses: open -> tp | sl (stopped, watching) -> sl_tp | left | reentered | expired
+LIMIT ENTRY (user, 2026-11-16, Documents/Limit_Entry_Rule.png): a level can take its entry as a limit order instead
+of at the confirmation close. The limit goes at: CISD = the CISD line; OCTGD = the OC level; PCL = the PCL candle's
+open; Engulfing = the close of the candle body it covered; Sweep and Break = the breaker. SL as above (the pattern's
+wick + buffer); TP and breakeven are measured from the limit. Nothing is watched until price comes back to the limit
+(LIMIT FILLED, then as above). The order is cancelled (CANCEL THE ORDER) when price reaches the TP first, or when an
+H4 candle closes with its body beyond the level (a buy: below it; a sell: above it) before the fill.
+
+Statuses: pending (limit not filled) -> open | cancelled ; open -> tp | sl (stopped, watching) -> sl_tp | left | reentered | expired
 """
 
 from __future__ import annotations
@@ -29,7 +36,7 @@ from config import fmt_price, pip_size_for, tagged
 logger = logging.getLogger(__name__)
 
 WATCH_DAYS = 14          # a follow is dropped after this long, whatever its state
-OPEN_STATES = ("open", "sl")
+OPEN_STATES = ("open", "sl", "pending")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trade_follows (
@@ -56,7 +63,9 @@ CREATE TABLE IF NOT EXISTS trade_follows (
     last_bar_at   TEXT    NOT NULL,
     sl_at         TEXT,
     closed_at     TEXT,
-    candles       TEXT
+    candles       TEXT,
+    mode          TEXT NOT NULL DEFAULT 'instant',
+    filled_at     TEXT
 )
 """
 
@@ -78,7 +87,7 @@ def _r(v: float) -> str:
 
 def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, direction: str, pattern: str,
                 tf_label: str, entry: float, touch: Optional[float], pattern_level: Optional[float],
-                candles: Optional[str] = None) -> Optional[str]:
+                candles: Optional[str] = None, limit_price: Optional[float] = None) -> Optional[str]:
     """Called when a level's entry alert fires. Returns the lines to add to the alert (None: not followed)."""
     if not alert.get("follow"):
         return None
@@ -89,10 +98,24 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     alert_id = alert["id"]
 
     live = conn.execute(
-        "SELECT id, status, opened_at, reentry_no FROM trade_follows WHERE alert_id = ? AND status IN ('open','sl') ORDER BY id DESC",
+        "SELECT id, status, opened_at, reentry_no FROM trade_follows WHERE alert_id = ? AND status IN ('open','sl','pending') ORDER BY id DESC",
         (alert_id,)).fetchall()
     if any(r["status"] == "open" for r in live):
         return "A trade from this level is still being followed: this one is not followed as well."
+    if any(r["status"] == "pending" for r in live):
+        return "A limit order from this level is still waiting to fill: this one is not followed as well."
+    live = [r for r in live if r["status"] == "sl"]
+
+    # Limit entry: the order waits at the pattern's limit price; else the entry is the confirmation close
+    note = ""
+    lim = None
+    if (alert.get("entry_mode") or "instant") == "limit":
+        lim = limit_for(pattern, direction, entry, pattern_level, candles, limit_price)
+        if lim is None:
+            note = "Limit entry: this alert carried no limit price (recreate the TradingView alert from the latest script), so it is followed as an instant entry.\n"
+    confirm_close = entry
+    if lim is not None:
+        entry = lim
 
     # SL behind the pattern: its wick; else the pattern's level, when that is on the right side of the entry
     pip = pip_size_for(instrument)
@@ -108,6 +131,7 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     risk = abs(entry - sl)
     if risk <= 0:
         return None
+    mode = "limit" if lim is not None else "instant"
     tp_r = float(alert.get("tp_r") or 2)
     be_r = alert.get("be_r")
     be_r = float(be_r) if be_r else None
@@ -124,14 +148,29 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
 
     conn.execute("""
         INSERT INTO trade_follows (alert_id, user_id, instrument, direction, pattern, tf, entry, sl, tp, be, tp_r, be_r,
-                                   zone_lo, zone_hi, reentry_no, status, opened_at, last_bar_at, candles)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)
+                                   zone_lo, zone_hi, reentry_no, status, opened_at, last_bar_at, candles, mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (alert_id, alert.get("user_id"), instrument, direction, pattern, tf_label, entry, sl, tp, be, tp_r, be_r,
-          zone_lo, zone_hi, reentry_no, _iso(now), _iso(now), candles))
+          zone_lo, zone_hi, reentry_no, "pending" if mode == "limit" else "open", _iso(now), _iso(now), candles, mode))
     conn.commit()
 
+    if mode == "limit":
+        head = (f"🔁 RE-ENTRY {reentry_no}: LIMIT ORDER at your level" if reentry_no else "📥 LIMIT ORDER at your level")
+        lines = [head,
+                 f"{'Buy' if bull else 'Sell'} limit {f(entry)} ({_LIMIT_AT.get(_SAME.get(pattern, pattern), 'the pattern level')}) · "
+                 f"SL {f(sl)} · TP {f(tp)} (1:{_r(tp_r)})"]
+        if be is not None:
+            lines.append(f"Breakeven alert at {f(be)} (1:{_r(be_r)})")
+        if _to_yf_ticker(instrument) is None:
+            lines.append("Note: there is no 5-minute price feed for this instrument, so the order can't be watched.")
+        else:
+            lines.append(f"Nothing is watched until price comes back to {f(entry)}: you'll get LIMIT FILLED, then breakeven, "
+                         f"TP and SL. If price reaches the TP first, or an H4 candle closes with its body "
+                         f"{'below' if bull else 'above'} your level before the fill, you'll get CANCEL THE ORDER.")
+        return "\n".join(lines)
+
     head = f"🔁 RE-ENTRY {reentry_no} at your level" if reentry_no else "📌 Following this trade"
-    lines = [head,
+    lines = [note + head if note else head,
              f"Entry {f(entry)} · SL {f(sl)} · TP {f(tp)} (1:{_r(tp_r)})"]
     if be is not None:
         lines.append(f"Breakeven alert at {f(be)} (1:{_r(be_r)})")
@@ -145,6 +184,33 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
 _PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
               "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 _SAME = {"engulfing_sweep": "pcl", "sweep": "pcl"}
+_LIMIT_AT = {"cisd": "the CISD line", "octgd": "the OC level", "pcl": "the PCL candle's open",
+             "engulfing": "the close of the candle it engulfed", "sweep_break": "the breaker"}
+
+
+def limit_for(pattern: str, direction: str, close: float, pattern_level: Optional[float],
+              candles: Optional[str], limit_price: Optional[float]) -> Optional[float]:
+    """The limit price of a confirmation (user, 2026-11-16): CISD = the CISD line; OCTGD = the OC level; PCL = the
+    PCL candle's open; Engulfing = the close of the candle it covered (its body, never the wick); Sweep and Break =
+    the breaker (sent by the script). None when the alert can't give it, or it isn't on the retrace side of the close."""
+    from alerts.chart_image import parse_candles
+    pat = _SAME.get(pattern, pattern)
+    lim = None
+    if limit_price is not None:
+        lim = limit_price
+    elif pat in ("cisd", "octgd"):
+        lim = pattern_level
+    elif pat in ("pcl", "engulfing"):
+        cs = parse_candles(candles)
+        # the last candle sent is the confirmation candle: its close is the alert's close
+        if len(cs) >= 2 and abs(cs[-1][4] - close) <= max(abs(close) * 1e-4, 1e-9):
+            lim = cs[-1][1] if pat == "pcl" else cs[-2][4]
+    if lim is None:
+        return None
+    # a buy's limit sits below the close (price comes back down to it); a sell's above
+    if (direction == "bullish" and not lim < close) or (direction == "bearish" and not lim > close):
+        return None
+    return lim
 
 
 def stopped_follow(conn: sqlite3.Connection, alert_id: int) -> Optional[dict]:
@@ -192,6 +258,23 @@ def h4_failed_at(fo: dict, h4: list, now: datetime) -> Optional[datetime]:
     return None
 
 
+def h4_cancel_at(fo: dict, h4: list, now: datetime) -> Optional[datetime]:
+    """A limit order not yet filled: the close time of the first H4 candle ending after the confirmation that
+    closed with its body beyond the level (a buy: below it; a sell: above it). None if none has."""
+    lvl = level_of(fo)
+    if lvl is None:
+        return None
+    opened = _parse(fo["opened_at"])
+    bull = fo["direction"] == "bullish"
+    for t, _o, _h, _l, c in sorted(h4, key=lambda x: x[0]):
+        end = t + H4
+        if end <= opened or end > now:
+            continue
+        if (c < lvl) if bull else (c > lvl):
+            return end
+    return None
+
+
 def h4_from_bars(bars: list, now: datetime) -> list:
     """Closed H4 candles built from 5-minute candles, aligned like the forex H4 chart (17:00 New York + 4n),
     for instruments whose H4 candles don't come from TradingView."""
@@ -233,6 +316,24 @@ def step(fo: dict, bars: list, now: datetime, h4: Optional[list] = None) -> list
         if t <= last or t + timedelta(minutes=5) > now:
             continue    # already seen, or still forming
         fo["last_bar_at"] = _iso(t)
+        if fo["status"] == "pending":       # a limit order waiting to fill
+            cancel = h4_cancel_at(fo, h4, now)
+            if cancel is not None and t >= cancel:
+                fo["status"], fo["closed_at"] = "cancelled", _iso(cancel)
+                events.append("cancel_h4")
+                break
+            if l <= fo["entry"] if bull else h >= fo["entry"]:
+                fo["status"], fo["filled_at"] = "open", _iso(t)
+                events.append("filled")
+                if l <= fo["sl"] if bull else h >= fo["sl"]:      # filled and stopped in the same 5 minutes
+                    fo["status"], fo["sl_at"] = "sl", _iso(t)
+                    events.append("sl")
+                continue
+            if h >= fo["tp"] if bull else l <= fo["tp"]:
+                fo["status"], fo["closed_at"] = "cancelled", _iso(t)
+                events.append("cancel_tp")
+                break
+            continue
         if fo["status"] == "open":
             hit_sl = l <= fo["sl"] if bull else h >= fo["sl"]
             if hit_sl:
@@ -256,14 +357,19 @@ def step(fo: dict, bars: list, now: datetime, h4: Optional[list] = None) -> list
                 fo["status"], fo["closed_at"] = "sl_tp", _iso(t)
                 events.append("sl_tp")
                 break
+    if fo["status"] == "pending":
+        cancel = h4_cancel_at(fo, h4, now)
+        if cancel is not None:
+            fo["status"], fo["closed_at"] = "cancelled", _iso(cancel)
+            events.append("cancel_h4")
     if fo["status"] == "sl":     # an H4 close beyond the level after the last 5-minute candle
         failed = h4_failed_at(fo, h4, now)
         if failed is not None:
             fo["status"], fo["closed_at"] = "left", _iso(failed)
             events.append("left")
     if fo["status"] in OPEN_STATES and now - _parse(fo["opened_at"]) > timedelta(days=WATCH_DAYS):
-        fo["status"], fo["closed_at"] = "expired", _iso(now)
-        events.append("expired")
+        events.append("cancel_old" if fo["status"] == "pending" else "expired")
+        fo["status"], fo["closed_at"] = ("cancelled" if fo["status"] == "pending" else "expired"), _iso(now)
     return events
 
 
@@ -271,8 +377,23 @@ def _text(fo: dict, ev: str) -> Optional[str]:
     inst = fo["instrument"]
     f = lambda v: fmt_price(inst, v)
     side = "BUY" if fo["direction"] == "bullish" else "SELL"
-    head = f"{tagged(inst)} · {side} from {f(fo['entry'])}"
+    limit = fo.get("mode") == "limit"
+    head = f"{tagged(inst)} · {side} {'limit' if limit else 'from'} {f(fo['entry'])}"
     tp_r, be_r = _r(fo["tp_r"]), _r(fo["be_r"]) if fo.get("be_r") else ""
+    if ev == "filled":
+        be = f" · breakeven alert at {f(fo['be'])}" if fo.get("be") is not None else ""
+        return (f"📥 Limit filled: {head}\n\nPrice came back to your limit {f(fo['entry'])}. The trade is on: "
+                f"SL {f(fo['sl'])} · TP {f(fo['tp'])} (1:{tp_r}){be}. You'll get a message at breakeven, TP and SL.")
+    if ev == "cancel_tp":
+        return (f"❌ Cancel the order: {head}\n\nPrice reached the TP {f(fo['tp'])} without coming back to your limit "
+                f"{f(fo['entry'])}, so the order never filled. Cancel it now.")
+    if ev == "cancel_h4":
+        lvl = level_of(fo)
+        return (f"❌ Cancel the order: {head}\n\nAn H4 candle closed with its body "
+                f"{'below' if fo['direction'] == 'bullish' else 'above'} your level{' ' + f(lvl) if lvl is not None else ''} "
+                f"before the limit {f(fo['entry'])} filled: the POI failed.")
+    if ev == "cancel_old":
+        return f"❌ Cancel the order: {head}\n\nThe limit {f(fo['entry'])} hasn't filled in {WATCH_DAYS} days, so it is no longer watched."
     if ev == "be":
         return f"🟡 Breakeven point reached: {head}\n\nPrice reached {f(fo['be'])} (1:{be_r}). You can move the stop to your entry {f(fo['entry'])}.\nTP {f(fo['tp'])} is still ahead."
     if ev == "tp":
@@ -303,7 +424,7 @@ def _text(fo: dict, ev: str) -> Optional[str]:
 
 def follow_instruments(conn: sqlite3.Connection) -> list[str]:
     try:
-        return [r[0] for r in conn.execute("SELECT DISTINCT instrument FROM trade_follows WHERE status IN ('open','sl')")]
+        return [r[0] for r in conn.execute("SELECT DISTINCT instrument FROM trade_follows WHERE status IN ('open','sl','pending')")]
     except sqlite3.OperationalError:
         return []
 
@@ -331,7 +452,7 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
         FROM trade_follows tf
         LEFT JOIN users u ON u.id = tf.user_id
         LEFT JOIN entry_pattern_alerts epa ON epa.id = tf.alert_id
-        WHERE tf.status IN ('open','sl')
+        WHERE tf.status IN ('open','sl','pending')
     """).fetchall()
     from alerts.follow_chart import h4_rows, standin_offset, shift, follow_picture
     offsets: dict = {}
@@ -346,8 +467,8 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
         if off:
             bars = shift(bars, off)
         events = step(fo, bars, now, _stored_h4(conn, fo, now))
-        conn.execute("UPDATE trade_follows SET status = ?, be_sent = ?, last_bar_at = ?, sl_at = ?, closed_at = ? WHERE id = ?",
-                     (fo["status"], fo["be_sent"], fo["last_bar_at"], fo["sl_at"], fo["closed_at"], fo["id"]))
+        conn.execute("UPDATE trade_follows SET status = ?, be_sent = ?, last_bar_at = ?, sl_at = ?, closed_at = ?, filled_at = ? WHERE id = ?",
+                     (fo["status"], fo["be_sent"], fo["last_bar_at"], fo["sl_at"], fo["closed_at"], fo.get("filled_at"), fo["id"]))
         now_iso = _iso(now)
         for ev in events:
             if ev == "sl" and fo["alert_id"]:
@@ -383,7 +504,11 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
 def summary(fo: dict) -> str:
     """One line for the dashboard: the latest follow of a level."""
     f = lambda v: fmt_price(fo["instrument"], v)
-    state = {"open": "open" + (" · breakeven point reached" if fo.get("be_sent") else ""),
+    if fo["status"] == "pending":
+        return f"Limit {f(fo['entry'])} · SL {f(fo['sl'])} · TP {f(fo['tp'])} · waiting to fill"
+    if fo["status"] == "cancelled":
+        return f"Limit {f(fo['entry'])} · SL {f(fo['sl'])} · TP {f(fo['tp'])} · order cancelled (never filled)"
+    state = {"open": ("filled" if fo.get("mode") == "limit" else "open") + (" · breakeven point reached" if fo.get("be_sent") else ""),
              "tp": "TP hit", "sl": "SL hit · watching for the same pattern past the SL until an H4 close beyond the level",
              "sl_tp": "SL hit, then price reached the TP",
              "left": "SL hit · an H4 candle closed beyond the level", "reentered": "SL hit · re-entered", "expired": "ended"}.get(fo["status"], fo["status"])

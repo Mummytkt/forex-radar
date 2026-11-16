@@ -137,17 +137,18 @@ def _h4_db(conn, instrument: str) -> list:
 
 _PAT = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
         "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
-_EVENT = {"open": "trade opened", "be": "breakeven point", "tp": "TP hit", "sl": "SL hit · re-entry watch",
+_EVENT = {"filled": "limit filled", "cancel_tp": "cancel the order", "cancel_h4": "cancel the order",
+          "cancel_old": "cancel the order", "open": "trade opened", "be": "breakeven point", "tp": "TP hit", "sl": "SL hit · re-entry watch",
           "left": "re-entry watch ended", "sl_tp": "TP reached after the stop", "expired": "follow ended"}
 
 
 def trade_levels(level: Optional[float], entry: float, sl: float, tp: float, be: Optional[float],
-                 tp_r=None, be_r=None) -> list[dict]:
+                 tp_r=None, be_r=None, entry_label: str = "Entry") -> list[dict]:
     r = lambda v: f" (1:{float(v):g})" if v else ""
     out = []
     if level is not None:
         out.append({"y": level, "label": "Your level", "kind": "h4", "tf": "both"})
-    out += [{"y": entry, "label": "Entry", "kind": "entry", "tf": "both"},
+    out += [{"y": entry, "label": entry_label, "kind": "entry", "tf": "both"},
             {"y": sl, "label": "SL", "kind": "sl", "tf": "both"},
             {"y": tp, "label": "TP" + r(tp_r), "kind": "tp", "tf": "both"}]
     if be is not None:
@@ -172,21 +173,26 @@ def follow_picture(conn, fo: dict, ev: str, bars: Optional[list], now: datetime)
         name, cs = "H4", _h4_db(conn, inst)
     if len(cs) < 3:
         return None
-    marks = [(_iso(entry_at), "entry")]
-    when = {"sl": fo.get("sl_at"), "tp": fo.get("closed_at"), "sl_tp": fo.get("closed_at"), "left": fo.get("closed_at")}.get(ev)
+    limit = fo.get("mode") == "limit"
+    marks = [(_iso(entry_at), "confirmation" if limit else "entry")]
+    if fo.get("filled_at"):
+        marks.append((_iso(_dt(fo["filled_at"])), "filled"))
+    when = {"sl": fo.get("sl_at"), "tp": fo.get("closed_at"), "sl_tp": fo.get("closed_at"), "left": fo.get("closed_at"),
+            "cancel_tp": fo.get("closed_at"), "cancel_h4": fo.get("closed_at")}.get(ev)
     if fo.get("sl_at") and ev in ("sl_tp", "left"):
         marks.append((_iso(_dt(fo["sl_at"])), "SL"))
     if when:
-        marks.append((_iso(_dt(when)), {"sl": "SL", "tp": "TP", "sl_tp": "TP", "left": "H4 close"}[ev]))
+        marks.append((_iso(_dt(when)), {"sl": "SL", "tp": "TP", "sl_tp": "TP", "left": "H4 close",
+                                        "cancel_tp": "TP, unfilled", "cancel_h4": "H4 close"}[ev]))
     side = "BUY" if fo["direction"] == "bullish" else "SELL"
     pat = _PAT.get(fo.get("pattern") or "", fo.get("pattern") or "")
     f = lambda v: fmt_price(inst, v)
     meta = {"tf_title": name, "side": f"{side} · {tf_label} {pat} · {_EVENT.get(ev, ev)}",
-            "subtitle": f"Entry {f(fo['entry'])}  ·  SL {f(fo['sl'])}  ·  TP {f(fo['tp'])}",
+            "subtitle": f"{'Limit' if limit else 'Entry'} {f(fo['entry'])}  ·  SL {f(fo['sl'])}  ·  TP {f(fo['tp'])}",
             "fired_at": now.astimezone(WAT).strftime("%d %b %H:%M WAT"), "marks": marks}
     try:
         return render(inst, name, cs, trade_levels(level_of(fo), fo["entry"], fo["sl"], fo["tp"], fo.get("be"),
-                                                    fo.get("tp_r"), fo.get("be_r")),
+                                                    fo.get("tp_r"), fo.get("be_r"), "Limit" if limit else "Entry"),
                       meta, fmt=f, full=True)
     except Exception:
         logger.exception("%s follow picture failed", inst)

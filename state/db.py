@@ -518,13 +518,19 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     for col_def in ("follow INTEGER NOT NULL DEFAULT 0", "tp_r REAL NOT NULL DEFAULT 2", "be_r REAL",
                     "sl_buffer_pips REAL NOT NULL DEFAULT 0",
                     # 2026-11-11: the wick must reach the level (tolerance = how far past it), not just come near
-                    "must_reach INTEGER NOT NULL DEFAULT 0"):
+                    "must_reach INTEGER NOT NULL DEFAULT 0",
+                    # 2026-11-16: 'instant' = enter at the confirmation close; 'limit' = a limit order at the pattern's level
+                    "entry_mode TEXT NOT NULL DEFAULT 'instant'"):
         if col_def.split()[0] not in epa_cols:
             conn.execute(f"ALTER TABLE entry_pattern_alerts ADD COLUMN {col_def}")
     from alerts.trade_follow import SCHEMA as _FOLLOW_SCHEMA
     conn.execute(_FOLLOW_SCHEMA)
-    if "candles" not in {row[1] for row in conn.execute("PRAGMA table_info(trade_follows)").fetchall()}:
-        conn.execute("ALTER TABLE trade_follows ADD COLUMN candles TEXT")   # the entry's candles, for the charts
+    tf_cols = {row[1] for row in conn.execute("PRAGMA table_info(trade_follows)").fetchall()}
+    for col_def in ("candles TEXT",                              # the entry's candles, for the charts
+                    "mode TEXT NOT NULL DEFAULT 'instant'",      # 'limit': a limit order (pending until filled)
+                    "filled_at TEXT"):
+        if col_def.split()[0] not in tf_cols:
+            conn.execute(f"ALTER TABLE trade_follows ADD COLUMN {col_def}")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_follows_live ON trade_follows (status, instrument)")
 
     # When the owner paid out a commission (Business page → Mark paid)

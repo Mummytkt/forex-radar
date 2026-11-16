@@ -300,7 +300,7 @@ function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDel
           <span style={{ fontSize: 12, color: 'var(--text-primary)', opacity: 0.85 }}>
             {item.watches ? item.watches.map(watchLabel).join(' · ') : 'PCL · H1/H2'}
             {item.keep_open ? ' · keeps watching' : ''}
-            {item.follow ? ` · follows the trade (1:${item.tp_r}${item.be_r != null ? `, breakeven at ${item.be_r}R` : ''})` : ''}
+            {item.follow ? ` · follows the trade (${item.entry_mode === 'limit' ? 'limit entry, ' : ''}1:${item.tp_r}${item.be_r != null ? `, breakeven at ${item.be_r}R` : ''})` : ''}
           </span>
           {item.follow_status && (
             <span style={{ fontSize: 12, color: 'var(--accent-hover)' }}>· {item.follow_status}</span>
@@ -426,6 +426,7 @@ function EntryAlertsPanel({ instruments, prices }: {
   const [tpR, setTpR] = useState('2')
   const [beR, setBeR] = useState('1')            // empty = no breakeven alert
   const [slBuf, setSlBuf] = useState('0')
+  const [entryMode, setEntryMode] = useState<'instant' | 'limit'>('instant')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const [editing, setEditing] = useState<EntryAlertItem | null>(null)   // saving replaces this alert
@@ -500,6 +501,7 @@ function EntryAlertsPanel({ instruments, prices }: {
           tp_r: follow ? tpVal : 2,
           be_r: follow ? beVal : null,
           sl_buffer_pips: follow ? bufVal : 0,
+          entry_mode: follow ? entryMode : 'instant',
         }),
       })
       if (!res.ok) {
@@ -538,6 +540,7 @@ function EntryAlertsPanel({ instruments, prices }: {
     setTpR(String(item.tp_r ?? 2))
     setBeR(item.be_r != null ? String(item.be_r) : '')
     setSlBuf(String(item.sl_buffer_pips ?? 0))
+    setEntryMode(item.entry_mode === 'limit' ? 'limit' : 'instant')
     setNote(item.note ?? '')
     setExpiry(item.expires_at ? 'keep' : 'never')
     setCustomExpiry('')
@@ -727,13 +730,33 @@ function EntryAlertsPanel({ instruments, prices }: {
               Follow the trade after the confirmation
             </label>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
-              Entry = the confirmation candle&apos;s close. Stop loss = behind the pattern&apos;s wick. You get a Telegram message at the
+              Entry = the confirmation candle&apos;s close (Instant), or a limit order at the pattern&apos;s level (Limit). Stop loss = behind the pattern&apos;s wick. You get a Telegram message at the
               breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry: the same pattern on the same timeframe, formed past your
               old stop loss (a buy: below it; a sell: above it). The watch runs until an H4 candle closes with its body beyond your
               level (a buy: below it; a sell: above it). SL buffer = how many pips behind the pattern&apos;s wick your stop loss goes.
               If price goes on to the take profit without a re-entry, you&apos;re told.
               Checked on 5-minute candles, so a message can come a few minutes after the touch.
             </div>
+            {follow && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Entry</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {([['instant', 'Instant'], ['limit', 'Limit']] as const).map(([v, lbl]) => (
+                    <button key={v} type="button" onClick={() => setEntryMode(v)} style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      border: `1px solid ${entryMode === v ? 'var(--accent)' : 'var(--border)'}`,
+                      background: entryMode === v ? 'var(--accent)' : 'var(--bg)',
+                      color: entryMode === v ? '#fff' : 'var(--text-secondary)',
+                    }}>{lbl}</button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                  {entryMode === 'instant'
+                    ? 'Instant: the trade starts at the confirmation candle\'s close.'
+                    : 'Limit: the confirmation alert gives a limit price: CISD = the CISD line, OCTGD = the OC level, PCL = the PCL candle\'s open, Engulfing = the close of the candle it covered, Sweep and Break = the breaker. Take profit and breakeven are measured from the limit. Nothing is watched until price comes back to it (LIMIT FILLED). If price reaches the take profit first, or an H4 candle closes with its body beyond your level before the fill, you get CANCEL THE ORDER.'}
+                </div>
+              </div>
+            )}
             {follow && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10 }}>
                 {([

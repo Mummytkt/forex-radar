@@ -1368,6 +1368,20 @@ _r = tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pat
 check("an ENTRY_CONFIRMATION with candles is accepted and fires the level",
       _cc["id"] not in {a["id"] for a in c.get("/api/entry-alerts?tab=active", headers=H(owner)).json()["items"]})
 c.delete(f"/api/entry-alerts/{_cc['id']}", headers=H(owner))
+# Instant / Limit entry (2026-11-16): a limit order at the pattern's level, filled / cancelled on the 5-minute feed
+_lm = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDUSD", "direction": "bullish", "price": 0.6500,
+             "tolerance_pips": 10, "watches": ["H1:cisd"], "follow": True, "tp_r": 3, "entry_mode": "limit"}).json()
+check("a level saves the Limit entry choice", _lm.get("entry_mode") == "limit")
+check("an entry mode other than instant / limit is refused",
+      c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDUSD", "direction": "bullish", "price": 0.65,
+             "follow": True, "entry_mode": "market"}).status_code == 400)
+_r = tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="60",
+        price=0.6540, swept_level=0.6530, touch_price=0.6498, candles=_cs)
+_lf = sqlite3.connect(DB).execute("SELECT status, mode, entry, sl, tp FROM trade_follows WHERE alert_id = ?", (_lm["id"],)).fetchone()
+check("the CISD confirmation opens a pending limit order at the CISD line, TP measured from it",
+      _lf is not None and _lf[0] == "pending" and _lf[1] == "limit" and abs(_lf[2] - 0.6530) < 1e-9
+      and abs(_lf[4] - (0.6530 + 3 * (0.6530 - _lf[3]))) < 1e-9)
+c.delete(f"/api/entry-alerts/{_lm['id']}", headers=H(owner))
 
 passed = sum(ok for _, ok in results)
 for name, ok in results:
