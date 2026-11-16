@@ -1331,6 +1331,14 @@ def get_instrument_prices(request: Request):
     return {r["instrument"]: {"price": r["price"], "updated_at": r["updated_at"]} for r in rows}
 
 
+@router.get("/price-alerts/live")
+def get_live_price(instrument: str, request: Request):
+    """The instrument's price now (for the Level Watch form); {} when there is none."""
+    from alerts.price_monitor import live_price
+    with _db(request) as conn:
+        return live_price(conn, instrument) or {}
+
+
 @router.post("/price-alerts", response_model=PriceAlertItem)
 def create_price_alert(body: PriceAlertCreate, request: Request):
     uid = _user_id(request)

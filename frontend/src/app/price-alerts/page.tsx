@@ -123,6 +123,15 @@ function SetAgo({ iso }: { iso: string }) {
   )
 }
 
+// The price now (every 30 s), else the last stored one
+function useLivePrice(instrument: string, prices?: Record<string, { price: number; updated_at: string }>) {
+  const { data } = useSWR<{ price?: number; at?: string }>(
+    instrument ? `/api/price-alerts/live?instrument=${instrument}` : null, fetcher, { refreshInterval: 30000 })
+  if (data?.price !== undefined && data.at) return { price: data.price, at: data.at }
+  const st = instrument ? prices?.[instrument] : undefined
+  return st ? { price: st.price, at: st.updated_at.endsWith('Z') || st.updated_at.includes('+') ? st.updated_at : st.updated_at + 'Z' } : undefined
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
@@ -431,7 +440,8 @@ function EntryAlertsPanel({ instruments, prices }: {
     }
   }, [instruments, instrument])
 
-  const currentPrice: number | undefined = instrument ? prices?.[instrument]?.price : undefined
+  const live = useLivePrice(instrument, prices)
+  const currentPrice: number | undefined = live?.price
 
   const [notice, showNotice] = useNotice()
 
@@ -586,8 +596,9 @@ function EntryAlertsPanel({ instruments, prices }: {
             </label>
             <InstrumentPicker instruments={instruments} value={instrument} onChange={setInstrument} />
             {currentPrice !== undefined && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
-                Current price: <strong style={{ color: 'var(--text-secondary)' }}>{formatPrice(instrument, currentPrice)}</strong>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>
+                Current price: <strong style={{ color: 'var(--text-primary)' }}>{formatPrice(instrument, currentPrice)}</strong>
+                {live?.at && <span> · {timeAgo(live.at)}</span>}
               </div>
             )}
           </div>
@@ -925,7 +936,8 @@ export default function PriceAlertsPage() {
   }, [overview, instrument])
 
   const instruments = overview?.map(o => o.instrument) ?? []
-  const currentPrice: number | undefined = instrument ? prices?.[instrument]?.price : undefined
+  const live = useLivePrice(instrument, prices)
+  const currentPrice: number | undefined = live?.price
 
   const [notice, showNotice] = useNotice()
 
@@ -1084,12 +1096,10 @@ export default function PriceAlertsPage() {
                 </label>
                 <InstrumentPicker instruments={instruments} value={instrument} onChange={setInstrument} />
                 {currentPrice !== undefined && (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Clock size={10} />
-                    Current price: <strong style={{ color: 'var(--text-secondary)' }}>{formatPrice(instrument, currentPrice)}</strong>
-                    {prices?.[instrument]?.updated_at && (
-                      <span>· {timeAgo(prices[instrument].updated_at)}</span>
-                    )}
+                    Current price: <strong style={{ color: 'var(--text-primary)' }}>{formatPrice(instrument, currentPrice)}</strong>
+                    {live?.at && <span>· {timeAgo(live.at)}</span>}
                   </div>
                 )}
               </div>

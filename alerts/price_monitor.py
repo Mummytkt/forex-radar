@@ -58,6 +58,69 @@ def _to_yf_ticker(instrument: str) -> Optional[str]:
     return None
 
 
+# ── The live price on the Level Watch page (user, 2026-11-16) ─────────────────
+# Forex and crypto: Yahoo's 1-minute price, which tracks the TradingView chart closely. Gold, oil and the
+# indices: Yahoo only has a stand-in (futures / the cash index), so its MOVE since the last TradingView H4
+# close is added to that close; when the stand-in isn't trading, no live price (the page shows the last one).
+_LIVE_CACHE: dict[str, tuple[float, Optional[dict]]] = {}
+LIVE_TTL = 30   # seconds
+
+
+def live_price(conn, instrument: str) -> Optional[dict]:
+    """{price, at (ISO UTC), source} or None."""
+    import time
+    inst = instrument.replace("/", "").upper()
+    hit = _LIVE_CACHE.get(inst)
+    if hit and time.time() - hit[0] < LIVE_TTL:
+        return hit[1]
+    try:
+        res = _live(conn, inst)
+    except Exception as exc:
+        logger.debug("live price %s failed: %s", inst, exc)
+        res = None
+    _LIVE_CACHE[inst] = (time.time(), res)
+    return res
+
+
+def _live(conn, inst: str) -> Optional[dict]:
+    from datetime import timedelta
+    sym = _to_yf_ticker(inst)
+    if not sym:
+        return None
+    import yfinance as yf
+    raw = yf.download(sym, period="2d", interval="1m", progress=False, auto_adjust=True)
+    if raw is None or raw.empty:
+        return None
+    col = raw["Close"]
+    if hasattr(col, "columns"):
+        col = col.iloc[:, 0]
+    col = col.dropna()
+    if col.empty:
+        return None
+    ts = col.index[-1].to_pydatetime()
+    ts = ts.astimezone(timezone.utc) if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+    val = float(col.iloc[-1])
+    if inst not in _EXACT_MAP:
+        return {"price": val, "at": ts.isoformat(), "source": "live"}
+    # a stand-in: its move since the last TradingView H4 close, added to that close
+    if datetime.now(timezone.utc) - ts > timedelta(minutes=15):
+        return None
+    row = conn.execute("SELECT ts, c FROM candles WHERE instrument = ? AND tf = 'H4' ORDER BY ts DESC LIMIT 1",
+                       (inst,)).fetchone()
+    if not row:
+        return None
+    t0 = datetime.fromisoformat(row[0])
+    t0 = (t0 if t0.tzinfo else t0.replace(tzinfo=timezone.utc)) + timedelta(hours=4)
+    before = [(i, v) for i, v in zip(col.index, col.values)
+              if i.to_pydatetime().astimezone(timezone.utc) <= t0]
+    if not before:
+        return None
+    bt = before[-1][0].to_pydatetime().astimezone(timezone.utc)
+    if t0 - bt > timedelta(minutes=10):
+        return None
+    return {"price": float(row[1]) + val - float(before[-1][1]), "at": ts.isoformat(), "source": "adjusted"}
+
+
 def _fetch_prices(instruments: list[str]) -> dict[str, dict]:
     """
     Fetch current OHLC for a list of instruments via Yahoo Finance.
