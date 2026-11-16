@@ -731,8 +731,8 @@ function EntryAlertsPanel({ instruments, prices }: {
             </label>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
               Entry = the confirmation candle&apos;s close (Instant), or a limit order at the pattern&apos;s level (Limit). Stop loss = behind the pattern&apos;s wick. You get a Telegram message at the
-              breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry: the same pattern on the same timeframe, formed past your
-              old stop loss (a buy: below it; a sell: above it). The watch runs until an H4 candle closes with its body beyond your
+              breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry: any pattern you ticked, on any ticked timeframe,
+              wherever it forms (price has already gone back past your entry). The watch runs until an H4 candle closes with its body beyond your
               level (a buy: below it; a sell: above it). SL buffer = how many pips behind the pattern&apos;s wick your stop loss goes.
               If price goes on to the take profit without a re-entry, you&apos;re told.
               Checked on 5-minute candles, so a message can come a few minutes after the touch.

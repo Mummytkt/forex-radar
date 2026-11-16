@@ -1113,8 +1113,8 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             continue  # an older level: PCL / Engulfing Sweep on H1 / H2 only
 
         proximity = tol_pips * pip_size
-        # A level re-armed after a stop loss (Follow the trade): only a RE-ENTRY counts, i.e. the SAME pattern on
-        # the same timeframe, with its wick past the stopped trade's SL (user, 2026-11-11)
+        # A level re-armed after a stop loss (Follow the trade): a RE-ENTRY = any pattern/timeframe the level
+        # watches (checked above), anywhere: price already went back past the old entry (user, 2026-11-16)
         stopped = None
         if row["follow"]:
             try:
@@ -1124,7 +1124,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
                 logger.exception("%s re-entry lookup failed (alert_id=%d)", instrument, alert_id)
         if stopped is not None:
             if not is_reentry(stopped, pattern, tf_label, touch):
-                continue  # not the same pattern past the old stop: no re-entry
+                continue  # not a stopped trade: no re-entry
         elif row["must_reach"]:
             # the wick has to reach the level itself (a buy: at or below it), and no further past it than the tolerance
             reached = (alert_price - proximity <= touch <= alert_price) if direction == "bullish"                 else (alert_price <= touch <= alert_price + proximity)
