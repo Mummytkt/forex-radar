@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS trade_follows (
     opened_at     TEXT    NOT NULL,
     last_bar_at   TEXT    NOT NULL,
     sl_at         TEXT,
-    closed_at     TEXT
+    closed_at     TEXT,
+    candles       TEXT
 )
 """
 
@@ -76,7 +77,8 @@ def _r(v: float) -> str:
 # ── Opening a follow when an entry alert fires ───────────────────────────────
 
 def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, direction: str, pattern: str,
-                tf_label: str, entry: float, touch: Optional[float], pattern_level: Optional[float]) -> Optional[str]:
+                tf_label: str, entry: float, touch: Optional[float], pattern_level: Optional[float],
+                candles: Optional[str] = None) -> Optional[str]:
     """Called when a level's entry alert fires. Returns the lines to add to the alert (None: not followed)."""
     if not alert.get("follow"):
         return None
@@ -122,10 +124,10 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
 
     conn.execute("""
         INSERT INTO trade_follows (alert_id, user_id, instrument, direction, pattern, tf, entry, sl, tp, be, tp_r, be_r,
-                                   zone_lo, zone_hi, reentry_no, status, opened_at, last_bar_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+                                   zone_lo, zone_hi, reentry_no, status, opened_at, last_bar_at, candles)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)
     """, (alert_id, alert.get("user_id"), instrument, direction, pattern, tf_label, entry, sl, tp, be, tp_r, be_r,
-          zone_lo, zone_hi, reentry_no, _iso(now), _iso(now)))
+          zone_lo, zone_hi, reentry_no, _iso(now), _iso(now), candles))
     conn.commit()
 
     head = f"🔁 RE-ENTRY {reentry_no} at your level" if reentry_no else "📌 Following this trade"
@@ -331,10 +333,18 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
         LEFT JOIN entry_pattern_alerts epa ON epa.id = tf.alert_id
         WHERE tf.status IN ('open','sl')
     """).fetchall()
+    from alerts.follow_chart import h4_rows, standin_offset, shift, follow_picture
+    offsets: dict = {}
     for row in rows:
         fo = dict(row)
         data = prices.get(fo["instrument"])
         bars = (data or {}).get("bars") or []
+        # gold, oil, indices: Yahoo's stand-in moved onto the TradingView price (forex / crypto: unchanged)
+        if fo["instrument"] not in offsets:
+            offsets[fo["instrument"]] = standin_offset(fo["instrument"], bars, h4_rows(conn, fo["instrument"]))
+        off = offsets[fo["instrument"]]
+        if off:
+            bars = shift(bars, off)
         events = step(fo, bars, now, _stored_h4(conn, fo, now))
         conn.execute("UPDATE trade_follows SET status = ?, be_sent = ?, last_bar_at = ?, sl_at = ?, closed_at = ? WHERE id = ?",
                      (fo["status"], fo["be_sent"], fo["last_bar_at"], fo["sl_at"], fo["closed_at"], fo["id"]))
@@ -357,11 +367,17 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
             chat_id = _resolve_chat(config, fo["user_id"], fo["chat"], fo["role"], fo["plan"], fo["plan_expires_at"])
         except Exception:
             chat_id = fo["chat"] or config.telegram_chat_id
+        from api.tv_webhook import _send_entry
         for ev in events:
             text = _text(fo, ev)
             logger.info("%s trade follow %d: %s", fo["instrument"], fo["id"], ev)
             if text and config.telegram_enabled and chat_id:
-                await send_alert(config.telegram_bot_token, chat_id, text)
+                try:   # every follow message comes with its chart (user, 2026-11-16)
+                    pic = follow_picture(conn, fo, ev, bars if off is not None else None, now)
+                except Exception:
+                    logger.exception("%s follow chart failed", fo["instrument"])
+                    pic = None
+                await _send_entry(config.telegram_bot_token, chat_id, text, pic)
 
 
 def summary(fo: dict) -> str:

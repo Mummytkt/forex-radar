@@ -1156,7 +1156,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             try:
                 from alerts.trade_follow import open_follow
                 fl = open_follow(conn, dict(row), instrument, direction, pattern,
-                                 tf_label, price, payload.touch_price, swept_level)
+                                 tf_label, price, payload.touch_price, swept_level, payload.candles)
                 if fl:
                     alert_text += "\n\n" + fl
             except Exception:
@@ -1166,8 +1166,18 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
                     instrument, direction, pattern, price, alert_id, alert_price, tol_pips)
 
         if config.telegram_enabled and chat_id:
-            pic = _entry_chart(instrument, tf_label, direction, pattern, payload, alert_price, tol_pips, swept_level)
-            _in_background(_send_entry(config.telegram_bot_token, chat_id, alert_text, pic))
+            extra = _follow_lines(conn, alert_id) if row["follow"] else None
+            draw = lambda cs, _ap=alert_price, _tp=tol_pips, _x=extra: _entry_chart(
+                instrument, tf_label, direction, pattern, cs, _ap, _tp, swept_level, _x)
+            pic = draw(payload.candles)
+            if pic is None:
+                # TradingView sent no candles (an alert made from an older script): drawn from the price feed
+                logger.info("%s entry alert %d came without candles: chart from the price feed", instrument, alert_id)
+                from alerts.follow_chart import h4_rows
+                _in_background(_send_entry_late(config.telegram_bot_token, chat_id, alert_text, instrument, tf_label,
+                                                h4_rows(conn, instrument), draw))
+            else:
+                _in_background(_send_entry(config.telegram_bot_token, chat_id, alert_text, pic))
 
 
 _ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
@@ -1176,19 +1186,46 @@ _ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd":
                 "engulfing": "Engulfed level", "sweep_break": "Broken level"}
 
 
-def _entry_chart(instrument, tf_label, direction, pattern, payload, level, tol_pips, line):
-    """The chart picture for an entry alert, from the candles the script sent (None if it sent none)."""
+def _follow_lines(conn, alert_id: int) -> Optional[list]:
+    """The entry, SL, TP and breakeven of the trade this alert just opened (for its chart)."""
+    try:
+        fo = conn.execute("SELECT entry, sl, tp, be, tp_r, be_r FROM trade_follows WHERE alert_id = ? AND status = 'open' "
+                          "ORDER BY id DESC LIMIT 1", (alert_id,)).fetchone()
+        if not fo:
+            return None
+        from alerts.follow_chart import trade_levels
+        return trade_levels(None, fo[0], fo[1], fo[2], fo[3], fo[4], fo[5])
+    except Exception:
+        return None
+
+
+def _entry_chart(instrument, tf_label, direction, pattern, candles, level, tol_pips, line, extra=None):
+    """The chart picture for an entry alert. candles: the script's "minutes,o,h,l,c;..." text, or a list of
+    (ISO time, o, h, l, c). None when there are none."""
     try:
         from alerts.chart_image import entry_picture, parse_candles
-        candles = parse_candles(payload.candles)
+        if isinstance(candles, str) or candles is None:
+            candles = parse_candles(candles)
         if not candles:
             return None
         return entry_picture(instrument, tf_label, direction, _ENTRY_NAMES.get(pattern, pattern), candles,
                              level, tol_pips, line, _ENTRY_LINES.get(pattern, "Pattern level"),
-                             lambda v: fmt_price(instrument, v))
+                             lambda v: fmt_price(instrument, v), extra)
     except Exception:
         logger.exception("%s entry chart picture failed", instrument)
         return None
+
+
+async def _send_entry_late(token: str, chat_id, text: str, instrument: str, tf_label: str, rows: list, draw) -> None:
+    """The entry alert when TradingView sent no candles: its chart from the 5-minute price feed."""
+    pic = None
+    try:
+        from alerts.follow_chart import fallback_candles
+        cs = await asyncio.to_thread(fallback_candles, instrument, tf_label, rows)
+        pic = draw(cs) if cs else None
+    except Exception:
+        logger.exception("%s entry chart from the price feed failed", instrument)
+    await _send_entry(token, chat_id, text, pic)
 
 
 async def _send_entry(token: str, chat_id, text: str, pic: Optional[bytes]) -> None:

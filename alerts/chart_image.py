@@ -24,12 +24,14 @@ COLORS = {
     "breaker": (248, 113, 113), "source": (52, 211, 153), "h4": (251, 191, 36),
     "ext": (167, 139, 250), "daily": (96, 165, 250), "h4lvl": (251, 146, 60),
     "liq": (56, 189, 248),
+    # a followed trade (2026-11-16)
+    "entry": (96, 165, 250), "sl": (248, 113, 113), "tp": (52, 211, 153), "be": (250, 204, 21),
 }
 N_CANDLES = {"D": 45, "H4": 60}
 MIN_FULL = 25   # fewer candles than this: say history is still arriving, and don't cache the picture
 # The alert's own levels: all a subscriber sees. The owner also sees the chart's
 # External high/low, D.A/D.V and H4.A/H4.V.
-ALERT_KINDS = {"breaker", "source", "h4", "liq"}
+ALERT_KINDS = {"breaker", "source", "h4", "liq", "entry", "sl", "tp", "be"}
 WAT = timezone(timedelta(hours=1))
 
 
@@ -292,13 +294,15 @@ def parse_candles(text: Optional[str]) -> list[tuple]:
 
 
 def entry_picture(instrument: str, tf_label: str, direction: str, pattern_name: str, candles: list[tuple],
-                  user_level: float, tol_pips: float, line: Optional[float], line_label: str, fmt) -> Optional[bytes]:
+                  user_level: float, tol_pips: float, line: Optional[float], line_label: str, fmt,
+                  extra: Optional[list] = None) -> Optional[bytes]:
     """The pattern's timeframe candles with the user's level (and its tolerance) and the pattern's line."""
     if len(candles) < 3:
         return None
     levels = [{"y": user_level, "label": "Your level", "kind": "h4", "tf": "both"}]
     if line is not None and abs(line - user_level) > 1e-12:
         levels.append({"y": line, "label": line_label, "kind": "source", "tf": "both"})
+    levels += [l for l in (extra or []) if l.get("kind") != "h4"]   # a followed trade: entry, SL, TP, breakeven
     side = "BUY" if direction == "bullish" else "SELL"
     meta = {"tf_title": tf_label, "side": f"{side} · {pattern_name}",
             "subtitle": f"Your level {fmt(user_level)} ± {tol_pips:g} pips  ·  the last candle formed it",

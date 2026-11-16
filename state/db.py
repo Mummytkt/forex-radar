@@ -523,6 +523,8 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE entry_pattern_alerts ADD COLUMN {col_def}")
     from alerts.trade_follow import SCHEMA as _FOLLOW_SCHEMA
     conn.execute(_FOLLOW_SCHEMA)
+    if "candles" not in {row[1] for row in conn.execute("PRAGMA table_info(trade_follows)").fetchall()}:
+        conn.execute("ALTER TABLE trade_follows ADD COLUMN candles TEXT")   # the entry's candles, for the charts
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_follows_live ON trade_follows (status, instrument)")
 
     # When the owner paid out a commission (Business page → Mark paid)
