@@ -117,7 +117,7 @@ function useNotice(): [React.ReactNode, (text: string) => void] {
 function SetAgo({ iso }: { iso: string }) {
   if (!iso) return null
   return (
-    <span style={{ fontSize: 11, color: 'var(--text-muted)' }} title={new Date(iso).toLocaleString()}>
+    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title={new Date(iso).toLocaleString()}>
       · Set {timeAgo(iso)}
     </span>
   )
@@ -181,18 +181,18 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
           </span>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             {triggerLabel(item.trigger_type, item.timeframe)}
           </span>
           {item.message && (
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {item.message}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>· {item.message}</span>
           )}
           {triggered && item.triggered_at && (
-            <span style={{ fontSize: 11, color: 'var(--bullish)' }}>· Triggered {timeAgo(item.triggered_at)}</span>
+            <span style={{ fontSize: 12, color: 'var(--bullish)' }}>· Triggered {timeAgo(item.triggered_at)}</span>
           )}
           <SetAgo iso={item.created_at} />
           {!triggered && item.expires_at && (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               · Expires {timeLeft(item.expires_at)}
             </span>
           )}
@@ -283,30 +283,30 @@ function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDel
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-hover)' }}>
             {formatPrice(item.instrument, item.price)}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             {item.must_reach ? `wick must reach · up to ${item.tolerance_pips}p past` : `± ${item.tolerance_pips}p`}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-primary)', opacity: 0.85 }}>
             {item.watches ? item.watches.map(watchLabel).join(' · ') : 'PCL · H1/H2'}
             {item.keep_open ? ' · keeps watching' : ''}
             {item.follow ? ` · follows the trade (1:${item.tp_r}${item.be_r != null ? `, breakeven at ${item.be_r}R` : ''})` : ''}
           </span>
           {item.follow_status && (
-            <span style={{ fontSize: 11, color: 'var(--accent-hover)' }}>· {item.follow_status}</span>
+            <span style={{ fontSize: 12, color: 'var(--accent-hover)' }}>· {item.follow_status}</span>
           )}
           {item.note && (
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>· {item.note}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>· {item.note}</span>
           )}
           {triggered && item.triggered_pattern && (
-            <span style={{ fontSize: 11, color: 'var(--bullish)' }}>
+            <span style={{ fontSize: 12, color: 'var(--bullish)' }}>
               · {patternLabel(item.triggered_pattern)} on {item.triggered_tf} · {timeAgo(item.triggered_at!)}
             </span>
           )}
           <SetAgo iso={item.created_at} />
           {!triggered && item.expires_at && (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               · Expires {timeLeft(item.expires_at)}
             </span>
           )}
