@@ -62,7 +62,7 @@ bool   x_on     = input.bool(true, "External high / low", group = G_T1, inline =
 color  x_col    = input.color(#E0E0E0, "", group = G_T1, inline = "x")
 string x_sty    = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = G_T1, inline = "x")
 int    x_w      = input.int(2, "width", minval = 1, maxval = 4, group = G_T1, inline = "x")
-bool   bo_on    = input.bool(true, "Breakout line (at the latest BO tag)", group = G_T1, inline = "bo")
+bool   bo_on    = input.bool(true, "Daily breakout line (D.BO)", group = G_T1, inline = "bo")
 color  bo_col   = input.color(#FFB74D, "", group = G_T1, inline = "bo")
 string bo_sty   = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = G_T1, inline = "bo")
 int    bo_w     = input.int(1, "width", minval = 1, maxval = 4, group = G_T1, inline = "bo")
