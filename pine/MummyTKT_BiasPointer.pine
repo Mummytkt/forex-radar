@@ -1448,12 +1448,20 @@ if barstate.islast
         string ew = a_cdir == "bull" ? "bullish" : "bearish"
         f_lvl(a_chit, a_chi, f_ab(N1 + " " + ew + " external high", A1 + (a_cdir == "bull" ? ".Bull" : ".Bear") + " XH"), x_col, x_sty, x_w)
         f_lvl(a_clot, a_clo, f_ab(N1 + " " + ew + " external low", A1 + (a_cdir == "bull" ? ".Bull" : ".Bear") + " XL"), x_col, x_sty, x_w)
-    if chart_ok and bo_on and D != 0 and not na(bo_t)
-        f_lvl(bo_t, bo_y, f_ab(N1 + " " + (bo_up ? "bullish" : "bearish") + " breakout (the breakout candle's " + (bo_up ? "high" : "low") + ")", A1 + ".BO"), bo_col, bo_sty, bo_w)
+    // the breakout line on the same price as the external high / low (the breakout candle made it): one label for both
+    bool   bo_vis  = chart_ok and bo_on and D != 0 and not na(bo_t) and not na(bo_y)
+    bool   bo_same = bo_vis and x_on and sph >= 1 and math.abs(bo_y - (bo_up ? XH : XL)) <= syminfo.mintick
+    string bo_tag  = bo_same ? " · " + f_ab(N1 + " breakout", A1 + ".BO") : ""
     if chart_ok and D != 0 and sph >= 1
         if x_on
-            f_lvl(XHt, XH, ab_on ? A1 + "." + BW + " XH" + (D > 0 and not a_chif ? " f" : "") : N1 + " " + DW + " external high" + (D > 0 and not a_chif ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range high" + (D > 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
-            f_lvl(XLt, XL, ab_on ? A1 + "." + BW + " XL" + (D < 0 and not a_clof ? " f" : "") : N1 + " " + DW + " external low" + (D < 0 and not a_clof ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range low" + (D < 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
+            f_lvl(XHt, XH, (ab_on ? A1 + "." + BW + " XH" + (D > 0 and not a_chif ? " f" : "") : N1 + " " + DW + " external high" + (D > 0 and not a_chif ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range high" + (D > 0 ? " (target)" : "") : "")) + (bo_up ? bo_tag : ""), x_col, x_sty, x_w)
+            f_lvl(XLt, XL, (ab_on ? A1 + "." + BW + " XL" + (D < 0 and not a_clof ? " f" : "") : N1 + " " + DW + " external low" + (D < 0 and not a_clof ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range low" + (D < 0 ? " (target)" : "") : "")) + (bo_up ? "" : bo_tag), x_col, x_sty, x_w)
+    if bo_vis      // drawn after the external lines, so it shows on top of them
+        if bo_same
+            array.push(cl, line.new(bo_t, bo_y, time, bo_y, xloc = xloc.bar_time, extend = extend.right, color = bo_col, style = f_sty(bo_sty), width = bo_w))
+        else
+            f_lvl(bo_t, bo_y, f_ab(N1 + " " + (bo_up ? "bullish" : "bearish") + " breakout (the breakout candle's " + (bo_up ? "high" : "low") + ")", A1 + ".BO"), bo_col, bo_sty, bo_w)
+    if chart_ok and D != 0 and sph >= 1
         if sph >= 2 and not na(XH) and not na(XL)
             float req = (XH + XL) / 2
             int   r0  = math.min(XHt, XLt)
