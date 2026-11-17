@@ -62,6 +62,10 @@ bool   x_on     = input.bool(true, "External high / low", group = G_T1, inline =
 color  x_col    = input.color(#E0E0E0, "", group = G_T1, inline = "x")
 string x_sty    = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = G_T1, inline = "x")
 int    x_w      = input.int(2, "width", minval = 1, maxval = 4, group = G_T1, inline = "x")
+bool   bo_on    = input.bool(true, "Breakout line (at the latest BO tag)", group = G_T1, inline = "bo")
+color  bo_col   = input.color(#FFB74D, "", group = G_T1, inline = "bo")
+string bo_sty   = input.string("Solid", "", options = ["Solid", "Dashed", "Dotted"], group = G_T1, inline = "bo")
+int    bo_w     = input.int(1, "width", minval = 1, maxval = 4, group = G_T1, inline = "bo")
 bool   eq_on    = input.bool(true, "Range 0.5 (after the pullback)", group = G_T1, inline = "eq")
 color  eq_col   = input.color(#9E9E9E, "", group = G_T1, inline = "eq")
 string eq_sty   = input.string("Dashed", "", options = ["Solid", "Dashed", "Dotted"], group = G_T1, inline = "eq")
@@ -820,6 +824,9 @@ f_story(int t, float y, bool above, string txt) =>
 // ── The story ────────────────────────────────────────────────────────────────
 // phase: 0 none · 1 top-timeframe breakout, story timeframe with it · 2 pullback break (the story
 // timeframe against it) · 3 story-timeframe pullback (back in alignment, the story-timeframe range)
+var int   bo_t = na    // the latest top-timeframe breakout candle (its BO tag): time and price
+var float bo_y = na
+var bool  bo_up = false
 var int   sph  = 0
 var int   D    = 0
 var int   k1   = 0
@@ -1136,6 +1143,9 @@ if ns_d != 0
     tk_dt  := s_dt
     if tg_bo
         f_tag(tg_bl, x1t, D > 0 ? x1h : x1l, f_ab(N1 + " " + DW + " breakout", A1 + ".BO"), D > 0, tg_boc)
+    bo_t  := x1t
+    bo_y  := D > 0 ? x1h : x1l
+    bo_up := D > 0
     al_rev := false
     f_al(al_bo, "daily_breakout", N1 + " " + DW + " breakout", D, ns_lvl, true, A1 + ".BO")
     f_story(time, D > 0 ? high : low, D > 0, N1 + " " + DW + " breakout (" + (t1_wick ? "wick" : "body close") + " beyond " + str.tostring(ns_lvl, format.mintick) + ").\nPullback line: the " + N2 + " " + LO + " that broke the last " + HI + "; it moves only when that " + HI + " breaks.\nAn " + N2 + " close beyond it = the " + N1 + " pullback.")
@@ -1438,6 +1448,8 @@ if barstate.islast
         string ew = a_cdir == "bull" ? "bullish" : "bearish"
         f_lvl(a_chit, a_chi, f_ab(N1 + " " + ew + " external high", A1 + (a_cdir == "bull" ? ".Bull" : ".Bear") + " XH"), x_col, x_sty, x_w)
         f_lvl(a_clot, a_clo, f_ab(N1 + " " + ew + " external low", A1 + (a_cdir == "bull" ? ".Bull" : ".Bear") + " XL"), x_col, x_sty, x_w)
+    if chart_ok and bo_on and D != 0 and not na(bo_t)
+        f_lvl(bo_t, bo_y, f_ab(N1 + " " + (bo_up ? "bullish" : "bearish") + " breakout (the breakout candle's " + (bo_up ? "high" : "low") + ")", A1 + ".BO"), bo_col, bo_sty, bo_w)
     if chart_ok and D != 0 and sph >= 1
         if x_on
             f_lvl(XHt, XH, ab_on ? A1 + "." + BW + " XH" + (D > 0 and not a_chif ? " f" : "") : N1 + " " + DW + " external high" + (D > 0 and not a_chif ? " (still forming)" : "") + (sph >= 2 ? " · " + N1 + " range high" + (D > 0 ? " (target)" : "") : ""), x_col, x_sty, x_w)
