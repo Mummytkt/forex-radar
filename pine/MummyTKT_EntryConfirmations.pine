@@ -57,6 +57,7 @@ int    sb_win  = input.int(20, "Candles allowed from the sweep to the break", mi
 int    oc_win  = input.int(10, "OCTGD: candles allowed from C2 to the close through the level", minval = 1, maxval = 50, group = "OCTGD")
 int    ci_win  = input.int(20, "CISD: candles allowed from the low to the close through the line", minval = 1, maxval = 100, group = "CISD")
 bool   show_mk = input.bool(true, "Show the confirmations on the chart", group = "Markers")
+bool   show_nt = input.bool(false, "Show the note on charts with no marks (4h, Daily, ...)", group = "Markers")
 color  bull_col = input.color(color.new(color.green, 10), "Bullish", group = "Markers", inline = "mc")
 color  bear_col = input.color(color.new(color.red, 10), "Bearish", group = "Markers", inline = "mc")
 
@@ -370,6 +371,6 @@ f_tf(own_on, true, own_m5, barstate.isconfirmed, own_tf, own_nm, d5_t,
      d5_bci, d5_sci, d5_bcilv, d5_bcitp, d5_scilv, d5_scitp, d5_cs)
 
 var table note = table.new(position.top_right, 1, 1)
-if barstate.islast and not (own_h1 or own_h2 or own_m15 or own_m5)
+if show_nt and barstate.islast and not (own_h1 or own_h2 or own_m15 or own_m5)
     table.cell(note, 0, 0, "Entry Confirmations marks show on H1, H2, M15 or M5 charts. Alerts are sent from a 5-minute chart.",
          text_color = color.white, bgcolor = color.new(color.gray, 40), text_size = size.small)
