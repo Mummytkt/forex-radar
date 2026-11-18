@@ -8,10 +8,10 @@ A level on the dashboard (an entry pattern alert) can follow the trade its confi
 The price monitor (every 5 minutes, 5-minute candles) then sends:
   - the breakeven point reached (once)
   - TP hit, or SL hit
-  - after an SL: the level is armed again for a RE-ENTRY (user, 2026-11-16, later the same day): ANY pattern
-    ticked on the level, on any ticked timeframe, in the same direction. Price has already gone back past the old
-    entry (the SL is behind it), which is all a re-entry needs; where the new pattern forms does not matter. No
-    limit on how many. The watch runs until an H4 candle (the POI timeframe) CLOSES with its body beyond the level (a buy:
+  - after an SL: the level is armed again for a RE-ENTRY (user, 2026-11-18, picture Documents/ReEntry_Three_Types.png,
+    only type 1 is right): ANY pattern ticked on the level, on any ticked timeframe, in the same direction, whose
+    wick is PAST the old SL (a buy: below it; a sell: above it), any distance. One forming between the old SL and
+    the entry, or back beyond the entry, is not a re-entry. No limit on how many. The watch runs until an H4 candle (the POI timeframe) CLOSES with its body beyond the level (a buy:
     closes below it; a sell: above it), H4 candle after H4 candle; or until price goes on to the TP without one
     (reported: the stop was a shake-out), the level expires, or WATCH_DAYS.
 
@@ -178,7 +178,7 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     if _to_yf_ticker(instrument) is None:
         lines.append("Note: there is no 5-minute price feed for this instrument, so its SL / TP can't be watched.")
     else:
-        lines.append("You'll get a message at breakeven, at TP and at SL. After an SL, any pattern you ticked forming again comes as a RE-ENTRY, until an H4 candle closes with its body beyond your level.")
+        lines.append("You'll get a message at breakeven, at TP and at SL. After an SL, any pattern you ticked forming past the SL comes as a RE-ENTRY, until an H4 candle closes with its body beyond your level.")
     return "\n".join(lines)
 
 
@@ -230,10 +230,12 @@ def stopped_follow(conn: sqlite3.Connection, alert_id: int) -> Optional[dict]:
 
 
 def is_reentry(fo: dict, pattern: str, tf_label: str, touch: Optional[float]) -> bool:
-    """A re-entry (user, 2026-11-16, replacing "the same pattern past the SL" the same day): any pattern the level
-    watches, on any timeframe it watches, in the trade's direction (the caller has already checked those). The
-    only condition is that price went back past the old entry before it formed, and the SL hit proves that."""
-    return fo.get("status") == "sl"
+    """A re-entry (user, 2026-11-18): any pattern the level watches, on any timeframe it watches, in the trade's
+    direction (the caller has already checked those), whose wick reached the stopped trade's SL or went past it (a buy:
+    at or below it; a sell: at or above it). How far past does not matter. Between the old SL and the entry, or beyond the entry: no."""
+    if fo.get("status") != "sl" or touch is None or fo.get("sl") is None:
+        return False
+    return touch <= fo["sl"] if fo["direction"] == "bullish" else touch >= fo["sl"]
 
 
 def level_of(fo: dict) -> Optional[float]:
@@ -412,7 +414,7 @@ def _text(fo: dict, ev: str) -> Optional[str]:
         end = (f"The watch runs until an H4 candle closes with its body {past} your level {f(lvl)}. "
                if lvl is not None else "")
         return (f"🛑 Stop loss hit: {head}\n\nPrice reached SL {f(fo['sl'])}: -1R.\n"
-                f"Re-entry watch: any pattern you ticked on this level that forms now comes as a RE-ENTRY. {end}"
+                f"Re-entry watch: any pattern you ticked on this level whose wick reaches the old SL {f(fo['sl'])} or goes {past} it comes as a RE-ENTRY. {end}"
                 f"I'll also tell you if price goes on to the TP {f(fo['tp'])} without one.")
     if ev == "left":
         bull = fo["direction"] == "bullish"
@@ -514,7 +516,7 @@ def summary(fo: dict) -> str:
     if fo["status"] == "cancelled":
         return f"Limit {f(fo['entry'])} · SL {f(fo['sl'])} · TP {f(fo['tp'])} · order cancelled (never filled)"
     state = {"open": ("filled" if fo.get("mode") == "limit" else "open") + (" · breakeven point reached" if fo.get("be_sent") else ""),
-             "tp": "TP hit", "sl": "SL hit · watching for a re-entry (any ticked pattern) until an H4 close beyond the level",
+             "tp": "TP hit", "sl": "SL hit · watching for a re-entry (any ticked pattern past the SL) until an H4 close beyond the level",
              "sl_tp": "SL hit, then price reached the TP",
              "left": "SL hit · an H4 candle closed beyond the level", "reentered": "SL hit · re-entered", "expired": "ended"}.get(fo["status"], fo["status"])
     return f"Entry {f(fo['entry'])} · SL {f(fo['sl'])} · TP {f(fo['tp'])} · {state}"
