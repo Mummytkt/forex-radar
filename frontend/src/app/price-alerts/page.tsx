@@ -117,7 +117,7 @@ function useNotice(): [React.ReactNode, (text: string) => void] {
 function SetAgo({ iso }: { iso: string }) {
   if (!iso) return null
   return (
-    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title={new Date(iso).toLocaleString()}>
+    <span style={{ fontSize: 12, fontWeight: 600, color: '#FB923C' }} title={new Date(iso).toLocaleString()}>
       · Set {timeAgo(iso)}
     </span>
   )
