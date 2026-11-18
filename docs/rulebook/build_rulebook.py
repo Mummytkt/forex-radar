@@ -285,8 +285,7 @@ def make_images():
         notes=[(1.3, 12.2, "C2 opens at or below C1's close", MUTED)],
         labels=["C1 down", "C2 up"], ylim=(11.6, 17.6))
     im["entrylevel"] = chart("entrylevel", [(16, 16.5, 13, 13.5), (13.5, 16.9, 13.2, 15.6), None, (19.5, 20, 17.5, 18), (18, 20.6, 17.8, 19.4)],
-        levels=[(15.0, "your watched level", ACCENT)], zones=[(13.6, 16.4, "± your tolerance", ZONE)],
-        notes=[(0.5, 17.4, "pattern inside your band → ALERT", GREEN), (3.5, 21.0, "same pattern far away → ignored", MUTED)],
+        levels=[(15.0, "your watched level", ACCENT)], notes=[(0.5, 17.4, "wick reaches your level → ALERT", GREEN), (3.5, 21.0, "wick stops short → ignored", MUTED)],
         ylim=(12.4, 21.6))
     im["timing"] = timeline("timing")
     im["delivery"] = flow("delivery", [("TradingView\nsends the event", ACCENT), ("Server checks\nsource + rules", ACCENT), ("Active plan?\nTelegram linked?", INK),
@@ -445,7 +444,8 @@ def make_rules(im):
          "The two candles must be opposite colours. Fires on candle close.", im["engulf"]),
         ("E. Entry patterns", "When an entry alert fires",
          "Entry patterns only alert at a level <b>you chose</b> in Price Alerts → Entry Pattern Alerts: same direction, a confirmation you ticked for that level, and the wick that reached it "
-         "within your tolerance (default 20 pips). The first one closes the alert, unless you chose to keep watching the others.",
+         "at your level or through it, any distance (no pips to set). The first one closes the alert, unless you chose to keep watching the others. "
+         "Every level closes by itself when an H4 candle closes with its body beyond it.",
          "Set a Buy entry alert at your level", "Set a Sell entry alert at your level",
          "Entry alerts don't check the bias state — you decide when and where to watch.", im["entrylevel"]),
         ("F. Timing and delivery", "When alerts arrive",
@@ -477,7 +477,7 @@ GLOSSARY = [
     ("H4.P+C", "One H4 candle closed through the pullback line and the H4 range edge: one alert instead of two."),
     ("FVG, OC, V, A", "Reaction zones. + = merged."),
     ("!", "An alert point on the chart."),
-    ("Tolerance", "The ± band your entry alert allows around your level. Entry alerts use 20 pips by default."),
+    ("Level reached", "An entry alert needs the pattern's wick at your level or through it (a buy: at or below; a sell: at or above), any distance. No pips."),
 ]
 
 

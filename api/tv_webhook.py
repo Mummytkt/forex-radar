@@ -1115,7 +1115,6 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         elif pattern not in ("pcl", "engulfing_sweep") or tf_label not in ("H1", "H2"):
             continue  # an older level: PCL / Engulfing Sweep on H1 / H2 only
 
-        proximity = tol_pips * pip_size
         # A level re-armed after a stop loss (Follow the trade): a RE-ENTRY = any pattern/timeframe the level
         # watches (checked above) with its wick at or past the stopped trade's SL, any distance (user, 2026-11-18)
         stopped = None
@@ -1128,13 +1127,13 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         if stopped is not None:
             if not is_reentry(stopped, pattern, tf_label, touch):
                 continue  # its wick is not past the old SL: no re-entry
-        elif row["must_reach"]:
-            # the wick has to reach the level itself (a buy: at or below it), and no further past it than the tolerance
-            reached = (alert_price - proximity <= touch <= alert_price) if direction == "bullish"                 else (alert_price <= touch <= alert_price + proximity)
+        else:
+            # No pips (user, 2026-11-18: "can we not use it at all?"): the pattern's wick has to reach the level
+            # itself (a buy: at or below it; a sell: at or above it), any distance past. The level ends when an
+            # H4 candle closes its body beyond it (alerts/trade_follow.check_kept_levels).
+            reached = touch <= alert_price if direction == "bullish" else touch >= alert_price
             if not reached:
                 continue  # the pattern's wick did not reach this user's level
-        elif abs(touch - alert_price) > proximity:
-            continue  # pattern formed too far from this user's watched level
 
         # The first formation closes the level, unless it keeps watching the others
         conn.execute("""
@@ -1172,7 +1171,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
 
         if config.telegram_enabled and chat_id:
             extra = _follow_lines(conn, alert_id) if row["follow"] else None
-            draw = lambda cs, _ap=alert_price, _tp=tol_pips, _x=extra: _entry_chart(
+            draw = lambda cs, _ap=alert_price, _tp=0, _x=extra: _entry_chart(
                 instrument, tf_label, direction, pattern, cs, _ap, _tp, swept_level, _x)
             pic = draw(payload.candles)
             if pic is None:

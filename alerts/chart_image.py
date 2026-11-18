@@ -305,7 +305,8 @@ def entry_picture(instrument: str, tf_label: str, direction: str, pattern_name: 
     levels += [l for l in (extra or []) if l.get("kind") != "h4"]   # a followed trade: entry, SL, TP, breakeven
     side = "BUY" if direction == "bullish" else "SELL"
     meta = {"tf_title": tf_label, "side": f"{side} · {pattern_name}",
-            "subtitle": f"Your level {fmt(user_level)} ± {tol_pips:g} pips  ·  the last candle formed it",
+            "subtitle": (f"Your level {fmt(user_level)} ± {tol_pips:g} pips" if tol_pips else f"Your level {fmt(user_level)}")
+                        + "  ·  the last candle formed it",
             "fired_at": datetime.now(WAT).strftime("%d %b %H:%M WAT")}
     try:
         return render(instrument, tf_label, candles, levels, meta, fmt=fmt, full=True)

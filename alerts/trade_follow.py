@@ -522,12 +522,13 @@ def kept_level_failed(level: dict, h4: list) -> Optional[tuple]:
 
 
 def kept_levels_due(conn: sqlite3.Connection, now: datetime) -> list:
-    """The active "Keep watching" levels an H4 close has just ended: [(level row dict, close time, close)]."""
+    """The active levels an H4 close has just ended: [(level row dict, close time, close)]. Every level since
+    2026-11-18 (no pips any more: a level lives until an H4 body closes beyond it), not only "Keep watching"."""
     out = []
     levels = conn.execute("""
         SELECT epa.*, u.telegram_chat_id AS chat, u.role, u.plan, u.plan_expires_at
         FROM entry_pattern_alerts epa LEFT JOIN users u ON u.id = epa.user_id
-        WHERE epa.is_active = 1 AND epa.keep_open = 1
+        WHERE epa.is_active = 1
           AND (epa.expires_at IS NULL OR epa.expires_at > ?)
     """, (_iso(now),)).fetchall()
     for r in levels:
@@ -555,16 +556,16 @@ def kept_level_text(lv: dict, close: float) -> str:
     bull = lv["direction"] == "bullish"
     return (f"🚫 Level closed: {tagged(lv['instrument'])} · {'BUY' if bull else 'SELL'} level {f(lv['price'])}\n\n"
             f"An H4 candle closed with its body {'below' if bull else 'above'} your level (close {f(close)}), so the level "
-            f"failed. It has stopped watching for confirmations (it was set to keep watching the others).")
+            f"failed. It has stopped watching for confirmations.")
 
 
 async def check_kept_levels(conn: sqlite3.Connection, config, now: datetime) -> None:
-    """Close each "Keep watching" level an H4 close beyond it has ended, and tell its owner."""
+    """Close each level an H4 close beyond it has ended, and tell its owner."""
     for lv, at, close in kept_levels_due(conn, now):
         conn.execute("UPDATE entry_pattern_alerts SET is_active = 0, triggered_at = ? WHERE id = ? AND is_active = 1",
                      (_iso(at), lv["id"]))
         conn.commit()
-        logger.info("%s keep-watching level %d closed: H4 close %s beyond %s", lv["instrument"], lv["id"], close, lv["price"])
+        logger.info("%s level %d closed: H4 close %s beyond %s", lv["instrument"], lv["id"], close, lv["price"])
         try:
             from api.tv_webhook import _resolve_chat
             chat_id = _resolve_chat(config, lv["user_id"], lv["chat"], lv["role"], lv["plan"], lv["plan_expires_at"])

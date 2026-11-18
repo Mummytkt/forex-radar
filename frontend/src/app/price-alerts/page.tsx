@@ -295,7 +295,7 @@ function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDel
             {formatPrice(item.instrument, item.price)}
           </span>
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            {item.must_reach ? `wick must reach · up to ${item.tolerance_pips}p past` : `± ${item.tolerance_pips}p`}
+            wick must reach · until an H4 close beyond
           </span>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
@@ -417,14 +417,12 @@ function EntryAlertsPanel({ instruments, prices }: {
   const [instrument, setInstrument] = useState('')
   const [direction, setDirection] = useState<'bullish' | 'bearish'>('bearish')
   const [price, setPrice] = useState('')
-  const [tolerance, setTolerance] = useState('20')
   const [expiry, setExpiry] = useState('1week')
   const [customExpiry, setCustomExpiry] = useState('')
   const [note, setNote] = useState('')
   const [watches, setWatches] = useState<string[]>(ENTRY_DEFAULT_WATCHES)
   const [keepOpen, setKeepOpen] = useState(false)
   const [follow, setFollow] = useState(false)
-  const [mustReach, setMustReach] = useState(true)   // new levels: the wick must reach the price
   const [tpR, setTpR] = useState('2')
   const [beR, setBeR] = useState('1')            // empty = no breakeven alert
   const [slBuf, setSlBuf] = useState('0')
@@ -452,17 +450,13 @@ function EntryAlertsPanel({ instruments, prices }: {
     e.preventDefault()
     setFormError('')
     const priceVal = parseFloat(price)
-    const tolVal = tolerance.trim() === '' ? 20 : parseFloat(tolerance)   // optional: blank = the default 20 pips
+    const tolVal = 20   // no pips any more (2026-11-18): the server only checks the wick reaches the level
     if (!instrument || isNaN(priceVal) || priceVal <= 0) {
       setFormError('Select an instrument and enter a valid price.')
       return
     }
     if (watches.length === 0) {
       setFormError('Tick at least one formation to watch on this level.')
-      return
-    }
-    if (isNaN(tolVal) || tolVal <= 0) {
-      setFormError('Tolerance has to be at least 1 pip (0 would only fire on the exact price). Leave it empty to use 20 pips.')
       return
     }
     const tpVal = parseFloat(tpR)
@@ -499,7 +493,7 @@ function EntryAlertsPanel({ instruments, prices }: {
           watches,
           keep_open: keepOpen,
           follow,
-          must_reach: mustReach,
+          must_reach: true,
           tp_r: follow ? tpVal : 2,
           be_r: follow ? beVal : null,
           sl_buffer_pips: follow ? bufVal : 0,
@@ -534,11 +528,9 @@ function EntryAlertsPanel({ instruments, prices }: {
     setInstrument(item.instrument)
     setDirection(item.direction as 'bullish' | 'bearish')
     setPrice(String(item.price))
-    setTolerance(String(item.tolerance_pips))
     setWatches(item.watches && item.watches.length ? item.watches : ENTRY_DEFAULT_WATCHES)
     setKeepOpen(!!item.keep_open)
     setFollow(!!item.follow)
-    setMustReach(!!item.must_reach)
     setTpR(String(item.tp_r ?? 2))
     setBeR(item.be_r != null ? String(item.be_r) : '')
     setSlBuf(String(item.sl_buffer_pips ?? 0))
@@ -653,37 +645,9 @@ function EntryAlertsPanel({ instruments, prices }: {
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
               Where the reaction must happen
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
-              {([[true, 'Wick must reach my level'], [false, 'Near my level (either side)']] as const).map(([val, lbl]) => (
-                <button key={lbl} type="button" onClick={() => setMustReach(val)} style={{
-                  padding: '7px 10px', borderRadius: 8, fontSize: 12, fontWeight: 500, border: '1px solid', cursor: 'pointer',
-                  borderColor: mustReach === val ? 'var(--accent)' : 'var(--border)',
-                  background: mustReach === val ? 'var(--accent)' : 'var(--bg)',
-                  color: mustReach === val ? 'white' : 'var(--text-secondary)',
-                }}>{lbl}</button>
-              ))}
-            </div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-              {mustReach ? 'How far past your level the wick may go (pips)' : 'Tolerance (pips)'} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>· optional</span>
-            </label>
-            <input
-              type="number"
-              step="1"
-              placeholder="20 (leave empty for the default)"
-              value={tolerance}
-              onChange={e => setTolerance(e.target.value)}
-              style={{
-                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
-                border: '1px solid var(--border)', background: 'var(--bg)',
-                color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
-              }}
-            />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
-              {mustReach
-                ? <>The pattern&apos;s wick has to touch your price or go through it (a buy: at or below your level; a sell: at or above). A wick that stops short never counts. This number only limits how far through your level it may go. Default 20 pips.</>
-                : <>How close the pattern must form to your level, on either side. Default 20 pips covers
-              normal overshoots. Use smaller (5-10) for tight levels, larger (30-50)
-              for wider zones.</>}
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              The pattern&apos;s wick has to touch your price or go through it (a buy: at or below your level; a sell: at or above), any distance. No pips to set.
+              The level stays open until an H4 candle closes with its body beyond it (a buy: below; a sell: above); then it closes and Telegram tells you.
             </div>
           </div>
 
@@ -1412,7 +1376,7 @@ export default function PriceAlertsPage() {
           <Clock size={13} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
             {mainTab === 'entry'
-              ? 'Entry Pattern alerts fire when a confirmation you picked (H1 PCL, H1 OCTGD, H1 / M15 / M5 CISD, M15 / M5 Sweep and Break, H1 / H2 Engulfing) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others: then it stays open until an H4 candle closes with its body beyond your level.'
+              ? 'Entry Pattern alerts fire when a confirmation you picked (H1 PCL, H1 OCTGD, H1 / M15 / M5 CISD, M15 / M5 Sweep and Break, H1 / H2 Engulfing) forms with its wick at your level or through it, in your direction (no pips to set). The first one closes the alert, unless you chose to keep watching the others. Every level closes by itself when an H4 candle closes with its body beyond it.'
               : 'On touch alerts fire within 5 minutes of the level being crossed. Candle close alerts fire only at the close of your chosen timeframe candle.'}
           </span>
         </div>
