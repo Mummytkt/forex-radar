@@ -7,7 +7,8 @@
 // an H1 chart, H2 on H2, M15 on M15, M5 on M5 (put the chart on the one you study).
 // CHART: each alert carries that timeframe's last 30 candles, so the Telegram message comes with a chart picture.
 // LIMIT (2026-11-16): after the candles, "|<buy breaker>|<sell breaker>" of a Sweep and Break (a limit entry's price).
-// MEMORY: the H1 / H2 / M15 / M5 reads only run on a 5-minute (or smaller) chart, where alerts are sent.
+// MEMORY: the H1 / H2 / M15 / M5 reads only run on a 5-minute (or smaller) chart, where alerts are sent
+// (on bigger charts they read the monthly candles); the alert's candle text is only built for the last 3 days.
 // ALERTS: put it on a 5-minute chart (the smallest timeframe it reads) for each
 // instrument and create ONE alert:
 //   condition = "Any alert() function call"
@@ -238,7 +239,8 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
             ss_on := false
     // The last 30 candles (oldest first) for the alert's chart picture: "minutes,o,h,l,c;..."
     string cs = ""
-    if b_pcl or s_pcl or b_en or s_en or b_oc or s_oc or b_sb or s_sb or b_ci or s_ci
+    // only the last 3 days build it (alerts are live): old candles keep an empty text, which saves memory
+    if (b_pcl or s_pcl or b_en or s_en or b_oc or s_oc or b_sb or s_sb or b_ci or s_ci) and time > timenow - 3 * 86400000
         for i = 29 to 0
             if not na(close[i]) and not na(time[i])
                 cs += (cs == "" ? "" : ";") + str.tostring(math.floor(time[i] / 60000)) + "," + str.tostring(open[i], format.mintick) + ","
@@ -254,12 +256,13 @@ f_prev(simple int n, simple int win, simple int ow, simple int cw) =>
     [a1[1], a2[1], a3[1], a4[1], a5[1], a6[1], a7[1], a8[1], a9[1], a10[1], a11[1], a12[1], a13[1], a14[1], a15[1], a16[1], a17[1], a18[1],
      a19[1], a20[1], a21[1], a22[1], a23[1], a24[1], a25[1], a26[1], a27[1], a28[1], a29[1], a30[1], a31[1], a32[1], a33[1], a34[1]]
 
-// Alerts are sent from a 5-minute (or smaller) chart only; on a bigger chart these read the chart itself (cheap, unused)
+// Alerts are sent from a 5-minute (or smaller) chart only. On a bigger chart these four reads are not used (its
+// marks come from the chart's own candles), so they read the monthly candles: a few hundred bars, almost no memory.
 bool   sec_ok = timeframe.in_seconds() <= 300
-string tf_h1  = sec_ok ? "60" : timeframe.period
-string tf_h2  = sec_ok ? "120" : timeframe.period
-string tf_m15 = sec_ok ? "15" : timeframe.period
-string tf_m5  = sec_ok ? "5" : timeframe.period
+string tf_h1  = sec_ok ? "60" : "1M"
+string tf_h2  = sec_ok ? "120" : "1M"
+string tf_m15 = sec_ok ? "15" : "1M"
+string tf_m5  = sec_ok ? "5" : "1M"
 [h1_bpcl, h1_spcl, h1_ben, h1_sen, h1_benw, h1_senw, h1_boc, h1_soc, h1_bsb, h1_ssb, h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_po, h1_lo2, h1_hi2, h1_boclv, h1_boctp, h1_soclv, h1_soctp, h1_blv, h1_btp, h1_slv, h1_stp, h1_t, h1_bci, h1_sci, h1_bcilv, h1_bcitp, h1_scilv, h1_scitp, h1_cs] = request.security(syminfo.tickerid, tf_h1, f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
 [h2_bpcl, h2_spcl, h2_ben, h2_sen, h2_benw, h2_senw, h2_boc, h2_soc, h2_bsb, h2_ssb, h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_po, h2_lo2, h2_hi2, h2_boclv, h2_boctp, h2_soclv, h2_soctp, h2_blv, h2_btp, h2_slv, h2_stp, h2_t, h2_bci, h2_sci, h2_bcilv, h2_bcitp, h2_scilv, h2_scitp, h2_cs] = request.security(syminfo.tickerid, tf_h2, f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
 [m15_bpcl, m15_spcl, m15_ben, m15_sen, m15_benw, m15_senw, m15_boc, m15_soc, m15_bsb, m15_ssb, m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_po, m15_lo2, m15_hi2, m15_boclv, m15_boctp, m15_soclv, m15_soctp, m15_blv, m15_btp, m15_slv, m15_stp, m15_t, m15_bci, m15_sci, m15_bcilv, m15_bcitp, m15_scilv, m15_scitp, m15_cs] = request.security(syminfo.tickerid, tf_m15, f_prev(fr_n, sb_win, oc_win, ci_win), lookahead = barmerge.lookahead_on)
