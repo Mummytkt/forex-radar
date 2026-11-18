@@ -67,6 +67,10 @@ def ensure_table(conn) -> None:
         cols = {r[1] for r in conn.execute(f"PRAGMA table_info({t})")}
         if "break_level" not in cols:
             conn.execute(f"ALTER TABLE {t} ADD COLUMN break_level REAL")
+    # several liquidities found at one H4 close go out as ONE message (user, 2026-11-18): the first row's chart
+    # draws the others too (their liq_sent ids, comma separated)
+    if "also" not in {r[1] for r in conn.execute("PRAGMA table_info(liq_sent)")}:
+        conn.execute("ALTER TABLE liq_sent ADD COLUMN also TEXT")
 
 
 def start(conn, instrument: str, direction: str, title: str, now: Optional[datetime] = None,
@@ -136,6 +140,30 @@ def _wat(ts: str) -> str:
     return (_parse(ts) + timedelta(hours=1)).strftime("%d %b %H:%M") + " WAT"
 
 
+def text_many(instrument: str, direction: str, title: str, liqs: list[dict]) -> str:
+    """Several liquidities from one H4 close in one message, nearest to price first (user, 2026-11-18)."""
+    bull = direction == "bullish"
+    t = title if title.startswith(("H4", "Daily")) else title[0].lower() + title[1:]
+    side = "below it" if bull else "above it"
+    parts = [_name_what(l, bull) for l in liqs]
+    lines = [f"{name}: {fmt_price(instrument, l['level'])}, {what}." for l, (name, what) in zip(liqs, parts)]
+    return (f"💧 {tagged(instrument)} · Liquidity after the {t}\n"
+            f"Liquidity: {' · '.join(fmt_price(instrument, l['level']) for l in liqs)}\n\n"
+            + "\n".join(lines) + "\n\n"
+            f"The {'BUY' if bull else 'SELL'} POI is the fresh key level of the leg just {side}: price sweeping this liquidity "
+            f"into it is the setup.")
+
+
+def _name_what(liq: dict, bull: bool) -> tuple[str, str]:
+    if liq["kind"] == "single":
+        return ("Single candle liquidity",
+                f"the low wick of the bullish candle of {_wat(liq['ts'])}" if bull
+                else f"the high wick of the bearish candle of {_wat(liq['ts'])}")
+    return ("Low liquidity" if bull else "High liquidity",
+            f"a V-shape on the closes ({_wat(liq['ts'])}): its low" if bull
+            else f"an A-shape on the closes ({_wat(liq['ts'])}): its high")
+
+
 def text(instrument: str, direction: str, title: str, liq: dict) -> str:
     bull = direction == "bullish"
     if liq["kind"] == "single":
@@ -196,6 +224,10 @@ def check(conn, instrument: str, now: Optional[datetime] = None) -> list[tuple[s
                  (w["sent_single"], ",".join(sorted(sent_v)), instrument))
     sent_at = (now or datetime.now(timezone.utc)).isoformat()
     out = []
+    ids = []
+    if len(new) > 1:        # one message: nearest to the last close first
+        last = candles[-1][4]
+        new.sort(key=lambda l: abs(l["level"] - last))
     for liq in new:
         lid = None
         try:
@@ -207,7 +239,14 @@ def check(conn, instrument: str, now: Optional[datetime] = None) -> list[tuple[s
                  w.get("break_level"))).lastrowid
         except Exception:
             logger.exception("%s liquidity not logged for its chart", instrument)
+        ids.append(lid)
         out.append((text(instrument, w["direction"], w["title"], liq), lid))
+    if len(new) > 1:
+        lid = ids[0]
+        others = [str(i) for i in ids[1:] if i]
+        if lid and others:
+            conn.execute("UPDATE liq_sent SET also = ? WHERE id = ?", (",".join(others), lid))
+        out = [(text_many(instrument, w["direction"], w["title"], new), lid)]
     conn.commit()
     return out
 
@@ -233,6 +272,16 @@ def picture(conn, liq_id: int) -> Optional[tuple[bytes, str, Optional[str]]]:
             else ("Low liquidity" if bull else "High liquidity"))
     level = {"y": r["level"], "label": name, "kind": "liq", "tf": "both", "t0": r["ts"]}
     levels = [level]
+    names = [f"{name} {fmt_price(inst, r['level'])}"]
+    for oid in [x for x in (r.get("also") or "").split(",") if x]:     # sent in the same message
+        o = conn.execute("SELECT * FROM liq_sent WHERE id = ?", (int(oid),)).fetchone()
+        if o:
+            o = dict(o)
+            oname = "Single candle liquidity" if o["kind"] == "single" else ("Low liquidity" if bull else "High liquidity")
+            levels.append({"y": o["level"], "label": oname, "kind": "liq", "tf": "both", "t0": o["ts"]})
+            names.append(f"{oname} {fmt_price(inst, o['level'])}")
+    if len(names) > 1:
+        name = "Liquidity"
     bl = r.get("break_level")
     if bl is not None:      # the level the H4 candle broke, from the candle that made it
         origin = level_origin(r["direction"], bl, candles, r["break_ts"]) or r["break_ts"]
@@ -242,7 +291,7 @@ def picture(conn, liq_id: int) -> Optional[tuple[bytes, str, Optional[str]]]:
             "marks": [(r["break_ts"], "break")],
             "fired_at": _wat(r["sent_at"])}
     png = render(inst, "H4", candles, levels, meta, fmt=lambda v: fmt_price(inst, v), full=True)
-    caption = f"{inst} · 4H · {name} {fmt_price(inst, r['level'])} after the {r['title']}"
+    caption = f"{inst} · 4H · {' · '.join(names)} after the {r['title']}"
     if bl is not None:
         caption += f" · broken level {fmt_price(inst, bl)}"
     return png, caption[:1000], r["file_id"]
