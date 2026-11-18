@@ -62,19 +62,43 @@ CREATE TABLE IF NOT EXISTS liq_sent (
 def ensure_table(conn) -> None:
     conn.execute(SCHEMA)
     conn.execute(SENT_SCHEMA)
+    # the level the H4 candle broke (user, 2026-11-18: drawn on the liquidity chart, from the candle that made it)
+    for t in ("liq_watch", "liq_sent"):
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({t})")}
+        if "break_level" not in cols:
+            conn.execute(f"ALTER TABLE {t} ADD COLUMN break_level REAL")
 
 
-def start(conn, instrument: str, direction: str, title: str, now: Optional[datetime] = None) -> None:
-    """A new H4 alert on the instrument: watch for the liquidity after it (replaces the old watch)."""
+def start(conn, instrument: str, direction: str, title: str, now: Optional[datetime] = None,
+          level: Optional[float] = None) -> None:
+    """A new H4 alert on the instrument: watch for the liquidity after it (replaces the old watch).
+    level: the level that H4 candle broke."""
     ensure_table(conn)
     now = now or datetime.now(timezone.utc)
     conn.execute("""
-        INSERT INTO liq_watch (instrument, direction, title, started_at, break_ts, sent_single, sent_v)
-        VALUES (?, ?, ?, ?, NULL, 0, '')
+        INSERT INTO liq_watch (instrument, direction, title, started_at, break_ts, sent_single, sent_v, break_level)
+        VALUES (?, ?, ?, ?, NULL, 0, '', ?)
         ON CONFLICT(instrument) DO UPDATE SET direction = excluded.direction, title = excluded.title,
-            started_at = excluded.started_at, break_ts = NULL, sent_single = 0, sent_v = ''
-    """, (instrument, direction, title, now.isoformat()))
+            started_at = excluded.started_at, break_ts = NULL, sent_single = 0, sent_v = '',
+            break_level = excluded.break_level
+    """, (instrument, direction, title, now.isoformat(), level))
     conn.commit()
+
+
+def level_origin(direction: str, level: float, candles: list[tuple], break_ts: str) -> Optional[str]:
+    """The candle that MADE the broken level (user picked picture B, Documents/Break_Line_Start.png): the latest
+    H4 candle before the break whose low (a bearish break: an old low) or high (a bullish break) is that level.
+    candles: (ts, o, h, l, c) oldest first. None when none of them made it (then the line starts at the break)."""
+    before = [c for c in candles if c[0] < break_ts]
+    if not before or level is None:
+        return None
+    wick = (lambda c: c[2]) if direction == "bullish" else (lambda c: c[3])
+    tol = abs(level) * 0.0002            # 2 pips on EURUSD; a few points on an index
+    for c in reversed(before):
+        if abs(wick(c) - level) <= tol:
+            return c[0]
+    best = min(before, key=lambda c: min(abs(v - level) for v in c[1:5]))   # a level from a close (body breaks)
+    return best[0] if min(abs(v - level) for v in best[1:5]) <= tol else None
 
 
 def _parse(s: str) -> datetime:
@@ -175,11 +199,12 @@ def check(conn, instrument: str, now: Optional[datetime] = None) -> list[tuple[s
     for liq in new:
         lid = None
         try:
-            conn.execute(SENT_SCHEMA)
+            ensure_table(conn)
             lid = conn.execute(
-                "INSERT INTO liq_sent (instrument, direction, title, kind, level, ts, break_ts, sent_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (instrument, w["direction"], w["title"], liq["kind"], liq["level"], liq["ts"], break_ts, sent_at)).lastrowid
+                "INSERT INTO liq_sent (instrument, direction, title, kind, level, ts, break_ts, sent_at, break_level) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (instrument, w["direction"], w["title"], liq["kind"], liq["level"], liq["ts"], break_ts, sent_at,
+                 w.get("break_level"))).lastrowid
         except Exception:
             logger.exception("%s liquidity not logged for its chart", instrument)
         out.append((text(instrument, w["direction"], w["title"], liq), lid))
@@ -207,12 +232,19 @@ def picture(conn, liq_id: int) -> Optional[tuple[bytes, str, Optional[str]]]:
     name = ("Single candle liquidity" if r["kind"] == "single"
             else ("Low liquidity" if bull else "High liquidity"))
     level = {"y": r["level"], "label": name, "kind": "liq", "tf": "both", "t0": r["ts"]}
+    levels = [level]
+    bl = r.get("break_level")
+    if bl is not None:      # the level the H4 candle broke, from the candle that made it
+        origin = level_origin(r["direction"], bl, candles, r["break_ts"]) or r["break_ts"]
+        levels.append({"y": bl, "label": "H4 break", "kind": "h4", "tf": "both", "t0": origin})
     meta = {"tf_title": "4H", "side": f"{'BUY' if bull else 'SELL'} · {name}",
             "subtitle": f"after the {r['title']}",
             "marks": [(r["break_ts"], "break")],
             "fired_at": _wat(r["sent_at"])}
-    png = render(inst, "H4", candles, [level], meta, fmt=lambda v: fmt_price(inst, v), full=True)
+    png = render(inst, "H4", candles, levels, meta, fmt=lambda v: fmt_price(inst, v), full=True)
     caption = f"{inst} · 4H · {name} {fmt_price(inst, r['level'])} after the {r['title']}"
+    if bl is not None:
+        caption += f" · broken level {fmt_price(inst, bl)}"
     return png, caption[:1000], r["file_id"]
 
 

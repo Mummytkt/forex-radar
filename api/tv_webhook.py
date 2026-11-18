@@ -916,7 +916,7 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
     # the liquidity after this break is watched from the next H4 candle on
     try:
         from alerts.liquidity_watch import start as start_liq_watch
-        start_liq_watch(conn, instrument, direction.value, title)
+        start_liq_watch(conn, instrument, direction.value, title, level=payload.level)
     except Exception:
         logger.exception("%s liquidity watch could not start", instrument)
 
