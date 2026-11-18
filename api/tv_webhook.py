@@ -108,7 +108,7 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
                          h4_class: Optional[str] = None, alert_id: Optional[int] = None,
                          pref: Optional[str] = None, engulf_wick: Optional[bool] = None,
                          engulf_key: str = "pref_engulf_mode", after_retest: Optional[bool] = None,
-                         markup=None) -> None:
+                         markup=None, also_pref: Optional[str] = None) -> None:
     """Send alert_text to every active user whose watched_instruments includes instrument.
 
     h4_class: External / Internal of the H4 confirmation this alert belongs to
@@ -139,6 +139,8 @@ async def _deliver_alert(conn, config, instrument: str, alert_text: str,
             continue  # user switched this confirmation type off
         if pref and not prefs.get(pref, True):
             continue  # user switched this alert type off (Origin / a continuation type / engulfing)
+        if also_pref and not prefs.get(also_pref, True):
+            continue  # liquidity after an alert they switched off (user, 2026-11-18)
         if after_retest is False and prefs.get("oc_after_retest"):
             continue  # they only want H4 OCs after a retest of the breakout that held
         if engulf_wick is not None and not engulf_wanted(get_engulf_mode(conn, rec["id"], engulf_key), engulf_wick):
@@ -420,7 +422,8 @@ def _save_chart_levels(conn, instrument: str, alert_id: int, direction: Directio
 def _check_liquidity(conn, config, instrument: str) -> None:
     """A new H4 candle: send the liquidity that formed after the last H4 alert (Alert Filters: off by default)."""
     try:
-        from alerts.liquidity_watch import check
+        from alerts.liquidity_watch import check, watch_pref
+        follows = watch_pref(conn, instrument)     # the alert this liquidity follows: its switch must be on too
         texts = check(conn, instrument)
     except Exception:
         logger.exception("%s liquidity check failed", instrument)
@@ -430,7 +433,7 @@ def _check_liquidity(conn, config, instrument: str) -> None:
         logger.info("%s liquidity alert: %s", instrument, t.split(chr(10), 1)[0])
         if config.telegram_enabled:
             _in_background(_deliver_alert(conn, config, instrument, t, pref="liquidity",
-                                          markup=liq_chart_button(liq_id) if liq_id else None))
+                                          markup=liq_chart_button(liq_id) if liq_id else None, also_pref=follows))
 
 
 def _store_candles(conn, instrument: str, payload: "TVWebhookPayload", config=None) -> None:
@@ -916,7 +919,7 @@ async def _handle_story(conn, config, instrument: str, payload: TVWebhookPayload
     # the liquidity after this break is watched from the next H4 candle on
     try:
         from alerts.liquidity_watch import start as start_liq_watch
-        start_liq_watch(conn, instrument, direction.value, title, level=payload.level)
+        start_liq_watch(conn, instrument, direction.value, title, level=payload.level, pref=story_type)
     except Exception:
         logger.exception("%s liquidity watch could not start", instrument)
 

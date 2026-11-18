@@ -71,22 +71,35 @@ def ensure_table(conn) -> None:
     # draws the others too (their liq_sent ids, comma separated)
     if "also" not in {r[1] for r in conn.execute("PRAGMA table_info(liq_sent)")}:
         conn.execute("ALTER TABLE liq_sent ADD COLUMN also TEXT")
+    # the Alert Filters switch of the alert the watch follows (user, 2026-11-18): its liquidity only reaches
+    # people who have that alert switched on too
+    if "pref" not in {r[1] for r in conn.execute("PRAGMA table_info(liq_watch)")}:
+        conn.execute("ALTER TABLE liq_watch ADD COLUMN pref TEXT")
 
 
 def start(conn, instrument: str, direction: str, title: str, now: Optional[datetime] = None,
-          level: Optional[float] = None) -> None:
+          level: Optional[float] = None, pref: Optional[str] = None) -> None:
     """A new H4 alert on the instrument: watch for the liquidity after it (replaces the old watch).
     level: the level that H4 candle broke."""
     ensure_table(conn)
     now = now or datetime.now(timezone.utc)
     conn.execute("""
-        INSERT INTO liq_watch (instrument, direction, title, started_at, break_ts, sent_single, sent_v, break_level)
-        VALUES (?, ?, ?, ?, NULL, 0, '', ?)
+        INSERT INTO liq_watch (instrument, direction, title, started_at, break_ts, sent_single, sent_v, break_level, pref)
+        VALUES (?, ?, ?, ?, NULL, 0, '', ?, ?)
         ON CONFLICT(instrument) DO UPDATE SET direction = excluded.direction, title = excluded.title,
             started_at = excluded.started_at, break_ts = NULL, sent_single = 0, sent_v = '',
-            break_level = excluded.break_level
-    """, (instrument, direction, title, now.isoformat(), level))
+            break_level = excluded.break_level, pref = excluded.pref
+    """, (instrument, direction, title, now.isoformat(), level, pref))
     conn.commit()
+
+
+def watch_pref(conn, instrument: str) -> Optional[str]:
+    """The Alert Filters switch of the alert the instrument's liquidity watch follows (None: no filter)."""
+    try:
+        r = conn.execute("SELECT pref FROM liq_watch WHERE instrument = ?", (instrument,)).fetchone()
+    except Exception:
+        return None
+    return r[0] if r else None
 
 
 def level_origin(direction: str, level: float, candles: list[tuple], break_ts: str) -> Optional[str]:
