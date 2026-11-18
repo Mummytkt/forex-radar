@@ -722,6 +722,12 @@ function EntryAlertsPanel({ instruments, prices }: {
                 }}>{lbl}</button>
               ))}
             </div>
+            {keepOpen && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                Keep watching: every confirmation you ticked that forms at the level sends its alert, until an H4 candle closes with its
+                body beyond your level (a buy: below it; a sell: above it). Then the level closes by itself and you&apos;re told why.
+              </div>
+            )}
           </div>
 
           <div>
@@ -1392,7 +1398,7 @@ export default function PriceAlertsPage() {
           <Clock size={13} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
             {mainTab === 'entry'
-              ? 'Entry Pattern alerts fire when a confirmation you picked (H1 PCL, H1 OCTGD, H1 / M15 / M5 CISD, M15 / M5 Sweep and Break, H1 / H2 Engulfing) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others.'
+              ? 'Entry Pattern alerts fire when a confirmation you picked (H1 PCL, H1 OCTGD, H1 / M15 / M5 CISD, M15 / M5 Sweep and Break, H1 / H2 Engulfing) forms within tolerance of your level in your direction. The first one closes the alert, unless you chose to keep watching the others: then it stays open until an H4 candle closes with its body beyond your level.'
               : 'On touch alerts fire within 5 minutes of the level being crossed. Candle close alerts fire only at the close of your chosen timeframe candle.'}
           </span>
         </div>

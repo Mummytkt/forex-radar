@@ -398,7 +398,12 @@ async def run_price_check(db_path: str, config) -> None:
               AND (expires_at IS NULL OR expires_at > ?)
         """, (now_iso,)).fetchall()
 
-        from alerts.trade_follow import follow_instruments, check_follows
+        from alerts.trade_follow import follow_instruments, check_follows, check_kept_levels
+        # "Keep watching" levels end at an H4 body close beyond the level (stored TradingView H4 candles)
+        try:
+            await check_kept_levels(conn, config, datetime.now(timezone.utc))
+        except Exception as exc:
+            logger.warning("Keep-watching level check failed: %s", exc)
         follow_insts = follow_instruments(conn)
         if not rows and not follow_insts:
             return

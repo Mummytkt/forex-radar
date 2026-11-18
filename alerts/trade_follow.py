@@ -508,6 +508,73 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
                 await _send_entry(config.telegram_bot_token, chat_id, text, pic)
 
 
+def kept_level_failed(level: dict, h4: list) -> Optional[tuple]:
+    """A "Keep watching" level ends when an H4 candle CLOSES with its body beyond it (a buy: close below the level;
+    a sell: above it), the same way the re-entry watch ends (user, 2026-11-18). h4: closed H4 candles
+    (open datetime, o, h, l, c), oldest first, that closed after the level was set. The first one that
+    closed beyond it as (close time, close), else None."""
+    price = level["price"]
+    bull = level["direction"] == "bullish"
+    for t, _o, _h, _l, c in h4:
+        if (c < price) if bull else (c > price):
+            return t + H4, c
+    return None
+
+
+def kept_levels_due(conn: sqlite3.Connection, now: datetime) -> list:
+    """The active "Keep watching" levels an H4 close has just ended: [(level row dict, close time, close)]."""
+    out = []
+    levels = conn.execute("""
+        SELECT epa.*, u.telegram_chat_id AS chat, u.role, u.plan, u.plan_expires_at
+        FROM entry_pattern_alerts epa LEFT JOIN users u ON u.id = epa.user_id
+        WHERE epa.is_active = 1 AND epa.keep_open = 1
+          AND (epa.expires_at IS NULL OR epa.expires_at > ?)
+    """, (_iso(now),)).fetchall()
+    for r in levels:
+        lv = dict(r)
+        try:
+            set_at = _parse(lv["created_at"])
+        except Exception:
+            continue
+        try:
+            rows = conn.execute("SELECT ts, o, h, l, c FROM candles WHERE instrument = ? AND tf = 'H4' AND ts > ? ORDER BY ts",
+                                (lv["instrument"], (set_at - H4).isoformat())).fetchall()
+        except sqlite3.OperationalError:
+            return out
+        h4 = [(_parse(x[0]), x[1], x[2], x[3], x[4]) for x in rows]
+        # only candles that CLOSED after the level was set, and have closed by now
+        h4 = [b for b in h4 if set_at < b[0] + H4 <= now]
+        hit = kept_level_failed(lv, h4)
+        if hit:
+            out.append((lv, hit[0], hit[1]))
+    return out
+
+
+def kept_level_text(lv: dict, close: float) -> str:
+    f = lambda v: fmt_price(lv["instrument"], v)
+    bull = lv["direction"] == "bullish"
+    return (f"🚫 Level closed: {tagged(lv['instrument'])} · {'BUY' if bull else 'SELL'} level {f(lv['price'])}\n\n"
+            f"An H4 candle closed with its body {'below' if bull else 'above'} your level (close {f(close)}), so the level "
+            f"failed. It has stopped watching for confirmations (it was set to keep watching the others).")
+
+
+async def check_kept_levels(conn: sqlite3.Connection, config, now: datetime) -> None:
+    """Close each "Keep watching" level an H4 close beyond it has ended, and tell its owner."""
+    for lv, at, close in kept_levels_due(conn, now):
+        conn.execute("UPDATE entry_pattern_alerts SET is_active = 0, triggered_at = ? WHERE id = ? AND is_active = 1",
+                     (_iso(at), lv["id"]))
+        conn.commit()
+        logger.info("%s keep-watching level %d closed: H4 close %s beyond %s", lv["instrument"], lv["id"], close, lv["price"])
+        try:
+            from api.tv_webhook import _resolve_chat
+            chat_id = _resolve_chat(config, lv["user_id"], lv["chat"], lv["role"], lv["plan"], lv["plan_expires_at"])
+        except Exception:
+            chat_id = lv["chat"] or config.telegram_chat_id
+        if config.telegram_enabled and chat_id:
+            from api.tv_webhook import _send_entry
+            await _send_entry(config.telegram_bot_token, chat_id, kept_level_text(lv, close), None)
+
+
 def summary(fo: dict) -> str:
     """One line for the dashboard: the latest follow of a level."""
     f = lambda v: fmt_price(fo["instrument"], v)
