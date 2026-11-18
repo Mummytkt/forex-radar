@@ -258,6 +258,8 @@ const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
 // Saved before 2026-11-10: the Sweep is now the PCL; H2 Sweep / H2 PCL are no longer offered
 const OLD_WATCH_LABELS: Record<string, string> = { 'H1:sweep': 'H1 PCL', 'H2:sweep': 'H2 Sweep (old)', 'H2:pcl': 'H2 PCL (old)' }
 const ENTRY_DEFAULT_WATCHES = ENTRY_WATCHES.map(w => w.key)
+// ready-made notes for an entry alert (user, 2026-11-18); the note box stays free to edit
+const NOTE_PRESETS = ['Inside range POI triggered', 'Opposite Range POI triggered']
 const watchLabel = (k: string) => ENTRY_WATCHES.find(w => w.key === k)?.label ?? OLD_WATCH_LABELS[k] ?? k
 const patternLabel = (p: string) => ({ pcl: 'PCL', engulfing_sweep: 'PCL', octgd: 'OCTGD', cisd: 'CISD', sweep_break: 'Sweep and Break', engulfing: 'Engulfing' } as Record<string, string>)[p] ?? p
 
@@ -823,6 +825,18 @@ function EntryAlertsPanel({ instruments, prices }: {
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
               Note <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
             </label>
+            <select
+              value={NOTE_PRESETS.includes(note) ? note : ''}
+              onChange={e => { if (e.target.value) setNote(e.target.value) }}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, marginBottom: 6,
+                border: '1px solid var(--border)', background: 'var(--bg)',
+                color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+              }}
+            >
+              <option value="">Pick a note, or type your own below</option>
+              {NOTE_PRESETS.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
             <textarea
               rows={2}
               value={note}
