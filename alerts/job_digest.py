@@ -72,8 +72,41 @@ REGION_TITLE = re.compile(r"\b(latam|americas?|north america|usa?|canada|apac|as
 NATIVE = re.compile(r"speakers? in|native (speaker|level)", re.I)
 
 
+KINDS = ("job", "freelance", "fiverr", "client")
+KIND_LABEL = {"job": "Job", "freelance": "Freelance proposal", "fiverr": "Fiverr order", "client": "Client lead"}
+GOAL = {"interviews": 5, "by": "2026-12-24"}    # the owner's goal (2026-11-19): 5 interviews before Christmas
+
+
 def ensure_table(conn) -> None:
     conn.execute(SCHEMA)
+    # entries she adds herself (LinkedIn, Jobberman, Upwork, Fiverr ...) and their type (2026-11-19)
+    if "kind" not in {r[1] for r in conn.execute("PRAGMA table_info(job_apps)")}:
+        conn.execute("ALTER TABLE job_apps ADD COLUMN kind TEXT NOT NULL DEFAULT 'job'")
+
+
+def add_manual(conn, title: str, company: str, url: str = "", source: str = "Added by you", kind: str = "job",
+               status: str = "applied", now: Optional[datetime] = None) -> dict:
+    """An application she made outside the digest. Starts the 7-day follow-up clock when it is applied."""
+    import uuid
+    ensure_table(conn)
+    conn.row_factory = sqlite3.Row
+    now = now or datetime.now(timezone.utc)
+    kind = kind if kind in KINDS else "job"
+    url = (url or "").strip() or f"manual:{uuid.uuid4().hex}"
+    jid = conn.execute(
+        "INSERT INTO job_apps (url, source, title, company, location, region, posted_at, sent_at, updated_at, kind) "
+        "VALUES (?, ?, ?, ?, '', 'Worldwide', ?, ?, ?, ?)",
+        (url, source or "Added by you", title.strip()[:200], (company or "?").strip()[:200], now.isoformat(),
+         now.isoformat(), now.isoformat(), kind)).lastrowid
+    conn.commit()
+    return set_status(conn, jid, status if status in STATUSES else "applied", now) or {}
+
+
+def goal_line(conn) -> str:
+    n = conn.execute("SELECT COUNT(*) FROM job_apps WHERE status IN ('interview', 'offer')").fetchone()[0]
+    week = conn.execute("SELECT COUNT(*) FROM job_apps WHERE applied_at >= ?",
+                        ((datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),)).fetchone()[0]
+    return f"🎯 Interviews: {n} of {GOAL['interviews']} by Christmas · {week} applied in the last 7 days"
 
 
 def classify(title: str, location: str) -> Optional[str]:
@@ -283,7 +316,7 @@ async def run_job_digest(db_path: str, config, now: Optional[datetime] = None) -
                 + ("\n\nTap Apply to open the post. Check where they hire before you apply: \"worldwide\" "
                    "is not always true. Paste the job description to Claude for your tailored CV." if new else
                    "\n\nNothing new on the remote boards today. Check your LinkedIn and Jobberman email alerts."))
-        await _send(token, chat, head)
+        await _send(token, chat, head + "\n\n" + goal_line(conn))
         for j in new:
             await _send(token, chat, job_text(j, now), job_buttons(j))
             await asyncio.sleep(0.4)
@@ -372,13 +405,15 @@ async def handle_update(conn, config, update: dict) -> None:
     if not (owner and chat == owner):
         await _send(token, chat, "This is a private bot.")
         return
-    cmd = (msg.get("text") or "").strip().split()[0].split("@")[0].lower() if (msg.get("text") or "").strip() else ""
-    await handle_command(conn, config, chat, cmd)
+    text = (msg.get("text") or "").strip()
+    cmd = text.split()[0].split("@")[0].lower() if text else ""
+    await handle_command(conn, config, chat, cmd, text[len(text.split()[0]):].strip() if text else "")
 
 
 # The bot's menu (owner request 2026-11-19: "the menu like on the Bias Pointer bot")
 COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
+            ("add", "Log an application: /add Title | Company | link"),
             ("tracker", "Open the Job Hunt page"), ("help", "How this bot works")]
 
 
@@ -389,7 +424,7 @@ def help_text() -> str:
             + "\n\nFor a tailored CV and cover letter, paste the job description to Claude.")
 
 
-async def handle_command(conn, config, chat: str, cmd: str) -> None:
+async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> None:
     token = config.jobs_bot_token
     conn.row_factory = sqlite3.Row
     ensure_table(conn)
@@ -415,13 +450,25 @@ async def handle_command(conn, config, chat: str, cmd: str) -> None:
             lines = [f"• <b>{html.escape(r['title'])}</b>, {html.escape(r['company'])}: {STATUS_LABEL[r['status']]}"
                      + (f" (applied {datetime.fromisoformat(r['applied_at']).astimezone(WAT).strftime('%d %b')})"
                         if r.get("applied_at") else "") for r in rows]
-            await _send(token, chat, f"📨 <b>Applications in progress ({len(rows)})</b>\n\n" + "\n".join(lines))
+            await _send(token, chat, f"📨 <b>Applications in progress ({len(rows)})</b>\n\n" + "\n".join(lines)
+                        + "\n\n" + goal_line(conn))
     elif cmd == "/followups":
         rows = due_followups(conn, now)
         if not rows:
             await _send(token, chat, "No follow-ups due. I'll remind you 7 days after each application.")
         for r in rows:
             await _send(token, chat, follow_text(r), follow_buttons(r["id"]))
+    elif cmd == "/add":
+        parts = [p.strip() for p in arg.split("|")]
+        if not parts or not parts[0]:
+            await _send(token, chat, "Log an application you made anywhere (LinkedIn, Jobberman, Upwork, a company site):\n\n"
+                                     "<code>/add Title | Company | link</code>\n\nExample:\n"
+                                     "<code>/add QA Tester | Moniepoint | https://...</code>\n\nThe link is optional. "
+                                     "For a Fiverr order or a freelance proposal, change the type on the Job Hunt page.")
+        else:
+            r = add_manual(conn, parts[0], parts[1] if len(parts) > 1 else "?", parts[2] if len(parts) > 2 else "")
+            await _send(token, chat, f"✅ Logged: <b>{html.escape(r['title'])}</b> at {html.escape(r['company'])}. "
+                                     f"I'll ask how it went in 7 days.\n\n{goal_line(conn)}")
     elif cmd == "/tracker":
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         url = f"{config.frontend_url.rstrip('/')}/job-hunt"
