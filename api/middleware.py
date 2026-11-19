@@ -19,6 +19,7 @@ _ALWAYS_PUBLIC = {
     "/api/auth/reset",       # complete a reset with the one-time token
     "/api/tv-webhook",   # TradingView Pine Script webhook (uses its own secret)
     "/api/telegram/update",  # Telegram bot webhook (uses its own secret header)
+    "/api/jobs-bot/update",  # the owner's Job Hunt bot webhook (same secret header)
     "/api/paystack/webhook", # Paystack webhook (verified by HMAC signature)
 }
 _PUBLIC_PREFIXES = ("/api/videos/", "/api/public/")

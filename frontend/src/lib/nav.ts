@@ -1,6 +1,6 @@
 import {
   Compass, BookOpen, BookMarked, FlaskConical, ScrollText, Crosshair,
-  SlidersHorizontal, Gift, Briefcase, UserCircle2, Settings, type LucideIcon,
+  SlidersHorizontal, Gift, Briefcase, UserCircle2, Settings, Search, type LucideIcon,
 } from 'lucide-react'
 
 // One list drives the home hub cards and the top bar's "Jump to" menu.
@@ -49,6 +49,7 @@ export const NAV: NavGroup[] = [
     label: 'Account',
     items: [
       { href: '/business', color: '#10b981', icon: Briefcase, label: 'Business', desc: 'Revenue, subscribers and platform health', ownerOnly: true },
+      { href: '/job-hunt', color: '#0ea5e9', icon: Search, label: 'Job Hunt', desc: 'Your remote job digest and applications', ownerOnly: true },
       { href: '/account', color: '#818cf8', icon: UserCircle2, label: 'Account', desc: 'Your sign-in details, plan and billing' },
       { href: '/settings', color: '#64748b', icon: Settings, label: 'Settings', desc: 'Your pairs, profile and Telegram link' },
     ],

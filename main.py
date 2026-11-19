@@ -31,6 +31,7 @@ from alerts.image_backup import run_image_backup
 from alerts.feed_monitor import run_feed_check
 from alerts.reminders import run_reminders
 from alerts.news import refresh_calendar, run_news_summary, run_news_reminders
+from alerts.job_digest import run_job_digest, ensure_webhook as ensure_jobs_webhook
 
 
 def setup_logging(level: str) -> None:
@@ -216,7 +217,18 @@ async def main(dry_run: bool = False) -> None:
         name="30-minutes-before high-impact news reminders",
         misfire_grace_time=240,
     )
+    scheduler.add_job(
+        run_job_digest,
+        "cron",
+        hour=7, minute=30,   # 08:30 WAT: after the school run, she applies through the morning (owner, 2026-11-19)
+        kwargs={"db_path": config.db_path, "config": config},
+        id="job_digest",
+        name="Owner's Job Hunt digest (separate Telegram bot)",
+        misfire_grace_time=3 * 3600,
+    )
     scheduler.start()
+    if config.jobs_bot_token:
+        asyncio.create_task(ensure_jobs_webhook(config))
     # Button taps ("📊 View chart") reach /api/telegram/update only if the webhook allows them
     if config.telegram_enabled and config.telegram_bot_token:
         from alerts.telegram import ensure_button_updates

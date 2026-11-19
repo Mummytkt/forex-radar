@@ -30,6 +30,8 @@ class Config:
     log_level: str = "INFO"
     telegram_enabled: bool = True    # set False for dry-run / testing
     backup_key: str = ""             # Fernet key; encrypts the daily off-site backup sent to the owner's Telegram
+    jobs_bot_token: str = ""         # the owner's separate Job Hunt bot (alerts/job_digest.py); empty = off
+    public_api_url: str = "https://forex-radar.fly.dev"   # this server's public address (the Job Hunt bot's webhook)
 
 
 def load_config(env_path: str = ".env") -> Config:
@@ -56,6 +58,8 @@ def load_config(env_path: str = ".env") -> Config:
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         telegram_enabled=os.getenv("TELEGRAM_ENABLED", "true").lower() != "false",
         backup_key=os.getenv("BACKUP_KEY", ""),
+        jobs_bot_token=os.getenv("JOBS_BOT_TOKEN", ""),
+        public_api_url=os.getenv("PUBLIC_API_URL", "https://forex-radar.fly.dev"),
     )
 
 
