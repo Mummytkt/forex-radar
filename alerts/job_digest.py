@@ -70,6 +70,19 @@ TITLE = re.compile(
 SENIOR = re.compile(r"\b(senior|sr\.?|lead|principal|head|director|staff|vp|chief|manager)\b", re.I)
 REGION_TITLE = re.compile(r"\b(latam|americas?|north america|usa?|canada|apac|asia|west region|east region)\b", re.I)
 NATIVE = re.compile(r"speakers? in|native (speaker|level)", re.I)
+# AI work she can do (2026-11-19): AI trainer / evaluator / annotator / AI QA / AI ops / AI support / prompt work.
+# Not the roles that need ML or engineering training.
+AI = re.compile(r"\b(ai|a\.i\.|artificial intelligence|gen ?ai|generative|llms?|chatbots?|conversational|"
+                r"machine learning|data (label\w*|annotat\w*)|rlhf|prompt\w*)\b", re.I)
+AI_HEAVY = re.compile(r"\b(engineer\w*|scientist|research\w*|architect|developer|ml ops|mlops|phd|"
+                      r"software|backend|full[- ]?stack|sales|account executive|marketing)\b", re.I)
+AI_OK_ROLE = re.compile(r"\b(qa|quality|test\w*|trainer|tutor|evaluat\w*|rater|annotat\w*|label\w*|reviewer|"
+                        r"writer|specialist|analyst|associate|operations|ops|support|assistant|coordinator|"
+                        r"content|expert|contributor|prompt\w*|freelance\w*)\b", re.I)
+
+
+def is_ai(title: str) -> bool:
+    return bool(AI.search(title))
 
 
 KINDS = ("job", "freelance", "fiverr", "client")
@@ -111,7 +124,8 @@ def goal_line(conn) -> str:
 
 def classify(title: str, location: str) -> Optional[str]:
     """The region group a job goes under, or None when it is not one for her."""
-    if not TITLE.search(title) or REGION_TITLE.search(title) or NATIVE.search(title):
+    ai_fit = AI.search(title) and AI_OK_ROLE.search(title) and not AI_HEAVY.search(title)
+    if not (TITLE.search(title) or ai_fit) or REGION_TITLE.search(title) or NATIVE.search(title):
         return None
     if SENIOR.search(title) and not re.search(r"associate product manager", title, re.I):
         return None
@@ -149,7 +163,7 @@ def fetch_jobs(since: datetime) -> list[dict]:
         return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
     for q in ("qa", "customer success", "customer support", "product analyst", "product operations",
-              "ai trainer", "annotation", "prompt"):
+              "ai trainer", "annotation", "prompt", "ai", "llm", "ai evaluator", "data labeling", "generative ai"):
         try:
             for j in json.loads(_get("https://remotive.com/api/remote-jobs?search=" + urllib.parse.quote(q)))["jobs"]:
                 add("Remotive", j["title"], j["company_name"], j.get("candidate_required_location"), utc(j["publication_date"]), j["url"])
@@ -200,7 +214,8 @@ def fetch_jobs(since: datetime) -> list[dict]:
             seen.add(k)
             uniq.append(j)
     order = {"Nigeria": 0, "Africa": 1, "Worldwide": 2, "EMEA": 3}
-    return sorted(uniq, key=lambda j: order[j["region"]])
+    # AI jobs first within each region, so the daily cap never drops them
+    return sorted(uniq, key=lambda j: (order[j["region"]], not is_ai(j["title"])))
 
 
 def store_new(conn, jobs: list[dict], now: datetime) -> list[dict]:
@@ -234,7 +249,7 @@ def _ago(posted_at: str, now: datetime) -> str:
 def job_text(j: dict, now: datetime) -> str:
     where = {"Nigeria": "open to Nigeria", "Africa": "open to Africa", "Worldwide": "worldwide",
              "EMEA": "EMEA (usually includes Africa: check)"}[j["region"]]
-    return (f"{FLAG[j['region']]} <b>{html.escape(j['title'])}</b>\n{html.escape(j['company'])} · {where}\n"
+    return (f"{FLAG[j['region']]} {'🤖 <b>AI</b> · ' if is_ai(j['title']) else ''}<b>{html.escape(j['title'])}</b>\n{html.escape(j['company'])} · {where}\n"
             f"Posted {_ago(j['posted_at'], now)} · {html.escape(j['source'])}")
 
 
@@ -262,6 +277,12 @@ COVER_NOTES = {
                  "in mind.\n\nSince 2024 I've designed and tested my own web platform (a dashboard with Telegram "
                  "alerts) using AI coding tools, which keeps my skills current and fast. "
                  "[One sentence: one thing in the job you've done before.]"),
+    "ai": ("I'm applying for the {role} position. I've built and tested a full web platform "
+           "by directing an AI coding assistant: writing detailed instructions, checking every answer against real "
+           "data, and catching the cases where the AI was confidently wrong, then explaining why so it could be "
+           "corrected.\n\nBefore that I spent two years at Belrald, a software company, as a frontend developer and "
+           "then a QA tester, and my degree in Anthropology from the University of Ibadan trained me to read "
+           "language and context closely. [One sentence: one requirement in this job you match.]"),
     "other": ("I'm applying for the {role} position. I bring two years at a software company, first as a frontend "
               "developer and then in QA, plus hands-on use of Figma and Canva.\n\nI'm careful with detail, I follow "
               "briefs closely, and I check my own work before it goes out. "
@@ -270,6 +291,8 @@ COVER_NOTES = {
 
 
 def note_kind(title: str) -> str:
+    if is_ai(title):
+        return "ai"
     if re.search(r"\b(qa|quality|tester|testing|test)\b", title, re.I):
         return "qa"
     if re.search(r"\b(front[- ]?end|react|web developer|javascript|ui developer)\b", title, re.I):
@@ -284,7 +307,7 @@ def cover_note(j: dict) -> str:
 
 
 def cover_note_message(j: dict) -> str:
-    label = {"qa": "QA", "frontend": "Frontend", "other": "General"}[note_kind(j["title"])]
+    label = {"ai": "AI", "qa": "QA", "frontend": "Frontend", "other": "General"}[note_kind(j["title"])]
     return (f"✍️ <b>Cover note</b> ({label}) for {html.escape(j['title'])}\n"
             f"Tap the box to copy. Change the sentence in [brackets], then paste.\n\n"
             f"<pre>{html.escape(cover_note(j))}</pre>")
@@ -466,7 +489,28 @@ async def handle_update(conn, config, update: dict) -> None:
 COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
             ("add", "Log an application: /add Title | Company | link"),
+            ("ai", "AI training sites open to Nigeria"),
             ("tracker", "Open the Job Hunt page"), ("help", "How this bot works")]
+
+# AI training / evaluation work is mostly sign-up on the platforms' own sites, not posted on job boards.
+# Eligibility for Nigeria as checked 2026-11-19 (origindatapartners.com guide of 2026-11-14); it changes often.
+AI_SITES = [
+    ("micro1", "https://jobs.micro1.ai", "Nigerian English language expert: tagging and correcting transcripts. $15–45/hr, paid via Deel."),
+    ("Mercor", "https://www.mercor.com", "Nigeria is on its supported list. AI expert and evaluation projects; weekly pay via Stripe or Wise."),
+    ("Alignerr", "https://www.alignerr.com", "Says it welcomes applicants worldwide. AI training and evaluation tasks."),
+    ("Welo Data", "https://jobs.lever.co/weloglobal", "Yoruba, Igbo and Hausa AI trainer pools, for native speakers in Nigeria."),
+    ("CrowdGen (Appen)", "https://crowdgen.com", "Pays in 200+ countries. Data and search-evaluation projects; check each one."),
+    ("OneForma", "https://www.oneforma.com", "Eligibility is per project. Language and data tasks."),
+    ("DataAnnotation", "https://www.dataannotation.tech", "No country list published: try the starter test."),
+]
+AI_CLOSED = "Closed to Nigeria right now: Outlier, Mindrift (Toloka), Prolific."
+
+
+def ai_sites_text() -> str:
+    return ("🤖 <b>AI training work open to Nigeria</b>\nThese hire by sign-up on their own sites, not on job boards. "
+            "Apply to each once with your AI CV, then log it with /add.\n\n"
+            + "\n\n".join(f"<b><a href=\"{u}\">{html.escape(n)}</a></b>\n{html.escape(d)}" for n, u, d in AI_SITES)
+            + f"\n\n{AI_CLOSED}\nRules change often: check each site's country list when you sign up.")
 
 
 def help_text() -> str:
@@ -522,6 +566,8 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
             r = add_manual(conn, parts[0], parts[1] if len(parts) > 1 else "?", parts[2] if len(parts) > 2 else "")
             await _send(token, chat, f"✅ Logged: <b>{html.escape(r['title'])}</b> at {html.escape(r['company'])}. "
                                      f"I'll ask how it went in 7 days.\n\n{goal_line(conn)}")
+    elif cmd == "/ai":
+        await _send(token, chat, ai_sites_text())
     elif cmd == "/tracker":
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         url = f"{config.frontend_url.rstrip('/')}/job-hunt"
