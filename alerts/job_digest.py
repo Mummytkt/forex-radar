@@ -369,12 +369,66 @@ async def handle_update(conn, config, update: dict) -> None:
     chat = str((msg.get("chat") or {}).get("id", ""))
     if not chat:
         return
-    if owner and chat == owner:
-        await _send(token, chat, "👋 Job Hunt bot connected. Your remote job digest arrives here every morning at "
-                                 "08:30 WAT, with Applied / Skip buttons and follow-up reminders.\n\n"
-                                 "Your full list is on the Job Hunt page of your dashboard.")
-    else:
+    if not (owner and chat == owner):
         await _send(token, chat, "This is a private bot.")
+        return
+    cmd = (msg.get("text") or "").strip().split()[0].split("@")[0].lower() if (msg.get("text") or "").strip() else ""
+    await handle_command(conn, config, chat, cmd)
+
+
+# The bot's menu (owner request 2026-11-19: "the menu like on the Bias Pointer bot")
+COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
+            ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
+            ("tracker", "Open the Job Hunt page"), ("help", "How this bot works")]
+
+
+def help_text() -> str:
+    return ("👋 <b>Job Hunt bot</b>\nYour remote job digest arrives here every morning at 08:30 WAT. Each job has "
+            "Apply / ✅ Applied / ⏭ Skip buttons. 7 days after you tap Applied, I ask how it went.\n\n"
+            + "\n".join(f"/{c} · {d}" for c, d in COMMANDS)
+            + "\n\nFor a tailored CV and cover letter, paste the job description to Claude.")
+
+
+async def handle_command(conn, config, chat: str, cmd: str) -> None:
+    token = config.jobs_bot_token
+    conn.row_factory = sqlite3.Row
+    ensure_table(conn)
+    now = datetime.now(timezone.utc)
+    if cmd == "/jobs":
+        await _send(token, chat, "🔎 Checking the job boards…")
+        await run_job_digest(config.db_path, config)
+    elif cmd == "/review":
+        rows = [dict(r) for r in conn.execute("SELECT * FROM job_apps WHERE status = 'new' ORDER BY sent_at DESC LIMIT 10")]
+        if not rows:
+            await _send(token, chat, "Nothing waiting: every job sent has been marked Applied or Skipped. /jobs checks for new ones.")
+        else:
+            await _send(token, chat, f"📋 <b>{len(rows)} job{'s' if len(rows) != 1 else ''} waiting for you</b>")
+            for r in rows:
+                await _send(token, chat, job_text(r, now), job_buttons(r))
+    elif cmd == "/applied":
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM job_apps WHERE status IN ('applied', 'followed_up', 'interview', 'offer') "
+            "ORDER BY applied_at DESC LIMIT 30")]
+        if not rows:
+            await _send(token, chat, "No applications in progress yet. Tap ✅ Applied under a job when you apply.")
+        else:
+            lines = [f"• <b>{html.escape(r['title'])}</b>, {html.escape(r['company'])}: {STATUS_LABEL[r['status']]}"
+                     + (f" (applied {datetime.fromisoformat(r['applied_at']).astimezone(WAT).strftime('%d %b')})"
+                        if r.get("applied_at") else "") for r in rows]
+            await _send(token, chat, f"📨 <b>Applications in progress ({len(rows)})</b>\n\n" + "\n".join(lines))
+    elif cmd == "/followups":
+        rows = due_followups(conn, now)
+        if not rows:
+            await _send(token, chat, "No follow-ups due. I'll remind you 7 days after each application.")
+        for r in rows:
+            await _send(token, chat, follow_text(r), follow_buttons(r["id"]))
+    elif cmd == "/tracker":
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        url = f"{config.frontend_url.rstrip('/')}/job-hunt"
+        await _send(token, chat, "Your Job Hunt page: every job, its status and your follow-ups.",
+                    InlineKeyboardMarkup([[InlineKeyboardButton("Open Job Hunt ↗", url=url)]]))
+    else:   # /start, /help, or any other text
+        await _send(token, chat, help_text())
 
 
 async def ensure_webhook(config) -> None:
@@ -391,5 +445,8 @@ async def ensure_webhook(config) -> None:
             await bot.set_webhook(url=url, secret_token=config.telegram_webhook_secret,
                                   allowed_updates=["message", "callback_query"])
             logger.info("Job Hunt bot webhook set")
+        from telegram import BotCommand, MenuButtonCommands
+        await bot.set_my_commands([BotCommand(c, d) for c, d in COMMANDS])
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     except TelegramError as e:
         logger.warning("Job Hunt bot webhook could not be set: %s", e)
