@@ -244,7 +244,50 @@ def job_buttons(j: dict, status: str = "new"):
     if status == "new":
         row += [InlineKeyboardButton("✅ Applied", callback_data=f"jb:a:{j['id']}"),
                 InlineKeyboardButton("⏭ Skip", callback_data=f"jb:s:{j['id']}")]
-    return InlineKeyboardMarkup([row])
+    return InlineKeyboardMarkup([row, [InlineKeyboardButton("✍️ Cover note", callback_data=f"jb:c:{j['id']}")]])
+
+
+# Cover notes: the same texts as the Quick Apply Kit doc (2026-11-19). Filled with the job's title and company;
+# the one sentence in [brackets] is hers to change. A template, not paid AI.
+_NOTE_END = ("I'm based in Nigeria (WAT, UTC+1), work well remotely, and can start immediately. "
+             "My CV is attached. Thank you for your time.\n\nTaiwo Damilola Mayowa")
+COVER_NOTES = {
+    "qa": ("I'm applying for the {role} position. I spent two years at Belrald, an education software company, "
+           "where I built the student and admin portals in React and then moved into QA to test the company's "
+           "full product before each release.\n\nBecause I've built features myself, I report bugs developers can "
+           "act on quickly: clear steps, expected against actual result, and a re-test once it's fixed. "
+           "[One sentence: what in their product you'd enjoy testing, or one requirement you match.]"),
+    "frontend": ("I'm applying for the {role} position. At Belrald I built and maintained the student and admin "
+                 "portals with HTML, CSS, JavaScript and React, then spent a year in QA, so I build with testing "
+                 "in mind.\n\nSince 2024 I've designed and tested my own web platform (a dashboard with Telegram "
+                 "alerts) using AI coding tools, which keeps my skills current and fast. "
+                 "[One sentence: one thing in the job you've done before.]"),
+    "other": ("I'm applying for the {role} position. I bring two years at a software company, first as a frontend "
+              "developer and then in QA, plus hands-on use of Figma and Canva.\n\nI'm careful with detail, I follow "
+              "briefs closely, and I check my own work before it goes out. "
+              "[One sentence: why this company or one requirement you match.]"),
+}
+
+
+def note_kind(title: str) -> str:
+    if re.search(r"\b(qa|quality|tester|testing|test)\b", title, re.I):
+        return "qa"
+    if re.search(r"\b(front[- ]?end|react|web developer|javascript|ui developer)\b", title, re.I):
+        return "frontend"
+    return "other"
+
+
+def cover_note(j: dict) -> str:
+    company = (j.get("company") or "").strip()
+    hello = f"Hello {company} team," if company and company != "?" else "Hello,"
+    return f"{hello}\n\n{COVER_NOTES[note_kind(j['title'])].format(role=j['title'].strip())}\n\n{_NOTE_END}"
+
+
+def cover_note_message(j: dict) -> str:
+    label = {"qa": "QA", "frontend": "Frontend", "other": "General"}[note_kind(j["title"])]
+    return (f"✍️ <b>Cover note</b> ({label}) for {html.escape(j['title'])}\n"
+            f"Tap the box to copy. Change the sentence in [brackets], then paste.\n\n"
+            f"<pre>{html.escape(cover_note(j))}</pre>")
 
 
 def follow_buttons(jid: int):
@@ -367,7 +410,16 @@ async def handle_update(conn, config, update: dict) -> None:
         chat = str(((cq.get("message") or {}).get("chat") or {}).get("id", ""))
         data = cq.get("data") or ""
         reply = ""
-        if owner and chat == owner and data.startswith("jb:"):
+        if owner and chat == owner and data.startswith("jb:c:"):
+            conn.row_factory = sqlite3.Row
+            try:
+                row = conn.execute("SELECT * FROM job_apps WHERE id = ?", (int(data.split(":")[2]),)).fetchone()
+            except (IndexError, ValueError):
+                row = None
+            if row:
+                await _send(token, chat, cover_note_message(dict(row)))
+            reply = "" if row else "That job is no longer in the tracker."
+        elif owner and chat == owner and data.startswith("jb:"):
             parts = data.split(":")
             try:
                 jid = int(parts[2])
@@ -419,7 +471,8 @@ COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you
 
 def help_text() -> str:
     return ("👋 <b>Job Hunt bot</b>\nYour remote job digest arrives here every morning at 08:30 WAT. Each job has "
-            "Apply / ✅ Applied / ⏭ Skip buttons. 7 days after you tap Applied, I ask how it went.\n\n"
+            "Apply / ✅ Applied / ⏭ Skip buttons, and ✍️ Cover note gives you a ready cover note for that job to copy. "
+            "7 days after you tap Applied, I ask how it went.\n\n"
             + "\n".join(f"/{c} · {d}" for c, d in COMMANDS)
             + "\n\nFor a tailored CV and cover letter, paste the job description to Claude.")
 
