@@ -277,8 +277,8 @@ def make_images():
         labels=["", "", "low", "", "LH", "", "sweep", "", "break"], ylim=(12.8, 19.6))
     im["cisd"] = chart("cisd", [(97.6, 99.6, 97.3, 99.4), (99.4, 99.8, 98.8, 99.0), (99.0, 99.2, 96.1, 96.4), (96.4, 96.9, 95.6, 95.8),
                                  (95.8, 96.0, 92.9, 93.4), (93.4, 94.6, 92.5, 94.3), (94.3, 98.6, 94.0, 98.2), (98.2, 99.1, 97.4, 97.8), (97.8, 100.6, 97.6, 100.3)],
-        levels=[(99.4, "CISD line = open of the run's first candle", ACCENT, 0.6, 8.4)],
-        notes=[(2.5, 91.3, "the run of down candles", MUTED), (6, 99.9, "not yet", MUTED), (8, 101.0, "body closes above → CISD", GREEN)],
+        levels=[(99.4, "CISD line = open of the series' first candle", ACCENT, 0.6, 8.4)],
+        notes=[(2.5, 91.3, "the series of down candles (2+ in a row)", MUTED), (6, 99.9, "not yet", MUTED), (8, 101.0, "body closes above → CISD", GREEN)],
         labels=["", "1st", "", "", "low", "", "", "", "CISD"], ylim=(90.6, 101.8))
     im["engulf"] = chart("engulf", [(16, 16.6, 13, 13.4), (13.3, 16.9, 12.9, 16.3)],
         levels=[(16.6, "C1 high (closing above it: covers the wick too)", RED), (16.0, "C1 open (closing above it: covers the body)", ACCENT)],
@@ -431,10 +431,10 @@ def make_rules(im):
          "High at the level, its sweep, then a close below the last higher low",
          "Up to 20 candles from the sweep to the break. Fires on candle close.", im["sweepbreak"]),
         ("E. Entry patterns", "CISD — H1 / M15 / M5: Change in State of Delivery",
-         "A run of same-colour candles delivers price to your level. The <b>CISD line</b> is the open of the first candle of the run that made the low "
-         "(a smaller pullback run that doesn't go lower doesn't replace it). A body closing beyond that line is the CISD.",
-         "Down run to the level, then an up candle's body closes above the open of the run's first candle",
-         "Up run to the level, then a down candle's body closes below the open of the run's first candle",
+         "A series of <b>2 or more</b> same-colour candles in a row delivers price to your level (one candle alone is not a series). The <b>CISD line</b> is the open of the first candle of the series that made the low "
+         "(a smaller pullback series that doesn't go lower doesn't replace it). A body closing beyond that line is the CISD.",
+         "2+ down candles to the level, then an up candle's body closes above the open of the series' first candle",
+         "2+ up candles to the level, then a down candle's body closes below the open of the series' first candle",
          "Opens and closes only, not wicks. Up to 20 candles from the low to the close through the line.", im["cisd"]),
         ("E. Entry patterns", "Engulfing — H1 / H2",
          "C2 opens at or below C1's close and its <b>body covers C1's body</b> (closes beyond C1's open). When it also closes beyond C1's high (low), "

@@ -1805,11 +1805,13 @@ f_zconf(simple int p, simple int ow, simple int cw, simple bool eg_open, simple 
     var float soc_mx = na
     var int   soc_b  = na
     var float dn_open = na
+    var int   dn_n    = 0     // candles in the current bearish run (a CISD series needs 2+ in a row, user 2026-11-19)
     var float dn_low  = na
     var float bci_ln  = na
     var float bci_lo  = na
     var int   bci_b   = na
     var float up_open = na
+    var int   up_n    = 0
     var float up_high = na
     var float sci_ln  = na
     var float sci_hi  = na
@@ -1871,7 +1873,7 @@ f_zconf(simple int p, simple int ow, simple int cw, simple bool eg_open, simple 
             soc_mx := soc_tp
             soc_b  := bar_index
     else
-        // CISD: the open of the first candle of the bearish run that made the lowest low; a bullish body close above it
+        // CISD: the open of the first candle of the bearish series (2+ in a row) that made the lowest low; a bullish body close above it
         if not na(bci_ln)
             if low < bci_lo
                 bci_lo := low
@@ -1900,9 +1902,11 @@ f_zconf(simple int p, simple int ow, simple int cw, simple bool eg_open, simple 
             if not pbear or na(dn_low)
                 dn_open := open
                 dn_low  := low
+                dn_n    := 1
             else
                 dn_low  := math.min(dn_low, low)
-            if na(bs) and (na(bci_ln) or dn_low <= bci_lo)
+                dn_n    += 1
+            if na(bs) and dn_n >= 2 and (na(bci_ln) or dn_low <= bci_lo)
                 bci_ln := dn_open
                 bci_lo := dn_low
                 bci_b  := bar_index
@@ -1910,9 +1914,11 @@ f_zconf(simple int p, simple int ow, simple int cw, simple bool eg_open, simple 
             if not pbull or na(up_high)
                 up_open := open
                 up_high := high
+                up_n    := 1
             else
                 up_high := math.max(up_high, high)
-            if na(ss) and (na(sci_ln) or up_high >= sci_hi)
+                up_n    += 1
+            if na(ss) and up_n >= 2 and (na(sci_ln) or up_high >= sci_hi)
                 sci_ln := up_open
                 sci_hi := up_high
                 sci_b  := bar_index

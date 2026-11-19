@@ -247,7 +247,7 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
 const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
   { key: 'H1:pcl',          label: 'H1 PCL',              hint: "a bullish candle wicks below the bearish candle before it and closes back above that low (sell: mirror)" },
   { key: 'H1:octgd',        label: 'H1 OCTGD',            hint: 'the last two bearish candles at the level form an OC; a bullish candle later closes above its level (sell: mirror)' },
-  { key: 'H1:cisd',         label: 'H1 CISD',             hint: 'a bullish body closes above the open of the first candle of the bearish run that reached the level (sell: mirror)' },
+  { key: 'H1:cisd',         label: 'H1 CISD',             hint: 'a bullish body closes above the open of the first candle of the bearish series (2 or more in a row) that reached the level (sell: mirror)' },
   { key: 'M15:cisd',        label: 'M15 CISD',            hint: 'the same on 15-minute candles' },
   { key: 'M5:cisd',         label: 'M5 CISD',             hint: 'the same on 5-minute candles' },
   { key: 'M15:sweep_break', label: 'M15 Sweep and Break', hint: 'a low at the level, its sweep, then a close above the last lower high' },
@@ -674,7 +674,7 @@ function EntryAlertsPanel({ instruments, prices }: {
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
               Each one is checked on its own timeframe, at this level, once the candle has closed (sells are the mirror). PCL: a bullish candle wicks below the bearish candle before it and closes back above that low.
               OCTGD: the last two bearish candles as price touches the level form an OC; within a few candles a bullish candle closes above where the first closed and the second opened.
-              CISD: a run of bearish candles brings price to the level; a bullish body then closes above the open of the run's first candle.
+              CISD: a series of 2 or more bearish candles in a row brings price to the level; a bullish body then closes above the open of that series' first candle (one bearish candle alone is not a series).
               Sweep and Break: a low at the level, its sweep, then a close through the last lower high.
               Engulfing: a bullish body covers the bearish candle's body (closes above its open), or its wick too (closes above its high), whichever shows.
             </div>

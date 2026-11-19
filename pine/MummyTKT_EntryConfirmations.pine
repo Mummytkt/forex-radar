@@ -33,8 +33,9 @@
 //       the sweep wick, a candle body closes above the last fractal high before the
 //       sweep (the last lower high): the break.
 //   CISD (Change in State of Delivery) — H1 / M15 / M5
-//       A run of bearish candles delivers price down. The CISD line is the OPEN of the
-//       first candle of the run that made the lowest low (a smaller pullback run that
+//       A series of 2 or more bearish candles IN A ROW delivers price down (one bearish
+//       candle alone is not a series, user 2026-11-19). The CISD line is the OPEN of the
+//       first candle of the series that made the lowest low (a smaller pullback series that
 //       doesn't go lower doesn't replace it). A bullish candle's body closing ABOVE that
 //       line is the CISD. Judged on opens and closes, not wicks.
 //   Engulfing — H1 / H2 (one confirmation, whichever kind shows)
@@ -116,11 +117,13 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
         soc_b  := bar_index
     // CISD: the run of candles that delivered price to its low (high), and the open of its first candle
     var float dn_open = na    // the current bearish run: open of its first candle
+    var int   dn_n    = 0     // candles in the current bearish run (a CISD series needs 2+ in a row, user 2026-11-19)
     var float dn_low  = na    // ... and its lowest low
     var float bci_ln  = na    // buy CISD line
     var float bci_lo  = na    // lowest low since that run began (the wick at your level)
     var int   bci_b   = na    // candle that made that low
     var float up_open = na
+    var int   up_n    = 0
     var float up_high = na
     var float sci_ln  = na    // sell CISD line
     var float sci_hi  = na
@@ -158,10 +161,12 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
         if not pbear
             dn_open := open
             dn_low  := low
+            dn_n    := 1
         else
             dn_low  := math.min(dn_low, low)
+            dn_n    += 1
         // the run that delivered price lowest is the one; a pullback run that doesn't go lower doesn't replace it
-        if not b_ci and (na(bci_ln) or dn_low <= bci_lo)
+        if not b_ci and dn_n >= 2 and (na(bci_ln) or dn_low <= bci_lo)
             bci_ln := dn_open
             bci_lo := dn_low
             bci_b  := bar_index
@@ -169,9 +174,11 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
         if not pbull
             up_open := open
             up_high := high
+            up_n    := 1
         else
             up_high := math.max(up_high, high)
-        if not s_ci and (na(sci_ln) or up_high >= sci_hi)
+            up_n    += 1
+        if not s_ci and up_n >= 2 and (na(sci_ln) or up_high >= sci_hi)
             sci_ln := up_open
             sci_hi := up_high
             sci_b  := bar_index
