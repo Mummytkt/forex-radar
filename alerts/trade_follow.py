@@ -17,7 +17,7 @@ The price monitor (every 5 minutes, 5-minute candles) then sends:
 
 LIMIT ENTRY (user, 2026-11-16, Documents/Limit_Entry_Rule.png): a level can take its entry as a limit order instead
 of at the confirmation close. The limit goes at: CISD = the CISD line; OCTGD = the OC level; PCL = the PCL candle's
-open; Engulfing = the close of the candle body it covered; Sweep and Break = the breaker. SL as above (the pattern's
+open; Engulfing = the OPEN of the candle it covered (C1, user 2026-11-19); Sweep and Break = the breaker. SL as above (the pattern's
 wick + buffer); TP and breakeven are measured from the limit. Nothing is watched until price comes back to the limit
 (LIMIT FILLED, then as above). The order is cancelled (CANCEL THE ORDER) when price reaches the TP first, or when an
 H4 candle closes with its body beyond the level (a buy: below it; a sell: above it) before the fill.
@@ -186,13 +186,13 @@ _PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "
               "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 _SAME = {"engulfing_sweep": "pcl", "sweep": "pcl"}
 _LIMIT_AT = {"cisd": "the CISD line", "octgd": "the OC level", "pcl": "the PCL candle's open",
-             "engulfing": "the close of the candle it engulfed", "sweep_break": "the breaker"}
+             "engulfing": "the open of the candle it engulfed", "sweep_break": "the breaker"}
 
 
 def limit_for(pattern: str, direction: str, close: float, pattern_level: Optional[float],
               candles: Optional[str], limit_price: Optional[float]) -> Optional[float]:
     """The limit price of a confirmation (user, 2026-11-16): CISD = the CISD line; OCTGD = the OC level; PCL = the
-    PCL candle's open; Engulfing = the close of the candle it covered (its body, never the wick); Sweep and Break =
+    PCL candle's open; Engulfing = the open of the candle it covered (C1's open, user 2026-11-19); Sweep and Break =
     the breaker (sent by the script). None when the alert can't give it, or it isn't on the retrace side of the close."""
     from alerts.chart_image import parse_candles
     pat = _SAME.get(pattern, pattern)
@@ -213,7 +213,7 @@ def limit_for(pattern: str, direction: str, close: float, pattern_level: Optiona
         cs = parse_candles(candles)
         # the last candle sent is the confirmation candle: its close is the alert's close
         if len(cs) >= 2 and abs(cs[-1][4] - close) <= max(abs(close) * 1e-4, 1e-9):
-            lim = cs[-1][1] if pat == "pcl" else cs[-2][4]
+            lim = cs[-1][1] if pat == "pcl" else cs[-2][1]   # PCL: C2's open; Engulfing: C1's open
     if lim is None:
         return None
     # a buy's limit sits below the close (price comes back down to it); a sell's above

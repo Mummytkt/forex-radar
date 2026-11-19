@@ -725,7 +725,7 @@ function EntryAlertsPanel({ instruments, prices }: {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
                   {entryMode === 'instant'
                     ? 'Instant: the trade starts at the confirmation candle\'s close.'
-                    : 'Limit: the confirmation alert gives a limit price: CISD = the CISD line, OCTGD = the OC level, PCL = the PCL candle\'s open, Engulfing = the close of the candle it covered, Sweep and Break = the breaker. Take profit and breakeven are measured from the limit. Nothing is watched until price comes back to it (LIMIT FILLED). If price reaches the take profit first, or an H4 candle closes with its body beyond your level before the fill, you get CANCEL THE ORDER.'}
+                    : 'Limit: the confirmation alert gives a limit price: CISD = the CISD line, OCTGD = the OC level, PCL = the PCL candle\'s open, Engulfing = the open of the candle it covered (the open of C1), Sweep and Break = the breaker. Take profit and breakeven are measured from the limit. Nothing is watched until price comes back to it (LIMIT FILLED). If price reaches the take profit first, or an H4 candle closes with its body beyond your level before the fill, you get CANCEL THE ORDER.'}
                 </div>
               </div>
             )}
