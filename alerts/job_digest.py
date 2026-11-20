@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 WAT = timezone(timedelta(hours=1))
 FOLLOW_DAYS = 7
-MAX_PER_DAY = 15
+MAX_PER_DAY = 25     # 15 until 2026-11-20; raised for her 15-20 applications a day
 UA = {"User-Agent": "Mozilla/5.0 (personal job digest)"}
 
 SCHEMA = """
@@ -237,8 +237,6 @@ def store_new(conn, jobs: list[dict], now: datetime) -> list[dict]:
             continue
         if len(new) >= MAX_PER_DAY:
             break
-        if j["source"] in PAYWALLED:
-            j = {**j, "url": direct_url(j)}
         jid = conn.execute(
             "INSERT INTO job_apps (url, source, title, company, location, region, posted_at, sent_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -261,7 +259,8 @@ def job_text(j: dict, now: datetime) -> str:
     where = {"Nigeria": "open to Nigeria", "Africa": "open to Africa", "Worldwide": "worldwide",
              "EMEA": "EMEA (usually includes Africa: check)"}[j["region"]]
     return (f"{FLAG[j['region']]} {'🤖 <b>AI</b> · ' if is_ai(j['title']) else ''}<b>{html.escape(j['title'])}</b>\n{html.escape(j['company'])} · {where}\n"
-            f"Posted {_ago(j['posted_at'], now)} · {html.escape(j['source'])}"
+            f"Posted {_ago(j['posted_at'], now)} · {html.escape(j['source'])}\n"
+            + SPEED_LABEL[form_speed(apply_link(j)[1])]
             + ("\n<i>We Work Remotely charges to apply, so the button opens this job on the company's own site (free).</i>"
                if j.get("source") in PAYWALLED else ""))
 
@@ -301,22 +300,31 @@ def ducky_url(j: dict) -> str:
     return "https://duckduckgo.com/?q=" + urllib.parse.quote_plus(f"!ducky {j['company']} {j['title']} careers apply")
 
 
+def ats_lookup(j: dict) -> Optional[str]:
+    """This job's own listing on the employer's hiring system (Greenhouse / Lever / Ashby / Workable), or None."""
+    from difflib import SequenceMatcher
+    if j.get("company") in (None, "", "?"):
+        return None
+    want = _norm(j["title"])
+    for slug in _slugs(j["company"]):
+        for api, parse in ATS:
+            try:
+                posts = parse(json.loads(urllib.request.urlopen(
+                    urllib.request.Request(api.format(slug=slug), headers=UA), timeout=6).read()))
+            except Exception:
+                continue
+            best = max(((SequenceMatcher(None, want, _norm(t)).ratio(), u) for t, u in posts if t and u), default=None)
+            if best and best[0] >= 0.85:
+                return best[1]
+    return None
+
+
 def direct_url(j: dict) -> str:
     """The job's own page at the employer, so applying is free: their hiring system's listing for this title,
     else an apply/careers link from the job's description, else a jump to the first search result."""
-    from difflib import SequenceMatcher
-    want = _norm(j["title"])
-    if j.get("company") not in (None, "", "?"):
-        for slug in _slugs(j["company"]):
-            for api, parse in ATS:
-                try:
-                    posts = parse(json.loads(urllib.request.urlopen(
-                        urllib.request.Request(api.format(slug=slug), headers=UA), timeout=8).read()))
-                except Exception:
-                    continue
-                best = max(((SequenceMatcher(None, want, _norm(t)).ratio(), u) for t, u in posts if t and u), default=None)
-                if best and best[0] >= 0.85:
-                    return best[1]
+    found = ats_lookup(j)
+    if found:
+        return found
     links = [u.rstrip(".,);") for u in re.findall(r"https?://[^\s\"'<>]+", html.unescape(j.get("_desc") or ""))]
     links = [u for u in links if not any(b in u for b in _NOT_APPLY)]
     for u in links:
@@ -328,14 +336,51 @@ def direct_url(j: dict) -> str:
     return ducky_url(j)
 
 
+def resolve_links(jobs: list[dict]) -> list[dict]:
+    """Run in a worker thread (many web requests): point each job at the employer's own application form when it
+    can be found, so Apply opens a short form the Simplify extension fills. Paywalled-board jobs whose free page
+    can't be found are dropped (owner, 2026-11-20: every job must reach a free form)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(j):
+        if j["source"] in PAYWALLED:
+            u = direct_url(j)
+            return None if "duckduckgo.com" in u else {**j, "url": u}
+        if form_speed(j["url"]) == "board":
+            u = ats_lookup(j)
+            if u:
+                return {**j, "url": u}
+        return j
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return [j for j in ex.map(one, jobs) if j]
+
+
+# How long the application form behind a link takes (owner, 2026-11-20): short hosted forms first.
+QUICK_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "breezy.hr", "recruitee.com",
+               "teamtailor.com", "bamboohr.com", "docs.google.com/forms", "jobs.micro1.ai")
+SLOW_HOSTS = ("myworkdayjobs.com", "workday", "icims.com", "taleo", "successfactors", "oraclecloud.com",
+              "smartrecruiters.com", "jobvite.com", "ultipro", "adp.com", "paylocity")
+SPEED_LABEL = {"quick": "⚡ Quick form (~3 min with Simplify)", "slow": "🐢 Long form (~15 min)",
+               "board": "📝 Opens the job board: tap Apply there"}
+
+
+def form_speed(url: str) -> str:
+    u = (url or "").lower()
+    if any(h in u for h in SLOW_HOSTS):
+        return "slow"
+    if any(h in u for h in QUICK_HOSTS):
+        return "quick"
+    return "board"
+
+
 def apply_link(j: dict) -> tuple[str, str]:
     """(button label, url) for the Apply button."""
     if j.get("source") in PAYWALLED:
-        url = j["url"]
+        url = j.get("url", "")
         if any(h in url for h in PAYWALL_HOSTS):       # stored before this fix: jump to the first result instead
             url = ducky_url(j)
         return "Apply on company site ↗", url
-    return "Apply ↗", j["url"]
+    return "Apply ↗", j.get("url", "")
 
 
 def job_buttons(j: dict, status: str = "new"):
@@ -461,7 +506,13 @@ async def run_job_digest(db_path: str, config, now: Optional[datetime] = None) -
         since = max(now - timedelta(hours=48), datetime.fromisoformat(last) - timedelta(hours=6)) if last \
             else now - timedelta(hours=48)
         jobs = await asyncio.to_thread(fetch_jobs, since)
+        # resolve only the unseen ones (a few spare, as unresolvable paywalled jobs get dropped), off the event loop
+        unseen = [j for j in jobs if not conn.execute(
+            "SELECT 1 FROM job_apps WHERE url = ? OR (lower(title) = ? AND lower(company) = ?)",
+            (j["url"], j["title"].lower(), j["company"].lower())).fetchone()][:MAX_PER_DAY + 10]
+        jobs = await asyncio.to_thread(resolve_links, unseen)
         new = store_new(conn, jobs, now)
+        new.sort(key=lambda j: {"quick": 0, "board": 1, "slow": 2}[form_speed(apply_link(j)[1])])   # quick forms first
         day = now.astimezone(WAT).strftime("%a %d %b")
         follows = due_followups(conn, now)
         head = (f"💼 <b>Job digest · {day}</b>\n{len(new)} new remote job{'s' if len(new) != 1 else ''} for you"
