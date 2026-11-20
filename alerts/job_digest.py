@@ -265,7 +265,7 @@ def job_buttons(j: dict, status: str = "new"):
 # Cover notes: the same texts as the Quick Apply Kit doc (2026-11-19). Filled with the job's title and company;
 # the one sentence in [brackets] is hers to change. A template, not paid AI.
 _NOTE_END = ("I'm based in Nigeria (WAT, UTC+1), work well remotely, and can start immediately. "
-             "My CV is attached. Thank you for your time.\n\nTaiwo Damilola Mayowa")
+             "My CV is attached, and you can see my work at taiwo-damilola-mayowa.vercel.app. Thank you for your time.\n\nTaiwo Damilola Mayowa")
 COVER_NOTES = {
     "qa": ("I'm applying for the {role} position. I have 4+ years building and testing software. At Belrald, an "
            "education software company, I built the student and admin portals in React and then moved into QA to "
@@ -491,6 +491,7 @@ COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
             ("add", "Log an application: /add Title | Company | link"),
             ("ai", "AI training sites open to Nigeria"),
+            ("portfolio", "Your portfolio, CV and contact links to copy"),
             ("tracker", "Open the Job Hunt page"), ("help", "How this bot works")]
 
 # AI training / evaluation work is mostly sign-up on the platforms' own sites, not posted on job boards.
@@ -512,6 +513,20 @@ def ai_sites_text() -> str:
             "Apply to each once with your AI CV, then log it with /add.\n\n"
             + "\n\n".join(f"<b><a href=\"{u}\">{html.escape(n)}</a></b>\n{html.escape(d)}" for n, u, d in AI_SITES)
             + f"\n\n{AI_CLOSED}\nRules change often: check each site's country list when you sign up.")
+
+
+PORTFOLIO_URL = "https://taiwo-damilola-mayowa.vercel.app"
+
+
+def portfolio_text() -> str:
+    """Tap-to-copy details for filling application forms on the phone (owner-only chat, so the phone number is fine here)."""
+    return ("🗂 <b>Your links for applications</b>\nTap any line to copy it, then paste it into the form.\n\n"
+            f"Portfolio / website:\n<code>{PORTFOLIO_URL}</code>\n\n"
+            f"CV (PDF link):\n<code>{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf</code>\n\n"
+            "Email:\n<code>olaomidamilola@gmail.com</code>\n\n"
+            "Phone:\n<code>+2349030281340</code>\n\n"
+            "Where a form asks for a <b>portfolio, website or personal site</b>, paste the portfolio link. "
+            "Where it asks you to <b>upload</b> a CV, use the PDF file; if it only takes a link, paste the CV link.")
 
 
 def help_text() -> str:
@@ -569,6 +584,11 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
                                      f"I'll ask how it went in 7 days.\n\n{goal_line(conn)}")
     elif cmd == "/ai":
         await _send(token, chat, ai_sites_text())
+    elif cmd == "/portfolio":
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        await _send(token, chat, portfolio_text(), InlineKeyboardMarkup([[
+            InlineKeyboardButton("Open portfolio ↗", url=PORTFOLIO_URL),
+            InlineKeyboardButton("Open CV ↗", url=f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf")]]))
     elif cmd == "/tracker":
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         url = f"{config.frontend_url.rstrip('/')}/job-hunt"
