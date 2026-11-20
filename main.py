@@ -226,6 +226,20 @@ async def main(dry_run: bool = False) -> None:
         name="Owner's Job Hunt digest (separate Telegram bot)",
         misfire_grace_time=3 * 3600,
     )
+    # LinkedIn coach on the same bot (owner request 2026-11-20): post 08:00, tasks 13:05, evening 19:00 WAT,
+    # review Sunday 18:10 WAT. Server times are UTC; 12:05 avoids the 12:00 H4 close.
+    from alerts.linkedin_coach import run_linkedin_slot, run_linkedin_review
+    for slot, hh, mm in (("morning", 7, 0), ("afternoon", 12, 5), ("evening", 18, 0)):
+        scheduler.add_job(
+            run_linkedin_slot, "cron", hour=hh, minute=mm,
+            kwargs={"db_path": config.db_path, "config": config, "slot": slot},
+            id=f"linkedin_{slot}", name=f"Owner's LinkedIn coach ({slot})", misfire_grace_time=3 * 3600,
+        )
+    scheduler.add_job(
+        run_linkedin_review, "cron", day_of_week="sun", hour=17, minute=10,
+        kwargs={"db_path": config.db_path, "config": config},
+        id="linkedin_review", name="Owner's LinkedIn weekly review", misfire_grace_time=6 * 3600,
+    )
     scheduler.start()
     if config.jobs_bot_token:
         asyncio.create_task(ensure_jobs_webhook(config))

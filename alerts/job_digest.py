@@ -514,7 +514,19 @@ async def handle_update(conn, config, update: dict) -> None:
         chat = str(((cq.get("message") or {}).get("chat") or {}).get("id", ""))
         data = cq.get("data") or ""
         reply = ""
-        if owner and chat == owner and data.startswith("jb:c:"):
+        if owner and chat == owner and data.startswith("li:"):
+            from alerts.linkedin_coach import handle_callback
+            reply = await handle_callback(conn, data)
+            if reply:
+                try:     # replace the buttons with the outcome, so the message shows it is done
+                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                    label = "⏭ Skipped" if data.endswith(":s") else ("✅ Posted" if ":morning:" in data else "✅ Done")
+                    await bot.edit_message_reply_markup(chat_id=chat, message_id=cq["message"]["message_id"],
+                                                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                                                            label, callback_data="li:noop")]]))
+                except TelegramError:
+                    pass
+        elif owner and chat == owner and data.startswith("jb:c:"):
             conn.row_factory = sqlite3.Row
             try:
                 row = conn.execute("SELECT * FROM job_apps WHERE id = ?", (int(data.split(":")[2]),)).fetchone()
@@ -572,6 +584,8 @@ COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you
             ("add", "Log an application: /add Title | Company | link"),
             ("ai", "AI training sites open to Nigeria"),
             ("portfolio", "Your portfolio, CV and contact links to copy"),
+            ("linkedin", "Today's LinkedIn post and tasks"),
+            ("stats", "Log LinkedIn numbers: /stats views impressions connections"),
             ("tracker", "Open the Job Hunt page"), ("help", "How this bot works")]
 
 # AI training / evaluation work is mostly sign-up on the platforms' own sites, not posted on job boards.
@@ -666,6 +680,9 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
                                      f"I'll ask how it went in 7 days.\n\n{goal_line(conn)}")
     elif cmd == "/ai":
         await _send(token, chat, ai_sites_text())
+    elif cmd in ("/linkedin", "/stats"):
+        from alerts.linkedin_coach import handle_command as li_command
+        await li_command(conn, token, chat, cmd, arg, _send)
     elif cmd == "/portfolio":
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         await _send(token, chat, portfolio_text(), InlineKeyboardMarkup([[
