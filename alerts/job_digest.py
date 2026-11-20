@@ -583,7 +583,7 @@ COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
             ("add", "Log an application: /add Title | Company | link"),
             ("ai", "AI training sites open to Nigeria"),
-            ("portfolio", "Your portfolio, CV and contact links to copy"),
+            ("links", "All your links and form answers to copy, and your Kits"),
             ("linkedin", "Today's LinkedIn post and tasks"),
             ("stats", "Log LinkedIn numbers: /stats views impressions connections"),
             ("tracker", "Open the Job Hunt page"), ("help", "How this bot works")]
@@ -615,14 +615,41 @@ LINKEDIN_URL = "https://www.linkedin.com/in/taiwo-damilola-mayowa-973710450"
 
 def portfolio_text() -> str:
     """Tap-to-copy details for filling application forms on the phone (owner-only chat, so the phone number is fine here)."""
-    return ("🗂 <b>Your links for applications</b>\nTap any line to copy it, then paste it into the form.\n\n"
+    return ("🗂 <b>Your links and details for applications</b>\nTap any grey line to copy it, then paste it into the form.\n\n"
             f"Portfolio / website:\n<code>{PORTFOLIO_URL}</code>\n\n"
             f"LinkedIn:\n<code>{LINKEDIN_URL}</code>\n\n"
             f"CV (PDF link):\n<code>{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf</code>\n\n"
             "Email:\n<code>olaomidamilola@gmail.com</code>\n\n"
             "Phone:\n<code>+2349030281340</code>\n\n"
+            "<b>Form answers</b>\n"
+            "Full name: <code>Taiwo Damilola Mayowa</code>\n"
+            "Location: <code>Ibadan, Nigeria</code>\n"
+            "Time zone: <code>WAT (UTC+1)</code>\n"
+            "Years of experience: <code>4+</code>\n"
+            "Current role: <code>Product Designer &amp; QA Tester, Bias Pointer</code>\n"
+            "Notice period: <code>Immediately</code>\n"
+            "Expected salary: <code>$700 to $1,000 per month</code>\n"
+            "Education: <code>B.A. Anthropology, University of Ibadan, 2019</code>\n"
+            "Visa sponsorship: <code>No, remote from Nigeria</code>\n\n"
             "Where a form asks for a <b>portfolio, website or personal site</b>, paste the portfolio link. "
-            "Where it asks you to <b>upload</b> a CV, use the PDF file; if it only takes a link, paste the CV link.")
+            "Where it asks you to <b>upload</b> a CV, use the PDF file; if it only takes a link, paste the CV link. "
+            "Longer answers (about you, why this role) are in your Quick Apply Kit: button below.")
+
+
+QUICK_APPLY_KIT = "https://claude.ai/artifact/1z2XBM6Rp1fLS1Q8Kh3jmy"
+LINKEDIN_KIT = "https://claude.ai/artifact/2HWhzAzEN6VpYcUqsY8Csb"
+
+
+def links_markup(config):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    tracker = f"{config.frontend_url.rstrip('/')}/job-hunt"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Portfolio ↗", url=PORTFOLIO_URL),
+         InlineKeyboardButton("CV ↗", url=f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf"),
+         InlineKeyboardButton("LinkedIn ↗", url=LINKEDIN_URL)],
+        [InlineKeyboardButton("📋 Quick Apply Kit", url=QUICK_APPLY_KIT),
+         InlineKeyboardButton("💼 LinkedIn Kit", url=LINKEDIN_KIT)],
+        [InlineKeyboardButton("📊 Job Hunt tracker", url=tracker)]])
 
 
 def help_text() -> str:
@@ -683,12 +710,8 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
     elif cmd in ("/linkedin", "/stats"):
         from alerts.linkedin_coach import handle_command as li_command
         await li_command(conn, token, chat, cmd, arg, _send)
-    elif cmd == "/portfolio":
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        await _send(token, chat, portfolio_text(), InlineKeyboardMarkup([[
-            InlineKeyboardButton("Open portfolio ↗", url=PORTFOLIO_URL),
-            InlineKeyboardButton("Open CV ↗", url=f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf"),
-            InlineKeyboardButton("LinkedIn ↗", url=LINKEDIN_URL)]]))
+    elif cmd in ("/links", "/portfolio"):     # /portfolio kept: it was the menu name until 2026-11-20
+        await _send(token, chat, portfolio_text(), links_markup(config))
     elif cmd == "/tracker":
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         url = f"{config.frontend_url.rstrip('/')}/job-hunt"
