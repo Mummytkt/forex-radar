@@ -530,6 +530,8 @@ async def run_job_digest(db_path: str, config, now: Optional[datetime] = None) -
                 conn.execute("UPDATE job_apps SET follow_at = ? WHERE id = ?",
                              ((now + timedelta(days=FOLLOW_DAYS)).isoformat(), r["id"]))
         conn.commit()
+        from alerts.job_checklist import send_checklist     # the day's checklist, once a day after the digest
+        await send_checklist(conn, token, chat, _send, now.astimezone(WAT).date(), once=True)
         logger.info("Job Hunt digest: %d new jobs, %d follow-ups", len(new), len(follows))
         return len(new)
     finally:
@@ -571,7 +573,10 @@ async def handle_update(conn, config, update: dict) -> None:
         chat = str(((cq.get("message") or {}).get("chat") or {}).get("id", ""))
         data = cq.get("data") or ""
         reply = ""
-        if owner and chat == owner and data.startswith("li:"):
+        if owner and chat == owner and data.startswith("ck:"):
+            from alerts.job_checklist import handle_callback as ck_callback
+            reply = await ck_callback(conn, bot, cq, data)
+        elif owner and chat == owner and data.startswith("li:"):
             from alerts.linkedin_coach import handle_callback
             reply = await handle_callback(conn, data)
             if reply:
@@ -636,7 +641,8 @@ async def handle_update(conn, config, update: dict) -> None:
 
 
 # The bot's menu (owner request 2026-11-19: "the menu like on the Bias Pointer bot")
-COMMANDS = [("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
+COMMANDS = [("today", "Today's checklist: what to do next"),
+            ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
             ("add", "Log an application: /add Title | Company | link"),
             ("ai", "AI training sites open to Nigeria"),
@@ -764,6 +770,9 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
                                      f"I'll ask how it went in 7 days.\n\n{goal_line(conn)}")
     elif cmd == "/ai":
         await _send(token, chat, ai_sites_text())
+    elif cmd == "/today":
+        from alerts.job_checklist import send_checklist
+        await send_checklist(conn, token, chat, _send)
     elif cmd in ("/linkedin", "/stats"):
         from alerts.linkedin_coach import handle_command as li_command
         await li_command(conn, token, chat, cmd, arg, _send)

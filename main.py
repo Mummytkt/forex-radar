@@ -235,6 +235,12 @@ async def main(dry_run: bool = False) -> None:
             kwargs={"db_path": config.db_path, "config": config, "slot": slot},
             id=f"linkedin_{slot}", name=f"Owner's LinkedIn coach ({slot})", misfire_grace_time=3 * 3600,
         )
+    from alerts.job_checklist import run_checklist_nudge
+    scheduler.add_job(
+        run_checklist_nudge, "cron", hour=15, minute=2,     # 16:02 WAT, only when steps are left
+        kwargs={"db_path": config.db_path, "config": config},
+        id="job_checklist_nudge", name="Owner's job checklist nudge", misfire_grace_time=3 * 3600,
+    )
     scheduler.add_job(
         run_linkedin_review, "cron", day_of_week="sun", hour=17, minute=10,
         kwargs={"db_path": config.db_path, "config": config},
