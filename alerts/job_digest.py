@@ -596,12 +596,14 @@ def ai_sites_text() -> str:
 
 
 PORTFOLIO_URL = "https://taiwo-damilola-mayowa.vercel.app"
+LINKEDIN_URL = "https://www.linkedin.com/in/taiwo-damilola-mayowa-973710450"
 
 
 def portfolio_text() -> str:
     """Tap-to-copy details for filling application forms on the phone (owner-only chat, so the phone number is fine here)."""
     return ("🗂 <b>Your links for applications</b>\nTap any line to copy it, then paste it into the form.\n\n"
             f"Portfolio / website:\n<code>{PORTFOLIO_URL}</code>\n\n"
+            f"LinkedIn:\n<code>{LINKEDIN_URL}</code>\n\n"
             f"CV (PDF link):\n<code>{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf</code>\n\n"
             "Email:\n<code>olaomidamilola@gmail.com</code>\n\n"
             "Phone:\n<code>+2349030281340</code>\n\n"
@@ -668,7 +670,8 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         await _send(token, chat, portfolio_text(), InlineKeyboardMarkup([[
             InlineKeyboardButton("Open portfolio ↗", url=PORTFOLIO_URL),
-            InlineKeyboardButton("Open CV ↗", url=f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf")]]))
+            InlineKeyboardButton("Open CV ↗", url=f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf"),
+            InlineKeyboardButton("LinkedIn ↗", url=LINKEDIN_URL)]]))
     elif cmd == "/tracker":
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         url = f"{config.frontend_url.rstrip('/')}/job-hunt"
