@@ -63,10 +63,12 @@ STATUS_LABEL = {"new": "New", "applied": "Applied", "skipped": "Skipped", "follo
                 "interview": "Interview", "rejected": "Rejected", "no_reply": "No reply", "offer": "Offer"}
 
 TITLE = re.compile(
-    r"\b(qa|quality assurance|tester|testing|test analyst|customer success|customer support|"
+    r"\b(qa|quality assurance|tester|testing|test analyst|test engineer|customer success|customer support|"
     r"support (specialist|agent|associate|representative|analyst|engineer)|technical support|product analyst|"
     r"product operations|product ops|associate product manager|ai (trainer|tutor|evaluator|rater|annotator|specialist)|"
     r"data annotat\w*|annotator|prompt|llm|rlhf|ai training|evaluator|rater)\b", re.I)
+ENGINEER = re.compile(r"\bengineer\w*\b", re.I)
+QA_WORD = re.compile(r"\b(qa|quality|test\w*)\b", re.I)
 SENIOR = re.compile(r"\b(senior|sr\.?|lead|principal|head|director|staff|vp|chief|manager)\b", re.I)
 REGION_TITLE = re.compile(r"\b(latam|americas?|north america|usa?|canada|apac|asia|west region|east region)\b", re.I)
 NATIVE = re.compile(r"speakers? in|native (speaker|level)", re.I)
@@ -126,6 +128,10 @@ def classify(title: str, location: str) -> Optional[str]:
     """The region group a job goes under, or None when it is not one for her."""
     ai_fit = AI.search(title) and AI_OK_ROLE.search(title) and not AI_HEAVY.search(title)
     if not (TITLE.search(title) or ai_fit) or REGION_TITLE.search(title) or NATIVE.search(title):
+        return None
+    # "... Support / Success / Solutions Engineer" roles want coding (mobile SDKs, stack traces): she asked to
+    # drop them (2026-11-20, after RevenueCat's Developer Support Engineer). QA / test engineers still come through.
+    if ENGINEER.search(title) and not QA_WORD.search(title):
         return None
     if SENIOR.search(title) and not re.search(r"associate product manager", title, re.I):
         return None
