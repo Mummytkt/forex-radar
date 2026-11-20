@@ -149,14 +149,15 @@ def fetch_jobs(since: datetime) -> list[dict]:
     """All six feeds, jobs posted after `since` that fit her. A feed that fails is skipped (logged)."""
     out: list[dict] = []
 
-    def add(src, title, company, loc, when, url):
+    def add(src, title, company, loc, when, url, desc=""):
         if when is None or when < since or not url:
             return
         title, company = html.unescape(title or "").strip(), html.unescape(company or "").strip()
         region = classify(title, loc)
         if region:
             out.append({"source": src, "title": title, "company": company or "?", "location": (loc or "").strip() or "Worldwide",
-                        "region": region, "posted_at": when.astimezone(timezone.utc).isoformat(), "url": url})
+                        "region": region, "posted_at": when.astimezone(timezone.utc).isoformat(), "url": url,
+                        "_desc": desc or ""})
 
     def utc(s):
         d = datetime.fromisoformat(s)
@@ -188,7 +189,7 @@ def fetch_jobs(since: datetime) -> list[dict]:
         for it in ET.fromstring(_get("https://weworkremotely.com/remote-jobs.rss")).iter("item"):
             comp, _, title = (it.findtext("title") or "").partition(": ")
             add("We Work Remotely", title or comp, comp if title else "", it.findtext("region") or "",
-                parsedate_to_datetime(it.findtext("pubDate")), it.findtext("link"))
+                parsedate_to_datetime(it.findtext("pubDate")), it.findtext("link"), it.findtext("description") or "")
     except Exception as e:
         logger.warning("Job feed We Work Remotely failed: %s", e)
     try:
@@ -208,7 +209,9 @@ def fetch_jobs(since: datetime) -> list[dict]:
         logger.warning("Job feed Working Nomads failed: %s", e)
 
     seen, uniq = set(), []
-    for j in sorted(out, key=lambda j: j["posted_at"], reverse=True):
+    # the same job on two boards: keep the free one (a paywalled board loses the tie)
+    out.sort(key=lambda j: j["posted_at"], reverse=True)
+    for j in sorted(out, key=lambda j: j["source"] in PAYWALLED):
         k = (j["title"].lower(), j["company"].lower())
         if k not in seen:
             seen.add(k)
@@ -228,6 +231,8 @@ def store_new(conn, jobs: list[dict], now: datetime) -> list[dict]:
             continue
         if len(new) >= MAX_PER_DAY:
             break
+        if j["source"] in PAYWALLED:
+            j = {**j, "url": direct_url(j)}
         jid = conn.execute(
             "INSERT INTO job_apps (url, source, title, company, location, region, posted_at, sent_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -251,7 +256,7 @@ def job_text(j: dict, now: datetime) -> str:
              "EMEA": "EMEA (usually includes Africa: check)"}[j["region"]]
     return (f"{FLAG[j['region']]} {'🤖 <b>AI</b> · ' if is_ai(j['title']) else ''}<b>{html.escape(j['title'])}</b>\n{html.escape(j['company'])} · {where}\n"
             f"Posted {_ago(j['posted_at'], now)} · {html.escape(j['source'])}"
-            + ("\n<i>That site charges to apply: the button finds the job on the company's own site, free.</i>"
+            + ("\n<i>We Work Remotely charges to apply, so the button opens this job on the company's own site (free).</i>"
                if j.get("source") in PAYWALLED else ""))
 
 
@@ -259,13 +264,71 @@ def job_text(j: dict, now: datetime) -> str:
 # paywall). The same jobs are almost always on the company's own careers page, where applying is free, so for
 # those jobs Apply opens a search for that page instead.
 PAYWALLED = {"We Work Remotely"}
+PAYWALL_HOSTS = ("weworkremotely.com",)
+# Public job-board APIs of the hiring systems most companies use: {slug} is the company's account name.
+ATS = [
+    ("https://boards-api.greenhouse.io/v1/boards/{slug}/jobs", lambda d: [(x["title"], x["absolute_url"]) for x in d["jobs"]]),
+    ("https://api.lever.co/v0/postings/{slug}?mode=json", lambda d: [(x["text"], x["hostedUrl"]) for x in d]),
+    ("https://api.ashbyhq.com/posting-api/job-board/{slug}", lambda d: [(x["title"], x["jobUrl"]) for x in d["jobs"]]),
+    ("https://apply.workable.com/api/v1/widget/accounts/{slug}", lambda d: [(x["title"], x["url"]) for x in d["jobs"]]),
+]
+ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "bamboohr.com", "recruitee.com",
+             "teamtailor.com", "breezy.hr", "smartrecruiters.com", "personio", "jobvite.com", "rippling.com",
+             "docs.google.com/forms")
+_NOT_APPLY = ("eeoc.gov", "slack.com", "linkedin.com", "twitter.com", "x.com", "facebook.com", "instagram.com",
+              "youtube.com", "glassdoor", "weworkremotely.com", "/blog")
+
+
+def _norm(t: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()
+
+
+def _slugs(company: str) -> list[str]:
+    c = company.lower()
+    c = re.sub(r"\b(inc|llc|ltd|gmbh|corp|co|the|hq)\b\.?", "", c)
+    out = [re.sub(r"[^a-z0-9]", "", c), re.sub(r"[^a-z0-9]+", "-", c).strip("-"), (re.findall(r"[a-z0-9]+", c) or [""])[0]]
+    return [s for i, s in enumerate(out) if s and s not in out[:i]]
+
+
+def ducky_url(j: dict) -> str:
+    """DuckDuckGo's '!ducky' jumps straight to the first result: one tap, no results page."""
+    return "https://duckduckgo.com/?q=" + urllib.parse.quote_plus(f"!ducky {j['company']} {j['title']} careers apply")
+
+
+def direct_url(j: dict) -> str:
+    """The job's own page at the employer, so applying is free: their hiring system's listing for this title,
+    else an apply/careers link from the job's description, else a jump to the first search result."""
+    from difflib import SequenceMatcher
+    want = _norm(j["title"])
+    if j.get("company") not in (None, "", "?"):
+        for slug in _slugs(j["company"]):
+            for api, parse in ATS:
+                try:
+                    posts = parse(json.loads(urllib.request.urlopen(
+                        urllib.request.Request(api.format(slug=slug), headers=UA), timeout=8).read()))
+                except Exception:
+                    continue
+                best = max(((SequenceMatcher(None, want, _norm(t)).ratio(), u) for t, u in posts if t and u), default=None)
+                if best and best[0] >= 0.85:
+                    return best[1]
+    links = [u.rstrip(".,);") for u in re.findall(r"https?://[^\s\"'<>]+", html.unescape(j.get("_desc") or ""))]
+    links = [u for u in links if not any(b in u for b in _NOT_APPLY)]
+    for u in links:
+        if any(h in u for h in ATS_HOSTS):
+            return u
+    for u in links:
+        if re.search(r"career|jobs|apply|join", u, re.I):
+            return u
+    return ducky_url(j)
 
 
 def apply_link(j: dict) -> tuple[str, str]:
     """(button label, url) for the Apply button."""
-    if j.get("source") in PAYWALLED and j.get("company") not in (None, "", "?"):
-        q = urllib.parse.quote_plus(f"{j['company']} careers {j['title']}")
-        return "Apply on company site ↗", f"https://www.google.com/search?q={q}"
+    if j.get("source") in PAYWALLED:
+        url = j["url"]
+        if any(h in url for h in PAYWALL_HOSTS):       # stored before this fix: jump to the first result instead
+            url = ducky_url(j)
+        return "Apply on company site ↗", url
     return "Apply ↗", j["url"]
 
 
