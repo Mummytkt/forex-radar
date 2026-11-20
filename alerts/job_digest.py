@@ -250,12 +250,29 @@ def job_text(j: dict, now: datetime) -> str:
     where = {"Nigeria": "open to Nigeria", "Africa": "open to Africa", "Worldwide": "worldwide",
              "EMEA": "EMEA (usually includes Africa: check)"}[j["region"]]
     return (f"{FLAG[j['region']]} {'🤖 <b>AI</b> · ' if is_ai(j['title']) else ''}<b>{html.escape(j['title'])}</b>\n{html.escape(j['company'])} · {where}\n"
-            f"Posted {_ago(j['posted_at'], now)} · {html.escape(j['source'])}")
+            f"Posted {_ago(j['posted_at'], now)} · {html.escape(j['source'])}"
+            + ("\n<i>That site charges to apply: the button finds the job on the company's own site, free.</i>"
+               if j.get("source") in PAYWALLED else ""))
+
+
+# We Work Remotely put applying behind a paid plan (seen 2026-11-20: Apply opens a $14.95/month, 12-month
+# paywall). The same jobs are almost always on the company's own careers page, where applying is free, so for
+# those jobs Apply opens a search for that page instead.
+PAYWALLED = {"We Work Remotely"}
+
+
+def apply_link(j: dict) -> tuple[str, str]:
+    """(button label, url) for the Apply button."""
+    if j.get("source") in PAYWALLED and j.get("company") not in (None, "", "?"):
+        q = urllib.parse.quote_plus(f"{j['company']} careers {j['title']}")
+        return "Apply on company site ↗", f"https://www.google.com/search?q={q}"
+    return "Apply ↗", j["url"]
 
 
 def job_buttons(j: dict, status: str = "new"):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-    row = [InlineKeyboardButton("Apply ↗", url=j["url"])]
+    label, link = apply_link(j)
+    row = [InlineKeyboardButton(label, url=link)]
     if status == "new":
         row += [InlineKeyboardButton("✅ Applied", callback_data=f"jb:a:{j['id']}"),
                 InlineKeyboardButton("⏭ Skip", callback_data=f"jb:s:{j['id']}")]
