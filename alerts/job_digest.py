@@ -267,12 +267,13 @@ def job_buttons(j: dict, status: str = "new"):
 _NOTE_END = ("I'm based in Nigeria (WAT, UTC+1), work well remotely, and can start immediately. "
              "My CV is attached. Thank you for your time.\n\nTaiwo Damilola Mayowa")
 COVER_NOTES = {
-    "qa": ("I'm applying for the {role} position. I spent two years at Belrald, an education software company, "
-           "where I built the student and admin portals in React and then moved into QA to test the company's "
-           "full product before each release.\n\nBecause I've built features myself, I report bugs developers can "
+    "qa": ("I'm applying for the {role} position. I have 4+ years building and testing software. At Belrald, an "
+           "education software company, I built the student and admin portals in React and then moved into QA to "
+           "test the company's full product before each release. Since 2024 I've kept building and testing my own "
+           "projects.\n\nBecause I've built features myself, I report bugs developers can "
            "act on quickly: clear steps, expected against actual result, and a re-test once it's fixed. "
            "[One sentence: what in their product you'd enjoy testing, or one requirement you match.]"),
-    "frontend": ("I'm applying for the {role} position. At Belrald I built and maintained the student and admin "
+    "frontend": ("I'm applying for the {role} position. I have 4+ years building and testing software. At Belrald I built and maintained the student and admin "
                  "portals with HTML, CSS, JavaScript and React, then spent a year in QA, so I build with testing "
                  "in mind.\n\nSince 2024 I've designed and tested my own web platform (a dashboard with Telegram "
                  "alerts) using AI coding tools, which keeps my skills current and fast. "
@@ -280,11 +281,11 @@ COVER_NOTES = {
     "ai": ("I'm applying for the {role} position. I've built and tested a full web platform "
            "by directing an AI coding assistant: writing detailed instructions, checking every answer against real "
            "data, and catching the cases where the AI was confidently wrong, then explaining why so it could be "
-           "corrected.\n\nBefore that I spent two years at Belrald, a software company, as a frontend developer and "
-           "then a QA tester, and my degree in Anthropology from the University of Ibadan trained me to read "
+           "corrected.\n\nThis adds to 4+ years building and testing software, including over two years at "
+           "Belrald, a software company, as a frontend developer and then a QA tester, and my degree in Anthropology from the University of Ibadan trained me to read "
            "language and context closely. [One sentence: one requirement in this job you match.]"),
-    "other": ("I'm applying for the {role} position. I bring two years at a software company, first as a frontend "
-              "developer and then in QA, plus hands-on use of Figma and Canva.\n\nI'm careful with detail, I follow "
+    "other": ("I'm applying for the {role} position. I bring 4+ years building, designing and testing software, "
+              "including over two years at a software company as a frontend developer and then in QA, plus hands-on use of Figma and Canva.\n\nI'm careful with detail, I follow "
               "briefs closely, and I check my own work before it goes out. "
               "[One sentence: why this company or one requirement you match.]"),
 }
