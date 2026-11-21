@@ -221,7 +221,7 @@ async def main(dry_run: bool = False) -> None:
         run_job_digest,
         "cron",
         hour=7, minute=30,   # 08:30 WAT: after the school run, she applies through the morning (owner, 2026-11-19)
-        kwargs={"db_path": config.db_path, "config": config},
+        kwargs={"db_path": config.db_path, "config": config, "scheduled": True},   # paused: JOB_HUNT_PAUSED
         id="job_digest",
         name="Owner's Job Hunt digest (separate Telegram bot)",
         misfire_grace_time=3 * 3600,

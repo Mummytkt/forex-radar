@@ -497,9 +497,9 @@ async def send_slot(conn, token: str, chat: str, d: date, slot: str, send) -> bo
 
 async def run_linkedin_slot(db_path: str, config, slot: str, now: Optional[datetime] = None) -> bool:
     """Scheduled: the morning / afternoon / evening message for today (WAT), if there is one."""
-    from alerts.job_digest import _send
+    from alerts.job_digest import _send, JOB_HUNT_PAUSED     # paused with the job hunt (posts are QA / design)
     token = getattr(config, "jobs_bot_token", "")
-    if not token:
+    if not token or JOB_HUNT_PAUSED:
         return False
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
@@ -514,9 +514,9 @@ async def run_linkedin_slot(db_path: str, config, slot: str, now: Optional[datet
 
 async def run_linkedin_review(db_path: str, config, now: Optional[datetime] = None) -> bool:
     """Scheduled every Sunday evening: the week's review."""
-    from alerts.job_digest import _send
+    from alerts.job_digest import _send, JOB_HUNT_PAUSED
     token = getattr(config, "jobs_bot_token", "")
-    if not token:
+    if not token or JOB_HUNT_PAUSED:
         return False
     d = wat_today(now)
     if d.isoformat() < min(POSTS) or (d - timedelta(days=7)).isoformat() > LAST_DAY:

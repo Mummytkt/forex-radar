@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 
 WAT = timezone(timedelta(hours=1))
 FOLLOW_DAYS = 7
+# Owner, 2026-11-21: "pause the job, let me put all my focus on business and trading". While True, the scheduled
+# 08:30 digest, the 16:02 checklist nudge and the LinkedIn coach's scheduled posts don't send. Commands (/jobs,
+# /links, /linkedin, /today ...) still work. Set False to resume.
+JOB_HUNT_PAUSED = True
 MAX_PER_DAY = 25     # 15 until 2026-11-20; raised for her 15-20 applications a day
 UA = {"User-Agent": "Mozilla/5.0 (personal job digest)"}
 
@@ -526,10 +530,10 @@ async def _send(token: str, chat: str, text: str, markup=None) -> bool:
         return False
 
 
-async def run_job_digest(db_path: str, config, now: Optional[datetime] = None) -> int:
+async def run_job_digest(db_path: str, config, now: Optional[datetime] = None, scheduled: bool = False) -> int:
     """The morning digest: new jobs (each with its buttons), then the follow-up questions due. Returns jobs sent."""
     token = getattr(config, "jobs_bot_token", "")
-    if not token:
+    if not token or (scheduled and JOB_HUNT_PAUSED):
         return 0
     now = now or datetime.now(timezone.utc)
     conn = sqlite3.connect(db_path, check_same_thread=False)

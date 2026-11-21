@@ -135,9 +135,9 @@ async def handle_callback(conn, bot, cq: dict, data: str) -> str:
 
 async def run_checklist_nudge(db_path: str, config, now: Optional[datetime] = None) -> bool:
     """Scheduled 16:02 WAT: the checklist again, only when something is left."""
-    from alerts.job_digest import _send, owner_chat
+    from alerts.job_digest import _send, owner_chat, JOB_HUNT_PAUSED
     token = getattr(config, "jobs_bot_token", "")
-    if not token:
+    if not token or JOB_HUNT_PAUSED:
         return False
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
