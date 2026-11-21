@@ -95,8 +95,35 @@ GOAL = {"interviews": 5, "by": "2026-12-24"}    # the owner's goal (2026-11-19):
 def ensure_table(conn) -> None:
     conn.execute(SCHEMA)
     # entries she adds herself (LinkedIn, Jobberman, Upwork, Fiverr ...) and their type (2026-11-19)
-    if "kind" not in {r[1] for r in conn.execute("PRAGMA table_info(job_apps)")}:
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(job_apps)")}
+    if "kind" not in cols:
         conn.execute("ALTER TABLE job_apps ADD COLUMN kind TEXT NOT NULL DEFAULT 'job'")
+    # contract / part-time / freelance / full-time, from the board (2026-11-21): contract work first
+    if "job_type" not in cols:
+        conn.execute("ALTER TABLE job_apps ADD COLUMN job_type TEXT NOT NULL DEFAULT ''")
+
+
+# Job type (owner, 2026-11-21: contract and part-time first, to start earning fast; full-time still sent)
+TYPE_LABEL = {"contract": "📄 Contract", "part_time": "⏱ Part-time", "freelance": "🧾 Freelance",
+              "full_time": "💼 Full-time", "internship": "🎓 Internship", "": "❔ Type not given"}
+TYPE_RANK = {"contract": 0, "part_time": 0, "freelance": 0, "": 1, "internship": 1, "full_time": 2}
+
+
+def job_type(raw, title: str = "") -> str:
+    """Normalise a board's job type (or, when it gives none, the title's words) to a TYPE_LABEL key."""
+    s = (" ".join(raw) if isinstance(raw, (list, tuple)) else str(raw or "")).lower()
+    for text in (s, title.lower()):
+        if re.search(r"contract", text):
+            return "contract"
+        if re.search(r"part[\s_-]?time", text):
+            return "part_time"
+        if re.search(r"freelanc", text):
+            return "freelance"
+        if re.search(r"intern", text):
+            return "internship"
+        if text is s and re.search(r"full[\s_-]?time", text):
+            return "full_time"
+    return ""
 
 
 def add_manual(conn, title: str, company: str, url: str = "", source: str = "Added by you", kind: str = "job",
@@ -155,7 +182,7 @@ def fetch_jobs(since: datetime) -> list[dict]:
     """All six feeds, jobs posted after `since` that fit her. A feed that fails is skipped (logged)."""
     out: list[dict] = []
 
-    def add(src, title, company, loc, when, url, desc=""):
+    def add(src, title, company, loc, when, url, desc="", jtype=None):
         if when is None or when < since or not url:
             return
         title, company = html.unescape(title or "").strip(), html.unescape(company or "").strip()
@@ -163,7 +190,7 @@ def fetch_jobs(since: datetime) -> list[dict]:
         if region:
             out.append({"source": src, "title": title, "company": company or "?", "location": (loc or "").strip() or "Worldwide",
                         "region": region, "posted_at": when.astimezone(timezone.utc).isoformat(), "url": url,
-                        "_desc": desc or ""})
+                        "_desc": desc or "", "job_type": job_type(jtype, title)})
 
     def utc(s):
         d = datetime.fromisoformat(s)
@@ -173,7 +200,7 @@ def fetch_jobs(since: datetime) -> list[dict]:
               "ai trainer", "annotation", "prompt", "ai", "llm", "ai evaluator", "data labeling", "generative ai"):
         try:
             for j in json.loads(_get("https://remotive.com/api/remote-jobs?search=" + urllib.parse.quote(q)))["jobs"]:
-                add("Remotive", j["title"], j["company_name"], j.get("candidate_required_location"), utc(j["publication_date"]), j["url"])
+                add("Remotive", j["title"], j["company_name"], j.get("candidate_required_location"), utc(j["publication_date"]), j["url"], jtype=j.get("job_type"))
         except Exception as e:
             logger.warning("Job feed Remotive (%s) failed: %s", q, e)
     cur, pages = None, 0
@@ -187,7 +214,8 @@ def fetch_jobs(since: datetime) -> list[dict]:
         for j in d.get("jobs", []):
             w = datetime.fromtimestamp(int(j["pubDate"]), timezone.utc)
             old += w < since
-            add("Himalayas", j["title"], j["companyName"], ", ".join(j.get("locationRestrictions") or []), w, j.get("applicationLink"))
+            add("Himalayas", j["title"], j["companyName"], ", ".join(j.get("locationRestrictions") or []), w, j.get("applicationLink"),
+                jtype=j.get("employmentType"))
         cur, pages = d.get("nextCursor"), pages + 1
         if old >= 15 or not cur:
             break
@@ -195,12 +223,13 @@ def fetch_jobs(since: datetime) -> list[dict]:
         for it in ET.fromstring(_get("https://weworkremotely.com/remote-jobs.rss")).iter("item"):
             comp, _, title = (it.findtext("title") or "").partition(": ")
             add("We Work Remotely", title or comp, comp if title else "", it.findtext("region") or "",
-                parsedate_to_datetime(it.findtext("pubDate")), it.findtext("link"), it.findtext("description") or "")
+                parsedate_to_datetime(it.findtext("pubDate")), it.findtext("link"), it.findtext("description") or "",
+                jtype=it.findtext("type"))
     except Exception as e:
         logger.warning("Job feed We Work Remotely failed: %s", e)
     try:
         for j in json.loads(_get("https://jobicy.com/api/v2/remote-jobs?count=100"))["jobs"]:
-            add("Jobicy", j["jobTitle"], j["companyName"], j.get("jobGeo") or "", utc(j["pubDate"]), j["url"])
+            add("Jobicy", j["jobTitle"], j["companyName"], j.get("jobGeo") or "", utc(j["pubDate"]), j["url"], jtype=j.get("jobType"))
     except Exception as e:
         logger.warning("Job feed Jobicy failed: %s", e)
     try:
@@ -224,7 +253,8 @@ def fetch_jobs(since: datetime) -> list[dict]:
             uniq.append(j)
     order = {"Nigeria": 0, "Africa": 1, "Worldwide": 2, "EMEA": 3}
     # AI jobs first within each region, so the daily cap never drops them
-    return sorted(uniq, key=lambda j: (order[j["region"]], not is_ai(j["title"])))
+    # contract / part-time / freelance first (they start fastest), then by region; AI jobs first within those
+    return sorted(uniq, key=lambda j: (TYPE_RANK[j["job_type"]], order[j["region"]], not is_ai(j["title"])))
 
 
 def store_new(conn, jobs: list[dict], now: datetime) -> list[dict]:
@@ -238,10 +268,10 @@ def store_new(conn, jobs: list[dict], now: datetime) -> list[dict]:
         if len(new) >= MAX_PER_DAY:
             break
         jid = conn.execute(
-            "INSERT INTO job_apps (url, source, title, company, location, region, posted_at, sent_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO job_apps (url, source, title, company, location, region, posted_at, sent_at, updated_at, job_type) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (j["url"], j["source"], j["title"], j["company"], j["location"], j["region"], j["posted_at"],
-             now.isoformat(), now.isoformat())).lastrowid
+             now.isoformat(), now.isoformat(), j.get("job_type", ""))).lastrowid
         new.append({**j, "id": jid})
     conn.commit()
     return new
@@ -258,7 +288,8 @@ def _ago(posted_at: str, now: datetime) -> str:
 def job_text(j: dict, now: datetime) -> str:
     where = {"Nigeria": "open to Nigeria", "Africa": "open to Africa", "Worldwide": "worldwide",
              "EMEA": "EMEA (usually includes Africa: check)"}[j["region"]]
-    return (f"{FLAG[j['region']]} {'🤖 <b>AI</b> · ' if is_ai(j['title']) else ''}<b>{html.escape(j['title'])}</b>\n{html.escape(j['company'])} · {where}\n"
+    return (f"{FLAG[j['region']]} {'🤖 <b>AI</b> · ' if is_ai(j['title']) else ''}<b>{html.escape(j['title'])}</b>\n"
+            f"{html.escape(j['company'])} · {where} · {TYPE_LABEL.get(j.get('job_type') or '', TYPE_LABEL[''])}\n"
             f"Posted {_ago(j['posted_at'], now)} · {html.escape(j['source'])}\n"
             + SPEED_LABEL[form_speed(apply_link(j)[1])]
             + ("\n<i>We Work Remotely charges to apply, so the button opens this job on the company's own site (free).</i>"
@@ -512,13 +543,18 @@ async def run_job_digest(db_path: str, config, now: Optional[datetime] = None) -
             (j["url"], j["title"].lower(), j["company"].lower())).fetchone()][:MAX_PER_DAY + 10]
         jobs = await asyncio.to_thread(resolve_links, unseen)
         new = store_new(conn, jobs, now)
-        new.sort(key=lambda j: {"quick": 0, "board": 1, "slow": 2}[form_speed(apply_link(j)[1])])   # quick forms first
+        # contract / part-time / freelance first, then quick forms first within each
+        new.sort(key=lambda j: (TYPE_RANK.get(j.get("job_type") or "", 1),
+                                {"quick": 0, "board": 1, "slow": 2}[form_speed(apply_link(j)[1])]))
         day = now.astimezone(WAT).strftime("%a %d %b")
         follows = due_followups(conn, now)
+        quick_start = sum(TYPE_RANK.get(j.get("job_type") or "", 1) == 0 for j in new)
         head = (f"💼 <b>Job digest · {day}</b>\n{len(new)} new remote job{'s' if len(new) != 1 else ''} for you"
+                + (f" · {quick_start} contract / part-time / freelance first" if quick_start else "")
                 + (f" · {len(follows)} follow-up{'s' if len(follows) != 1 else ''} to check" if follows else "")
                 + ("\n\nTap Apply to open the post. Check where they hire before you apply: \"worldwide\" "
-                   "is not always true. Paste the job description to Claude for your tailored CV." if new else
+                   "is not always true. Aim for about 14 contract / part-time and 6 full-time applications a day."
+                   if new else
                    "\n\nNothing new on the remote boards today. Check your LinkedIn and Jobberman email alerts."))
         await _send(token, chat, head + "\n\n" + goal_line(conn))
         for j in new:
@@ -645,7 +681,7 @@ COMMANDS = [("today", "Today's checklist: what to do next"),
             ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
             ("add", "Log an application: /add Title | Company | link"),
-            ("ai", "AI training sites open to Nigeria"),
+            ("ai", "AI training and paid testing sites"),
             ("links", "All your links and form answers to copy, and your Kits"),
             ("linkedin", "Today's LinkedIn post and tasks"),
             ("stats", "Log LinkedIn numbers: /stats views impressions connections"),
@@ -663,13 +699,22 @@ AI_SITES = [
     ("DataAnnotation", "https://www.dataannotation.tech", "No country list published: try the starter test."),
 ]
 AI_CLOSED = "Closed to Nigeria right now: Outlier, Mindrift (Toloka), Prolific."
+# Paid software testing (added 2026-11-21, her QA background). Not checked for Nigeria: she confirms at sign-up.
+TEST_SITES = [
+    ("uTest (Applause)", "https://www.utest.com", "Paid per approved bug and per test cycle. Free courses to start; "
+                                                  "check it can pay you (Payoneer or PayPal) when you sign up."),
+    ("Testlio", "https://testlio.com", "Freelance testers on real client apps, paid per hour. Check the "
+                                       "country list when you apply."),
+]
 
 
 def ai_sites_text() -> str:
     return ("🤖 <b>AI training work open to Nigeria</b>\nThese hire by sign-up on their own sites, not on job boards. "
             "Apply to each once with your AI CV, then log it with /add.\n\n"
             + "\n\n".join(f"<b><a href=\"{u}\">{html.escape(n)}</a></b>\n{html.escape(d)}" for n, u, d in AI_SITES)
-            + f"\n\n{AI_CLOSED}\nRules change often: check each site's country list when you sign up.")
+            + f"\n\n{AI_CLOSED}\nRules change often: check each site's country list when you sign up."
+            + "\n\n🐞 <b>Paid software testing</b> (your QA background; sign up with your QA CV)\n\n"
+            + "\n\n".join(f"<b><a href=\"{u}\">{html.escape(n)}</a></b>\n{html.escape(d)}" for n, u, d in TEST_SITES))
 
 
 PORTFOLIO_URL = "https://taiwo-damilola-mayowa.vercel.app"
