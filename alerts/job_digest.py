@@ -68,6 +68,9 @@ TITLE = re.compile(
     r"product operations|product ops|associate product manager|ai (trainer|tutor|evaluator|rater|annotator|specialist)|"
     r"data annotat\w*|annotator|prompt|llm|rlhf|ai training|evaluator|rater)\b", re.I)
 ENGINEER = re.compile(r"\bengineer\w*\b", re.I)
+CODE_HEAVY = re.compile(r"\b(python|golang|java|kotlin|swift|rust|c\+\+|c#|\.net|sdet|automation|automated|"
+                        r"distributed systems?|back[- ]?end|devops|software engineer\w*|developer in test)\b"
+                        r"|/\s*go\b", re.I)
 QA_WORD = re.compile(r"\b(qa|quality|test\w*)\b", re.I)
 SENIOR = re.compile(r"\b(senior|sr\.?|lead|principal|head|director|staff|vp|chief|manager)\b", re.I)
 REGION_TITLE = re.compile(r"\b(latam|americas?|north america|usa?|canada|apac|asia|west region|east region)\b", re.I)
@@ -159,6 +162,10 @@ def classify(title: str, location: str) -> Optional[str]:
     # "... Support / Success / Solutions Engineer" roles want coding (mobile SDKs, stack traces): she asked to
     # drop them (2026-11-20, after RevenueCat's Developer Support Engineer). QA / test engineers still come through.
     if ENGINEER.search(title) and not QA_WORD.search(title):
+        return None
+    # Titles naming code-heavy work (2026-11-21, after Canonical's "Distributed Systems Testing Software Engineer,
+    # Python / Go"): she does manual QA and React, not test automation or back-end languages yet.
+    if CODE_HEAVY.search(title):
         return None
     if SENIOR.search(title) and not re.search(r"associate product manager", title, re.I):
         return None
