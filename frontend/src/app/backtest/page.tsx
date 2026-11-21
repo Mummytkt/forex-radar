@@ -1,6 +1,7 @@
 'use client'
 import TradeLogPage from '@/components/TradeLogPage'
 import EntryTester from '@/components/EntryTester'
+import QuickBacktest from '@/components/QuickBacktest'
 import { useAuth } from '@/lib/auth'
 import { useJournalTabs } from '@/components/JournalTabs'
 
@@ -9,7 +10,8 @@ import { useJournalTabs } from '@/components/JournalTabs'
 export default function BacktestPage() {
   const { user } = useAuth()
   const isOwner = user?.role === 'OWNER'
-  const [tab, tabs] = useJournalTabs('mbp_bt_tab2', 'Backtest Journal')
+  const [tab, tabs] = useJournalTabs('mbp_bt_tab2', 'Backtest Journal', isOwner)
+  if (isOwner && tab === 'quick') return <QuickBacktest tabs={tabs} />
   if (isOwner && tab === 'scl') return <EntryTester key="bt-scl" book="bt_scl" tabs={tabs} />
   if (isOwner && tab === 'check') return <EntryTester key="bt-check" book="bt_check" tabs={tabs} />
   if (isOwner && tab === 'hl_liq') return <EntryTester key="bt-hl" book="bt_hl_liq" tabs={tabs} />

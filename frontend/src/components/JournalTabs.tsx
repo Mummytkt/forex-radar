@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react'
 import { EyeOff, Eye } from 'lucide-react'
 
-export type JournalTab = 'scl' | 'check' | 'hl_liq' | 'engulfing' | 'h4_key' | 'journal'
-const TABS: JournalTab[] = ['scl', 'check', 'hl_liq', 'engulfing', 'h4_key', 'journal']
+export type JournalTab = 'quick' | 'scl' | 'check' | 'hl_liq' | 'engulfing' | 'h4_key' | 'journal'
+const TABS: JournalTab[] = ['quick', 'scl', 'check', 'hl_liq', 'engulfing', 'h4_key', 'journal']
 // M15 entry joined the old journals on 2026-11-08, when the Checklist took its place
 const OLD: JournalTab[] = ['hl_liq', 'engulfing', 'h4_key']
 const OLD_KEY = 'mbp_show_old_journals'   // one choice for the Journal and Backtest pages
@@ -11,17 +11,19 @@ const OLD_KEY = 'mbp_show_old_journals'   // one choice for the Journal and Back
 // The owner's journal tabs (one per entry model, then the trade journal), the chosen
 // tab remembered under tabKey. The older Engulfing / Fresh Key Levels journals are
 // hidden until asked for; their trades stay saved.
-export function useJournalTabs(tabKey: string, journalLabel: string): [JournalTab, React.ReactNode] {
-  const [tab, setTabState] = useState<JournalTab>('scl')
+// quick: show the Quick Backtest tab (Backtest page only, 2026-11-21) and open on it the first time.
+export function useJournalTabs(tabKey: string, journalLabel: string, quick = false): [JournalTab, React.ReactNode] {
+  const [tab, setTabState] = useState<JournalTab>(quick ? 'quick' : 'scl')
   const [showOld, setShowOld] = useState(false)
   useEffect(() => {
     try {
       const o = localStorage.getItem(OLD_KEY) === '1'
       setShowOld(o)
       const t = localStorage.getItem(tabKey) as JournalTab | null
-      if (t && TABS.includes(t) && (o || !OLD.includes(t))) setTabState(t)
+      if (t && TABS.includes(t) && (o || !OLD.includes(t)) && (quick || t !== 'quick')) setTabState(t)
+      else if (quick && !t) setTabState('quick')
     } catch { /* private mode */ }
-  }, [tabKey])
+  }, [tabKey, quick])
   const setTab = (t: JournalTab) => {
     setTabState(t)
     try { localStorage.setItem(tabKey, t) } catch { /* private mode */ }
@@ -45,6 +47,7 @@ export function useJournalTabs(tabKey: string, journalLabel: string): [JournalTa
   const node = (
     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
       <div style={{ display: 'flex', gap: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
+        {quick && b('quick', '⚡ Quick Backtest')}
         {b('scl', 'H1 entry')}
         {b('check', 'Checklist')}
         {showOld && b('hl_liq', 'M15 entry')}
