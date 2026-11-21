@@ -19,8 +19,9 @@ STEPS = [
                               "answer the custom questions, submit."),
     ("board", "📝 Board jobs", "Then the 📝 board jobs: tap Apply on the board's page, then Autofill."),
     ("slow", "🐢 Long forms", "🐢 Long forms only for the jobs that fit you really well."),
-    ("linkedin", "💼 LinkedIn Easy Apply", "LinkedIn Jobs: search QA tester / UI designer, filter <b>Remote · Easy Apply · "
-                                          "Past 24 hours · Entry level</b>, apply until you reach today's target."),
+    ("linkedin", "💼 LinkedIn Easy Apply", "LinkedIn: tap the 🔎 search buttons below (remote, Easy Apply, last 24 hours, "
+                                          "already set). Apply where the location line says EMEA, Africa, Nigeria or "
+                                          "worldwide; skip single-country jobs. Keep going until today's target."),
     ("logged", "✅ All logged", "Every application logged: ✅ Applied under bot jobs, <code>/add Title | Company | link</code> "
                                "for LinkedIn and other sites."),
     ("followups", "⏰ Follow-ups", "Answer any follow-up questions from the bot (or /followups)."),
@@ -85,7 +86,8 @@ def checklist_markup(conn, d: date):
            for k, label, _ in STEPS]
     rows = [btn[i:i + 2] for i in range(0, len(btn), 2)]
     rows.append([InlineKeyboardButton("🔄 Update count", callback_data=f"ck:{d.isoformat()}:refresh")])
-    return InlineKeyboardMarkup(rows)
+    from alerts.job_digest import linkedin_search_rows     # one-tap LinkedIn searches (2026-11-21)
+    return InlineKeyboardMarkup(rows + linkedin_search_rows())
 
 
 def needs_nudge(conn, d: date) -> bool:

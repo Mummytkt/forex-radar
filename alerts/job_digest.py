@@ -744,6 +744,27 @@ def portfolio_text() -> str:
             "Longer answers (about you, why this role) are in your Quick Apply Kit: button below.")
 
 
+# One-tap LinkedIn searches (owner, 2026-11-21): remote, Easy Apply, last 24 h, newest first.
+# geoIds checked 2026-11-21 on LinkedIn's public search: 91000007 = EMEA, 105365761 = Nigeria.
+LI_EMEA, LI_NIGERIA = ("91000007", "EMEA"), ("105365761", "Nigeria")
+LINKEDIN_SEARCHES = [("QA", "QA", LI_EMEA), ("QA · Nigeria", "QA", LI_NIGERIA),
+                     ("Software tester", "software tester", LI_EMEA), ("AI trainer", "AI trainer", LI_EMEA),
+                     ("Data annotation", "data annotation", LI_EMEA), ("UI designer", "UI designer", LI_EMEA),
+                     ("Customer support", "customer support", LI_EMEA)]
+
+
+def linkedin_search_url(keywords: str, geo: tuple[str, str]) -> str:
+    q = urllib.parse.urlencode({"keywords": keywords, "geoId": geo[0], "location": geo[1], "f_WT": "2",
+                                "f_AL": "true", "f_TPR": "r86400", "sortBy": "DD"})
+    return f"https://www.linkedin.com/jobs/search/?{q}"
+
+
+def linkedin_search_rows() -> list:
+    from telegram import InlineKeyboardButton
+    btn = [InlineKeyboardButton(f"🔎 {label}", url=linkedin_search_url(kw, geo)) for label, kw, geo in LINKEDIN_SEARCHES]
+    return [btn[i:i + 2] for i in range(0, len(btn), 2)]
+
+
 QUICK_APPLY_KIT = "https://claude.ai/artifact/1z2XBM6Rp1fLS1Q8Kh3jmy"
 LINKEDIN_KIT = "https://claude.ai/artifact/2HWhzAzEN6VpYcUqsY8Csb"
 
@@ -757,7 +778,7 @@ def links_markup(config):
          InlineKeyboardButton("LinkedIn ↗", url=LINKEDIN_URL)],
         [InlineKeyboardButton("📋 Quick Apply Kit", url=QUICK_APPLY_KIT),
          InlineKeyboardButton("💼 LinkedIn Kit", url=LINKEDIN_KIT)],
-        [InlineKeyboardButton("📊 Job Hunt tracker", url=tracker)]])
+        [InlineKeyboardButton("📊 Job Hunt tracker", url=tracker)]] + linkedin_search_rows())
 
 
 def help_text() -> str:
