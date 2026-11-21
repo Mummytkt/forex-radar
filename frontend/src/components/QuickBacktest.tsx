@@ -27,9 +27,9 @@ interface Draft {
   results: Record<string, Res>; first: string | null; note: string
 }
 
-const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD 1'], ['octgd2', 'H1 OCTGD 2'], ['cisd', 'H1 CISD'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
+const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD 1'], ['octgd2', 'H1 OCTGD 2'], ['cisd', 'H1 CISD'], ['octgd15', 'M15 OCTGD'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
 const LABEL = Object.fromEntries(CONFS)
-const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OC1', octgd2: 'OC2', cisd: 'H1 CISD', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
+const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OC1', octgd2: 'OC2', cisd: 'H1 CISD', octgd15: 'M15 OCTGD', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
 const OUT: [Outcome, string, string][] = [['win', 'Win', 'var(--bullish)'], ['be', 'BE', '#eab308'], ['loss', 'Loss', 'var(--bearish)']]
 const LAST_KEY = 'mbp_qbt_last'   // remembers the date / pair / range of the last saved setup
 
@@ -180,7 +180,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             <Zap size={20} color="var(--accent)" /> Quick Backtest
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-            Only you see this. One pass through the years: at each setup, tick every confirmation (H1, M15 CISD, M5 CISD) that formed at the
+            Only you see this. One pass through the years: at each setup, tick every confirmation (H1, M15 OCTGD, M15 CISD, M5 CISD) that formed at the
             POI and star the first one. TP 3R, breakeven at 2R. Every trade you place counts: takes before the last are
             losses, and Win % is wins out of all trades.
           </p>
