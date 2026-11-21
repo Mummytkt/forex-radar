@@ -1,6 +1,6 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy, CalendarDays } from 'lucide-react'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
 
@@ -39,6 +39,38 @@ const fmtR = (v: number) => `${v > 0 ? '+' : ''}${Math.round(v * 10) / 10}R`
 const fmtDay = (d: string) => {
   const [y, m, dd] = d.split('-').map(Number)
   return `${dd} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${y}`
+}
+
+// Date field that always reads day / month / year (the browser's own date input follows the PC's locale,
+// which showed month first). Type the digits, or use the calendar button. Stores ISO yyyy-mm-dd.
+const isoToDmy = (iso: string) => { const [y, m, d] = iso.split('-'); return y && m && d ? `${d}/${m}/${y}` : '' }
+function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const [text, setText] = useState(isoToDmy(value))
+  const pickRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { setText(isoToDmy(value)) }, [value])
+  const type = (raw: string) => {
+    const dg = raw.replace(/\D/g, '').slice(0, 8)
+    const t = dg.length > 4 ? `${dg.slice(0, 2)}/${dg.slice(2, 4)}/${dg.slice(4)}` : dg.length > 2 ? `${dg.slice(0, 2)}/${dg.slice(2)}` : dg
+    setText(t)
+    if (dg.length === 8) {
+      const d = +dg.slice(0, 2), m = +dg.slice(2, 4), y = +dg.slice(4)
+      const dt = new Date(Date.UTC(y, m - 1, d))
+      if (dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d)
+        onChange(`${dg.slice(4)}-${dg.slice(2, 4)}-${dg.slice(0, 2)}`)
+    }
+  }
+  const bad = text.length === 10 && isoToDmy(value) !== text
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <input value={text} onChange={e => type(e.target.value)} placeholder="DD/MM/YYYY" inputMode="numeric"
+        style={{ ...field, width: 150, paddingRight: 36, borderColor: bad ? 'var(--bearish)' : undefined }} aria-label="Setup date (day/month/year)" />
+      <button type="button" aria-label="Pick from calendar" onClick={() => { try { pickRef.current?.showPicker() } catch { pickRef.current?.focus() } }}
+        style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' }}>
+        <CalendarDays size={16} /></button>
+      <input ref={pickRef} type="date" value={value} onChange={e => e.target.value && onChange(e.target.value)} tabIndex={-1} aria-hidden
+        style={{ position: 'absolute', right: 0, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} />
+    </span>
+  )
 }
 
 function blank(): Draft {
@@ -163,7 +195,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
         {/* ---------- the form ---------- */}
         <div style={{ ...card, marginBottom: 18 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-            <input type="date" value={draft.date} onChange={e => setDraft(d => ({ ...d, date: e.target.value }))} style={field} aria-label="Setup date" />
+            <DateDMY value={draft.date} onChange={v => setDraft(d => ({ ...d, date: v }))} />
             <input value={draft.pair} onChange={e => setDraft(d => ({ ...d, pair: e.target.value.toUpperCase() }))} style={{ ...field, width: 100 }} aria-label="Pair" />
             <button style={pill(draft.side === 'buy', 'var(--bullish)')} onClick={() => setDraft(d => ({ ...d, side: 'buy' }))}>Buy</button>
             <button style={pill(draft.side === 'sell', 'var(--bearish)')} onClick={() => setDraft(d => ({ ...d, side: 'sell' }))}>Sell</button>
