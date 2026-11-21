@@ -149,7 +149,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
             Only you see this. One pass through the years: at each setup, tick every H1 confirmation that formed at the
-            POI and star the first one. TP 3R, breakeven at 2R. Takes before the last count as losses.
+            POI and star the first one. TP 3R, breakeven at 2R. Every trade you place counts: takes before the last are
+            losses, and Win % is wins out of all trades.
           </p>
         </div>
 
@@ -237,7 +238,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
               <thead>
                 <tr style={{ color: 'var(--text-muted)', fontSize: 11.5, textAlign: 'right' }}>
                   <th style={{ textAlign: 'left', padding: '6px 8px' }}>Confirmation</th>
-                  <th style={th}>Setups</th><th style={th}>Takes</th><th style={th}>Win</th><th style={th}>BE</th>
+                  <th style={th}>Setups</th><th style={th}>Trades</th><th style={th}>Win</th><th style={th}>BE</th>
                   <th style={th}>Loss</th><th style={th}>Win %</th><th style={th}>Total R</th><th style={th}>R / setup</th>
                 </tr>
               </thead>
@@ -298,7 +299,9 @@ function row(label: string, rs: { r: Res; tp: number }[]): Stat {
   const s: Stat = { label, setups: rs.length, takes: 0, win: 0, be: 0, loss: 0, total: 0 }
   for (const { r, tp } of rs) {
     if (!r.outcome) continue
+    // every trade placed counts (user, 2026-11-21): takes before the last are losses, the last is the ticked result
     s.takes += r.takes
+    s.loss += r.takes - 1
     s[r.outcome] += 1
     s.total += rOf(r, tp)
   }
@@ -306,7 +309,7 @@ function row(label: string, rs: { r: Res; tp: number }[]): Stat {
 }
 
 function StatRow({ r, best, first }: { r: Stat; best?: boolean; first?: boolean }) {
-  const pct = r.setups ? Math.round(100 * r.win / r.setups) : 0
+  const pct = r.takes ? Math.round(100 * r.win / r.takes) : 0     // wins out of every trade placed
   return (
     <tr style={{ borderTop: '1px solid var(--border)', textAlign: 'right', fontWeight: best || first ? 800 : 500,
       background: best ? 'color-mix(in srgb, var(--bullish) 10%, transparent)' : undefined }}>
