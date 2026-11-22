@@ -706,7 +706,8 @@ async def handle_update(conn, config, update: dict) -> None:
 
 
 # The bot's menu (owner request 2026-11-19: "the menu like on the Bias Pointer bot")
-COMMANDS = [("today", "Today's checklist: what to do next"),
+COMMANDS = [("brief", "Morning Brief: world news, word of the day, what's blowing up"),
+            ("today", "Today's checklist: what to do next"),
             ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
             ("add", "Log an application: /add Title | Company | link"),
@@ -872,6 +873,10 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
     elif cmd == "/today":
         from alerts.job_checklist import send_checklist
         await send_checklist(conn, token, chat, _send)
+    elif cmd == "/brief":
+        from alerts.morning_brief import send_brief
+        await _send(token, chat, "☀️ Gathering today's brief…")
+        await send_brief(token, chat, _send)
     elif cmd in ("/linkedin", "/stats"):
         from alerts.linkedin_coach import handle_command as li_command
         await li_command(conn, token, chat, cmd, arg, _send)

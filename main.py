@@ -235,6 +235,15 @@ async def main(dry_run: bool = False) -> None:
             kwargs={"db_path": config.db_path, "config": config, "slot": slot},
             id=f"linkedin_{slot}", name=f"Owner's LinkedIn coach ({slot})", misfire_grace_time=3 * 3600,
         )
+    # Morning Brief (owner request 2026-11-22): world/Nigeria news, word of the day, viral-post searches.
+    # 06:10 UTC = 07:10 WAT, evening check 18:30 UTC = 19:30 WAT. Not paused with the job hunt.
+    from alerts.morning_brief import run_morning_brief
+    for bid, hh, mm, ev in (("morning_brief", 6, 10, False), ("evening_check", 18, 30, True)):
+        scheduler.add_job(
+            run_morning_brief, "cron", hour=hh, minute=mm,
+            kwargs={"db_path": config.db_path, "config": config, "evening": ev},
+            id=bid, name=f"Owner's {bid.replace('_', ' ')}", misfire_grace_time=3 * 3600,
+        )
     from alerts.job_checklist import run_checklist_nudge
     scheduler.add_job(
         run_checklist_nudge, "cron", hour=15, minute=2,     # 16:02 WAT, only when steps are left
