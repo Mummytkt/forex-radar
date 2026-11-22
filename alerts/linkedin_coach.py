@@ -6,7 +6,8 @@ One post a day, Monday to Friday, plus tasks, from 23 Nov to 18 Dec 2026:
   - 19:00 WAT evening: reply to comments, and a preview of tomorrow.
   - Sunday 18:10 WAT: the weekly review (what was done, her logged LinkedIn numbers vs last week).
 /linkedin shows today's messages any time; /stats views impressions connections logs the week's numbers.
-The posts are the LinkedIn Kit doc's (claude.ai/artifact/2HWhzAzEN6VpYcUqsY8Csb): keep the two in sync.
+The posts are the Customer Service & Sales Kit doc's (CS_KIT in job_digest.py): keep the two in sync.
+Since 2026-11-22 the theme is customer service and sales (was QA/design).
 Facts only: every claim is from her CV / portfolio. Bias Pointer's trading rules never appear.
 """
 from __future__ import annotations
@@ -20,9 +21,10 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 WAT = timezone(timedelta(hours=1))
 PORTFOLIO = "https://taiwo-damilola-mayowa.vercel.app"
-FIRST_COMMENT = f"My portfolio, with a case study, a test plan and real bug reports: {PORTFOLIO}"
-CONNECT_NOTE = ("Hi [Name], I'm a designer and QA tester looking to learn from people building great products. "
-                "I'd love to connect and follow your work.")
+CV_URL = f"{PORTFOLIO}/Taiwo-Damilola-Mayowa-CV-Support-Sales.pdf"
+FIRST_COMMENT = f"Open to remote customer service, customer success and sales roles. My CV: {CV_URL}"
+CONNECT_NOTE = ("Hi [Name], I work in customer support and sales for tech products and I'm growing my network with "
+                "people in CX and sales. I'd love to connect and follow your work.")
 SLOTS = ("morning", "afternoon", "evening")
 
 
@@ -30,304 +32,302 @@ def _e(s: str) -> str:
     """Escape for Telegram HTML; apostrophes and quotes stay plain so copied posts are clean."""
     return html.escape(s, quote=False)
 
-_DESIGN_PREP = ("Prep for tomorrow's design post (20 minutes): open an app most people know (banking, food delivery, "
-                "transport), screenshot one screen that confused you, then in Canva put 3 numbered red circles on the "
-                "3 things you'd fix. Note your fix for each.")
-
-
 def _post(title, image, text, prep=""):
     return {"title": title, "image": image, "text": text.strip(), "prep": prep}
 
 
-DESIGN_TEMPLATE = """I use [app name] almost every day. Today I counted: [simple task] took me [number] taps.
-
-As a designer and tester, here are 3 small changes I'd make:
-
-1. [What's confusing] → [your fix]
-2. [What's confusing] → [your fix]
-3. [What's confusing] → [your fix]
-
-None of these need a redesign. They just remove the moments where a user stops and thinks.
-
-{closer}
-
-{question}
-
-#UXDesign #UIDesign #ProductDesign"""
-
-
-def _design(focus, closer, question):
-    return _post(f"Design fix: {focus}", "Your Canva markup (screenshot with 3 numbered red circles)",
-                 DESIGN_TEMPLATE.format(closer=closer, question=question))
-
-
+# Customer service & sales month (owner, 2026-11-22: job search is now customer service and sales roles, any niche).
+# Facts only, from what she confirmed: at Belrald (remote, 2022-2024) she answered user questions, handled complaints
+# and bugs until fixed, and ran demos/onboarding; she onboarded about 6 testers onto Bias Pointer and resolved their
+# issues; she works in English, Yoruba and Pidgin; B.A. Anthropology. The food business has NOT started: no stories
+# from it until it has. Examples in quotes are labelled as examples, never as things a customer said.
 POSTS: dict[str, dict] = {
     # ---- Week 1 ----
-    "2026-11-23": _post("Introduce yourself", "A screenshot of the top of your portfolio", """
-I've spent 4+ years making software look right, work right, and stay right.
+    "2026-11-23": _post("New chapter: customer service and sales", "None, text only (your profile photo does the work)", """
+New chapter, and I'm saying it out loud.
 
-I started by building the student and admin portals for an education platform in React.
-Then I moved into QA and tested the whole product before every release.
-Since 2024 I've designed and tested my own live product, with 400+ automated checks guarding every release.
+I'm looking for a remote role in customer service, customer success or sales.
 
-That mix taught me one thing:
-most bugs are born in the gaps between design, code and testing.
+I spent over two years at Belrald, an education software company. My title said frontend, then QA. But a real part of my work was people: students who couldn't get in, schools that needed a walkthrough, complaints that had to be chased until they were actually fixed.
 
-I'm now looking for my next remote role in design, QA or AI evaluation.
+Later I brought six testers onto a platform I built, and looked after every issue they raised.
 
-If your team ships software and cares about getting it right, I'd love to connect.
+That's the part of the work I enjoy most. So that's where I'm going.
 
-What's the one bug you'll never forget?
+I work in English, Yoruba and Pidgin, remotely from Nigeria.
 
-#OpenToWork #QA #UIDesign"""),
-    "2026-11-24": _post("Bug of the week: the alert that never fired", "None, text only", """
-The alert worked for every currency pair. It never fired for oil.
+If you hire for support or sales, or know someone who does, I'd love to connect.
 
-The chart clearly showed price reaching the level. No message arrived.
+#OpenToWork #CustomerService #CustomerSuccess"""),
+    "2026-11-24": _post("\"Sorry for the inconvenience\"", "None, text only", """
+"Sorry for the inconvenience."
 
-I compared the alert's numbers with the chart, one by one.
-The cause: oil uses a different price scale, and the alert was measuring distance with the currency setting.
+Most customers have read that line so many times it means nothing.
 
-The fix: fire when price reaches the level itself.
-Then I re-tested on the same chart, and added it to my test plan so it can't quietly come back.
+When someone writes in upset, they want to know three things:
+Did you understand my problem?
+What happens now?
+When will I hear from you again?
 
-Lesson: test the edge cases your users care about, not just the common path.
+The replies that calm people down aren't the most polite ones. They're the most specific ones.
 
-What's an edge case that caught you out?
+Something like: "I can see your result isn't showing. I've passed it to the team and I'll update you by 3pm."
 
-#QA #SoftwareTesting #BugReport""", prep=_DESIGN_PREP),
-    "2026-11-25": _design("3 things I'd fix in an app", "Good design is invisible. You only notice it when it's missing.",
-                          "Which app do you wish would fix one small thing?"),
-    "2026-11-26": _post("What AI taught me about testing", "None, text only", """
-AI wrote most of the code for my last project. My job was to catch where it was wrong.
+Then you update them by 3pm. Even if it isn't fixed yet.
 
-The hardest bugs weren't crashes.
-They were answers that looked right: confident, neat, and quietly incorrect.
+What's the worst support reply you've ever received?
 
-What worked for me:
-→ Write the rule in plain words before asking for any code
-→ Check every result against real data, not against the AI's own explanation
-→ When it's wrong, explain why, then re-test the fix
+#CustomerService #CustomerExperience"""),
+    "2026-11-25": _post("Testing trained me for support", "None, text only", """
+I spent a year as a software tester before I noticed I was training for customer support.
 
-AI makes building faster.
-It doesn't make testing optional.
+A tester's job: reproduce the problem, describe it so someone else can see it, and follow it until it's fixed.
 
-How do you check AI's work?
+A support agent does the same thing. With a frustrated person on the other end.
 
-#AI #QA #SoftwareTesting"""),
-    "2026-11-27": _post("How I write a bug report", "A screenshot of a bug report from your portfolio (QA samples)", """
-A bug report has one job: get the bug fixed without a single follow-up question.
+So when a customer says "it's not working", I start with a tester's three questions:
+1. What were you trying to do?
+2. What did you expect to happen?
+3. What happened instead?
 
-Here's the format I use every time:
+Most of the time, those three answers make the problem clear. And the customer feels heard, because you asked instead of guessing.
 
-1. Title: what's broken, in one line
-2. Steps: numbered, from a clean start
-3. Expected: what should happen
-4. Actual: what happened instead
-5. Evidence: a screenshot or a screen recording
+#CustomerSupport #CustomerService"""),
+    "2026-11-26": _post("One problem, three languages", "None, text only", """
+I can walk someone through a password reset in English, Yoruba or Pidgin.
 
-Then one more step most people skip:
-re-test it after the fix, on the same steps.
+It lands differently in each.
 
-A good report saves a developer an hour.
-A vague one costs the whole team a day.
+A lot of us switch languages in the middle of a sentence. When the person helping you switches with you, you relax, and you explain the real problem instead of the polite version.
 
-Testers, what would you add?
+If your customers are in Nigeria or West Africa, support that speaks like them isn't a nice extra. It's how you hear what's actually going wrong.
 
-#QA #SoftwareTesting #BugReport"""),
+Do you switch languages when you talk to customers?
+
+#CustomerService #Nigeria #CustomerExperience"""),
+    "2026-11-27": _post("Onboarding new users: what I'd tell anyone", "None, text only", """
+I once onboarded six testers onto a product I built, one by one.
+
+If you're onboarding new users, here's what I'd tell you:
+
+1. Nobody reads a long welcome message. Short beats complete.
+2. The first problem shows up in the first ten minutes. Be around then.
+3. "It doesn't work" often means "I couldn't find where to tap". Ask before you assume a bug.
+4. When someone takes time to report a problem, thank them, and tell them when it's fixed.
+
+Onboarding isn't a document. It's the first few conversations.
+
+What made a product easy for you to start using?
+
+#CustomerSuccess #Onboarding"""),
     # ---- Week 2 ----
-    "2026-11-30": _post("Anthropology to tech", "None, text only", """
-I studied Anthropology. Now I design and test software.
+    "2026-11-30": _post("Anthropology and customer service", "None, text only", """
+My degree is in Anthropology, from the University of Ibadan.
 
-People ask how those connect. Easily:
+People ask what that has to do with customer service. More than you'd think.
 
-Anthropology is the study of how people actually behave, not how we assume they do.
-Testing is finding where software meets real behaviour, and breaks.
-Design is shaping software around that behaviour from the start.
+Anthropology trains you to watch what people do, not only what they say.
 
-The best bug reports I've written started with one question:
-"What would a real person do here?"
+A customer writes: "Your app is too slow."
+That might mean their network is weak and the page keeps timing out.
+It might mean they couldn't find the button and gave up.
+It might mean something else happened today and this was the last straw.
 
-What did you study, and how does it show up in your work today?
+Same sentence. Three different fixes.
 
-#UXDesign #QA #CareerChange"""),
-    "2026-12-01": _post("Bug of the week: the off switch that didn't switch off", "None, text only", """
-A user turns off a type of alert. The main alert stops. Its follow-up messages keep coming.
+Good support listens for the problem behind the first sentence.
 
-That was the bug.
+#CustomerExperience #CustomerService"""),
+    "2026-12-01": _post("Sales isn't pushing", "None, text only", """
+I used to think sales meant pushing.
 
-The main alert checked the user's setting.
-The follow-ups didn't: they never asked which alert they came from.
+Then I started showing our product to schools at Belrald.
 
-The fix: every follow-up now carries its parent alert's on/off switch.
-And an automated check now guards it, so it stays fixed.
+Walking someone through every feature didn't help them decide anything. What helped was asking first: "What's taking up your staff's time right now?"
 
-Lesson: when you test a setting, test everything that setting should control, not just the obvious part.
+Then showing only the part that fixed that.
 
-What's the sneakiest "it should have stopped" bug you've seen?
+Good selling is helping someone make a decision they'll still be happy with in six months.
 
-#QA #SoftwareTesting #BugReport""", prep=_DESIGN_PREP),
-    "2026-12-02": _design("a sign-up form", "Every extra field is a reason to leave. Every unclear one is a support ticket.",
-                          "What's the most annoying sign-up form you've filled in?"),
-    "2026-12-03": _post("Write the rule before the code", "None, text only", """
-The most useful testing I do happens before any code exists.
+If they won't be, it's better to say so.
 
-Before a feature is built, I write its rule in plain words:
-→ What exactly should happen
-→ When it should happen
-→ When it should NOT happen
+#Sales #CustomerSuccess"""),
+    "2026-12-02": _post("The follow-up is the job", "None, text only", """
+Most sales don't happen on the first message.
+Most problems don't get solved in the first reply.
 
-Then I ask: could two people read this and build two different things?
-If yes, the rule isn't finished.
+The follow-up is where the work actually happens.
 
-Half the bugs I've caught were really unclear requirements.
-Fixing a sentence is cheaper than fixing a release.
+A habit that helps: when you tell someone "I'll get back to you", put the time in your calendar while you're still talking to them.
 
-Do you test the requirements, or only the product?
+Then get back to them at that time. Even if all you can say is "still working on it".
 
-#QA #ProductManagement #SoftwareTesting"""),
-    "2026-12-04": _post("6 things I test on every form", "None, text only", """
-6 things I test on every form, before anything else:
+People forgive slow. They don't forgive forgotten.
 
-1. Submit it empty
-2. Paste a very long name (300+ characters)
-3. Use an apostrophe and an emoji: O'Brien 😊
-4. Paste an email with a space before or after it
-5. Double-click the submit button
-6. Press Back after submitting
+#Sales #CustomerService"""),
+    "2026-12-03": _post("Write for the bus, not the desk", "None, text only", """
+Write support replies for someone reading on a small phone, on a bus, at the end of a long day.
 
-Most forms pass the happy path.
-These six find the bugs real users hit on day one.
+That means:
+Short paragraphs.
+One step per line.
+The exact name of the button, the way it appears on their screen.
+No links to a 20-page help article when two lines will do.
 
-What's on your list?
+A reply that's easy to read gets followed. A reply that's hard to read becomes a second ticket.
 
-#QA #SoftwareTesting #ManualTesting"""),
+#CustomerSupport #Writing"""),
+    "2026-12-04": _post("Complaints are free research", "None, text only", """
+A complaint is a customer telling you, for free, exactly where your product loses people.
+
+As a software tester, I'd spend hours hunting for problems that real users found in five minutes.
+
+So angry messages aren't noise to me. They're data.
+
+Good support teams log them, group them, and send the patterns to the product team with real examples.
+
+That's how a support team stops answering the same question 50 times a week.
+
+#CustomerExperience #CustomerSupport"""),
     # ---- Week 3 ----
-    "2026-12-07": _post("From building to testing", "None, text only", """
-I built screens for a year. Then I moved into QA and started breaking them.
+    "2026-12-07": _post("Questions before answers", "None, text only", """
+The questions I like to ask before I explain anything:
 
-Best career move I've made.
+In support:
+What were you trying to do?
+What have you tried already?
+Which device or browser are you on?
 
-Because I'd built the portals myself, I knew where developers cut corners under deadline, which screens were fragile, and what a useful bug report looks like from the other side.
+In sales:
+What made you start looking now?
+What happens if you don't fix this?
+Who else needs to be happy with the decision?
 
-My reports got shorter. Fixes got faster.
+Asking first feels slower. It's actually faster, because you answer the right question the first time.
 
-If you're a developer thinking about QA, or a tester thinking about learning to build: do it. Each side makes you better at the other.
+What's your go-to first question?
 
-Have you switched roles? What surprised you?
+#Sales #CustomerService"""),
+    "2026-12-08": _post("\"User error\"", "None, text only", """
+"User error" is often a design problem with a different name.
 
-#QA #FrontendDevelopment #CareerGrowth"""),
-    "2026-12-08": _post("Testing the edge: close vs touch", "None, text only", """
-"Does the alert fire when price touches the level?" is an easy test.
+When I was testing software, if three people tapped the wrong button, that wasn't three mistakes. That was one unclear button.
 
-The interesting tests sit right next to it:
-→ Price touches the level exactly: one alert, within a minute
-→ Price comes very close but doesn't touch: no alert
-→ Price passes the level twice: still only one alert
+Support teams sit closest to this. You see the same confusion again and again before anyone else does.
 
-That's boundary testing: bugs live at the edges, not in the middle.
+Telling a customer "you did it wrong" closes the ticket.
+Telling the product team "people keep doing this" fixes it for everyone.
 
-The happy path tells you a feature works.
-The edges tell you if you can trust it.
+#CustomerSupport #UX"""),
+    "2026-12-09": _post("Same message, different tone", "None, text only", """
+Same message. Different tone.
 
-What boundary has surprised you lately?
+"You need to update the app."
+"Updating the app should fix this. It takes about a minute."
 
-#QA #SoftwareTesting #TestCases""", prep=_DESIGN_PREP),
-    "2026-12-09": _design("an error message", "A good error message says what happened, why, and what to do next. In plain words.",
-                          "What's the worst error message you've ever seen?"),
-    "2026-12-10": _post("When AI is confidently wrong", "None, text only", """
-The AI defined a rule for me. It read perfectly. It was wrong.
+"That's not possible."
+"We can't do that one, but here's what we can do."
 
-It had described a chart pattern in a way that sounded exactly right, but didn't match what the pattern really looks like on a chart.
+"As I said earlier..."
+"Just to make sure we're on the same page..."
 
-I only caught it because I checked the result on real charts, not against the AI's explanation.
+In writing, nobody hears your voice. Your word choice is your voice.
 
-What I do now:
-→ Never accept "it should work"
-→ Test with real data, including the cases you expect to fail
-→ Write down why it was wrong, so the next fix is right first time
+Which phrases do you avoid with customers?
 
-AI is a fast junior. It still needs a reviewer.
+#CustomerService #Communication"""),
+    "2026-12-10": _post("Saying no well", "None, text only", """
+Sometimes the answer is no.
 
-#AI #QA #AIEvaluation"""),
-    "2026-12-11": _post("Why fixed bugs come back", "None, text only", """
-The most frustrating bug is the one you already fixed.
+The feature doesn't exist. The refund isn't possible. The deadline can't move.
 
-It comes back because something else changed, and nobody re-checked the old fix.
+A good no has three parts:
+1. Say it early. Don't make someone read four paragraphs to find it.
+2. Say why, in one line.
+3. Offer the closest yes you can.
 
-That's why I keep a growing set of automated checks: 400+ now, run before every release.
+People can accept a no. What they don't accept is being left to guess.
 
-Each one asks a simple question:
-"Is this still true?"
+#CustomerService #CustomerExperience"""),
+    "2026-12-11": _post("Why I'm moving from QA to customer roles", "None, text only", """
+Why I'm moving from testing software to customer service and sales:
 
-It takes minutes to run.
-It saves the embarrassment of telling a user, "We fixed that last month."
+When I tested software, the best moment wasn't finding a bug. It was telling a user "that's fixed now" and hearing them relieved.
 
-How do you stop old bugs coming back?
+When I onboarded testers onto my own platform, the part I looked forward to was the conversations, not the code.
 
-#QA #RegressionTesting #SoftwareTesting"""),
+I still think like a tester: careful, curious, I don't let things drop.
+I just want to point that at people instead of screens.
+
+If your team needs someone like that in support, success or sales, let's talk.
+
+#OpenToWork #CustomerSuccess #Sales"""),
     # ---- Week 4 ----
-    "2026-12-14": _post("Remote since 2022: what works", "None, text only", """
-I've worked remotely since 2022. Three habits made the biggest difference:
+    "2026-12-14": _post("Remote since 2022", "None, text only", """
+I've worked remotely since 2022.
 
-1. Write it down. A clear written update beats a quick call nobody remembers.
-2. Hand over cleanly. Every task I pass on says what's done, what's left, and what I'm unsure about.
-3. Overlap on purpose. From Nigeria I can work full UK and European hours, so I protect that shared time for questions and reviews.
+For customer-facing work, remote means:
 
-Remote doesn't work because of tools.
-It works because people make their work easy to pick up.
+Be reachable at the times you said you would be.
+Write things down, so the next person doesn't start from zero.
+When you hand a customer over, hand over the whole story, not just the ticket number.
+Over-communicate. Silence feels longer online.
 
-What's your best remote habit?
+Customers don't care where you're sitting. They care that someone has their back.
 
-#RemoteWork #QA #Productivity"""),
-    "2026-12-15": _post("Test when a feature should stop", "None, text only", """
-We test when features start. We forget to test when they should stop.
+#RemoteWork #CustomerService"""),
+    "2026-12-15": _post("AI in customer service", "None, text only", """
+AI can answer "how do I reset my password?" at 3am. Good.
 
-On my alert platform, a price level stays active until a 4-hour candle closes beyond it.
-So I tested the end, not just the start:
-→ The candle closes beyond the level: the alert ends
-→ After that: no more messages for that level, ever
+What it can't do well yet: notice that the same customer has written three times this week and is about to leave.
 
-A feature that never stops is a bug too, just a slower one.
+I've spent the last two years building with AI tools and checking their answers. They're useful, and they can be confidently wrong.
 
-What's a feature you've seen that didn't know when to stop?
+The best setup I can picture: AI handles the simple, repeated questions. People handle the moments that decide whether a customer stays.
 
-#QA #SoftwareTesting #TestCases""", prep=_DESIGN_PREP),
-    "2026-12-16": _design("a loading or empty screen", "Empty and loading screens are the first thing new users see. They deserve design too.",
-                          "Which app handles waiting really well?"),
-    "2026-12-17": _post("How I'd test a login page", "None, text only", """
-"Just test the login page." Here's where I'd start:
+Where do you draw the line?
 
-1. Correct details: you're in
-2. Wrong password: a clear message that doesn't say which part was wrong
-3. Empty fields: can't submit
-4. Caps Lock on: does it warn you?
-5. Five wrong tries: is there a limit?
-6. "Forgot password": does the email arrive, and does the link expire?
-7. Back button after logout: you shouldn't see private pages
-8. On a phone: does the keyboard cover the button?
+#AI #CustomerService #CustomerExperience"""),
+    "2026-12-16": _post("Fast reply vs right reply", "None, text only", """
+A fast first reply is nice.
+A first reply that solves the problem is better.
 
-The simplest page often hides the most important bugs.
+"Thanks for reaching out, we're looking into it" in 2 minutes, then nothing for two days, isn't great service.
 
-What would you add?
+A reply in 20 minutes that fixes it is.
 
-#QA #SoftwareTesting #ManualTesting"""),
-    "2026-12-18": _post("What a month of posting taught me", "None, text only", """
-A month ago I started posting here every weekday. Here's what happened:
+Speed matters. But the number that customers remember is how many times they had to explain themselves.
 
-→ [Number] posts
-→ [Number] new connections
-→ [The post that did best, and why you think it did]
+#CustomerSupport #CustomerExperience"""),
+    "2026-12-17": _post("\"It's too expensive\"", "None, text only", """
+"It's too expensive" rarely means the price is too high.
 
-What surprised me: [one honest sentence].
+Often it means:
+"I don't see enough value yet."
+"I can't justify it to my boss."
+"Now isn't the right time."
 
-What I'm taking into the new year: [one sentence].
+Each of those needs a different answer, and none of them is a discount.
 
-Thank you to everyone who commented, shared, or sent a kind message. It made a real difference.
+A simple question helps: "Too expensive compared to what?"
 
-What did you learn this year?
+Then listen.
 
-#OpenToWork #QA #UIDesign"""),
+#Sales #SalesTips"""),
+    "2026-12-18": _post("A month of posting about customers", "None, text only", """
+I've posted every weekday for a month about customer service and sales.
+
+What surprised me most: [one thing you learnt or noticed this month].
+
+The post that got the most replies was [which one], I think because [your guess].
+
+I'm still looking for a remote role in customer service, customer success or sales, in any industry. I work in English, Yoruba and Pidgin.
+
+If you're hiring, or know someone who is, my messages are open.
+
+Thank you for reading along.
+
+#OpenToWork #CustomerService #Sales"""),
 }
 LAST_DAY = max(POSTS)
 
@@ -385,7 +385,7 @@ def afternoon_text(d: date) -> Optional[str]:
     p = POSTS.get(d.isoformat())
     lines = [f"🤝 <b>LinkedIn · afternoon tasks · {d.strftime('%a %d %b')}</b>",
              "",
-             "☐ <b>5 comments</b> on posts by QA leads, designers or recruiters. Two sentences or more: agree and add "
+             "☐ <b>5 comments</b> on posts by support leads, customer success or sales people, or recruiters. Two sentences or more: agree and add "
              "something from your own work, or ask a real question.",
              "☐ <b>5 connection requests</b> with a note (tap to copy, change [Name]):",
              f"<code>{_e(CONNECT_NOTE)}</code>"]
@@ -497,7 +497,7 @@ async def send_slot(conn, token: str, chat: str, d: date, slot: str, send) -> bo
 
 async def run_linkedin_slot(db_path: str, config, slot: str, now: Optional[datetime] = None) -> bool:
     """Scheduled: the morning / afternoon / evening message for today (WAT), if there is one."""
-    from alerts.job_digest import _send, JOB_HUNT_PAUSED     # paused with the job hunt (posts are QA / design)
+    from alerts.job_digest import _send, JOB_HUNT_PAUSED     # paused with the job hunt
     token = getattr(config, "jobs_bot_token", "")
     if not token or JOB_HUNT_PAUSED:
         return False

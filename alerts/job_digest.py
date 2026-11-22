@@ -39,7 +39,7 @@ FOLLOW_DAYS = 7
 # Owner, 2026-11-21: "pause the job, let me put all my focus on business and trading". While True, the scheduled
 # 08:30 digest, the 16:02 checklist nudge and the LinkedIn coach's scheduled posts don't send. Commands (/jobs,
 # /links, /linkedin, /today ...) still work. Set False to resume.
-JOB_HUNT_PAUSED = True
+JOB_HUNT_PAUSED = False   # True 2026-11-21 (business focus); back on 2026-11-22 for customer service & sales
 MAX_PER_DAY = 25     # 15 until 2026-11-20; raised for her 15-20 applications a day
 UA = {"User-Agent": "Mozilla/5.0 (personal job digest)"}
 
@@ -66,11 +66,18 @@ STATUSES = ("new", "applied", "skipped", "followed_up", "interview", "rejected",
 STATUS_LABEL = {"new": "New", "applied": "Applied", "skipped": "Skipped", "followed_up": "Followed up",
                 "interview": "Interview", "rejected": "Rejected", "no_reply": "No reply", "offer": "Offer"}
 
+# Since 2026-11-22 (owner): customer service and sales roles only, in any niche (AI, tech, anything).
+# Was QA / design / AI training before that.
 TITLE = re.compile(
-    r"\b(qa|quality assurance|tester|testing|test analyst|test engineer|customer success|customer support|"
-    r"support (specialist|agent|associate|representative|analyst|engineer)|technical support|product analyst|"
-    r"product operations|product ops|associate product manager|ai (trainer|tutor|evaluator|rater|annotator|specialist)|"
-    r"data annotat\w*|annotator|prompt|llm|rlhf|ai training|evaluator|rater)\b", re.I)
+    r"\b(customer (service|support|success|care|experience|happiness|operations|onboarding|advocate|relations?)|"
+    r"client (service|support|success|care|experience|relations?)|cx|"
+    r"support (specialist|agent|associate|representative|rep|advocate|analyst|executive|officer|hero)|"
+    r"technical support|tech support|help ?desk|service desk|call cent(er|re)|contact cent(er|re)|"
+    r"live chat|chat (support|agent)|community support|onboarding (specialist|associate|coordinator)|"
+    r"account (manager|executive|coordinator|associate)|"
+    r"sales|sdr|bdr|business development|lead generation|appointment setter|telesales|telemarketing|"
+    r"inside sales|retention (specialist|agent|associate)|partnerships? (associate|executive|specialist)|"
+    r"order (support|processing)|e-?commerce (support|assistant))\b", re.I)
 ENGINEER = re.compile(r"\bengineer\w*\b", re.I)
 CODE_HEAVY = re.compile(r"\b(python|golang|java|kotlin|swift|rust|c\+\+|c#|\.net|sdet|automation|automated|"
                         r"distributed systems?|back[- ]?end|devops|software engineer\w*|developer in test)\b"
@@ -79,6 +86,24 @@ QA_WORD = re.compile(r"\b(qa|quality|test\w*)\b", re.I)
 SENIOR = re.compile(r"\b(senior|sr\.?|lead|principal|head|director|staff|vp|chief|manager)\b", re.I)
 REGION_TITLE = re.compile(r"\b(latam|americas?|north america|usa?|canada|apac|asia|west region|east region)\b", re.I)
 NATIVE = re.compile(r"speakers? in|native (speaker|level)", re.I)
+# Manager titles that are usually entry/mid level in customer roles (2026-11-22)
+OK_MANAGER = re.compile(r"\b(customer success manager|account manager|client success manager)\b", re.I)
+VERY_SENIOR = re.compile(r"\b(senior|sr\.?|lead|head|director|vp|principal|chief)\b", re.I)
+# Customer/sales titles that name a single country, a US state or government work (2026-11-22, live check:
+# "Account Executive - Enterprise, North Carolina", "... UK", "... Nordics", "Public Sector Germany"). A title that
+# also names Nigeria, Africa, EMEA or worldwide still comes through.
+PLACE_TITLE = re.compile(r"\b(uk|u\.k\.|united kingdom|britain|ireland|nordics?|dach|germany|france|spain|italy|"
+                         r"netherlands|benelux|poland|australia|anz|new zealand|japan|india|singapore|brazil|mexico|"
+                         r"federal|fed|public sector|government|state and local|sled|north carolina|texas|california|"
+                         r"new york|florida|illinois|ohio|georgia|virginia|washington|massachusetts|colorado)\b", re.I)
+OK_PLACE = re.compile(r"\b(nigeria|africa|emea|worldwide|global|anywhere)\b", re.I)
+# Enterprise / strategic account executives and commission analysts: senior or not a selling role
+NOT_ENTRY = re.compile(r"\b(strategics?|enterprise account executive|commissions?)\b|account executive.*enterprise", re.I)
+# A non-English language in the title: the job is for speakers of it (she works in English, Yoruba, Pidgin)
+OTHER_LANG = re.compile(r"\b(german|french|spanish|dutch|italian|portuguese|polish|swedish|danish|norwegian|finnish|"
+                        r"czech|greek|turkish|arabic|hebrew|russian|ukrainian|japanese|korean|mandarin|chinese|"
+                        r"cantonese|hindi|thai|vietnamese|indonesian|romanian|hungarian|bulgarian|croatian|serbian|"
+                        r"slovak|slovenian|lithuanian|latvian|estonian|swahili|amharic|bilingual|multilingual)\b", re.I)
 # AI work she can do (2026-11-19): AI trainer / evaluator / annotator / AI QA / AI ops / AI support / prompt work.
 # Not the roles that need ML or engineering training.
 AI = re.compile(r"\b(ai|a\.i\.|artificial intelligence|gen ?ai|generative|llms?|chatbots?|conversational|"
@@ -160,18 +185,19 @@ def goal_line(conn) -> str:
 
 def classify(title: str, location: str) -> Optional[str]:
     """The region group a job goes under, or None when it is not one for her."""
-    ai_fit = AI.search(title) and AI_OK_ROLE.search(title) and not AI_HEAVY.search(title)
-    if not (TITLE.search(title) or ai_fit) or REGION_TITLE.search(title) or NATIVE.search(title):
+    if not TITLE.search(title) or REGION_TITLE.search(title) or NATIVE.search(title) or OTHER_LANG.search(title):
         return None
-    # "... Support / Success / Solutions Engineer" roles want coding (mobile SDKs, stack traces): she asked to
-    # drop them (2026-11-20, after RevenueCat's Developer Support Engineer). QA / test engineers still come through.
-    if ENGINEER.search(title) and not QA_WORD.search(title):
+    if (PLACE_TITLE.search(title) and not OK_PLACE.search(title)) or NOT_ENTRY.search(title):
+        return None
+    # "... Support / Success / Solutions / Sales Engineer" roles want coding: she asked to drop them (2026-11-20,
+    # after RevenueCat's Developer Support Engineer).
+    if ENGINEER.search(title):
         return None
     # Titles naming code-heavy work (2026-11-21, after Canonical's "Distributed Systems Testing Software Engineer,
     # Python / Go"): she does manual QA and React, not test automation or back-end languages yet.
     if CODE_HEAVY.search(title):
         return None
-    if SENIOR.search(title) and not re.search(r"associate product manager", title, re.I):
+    if SENIOR.search(title) and not (OK_MANAGER.search(title) and not VERY_SENIOR.search(title)):
         return None
     loc = (location or "").strip()
     if not loc or re.search(r"worldwide|anywhere|global", loc, re.I):
@@ -207,10 +233,11 @@ def fetch_jobs(since: datetime) -> list[dict]:
         d = datetime.fromisoformat(s)
         return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
-    for q in ("qa", "customer success", "customer support", "product analyst", "product operations",
-              "ai trainer", "annotation", "prompt", "ai", "llm", "ai evaluator", "data labeling", "generative ai"):
+    # Customer service & sales (2026-11-22): Remotive's two categories, plus searches for titles filed elsewhere
+    for q in ("category=customer-support", "category=sales", "search=customer%20service", "search=customer%20success",
+              "search=account%20executive", "search=business%20development", "search=sdr"):
         try:
-            for j in json.loads(_get("https://remotive.com/api/remote-jobs?search=" + urllib.parse.quote(q)))["jobs"]:
+            for j in json.loads(_get("https://remotive.com/api/remote-jobs?" + q))["jobs"]:
                 add("Remotive", j["title"], j["company_name"], j.get("candidate_required_location"), utc(j["publication_date"]), j["url"], jtype=j.get("job_type"))
         except Exception as e:
             logger.warning("Job feed Remotive (%s) failed: %s", q, e)
@@ -435,43 +462,34 @@ def job_buttons(j: dict, status: str = "new"):
     return InlineKeyboardMarkup([row, [InlineKeyboardButton("✍️ Cover note", callback_data=f"jb:c:{j['id']}")]])
 
 
-# Cover notes: the same texts as the Quick Apply Kit doc (2026-11-19). Filled with the job's title and company;
-# the one sentence in [brackets] is hers to change. A template, not paid AI.
-_NOTE_END = ("I'm based in Nigeria (WAT, UTC+1), work well remotely, and can start immediately. "
-             "My CV is attached, and you can see my work at taiwo-damilola-mayowa.vercel.app. Thank you for your time.\n\nTaiwo Damilola Mayowa")
+# Cover notes: the same texts as the Customer Service & Sales Kit doc (CS_KIT, 2026-11-22). Filled with the job's
+# title and company; the one sentence in [brackets] is hers to change. A template, not paid AI.
+# Facts she confirmed: at Belrald she answered users' questions, handled complaints and bugs until fixed and ran
+# demos/onboarding; she onboarded about 6 testers onto Bias Pointer and resolved their issues; English, Yoruba, Pidgin.
+_NOTE_END = ("I'm based in Nigeria (WAT, UTC+1), I've worked remotely since 2022, and I can start immediately. "
+             "My CV is attached, and my LinkedIn is linkedin.com/in/taiwo-damilola-mayowa-973710450. "
+             "Thank you for your time.\n\nTaiwo Damilola Mayowa")
 COVER_NOTES = {
-    "qa": ("I'm applying for the {role} position. I have 4+ years building and testing software. At Belrald, an "
-           "education software company, I built the student and admin portals in React and then moved into QA to "
-           "test the company's full product before each release. Since 2024 I've kept building and testing my own "
-           "projects.\n\nBecause I've built features myself, I report bugs developers can "
-           "act on quickly: clear steps, expected against actual result, and a re-test once it's fixed. "
-           "[One sentence: what in their product you'd enjoy testing, or one requirement you match.]"),
-    "frontend": ("I'm applying for the {role} position. I have 4+ years building and testing software. At Belrald I built and maintained the student and admin "
-                 "portals with HTML, CSS, JavaScript and React, then spent a year in QA, so I build with testing "
-                 "in mind.\n\nSince 2024 I've designed and tested my own web platform (a dashboard with Telegram "
-                 "alerts) using AI coding tools, which keeps my skills current and fast. "
-                 "[One sentence: one thing in the job you've done before.]"),
-    "ai": ("I'm applying for the {role} position. I've built and tested a full web platform "
-           "by directing an AI coding assistant: writing detailed instructions, checking every answer against real "
-           "data, and catching the cases where the AI was confidently wrong, then explaining why so it could be "
-           "corrected.\n\nThis adds to 4+ years building and testing software, including over two years at "
-           "Belrald, a software company, as a frontend developer and then a QA tester, and my degree in Anthropology from the University of Ibadan trained me to read "
-           "language and context closely. [One sentence: one requirement in this job you match.]"),
-    "other": ("I'm applying for the {role} position. I bring 4+ years building, designing and testing software, "
-              "including over two years at a software company as a frontend developer and then in QA, plus hands-on use of Figma and Canva.\n\nI'm careful with detail, I follow "
-              "briefs closely, and I check my own work before it goes out. "
-              "[One sentence: why this company or one requirement you match.]"),
+    "support": ("I'm applying for the {role} position. For over two years at Belrald, an education software company, "
+                "I answered questions from students, schools and staff, followed complaints and bug reports through "
+                "until they were fixed, and walked new users through our portals. Since then I've onboarded testers "
+                "onto a platform I built and resolved the issues they raised.\n\nBecause I also built and tested "
+                "software, I can explain technical problems in plain words and give the product team reports they can "
+                "act on. I work in English, Yoruba and Pidgin. "
+                "[One sentence: why this company, or one requirement you match.]"),
+    "sales": ("I'm applying for the {role} position. At Belrald, an education software company, I showed our product "
+              "to new schools and users, answered their questions and handled their concerns, and I've since "
+              "onboarded testers onto a platform I built. That taught me to ask what someone actually needs before "
+              "showing them anything.\n\nI'm comfortable on calls, chat and email, I follow up when I say I will, "
+              "and I keep clear notes. I speak English, Yoruba and Pidgin. "
+              "[One sentence: why this company, or one requirement you match.]"),
 }
+SALES_TITLE = re.compile(r"\b(sales|sdr|bdr|business development|lead generation|appointment setter|telesales|"
+                         r"telemarketing|account executive|partnerships?)\b", re.I)
 
 
 def note_kind(title: str) -> str:
-    if is_ai(title):
-        return "ai"
-    if re.search(r"\b(qa|quality|tester|testing|test)\b", title, re.I):
-        return "qa"
-    if re.search(r"\b(front[- ]?end|react|web developer|javascript|ui developer)\b", title, re.I):
-        return "frontend"
-    return "other"
+    return "sales" if SALES_TITLE.search(title) else "support"
 
 
 def cover_note(j: dict) -> str:
@@ -481,7 +499,7 @@ def cover_note(j: dict) -> str:
 
 
 def cover_note_message(j: dict) -> str:
-    label = {"ai": "AI", "qa": "QA", "frontend": "Frontend", "other": "General"}[note_kind(j["title"])]
+    label = {"support": "Customer service", "sales": "Sales"}[note_kind(j["title"])]
     return (f"✍️ <b>Cover note</b> ({label}) for {html.escape(j['title'])}\n"
             f"Tap the box to copy. Change the sentence in [brackets], then paste.\n\n"
             f"<pre>{html.escape(cover_note(j))}</pre>")
@@ -729,6 +747,7 @@ def ai_sites_text() -> str:
 
 
 PORTFOLIO_URL = "https://taiwo-damilola-mayowa.vercel.app"
+CV_URL = f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV-Support-Sales.pdf"   # customer service & sales CV (2026-11-22)
 LINKEDIN_URL = "https://www.linkedin.com/in/taiwo-damilola-mayowa-973710450"
 
 
@@ -737,14 +756,15 @@ def portfolio_text() -> str:
     return ("🗂 <b>Your links and details for applications</b>\nTap any grey line to copy it, then paste it into the form.\n\n"
             f"Portfolio / website:\n<code>{PORTFOLIO_URL}</code>\n\n"
             f"LinkedIn:\n<code>{LINKEDIN_URL}</code>\n\n"
-            f"CV (PDF link):\n<code>{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf</code>\n\n"
+            f"CV (PDF link):\n<code>{CV_URL}</code>\n\n"
             "Email:\n<code>olaomidamilola@gmail.com</code>\n\n"
             "Phone:\n<code>+2349030281340</code>\n\n"
             "<b>Form answers</b>\n"
             "Full name: <code>Taiwo Damilola Mayowa</code>\n"
             "Location: <code>Ibadan, Nigeria</code>\n"
             "Time zone: <code>WAT (UTC+1)</code>\n"
-            "Years of experience: <code>4+</code>\n"
+            "Years of experience: <code>4+ in tech, 2+ with customers</code>\n"
+            "Languages: <code>English (fluent), Yoruba (fluent), Nigerian Pidgin</code>\n"
             "Current role: <code>Product Designer &amp; QA Tester, Bias Pointer</code>\n"
             "Notice period: <code>Immediately</code>\n"
             "Expected salary: <code>$700 to $1,000 per month</code>\n"
@@ -752,16 +772,18 @@ def portfolio_text() -> str:
             "Visa sponsorship: <code>No, remote from Nigeria</code>\n\n"
             "Where a form asks for a <b>portfolio, website or personal site</b>, paste the portfolio link. "
             "Where it asks you to <b>upload</b> a CV, use the PDF file; if it only takes a link, paste the CV link. "
-            "Longer answers (about you, why this role) are in your Quick Apply Kit: button below.")
+            "Longer answers (about you, why this role) are in your Customer Service &amp; Sales Kit: button below.")
 
 
 # One-tap LinkedIn searches (owner, 2026-11-21): remote, Easy Apply, last 24 h, newest first.
 # geoIds checked 2026-11-21 on LinkedIn's public search: 91000007 = EMEA, 105365761 = Nigeria.
 LI_EMEA, LI_NIGERIA = ("91000007", "EMEA"), ("105365761", "Nigeria")
-LINKEDIN_SEARCHES = [("QA", "QA", LI_EMEA), ("QA · Nigeria", "QA", LI_NIGERIA),
-                     ("Software tester", "software tester", LI_EMEA), ("AI trainer", "AI trainer", LI_EMEA),
-                     ("Data annotation", "data annotation", LI_EMEA), ("UI designer", "UI designer", LI_EMEA),
-                     ("Customer support", "customer support", LI_EMEA)]
+LINKEDIN_SEARCHES = [("Customer service", "customer service", LI_EMEA),
+                     ("Customer service · NG", "customer service", LI_NIGERIA),
+                     ("Customer support", "customer support", LI_EMEA), ("Customer success", "customer success", LI_EMEA),
+                     ("Sales rep", "sales representative", LI_EMEA), ("Sales · NG", "sales", LI_NIGERIA),
+                     ("SDR / BDR", "sales development representative", LI_EMEA),
+                     ("Business development", "business development", LI_EMEA)]
 
 
 def linkedin_search_url(keywords: str, geo: tuple[str, str]) -> str:
@@ -776,7 +798,8 @@ def linkedin_search_rows() -> list:
     return [btn[i:i + 2] for i in range(0, len(btn), 2)]
 
 
-QUICK_APPLY_KIT = "https://claude.ai/artifact/1z2XBM6Rp1fLS1Q8Kh3jmy"
+QUICK_APPLY_KIT = "https://claude.ai/artifact/1z2XBM6Rp1fLS1Q8Kh3jmy"   # QA-era kit, kept for reference
+CS_KIT = "https://claude.ai/artifact/U9gf968gRb5yEx7jCf5zFC"   # Customer Service & Sales Kit doc (2026-11-22)
 LINKEDIN_KIT = "https://claude.ai/artifact/2HWhzAzEN6VpYcUqsY8Csb"
 
 
@@ -785,10 +808,9 @@ def links_markup(config):
     tracker = f"{config.frontend_url.rstrip('/')}/job-hunt"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Portfolio ↗", url=PORTFOLIO_URL),
-         InlineKeyboardButton("CV ↗", url=f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV.pdf"),
+         InlineKeyboardButton("CV ↗", url=CV_URL),
          InlineKeyboardButton("LinkedIn ↗", url=LINKEDIN_URL)],
-        [InlineKeyboardButton("📋 Quick Apply Kit", url=QUICK_APPLY_KIT),
-         InlineKeyboardButton("💼 LinkedIn Kit", url=LINKEDIN_KIT)],
+        [InlineKeyboardButton("📋 Customer Service & Sales Kit", url=CS_KIT)],
         [InlineKeyboardButton("📊 Job Hunt tracker", url=tracker)]] + linkedin_search_rows())
 
 
