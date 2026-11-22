@@ -467,7 +467,7 @@ def job_buttons(j: dict, status: str = "new"):
 # Facts she confirmed: at Belrald she answered users' questions, handled complaints and bugs until fixed and ran
 # demos/onboarding; she onboarded about 6 testers onto Bias Pointer and resolved their issues; English, Yoruba, Pidgin.
 _NOTE_END = ("I'm based in Nigeria (WAT, UTC+1), I've worked remotely since 2022, and I can start immediately. "
-             "My CV is attached, and my LinkedIn is linkedin.com/in/taiwo-damilola-mayowa-973710450. "
+             "My CV is attached, and my LinkedIn is linkedin.com/in/taiwo-damilola-mayowa-olaomi-973710450. "
              "Thank you for your time.\n\nTaiwo Damilola Mayowa")
 COVER_NOTES = {
     "support": ("I'm applying for the {role} position. For over two years at Belrald, an education software company, "
@@ -748,7 +748,7 @@ def ai_sites_text() -> str:
 
 PORTFOLIO_URL = "https://taiwo-damilola-mayowa.vercel.app"
 CV_URL = f"{PORTFOLIO_URL}/Taiwo-Damilola-Mayowa-CV-Support-Sales.pdf"   # customer service & sales CV (2026-11-22)
-LINKEDIN_URL = "https://www.linkedin.com/in/taiwo-damilola-mayowa-973710450"
+LINKEDIN_URL = "https://www.linkedin.com/in/taiwo-damilola-mayowa-olaomi-973710450"
 
 
 def portfolio_text() -> str:
