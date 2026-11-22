@@ -34,6 +34,12 @@ PROMPTS = [
      f"Use this photo only as a style reference. Create a NEW photo with the same look: same camera angle, "
      f"full-body pose, soft boutique lighting, realistic skin and fabric detail, same level of luxury.\n"
      f"Change the outfit to: [OUTFIT]\n{STUDIO}\nDo not copy the original sign or the original outfit exactly."),
+    ("⭐ Recreate a style you found (fastest daily prompt)",
+     "Upload 2 pictures: FIRST the style you found online, SECOND your master MummyTKT picture.",
+     "Recreate the outfit from the first image as a new design on a new Nigerian model, standing in the exact "
+     "studio from the second image (same background, sign, flowers, floor and lighting). Keep the outfit's shape "
+     "and details, but change the colour to [COLOUR] and make it [SMALL CHANGE]. Full body, shoes visible, "
+     "photorealistic. Do not copy the first image's background, logo or model's face."),
     ("6️⃣ Fix the sign", "When the sign comes out misspelled.",
      "Keep everything else exactly the same. Fix only the sign on the back wall: it must read exactly "
      "\"MummyTKT\" in gold serif letters, with \"STYLE HOUSE\" smaller underneath."),
@@ -84,10 +90,26 @@ OUTFITS = [
     ("Senator kaftan (man)",
      "a Nigerian man in his thirties in a wine-red senator kaftan with subtle tone-on-tone embroidery down the "
      "front, matching trousers, a black cap, black loafers"),
+    ("Crepe peplum dress (work/office, woman)",
+     "a Nigerian woman in her thirties in a navy crepe office dress with a soft peplum at the waist, three-quarter "
+     "sleeves, a round neck and a knee-length straight skirt, nude block heels, a structured handbag"),
+    ("Ankara-trim blazer set (work/office, woman)",
+     "a Nigerian woman in a black crepe office blazer and tapered trousers, with ankara print on the lapels and "
+     "sleeve cuffs, a white blouse inside, black pointed heels, confident pose"),
+    ("Linen shirt & trousers (work/office, man)",
+     "a Nigerian man in his thirties in a beige linen shirt with a band collar and matching straight trousers, "
+     "brown leather loafers, a simple watch"),
     ("Mother & daughter matching",
      "a Nigerian mother and her 6-year-old daughter in matching ankara outfits: the mother in a mermaid gown, the "
      "daughter in a flared knee-length dress, both in the same teal and coral print, holding hands"),
 ]
+
+CAPTION = ("10 [THEME] style ideas ✨ Which number would you wear? Tell me in the comments 👇\n\n"
+           "Save this for your next tailor visit. Want any of them sewn for you or your child? "
+           "Send the number on WhatsApp 0903 028 1340 or browse them all on our website.\n\n"
+           "These are AI-made style ideas for inspiration.\n\n"
+           "#MummyTKT #MummyTKTStyleHouse #NigerianFashion #AsoEbi #OwambeStyles #KidsFashionNigeria "
+           "#AnkaraStyles #[THEME]Styles")
 
 CHANGES = ["make the dress wine red", "add long puff sleeves", "make the skirt floor-length",
            "add sparkling stones on the bodice", "change the fabric to gold beaded lace",
@@ -110,5 +132,6 @@ def messages() -> list[str]:
               [f"<b>{html.escape(t)}</b>\n{_box(o)}\n" for t, o in OUTFITS]
     videos = ["🎬 <b>Make it move</b>\nUpload your final picture to Flow, Kling or TikTok AI Alive, then paste:\n"] + \
              [f"<b>{t}</b>\n{_box(v)}\n" for t, v in VIDEOS] + \
-             ["<i>Keep TikTok's AI-generated label on, and call them \"style ideas\", never \"our work\".</i>"]
+             ["<b>📝 Caption for a 10-picture carousel</b>\n" + _box(CAPTION) + "\n",
+              "<i>Keep TikTok's AI-generated label on, and call them \"style ideas\", never \"our work\".</i>"]
     return ["\n".join(first), "\n".join(second), "\n".join(outfits), "\n".join(videos)]
