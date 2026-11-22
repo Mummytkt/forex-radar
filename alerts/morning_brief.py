@@ -309,7 +309,19 @@ def brief_text(world: list[dict], nigeria: list[dict], d: date) -> str:
     lines += [f"• <a href=\"{TIKTOK_TRENDS}\">TikTok trends</a> (Creative Center: pick country + 7 days)",
               "", f"🎙 <b>Today's drill</b>\n{_e(DRILLS[d.toordinal() % len(DRILLS)])}",
               "", "<i>Study why a post worked (first line, feeling, format), then tell your own true version.</i>"]
+    if world or nigeria:
+        lines += ["", "🧠 <b>Want it explained?</b> Tap the box to copy it, then paste into the Claude app:",
+                  f"<code>{_e(explain_prompt(world + nigeria))}</code>"]
     return "\n".join(lines)
+
+
+def explain_prompt(stories: list[dict]) -> str:
+    """A ready question for the Claude app (free with the owner's subscription): open each link, explain simply."""
+    items = "\n".join(f"{n}. {i['title']}\n{i['link']}" for n, i in enumerate(stories, 1))
+    return ("Open each link and explain each story in simple words, like to a smart friend:\n"
+            "- What happened\n- Why it happened\n- Who and what it affects (especially Nigeria, prices, the naira)\n"
+            "- What to watch next\n- Any hard words, explained\n"
+            "- One line I could say in a conversation\n\n" + items)
 
 
 def evening_text(d: date) -> str:
