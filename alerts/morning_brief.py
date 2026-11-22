@@ -302,8 +302,10 @@ def brief_text(world: list[dict], nigeria: list[dict], d: date) -> str:
     lines += ["", "🇳🇬 <b>Nigeria</b>"]
     lines += [_story(i) for i in nigeria] or ["• The feeds were quiet. Check Nairametrics when you can."]
     lines += ["", f"📖 <b>Word of the day: {_e(w)}</b>", f"{_e(meaning)}.", f"<i>\"{_e(example)}\"</i>",
-              "", "🔥 <b>What's blowing up (last 24h, most liked)</b>"]
-    lines += [f"• <a href=\"{_e(x_search_url(q, n, since))}\">{_e(label)} on X</a>" for label, q, n in X_SEARCHES]
+              "", "🔥 <b>What's blowing up (most liked)</b>"]
+    week = d - timedelta(days=7)
+    lines += [f"• {_e(label)} on X: <a href=\"{_e(x_search_url(q, n, since))}\">last 24h</a> · "
+              f"<a href=\"{_e(x_search_url(q, n * 3, week))}\">this week</a>" for label, q, n in X_SEARCHES]
     lines += [f"• <a href=\"{TIKTOK_TRENDS}\">TikTok trends</a> (Creative Center: pick country + 7 days)",
               "", f"🎙 <b>Today's drill</b>\n{_e(DRILLS[d.toordinal() % len(DRILLS)])}",
               "", "<i>Study why a post worked (first line, feeling, format), then tell your own true version.</i>"]
