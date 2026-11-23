@@ -199,24 +199,28 @@ def play(mins: list[tuple], start_i: int, side: str, entry: float, sl: float, tp
 
 
 def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float = 0.0) -> list[dict]:
-    """OCTGD 2 (owner, 2026-11-23): once price has reached the level (a buy: a wick at or below it), every two
-    candles IN A ROW in the trade's direction (a buy: two bullish). Entry = their OC (C1's close = C2's open), as a
-    limit; SL = the pair's wick (a buy: the lower low of the two), like OCTGD 1."""
-    out, touched = [], False
+    """OCTGD 2 (owner, 2026-11-23, confirmed with Documents/OCTGD2_Rule_Check.png). At each touch of the level (a
+    candle whose wick reaches it, after one that didn't), only the FIRST two candles count:
+      - the touch candle closes in the trade's direction (a sell: bearish) -> it is the 1st, the next one the 2nd;
+      - otherwise the two candles right after the touch.
+    Both must be in the trade's direction, or there is no OCTGD 2 for that touch (later pairs don't count).
+    Entry = their OC (the 1st's close = the 2nd's open) as a limit; SL = the pair's wick. Buys are the mirror."""
+    buy = side == "buy"
+    hit = lambda k: (k["l"] <= level + tol) if buy else (k["h"] >= level - tol)
+    with_trade = lambda k: (k["c"] > k["o"]) if buy else (k["c"] < k["o"])
+    out = []
     for i, k in enumerate(cs):
-        if k["ct"] <= start:
+        if k["ct"] <= start or not hit(k) or (i and cs[i - 1]["ct"] > start and hit(cs[i - 1])):
+            continue                              # not a NEW touch
+        a = i if with_trade(k) else i + 1
+        if a + 1 >= len(cs):
             continue
-        if not touched and ((k["l"] <= level + tol) if side == "buy" else (k["h"] >= level - tol)):
-            touched = True
-            continue                       # the pair forms after the touch
-        if not touched or i == 0 or cs[i - 1]["ct"] <= start:
-            continue
-        p = cs[i - 1]
-        same = (p["c"] > p["o"] and k["c"] > k["o"]) if side == "buy" else (p["c"] < p["o"] and k["c"] < k["o"])
-        if same:
-            wick = min(p["l"], k["l"]) if side == "buy" else max(p["h"], k["h"])
-            out.append({"i": i, "ct": k["ct"], "pat": "octgd2", "dir": side, "close": k["c"], "touch": wick,
-                        "level": p["c"], "limit": p["c"]})
+        c1, c2 = cs[a], cs[a + 1]
+        if not (with_trade(c1) and with_trade(c2)):
+            continue                              # the first two aren't both in the trade's direction
+        wick = min(c1["l"], c2["l"]) if buy else max(c1["h"], c2["h"])
+        out.append({"i": a + 1, "ct": c2["ct"], "pat": "octgd2", "dir": side, "close": c2["c"], "touch": wick,
+                    "level": c1["c"], "limit": c1["c"]})
     return out
 
 
