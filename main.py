@@ -253,6 +253,11 @@ async def main(dry_run: bool = False) -> None:
             kwargs={"db_path": config.db_path, "config": config, "slot": slot},
             id=f"routine_{slot}", name=f"Owner's routine ({slot})", misfire_grace_time=3600,
         )
+    # Weekly forward-test results of the owner's followed trades (2026-11-23): Sundays 18:20 WAT, main bot
+    from alerts.forward_report import run_weekly_report
+    scheduler.add_job(run_weekly_report, "cron", day_of_week="sun", hour=17, minute=20,
+                      kwargs={"db_path": config.db_path, "config": config},
+                      id="forward_report", name="Owner's weekly forward-test results", misfire_grace_time=6 * 3600)
     from alerts.job_checklist import run_checklist_nudge
     scheduler.add_job(
         run_checklist_nudge, "cron", hour=15, minute=2,     # 16:02 WAT, only when steps are left

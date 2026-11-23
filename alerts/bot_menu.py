@@ -41,6 +41,8 @@ COMMANDS = [
     ("start", "Open the Bias Pointer"),
     *[(c, v[0]) for c, v in PAGES.items()],
     ("news", "High-impact news reminders"),
+    ("results", "Your live results from followed trades"),
+    ("risk", "Lot size in your alerts: /risk balance %"),
     ("help", "What the words in an alert mean"),
 ]
 
@@ -135,7 +137,7 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
     cmd = text.split(maxsplit=1)[0].lstrip("/").split("@")[0].lower()
     if cmd == "start" and len(text.split()) > 1:
         return False
-    if cmd not in PAGES and cmd not in ("start", "news", "help"):
+    if cmd not in PAGES and cmd not in ("start", "news", "help", "results", "risk"):
         return False
 
     token, chat_id, base = config.telegram_bot_token, str(chat["id"]), config.frontend_url
@@ -156,6 +158,30 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
         await _reply(conn, token, chat_id,
                      f"{hi}Your alerts come to this chat.\n\nTap Menu for shortcuts, or open the Bias Pointer here:",
                      _page_markup(base, "📈 Open Bias Pointer", "/hub"))
+    elif cmd == "results":
+        from alerts.forward_report import report_text
+        await _reply(conn, token, chat_id, report_text(conn, user["id"]))
+    elif cmd == "risk":
+        from alerts.forward_report import RISK_HELP, set_risk, get_risk, ensure_risk_table
+        args = text.split()[1:]
+        if args and args[0].lower() == "off":
+            ensure_risk_table(conn)
+            conn.execute("DELETE FROM user_risk WHERE user_id = ?", (user["id"],)); conn.commit()
+            await _reply(conn, token, chat_id, "💼 Lot size removed from your alerts.")
+        else:
+            try:
+                bal, pct = float(args[0].replace(",", "").lstrip("$")), float(args[1].rstrip("%"))
+                ok = bal > 0 and 0 < pct <= 10
+            except (IndexError, ValueError):
+                ok = False
+            if ok:
+                set_risk(conn, user["id"], bal, pct)
+                await _reply(conn, token, chat_id, f"💼 Saved: ${bal:,.0f} account, {pct:g}% (${bal * pct / 100:,.2f}) "
+                                                   "risk per trade. Your followed entries now show the lot size.")
+            else:
+                cur = get_risk(conn, user["id"])
+                now_txt = f"\n\nNow: ${cur[0]:,.0f} at {cur[1]:g}%." if cur else ""
+                await _reply(conn, token, chat_id, RISK_HELP + now_txt)
     elif cmd == "news":
         from api.alert_prefs import get_alert_prefs
         on = get_alert_prefs(conn, user["id"], user["role"]).get("news", True)

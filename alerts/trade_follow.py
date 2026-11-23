@@ -155,6 +155,13 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
           zone_lo, zone_hi, reentry_no, "pending" if mode == "limit" else "open", _iso(now), _iso(now), candles, mode))
     conn.commit()
 
+    lot = None
+    try:     # the lot size for the person's /risk setting (owner request 2026-11-23)
+        from alerts.forward_report import lot_line
+        lot = lot_line(conn, alert.get("user_id"), instrument, entry, sl)
+    except Exception:
+        logger.exception("lot size failed for alert %s", alert_id)
+
     if mode == "limit":
         head = (f"🔁 RE-ENTRY {reentry_no}: LIMIT ORDER at your level" if reentry_no else "📥 LIMIT ORDER at your level")
         lines = [head,
@@ -162,6 +169,8 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
                  f"SL {f(sl)} · TP {f(tp)} (1:{_r(tp_r)})"]
         if be is not None:
             lines.append(f"Breakeven alert at {f(be)} (1:{_r(be_r)})")
+        if lot:
+            lines.append(lot)
         if _to_yf_ticker(instrument) is None:
             lines.append("Note: there is no 5-minute price feed for this instrument, so the order can't be watched.")
         else:
@@ -175,6 +184,8 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
              f"Entry {f(entry)} · SL {f(sl)} · TP {f(tp)} (1:{_r(tp_r)})"]
     if be is not None:
         lines.append(f"Breakeven alert at {f(be)} (1:{_r(be_r)})")
+    if lot:
+        lines.append(lot)
     if _to_yf_ticker(instrument) is None:
         lines.append("Note: there is no 5-minute price feed for this instrument, so its SL / TP can't be watched.")
     else:
