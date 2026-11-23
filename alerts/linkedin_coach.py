@@ -605,9 +605,9 @@ def flyer_prompt(post: str) -> str:
 
 
 def flyer_message(post: str) -> str:
-    return ("🎨 <b>Flyer for this post</b>\nTap the box to copy, paste it into Gemini or ChatGPT (attach your "
-            "photo the first time so the cartoon looks like you), then post the flyer with the text. Check the "
-            "spelling on the image before you post. Rephrased the post? Send <code>/flyer</code> followed by your "
+    return ("🎨 <b>Flyer for this post</b>\nTap the box to copy, paste it into ChatGPT or Gemini and ATTACH YOUR "
+            "ORIGINAL PHOTO every time (not an earlier AI image), so your face stays exactly yours. Change the "
+            "label if the topic isn't design. Check the spelling on the image before you post. Rephrased the post? Send <code>/flyer</code> followed by your "
             "version and I'll rebuild the prompt from your words.\n\n"
             f"<code>{_e(flyer_prompt(post))}</code>")
 
