@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy, CalendarDays, Wand2 } from 'lucide-react'
+import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy, CalendarDays, Wand2, Camera, Check, X } from 'lucide-react'
 import { useTimezone } from '@/lib/timezone'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
@@ -22,6 +22,7 @@ interface Res { outcome: Outcome | ''; takes: number }   // '' only in the form:
 interface Setup {
   id: number; pair: string; date: string; side: 'buy' | 'sell'; range_type: 'inside' | 'opposite'; valid: boolean
   results: Record<string, Res>; first: string | null; tp_r: number; note: string
+  auto?: boolean; reviewed?: boolean; pictures?: number; level?: number | null
 }
 interface Draft {
   pair: string; date: string; side: '' | 'buy' | 'sell'; range_type: '' | 'inside' | 'opposite'; valid: boolean
@@ -91,7 +92,7 @@ function zonedIso(dateIso: string, hhmm: string, tz: string): string {
   return new Date(guess - (shown - guess)).toISOString()
 }
 
-function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => void }) {
+function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { saved_id?: number; pictures?: number }) => void }) {
   const { timezone } = useTimezone()
   const [level, setLevel] = useState('')
   const [time, setTime] = useState('00:00')
@@ -111,17 +112,20 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
   const go = async () => {
     setErr('')
     if (!draft.side) return setErr('Pick Buy or Sell first')
+    if (!draft.range_type) return setErr('Pick Inside range or Opposite range first')
     const lv = parseFloat(level)
     if (!(lv > 0)) return setErr("Type the level's price (the line you watch)")
     setBusy(true); setRes(null)
     const r = await api('/api/quick-bt/auto', { method: 'POST', body: JSON.stringify({ pair: draft.pair, side: draft.side,
       level: lv, mode, tol_pips: parseFloat(tol) || 0, start: zonedIso(draft.date, time, timezone || 'UTC'),
-      end_at: endDate && endTime ? zonedIso(endDate, endTime, timezone || 'UTC') : null }) })
+      end_at: endDate && endTime ? zonedIso(endDate, endTime, timezone || 'UTC') : null,
+      save: true, date: draft.date, range_type: draft.range_type, valid: draft.valid, note: draft.note }) })
     setBusy(false)
     const j = await r.json().catch(() => ({}))
     if (!r.ok) return setErr(j.detail || 'Auto-check failed')
     setRes(j)
-    onApply(j)
+    setLevel('')
+    onSaved(j)
   }
   const labelOf = (k: string) => LABEL[k] || k
   const col = (o: string) => o === 'win' ? 'var(--bullish)' : o === 'loss' ? 'var(--bearish)' : '#eab308'
@@ -141,7 +145,7 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
           <button type="button" style={{ ...pill(mode === 'instant'), padding: '5px 10px' }} onClick={() => setMode('instant')} title="At the confirmation candle's close">Instant</button>
         </span>
         <button onClick={go} disabled={busy} style={{ ...pill(true), display: 'flex', alignItems: 'center', gap: 6 }}>
-          {busy ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} {busy ? 'Checking…' : 'Find and trade every confirmation'}
+          {busy ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} {busy ? 'Checking…' : 'Check and save'}
         </button>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -158,7 +162,7 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--text-secondary)' }}>
           <div style={{ marginBottom: 6 }}>
             Setup ended <b>{when(res.setup_end || res.watched_until)}</b>{res.end_reason ? ` (${res.end_reason})` : ''}.
-            {' '}{Object.keys(res.results).length ? 'Results ticked below: check them, then save.' : 'No confirmation reached the POI.'}
+            {' '}{Object.keys(res.results).length ? 'Saved with its pictures, marked "to review".' : 'No confirmation reached the level (saved as a setup with none).'}
           </div>
           {Object.entries(res.results).map(([k, v]) => (
             <div key={k} style={{ marginBottom: 4 }}>
@@ -204,6 +208,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [rangeF, setRangeF] = useState<'all' | 'inside' | 'opposite'>('all')
   const [yearF, setYearF] = useState('all')
   const [showAll, setShowAll] = useState(false)
+  const [reviewOnly, setReviewOnly] = useState(false)
+  const [gallery, setGallery] = useState<Setup | null>(null)
 
   const load = useCallback(async () => {
     const r = await api('/api/quick-bt')
@@ -312,16 +318,12 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             {!draft.valid && <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>(saved, not counted)</span>}
           </label>
 
-          <AutoCheck draft={draft} onApply={res => setDraft(d => {
-            const results: Record<string, Res> = {}
-            for (const [k, v] of Object.entries(res.results)) {
-              if (!LABEL[k] || (v.outcome !== 'win' && v.outcome !== 'be' && v.outcome !== 'loss')) continue
-              results[k] = { outcome: v.outcome as Outcome, takes: v.takes }
-            }
-            const keys = Object.keys(results)
-            const first = res.first && results[res.first] ? res.first : (keys.length === 1 ? keys[0] : null)
-            return { ...d, results, first, note: d.note || 'Auto-checked' }
-          })} />
+          <AutoCheck draft={draft} onSaved={res => {
+            try { localStorage.setItem(LAST_KEY, JSON.stringify({ pair: draft.pair, date: draft.date, range_type: draft.range_type })) } catch { /* private mode */ }
+            setMsg(`Saved ✓ ${Object.keys(res.results).length} confirmation${Object.keys(res.results).length === 1 ? '' : 's'}, ${res.pictures ?? 0} picture${res.pictures === 1 ? '' : 's'} · marked to review. Next level.`)
+            setDraft(d => ({ ...blank(), date: d.date, pair: d.pair, range_type: d.range_type, side: d.side }))
+            load()
+          }} />
           <div style={{ display: 'grid', gap: 6 }}>
             {CONFS.map(([k, label]) => {
               const r = draft.results[k]
@@ -402,7 +404,14 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No setups yet. Start at January 2020 and save your first one above.</p>
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
-              {(showAll ? setups : setups.slice(0, 40)).map(s => (
+              {setups.some(s => s.auto && !s.reviewed) && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
+                  <button style={pill(reviewOnly, '#eab308')} onClick={() => setReviewOnly(v => !v)}>
+                    To review ({setups.filter(s => s.auto && !s.reviewed).length})</button>
+                  <span style={{ color: 'var(--text-muted)' }}>Auto-checked setups wait here until you look at their pictures and tick ✓.</span>
+                </div>
+              )}
+              {(() => { const list = reviewOnly ? setups.filter(s => s.auto && !s.reviewed) : setups; return (showAll ? list : list.slice(0, 40)) })().map(s => (
                 <div key={s.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 9px',
                   borderRadius: 8, border: '1px solid var(--border)', opacity: s.valid ? 1 : 0.55 }}>
                   <b style={{ width: 92, color: 'var(--text-primary)' }}>{fmtDay(s.date)}</b>
@@ -421,7 +430,10 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                   })}
                   {!s.valid && <span style={{ color: 'var(--text-muted)' }}>(not counted)</span>}
                   {s.note && <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{s.note}</span>}
+                  {s.auto && !s.reviewed && <span style={{ fontSize: 11, fontWeight: 800, color: '#eab308', border: '1px solid #eab308', borderRadius: 6, padding: '1px 6px' }}>to review</span>}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                    {!!s.pictures && <button onClick={() => setGallery(s)} style={{ ...iconBtn, width: 'auto', padding: '0 7px', gap: 4, display: 'flex', alignItems: 'center' }} aria-label="Pictures"><Camera size={13} /> {s.pictures}</button>}
+                    {s.auto && !s.reviewed && <button onClick={async () => { await api(`/api/quick-bt/${s.id}/reviewed`, { method: 'POST' }); load() }} style={iconBtn} aria-label="Mark reviewed" title="Looked at it: mark reviewed"><Check size={13} /></button>}
                     <button onClick={() => edit(s)} style={iconBtn} aria-label="Edit"><Pencil size={13} /></button>
                     <button onClick={() => remove(s)} style={iconBtn} aria-label="Delete"><Trash2 size={13} /></button>
                   </span>
@@ -433,12 +445,59 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             </div>
           )}
         </div>
+        {gallery && <Gallery setup={gallery} onClose={() => setGallery(null)}
+          onReviewed={async () => { await api(`/api/quick-bt/${gallery.id}/reviewed`, { method: 'POST' }); setGallery(null); load() }} />}
       </main>
     </div>
   )
 }
 
 interface Stat { label: string; setups: number; takes: number; win: number; be: number; loss: number; total: number }
+
+// The pictures of an auto-checked setup: one chart per trade (fetched with the login token, shown full width)
+function Gallery({ setup, onClose, onReviewed }: { setup: Setup; onClose: () => void; onReviewed: () => void }) {
+  const [pics, setPics] = useState<{ id: number; label: string; url: string }[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let gone = false
+    const made: string[] = []
+    ;(async () => {
+      const r = await api(`/api/quick-bt/${setup.id}/pictures`)
+      const list: { id: number; label: string }[] = r.ok ? (await r.json()).pictures : []
+      const out = []
+      for (const p of list) {
+        const b = await api(`/api/quick-bt/picture/${p.id}`)
+        if (!b.ok) continue
+        const url = URL.createObjectURL(await b.blob())
+        made.push(url)
+        out.push({ ...p, url })
+      }
+      if (!gone) { setPics(out); setLoading(false) }
+    })()
+    return () => { gone = true; made.forEach(u => URL.revokeObjectURL(u)) }
+  }, [setup.id])
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.85)', overflowY: 'auto', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth: 1000, margin: '0 auto', background: 'var(--card)', borderRadius: 12, padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <b style={{ color: 'var(--text-primary)' }}>{fmtDay(setup.date)} · {setup.side.toUpperCase()}{setup.level ? ` · level ${setup.level}` : ''}</b>
+          {setup.auto && !setup.reviewed && <button onClick={onReviewed} style={{ ...pill(true, 'var(--bullish)'), display: 'flex', alignItems: 'center', gap: 5 }}><Check size={14} /> Looks right: reviewed</button>}
+          <button onClick={onClose} style={{ ...iconBtn, marginLeft: 'auto' }} aria-label="Close"><X size={15} /></button>
+        </div>
+        {loading ? <Loader2 size={18} className="spin" /> : pics.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>No pictures.</p> : (
+          <div style={{ display: 'grid', gap: 14 }}>
+            {pics.map(p => (
+              <figure key={p.id} style={{ margin: 0 }}>
+                <figcaption style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>{p.label}</figcaption>
+                <img src={p.url} alt={p.label} style={{ width: '100%', borderRadius: 8, display: 'block' }} />
+              </figure>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function row(label: string, rs: { r: Res; tp: number }[]): Stat {
   const s: Stat = { label, setups: rs.length, takes: 0, win: 0, be: 0, loss: 0, total: 0 }

@@ -51,12 +51,29 @@ CREATE TABLE IF NOT EXISTS quick_bt (
 )"""
 
 
+IMG_SCHEMA = """
+CREATE TABLE IF NOT EXISTS quick_bt_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    setup_id INTEGER NOT NULL,
+    conf TEXT NOT NULL,             -- the confirmation key
+    n INTEGER NOT NULL,             -- which take
+    png BLOB NOT NULL,
+    created_at TEXT NOT NULL
+)"""
+
+
 @contextmanager
 def _db(request: Request):
     conn = sqlite3.connect(request.app.state.config.db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(SCHEMA)
+        conn.execute(IMG_SCHEMA)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(quick_bt)")}
+        if "auto" not in cols:      # Auto-check saves (2026-11-23): saved by itself, to review at a break
+            conn.execute("ALTER TABLE quick_bt ADD COLUMN auto INTEGER NOT NULL DEFAULT 0")
+            conn.execute("ALTER TABLE quick_bt ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 1")
+            conn.execute("ALTER TABLE quick_bt ADD COLUMN level REAL")
         yield conn
         conn.commit()
     finally:
@@ -103,6 +120,8 @@ def _row(r: sqlite3.Row) -> dict:
     d = dict(r)
     d["results"] = json.loads(d.pop("results_json") or "{}")
     d["valid"] = bool(d["valid"])
+    d["auto"] = bool(d.get("auto"))
+    d["reviewed"] = bool(d.get("reviewed", 1))
     return d
 
 
@@ -110,7 +129,9 @@ def _row(r: sqlite3.Row) -> dict:
 def list_setups(request: Request):
     require_owner(request)
     with _db(request) as conn:
-        rows = [_row(r) for r in conn.execute("SELECT * FROM quick_bt ORDER BY date DESC, id DESC")]
+        counts = dict(conn.execute("SELECT setup_id, COUNT(*) FROM quick_bt_images GROUP BY setup_id").fetchall())
+        rows = [dict(_row(r), pictures=counts.get(r["id"], 0))
+                for r in conn.execute("SELECT * FROM quick_bt ORDER BY date DESC, id DESC")]
     return {"setups": rows, "confirmations": CONFIRMATIONS, "tp_r": DEFAULT_TP_R, "be_at_r": 2}
 
 
@@ -133,7 +154,7 @@ def update_setup(sid: int, body: SetupBody, request: Request):
         if not conn.execute("SELECT 1 FROM quick_bt WHERE id = ?", (sid,)).fetchone():
             raise HTTPException(404, "Setup not found")
         conn.execute("UPDATE quick_bt SET pair = ?, date = ?, side = ?, range_type = ?, valid = ?, results_json = ?, "
-                     "first = ?, note = ?, updated_at = ? WHERE id = ?",
+                     "first = ?, note = ?, updated_at = ?, reviewed = 1 WHERE id = ?",
                      (*_clean(body), datetime.now(timezone.utc).isoformat(), sid))
         return _row(conn.execute("SELECT * FROM quick_bt WHERE id = ?", (sid,)).fetchone())
 
@@ -143,7 +164,37 @@ def delete_setup(sid: int, request: Request):
     require_owner(request)
     with _db(request) as conn:
         conn.execute("DELETE FROM quick_bt WHERE id = ?", (sid,))
+        conn.execute("DELETE FROM quick_bt_images WHERE setup_id = ?", (sid,))
     return {"ok": True}
+
+
+@router.post("/quick-bt/{sid}/reviewed")
+def mark_reviewed(sid: int, request: Request):
+    require_owner(request)
+    with _db(request) as conn:
+        conn.execute("UPDATE quick_bt SET reviewed = 1 WHERE id = ?", (sid,))
+    return {"ok": True}
+
+
+@router.get("/quick-bt/{sid}/pictures")
+def list_pictures(sid: int, request: Request):
+    require_owner(request)
+    labels = dict(CONFIRMATIONS)
+    with _db(request) as conn:
+        return {"pictures": [{"id": r[0], "conf": r[1], "n": r[2], "label": f"{labels.get(r[1], r[1])} · take {r[2]}"}
+                             for r in conn.execute("SELECT id, conf, n FROM quick_bt_images WHERE setup_id = ? "
+                                                   "ORDER BY id", (sid,))]}
+
+
+@router.get("/quick-bt/picture/{pid}")
+def get_picture(pid: int, request: Request):
+    from fastapi.responses import Response
+    require_owner(request)
+    with _db(request) as conn:
+        r = conn.execute("SELECT png FROM quick_bt_images WHERE id = ?", (pid,)).fetchone()
+    if not r:
+        raise HTTPException(404, "Picture not found")
+    return Response(content=r[0], media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
 # ── Auto-check (2026-11-23): she marks the POI, the server finds and trades every confirmation ──────────────
@@ -157,6 +208,12 @@ class AutoBody(BaseModel):
     tp_r: float = DEFAULT_TP_R
     be_r: float = 2.0
     tol_pips: float = 1.0      # a wick this close to the line counts as reaching it (feeds differ slightly)
+    # Save it straight away (2026-11-23: she reviews at her break, so checking never slows the backtest down)
+    save: bool = False
+    date: Optional[str] = None
+    range_type: Optional[str] = None
+    valid: bool = True
+    note: str = ""
 
 
 def _cache_base(request: Request) -> str:
@@ -190,8 +247,30 @@ def auto_check(request: Request, body: AutoBody):
         raise HTTPException(400, "Type the level's price")
     if body.mode not in ("limit", "instant"):
         raise HTTPException(400, "mode must be limit or instant")
+    if body.save and body.range_type not in RANGES:
+        raise HTTPException(400, "Pick Inside range or Opposite range")
     try:
-        return run(body.pair.upper(), body.side, body.level, start, _cache_base(request), body.tp_r, body.be_r,
-                   body.mode, end_at, max(0.0, min(body.tol_pips, 20.0)))
+        res = run(body.pair.upper(), body.side, body.level, start, _cache_base(request), body.tp_r, body.be_r,
+                  body.mode, end_at, max(0.0, min(body.tol_pips, 20.0)), pictures=body.save)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
+    pics = res.pop("_pictures", [])
+    if body.save:
+        keys = {k for k, _ in CONFIRMATIONS}
+        results = {k: {"outcome": v["outcome"], "takes": v["takes"]} for k, v in res["results"].items()
+                   if k in keys and v["outcome"] in OUTCOMES}
+        first = res["first"] if res["first"] in results else (next(iter(results)) if len(results) == 1 else None)
+        now = datetime.now(timezone.utc).isoformat()
+        note = (body.note.strip() or f"Auto-checked · level {body.level:g}")[:300]
+        with _db(request) as conn:
+            sid = conn.execute(
+                "INSERT INTO quick_bt (pair, date, side, range_type, valid, results_json, first, note, tp_r, created_at, "
+                "updated_at, auto, reviewed, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)",
+                (body.pair.upper(), body.date or start.date().isoformat(), body.side, body.range_type, int(body.valid),
+                 json.dumps(results), first, note, body.tp_r, now, now, body.level)).lastrowid
+            for conf, n, png in pics:
+                conn.execute("INSERT INTO quick_bt_images (setup_id, conf, n, png, created_at) VALUES (?, ?, ?, ?, ?)",
+                             (sid, conf, n, png, now))
+        res["saved_id"] = sid
+        res["pictures"] = len(pics)
+    return res

@@ -242,7 +242,7 @@ def play_limit(mins, j0, side, limit, sl, tp_r, be_r, cancel_at):
 
 
 def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: float = 3.0, be_r: float = 2.0,
-        mode: str = "limit", end_at: Optional[datetime] = None, tol_pips: float = 1.0) -> dict:
+        mode: str = "limit", end_at: Optional[datetime] = None, tol_pips: float = 1.0, pictures: bool = False) -> dict:
     """Auto-check one setup: the level line, when the watch starts, and optionally the next breakout (end_at)."""
     start = start.astimezone(UTC)
     if end_at:
@@ -347,7 +347,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     reason = ("price reached the first trade's TP" if tp_end and setup_end == tp_end else
               "an H4 candle closed beyond the level" if h4_end and setup_end == h4_end else
               "the next breakout" if end_at and setup_end == end_at else "the end of the data")
-    return {"results": out, "first": first, "poi_failed_at": h4_end.isoformat() if h4_end else None,
+    pics = trade_pictures(pair, side, level, out, frames, tp_r, be_r) if pictures else []
+    return {"_pictures": pics, "results": out, "first": first, "poi_failed_at": h4_end.isoformat() if h4_end else None,
             "setup_end": setup_end.isoformat(), "end_reason": reason, "watched_until": setup_end.isoformat(),
             "note": "Prices are Dukascopy's (bid), not your TradingView feed: a pattern formed by a fraction of a pip "
                     "can differ. " + ("Entries are limit orders (OC, CISD line, PCL candle's open, the covered "
@@ -424,3 +425,53 @@ async def run_prefetch(config) -> None:
     import asyncio
     base = os.path.dirname(os.path.abspath(config.db_path)) or "."
     await asyncio.to_thread(prefetch, "EURUSD", base)
+
+
+# ── Pictures (owner, 2026-11-23): one chart per trade, saved with the setup ───────────────────────────────
+TF_NAME = {60: "H1", 15: "M15", 5: "M5"}
+OUT_TXT = {"win": "TP ✓", "loss": "SL", "be": "breakeven", "open": "still open"}
+
+
+def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, tp_r: float, be_r: float) -> list[tuple]:
+    """[(key, n, png bytes)] for every trade in an Auto-check result."""
+    from alerts.chart_image import render
+    from alerts.follow_chart import trade_levels
+    from config import fmt_price
+    f = lambda v: fmt_price(pair, v)
+    out = []
+    for key, v in res.items():
+        tf = KEYS[key][0]
+        cs = frames[tf]
+        for n, t in enumerate(v["trades"], 1):
+            at = datetime.fromisoformat(t["time"])
+            fi = next((i for i, k in enumerate(cs) if k["ct"] >= at), None)
+            if fi is None:
+                continue
+            ex = datetime.fromisoformat(t["exit"]) if t.get("exit") else None
+            ei = next((i for i, k in enumerate(cs) if ex and k["ct"] > ex), None)
+            a = max(0, fi - 25)
+            b = min(len(cs), max(fi + 30, (ei + 6) if ei is not None else fi + 30), a + 120)
+            candles = [(k["t"].isoformat(), k["o"], k["h"], k["l"], k["c"]) for k in cs[a:b]]
+            bucket = lambda d: next((k["t"].isoformat() for k in cs[a:b] if k["t"] <= d < k["ct"]), None)
+            marks = [(cs[fi]["t"].isoformat(), "confirmation")]
+            if t.get("limit") and t.get("filled"):
+                fb = bucket(datetime.fromisoformat(t["filled"]))
+                if fb:
+                    marks.append((fb, "filled"))
+            if ex:
+                xb = bucket(ex)
+                if xb:
+                    marks.append((xb, OUT_TXT.get(t["outcome"], t["outcome"])))
+            risk = abs(t["entry"] - t["sl"])
+            be = t["entry"] + (be_r * risk if side == "buy" else -be_r * risk) if be_r and be_r < tp_r else None
+            meta = {"tf_title": TF_NAME[tf], "side": f"{side.upper()} · {key} · take {n} · {t['outcome'].upper()}",
+                    "subtitle": f"{'Limit' if t.get('limit') else 'Entry'} {f(t['entry'])}  ·  SL {f(t['sl'])}  ·  TP {f(t['tp'])}",
+                    "fired_at": at.astimezone(timezone(timedelta(hours=1))).strftime("%d %b %Y %H:%M WAT"), "marks": marks}
+            try:
+                png = render(pair, TF_NAME[tf], candles,
+                             trade_levels(level, t["entry"], t["sl"], t["tp"], be, tp_r, be_r,
+                                          "Limit" if t.get("limit") else "Entry"), meta, fmt=f, full=True)
+                out.append((key, n, png))
+            except Exception:
+                continue
+    return out
