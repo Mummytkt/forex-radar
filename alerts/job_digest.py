@@ -721,6 +721,7 @@ COMMANDS = [("brief", "Morning Brief: world news, word of the day, what's blowin
             ("style", "Style House AI prompts to copy (pictures + videos)"),
             ("plan", "Style House weekly plan: today's niche"),
             ("posts", "Your saved posts to copy (send any text to save one)"),
+            ("quote", "Price a Style House order: /quote tailor-price costs…"),
             ("today", "Today's checklist: what to do next"),
             ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
@@ -887,6 +888,9 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
     elif cmd == "/today":
         from alerts.job_checklist import send_checklist
         await send_checklist(conn, token, chat, _send)
+    elif cmd == "/quote":
+        from alerts.quote import quote_text
+        await _send(token, chat, quote_text(arg))
     elif cmd == "/posts":
         from alerts.post_drafts import send_list
         await send_list(conn, token, chat, _send)
