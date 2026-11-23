@@ -358,12 +358,16 @@ async def tv_webhook(payload: TVWebhookPayload, request: Request) -> dict:
         _handle_retest_cancelled(conn, instrument)
     elif event_type == "CONFIRMED":
         await _handle_confirmed(conn, config, instrument, payload)
+        await _end_setups(conn, config, instrument, "H4 breakout")
     elif event_type == "INVALIDATED":
         _handle_invalidated(conn, instrument)
     elif event_type == "H4_CONTINUATION":
         await _handle_h4_continuation(conn, config, instrument, payload)
+        await _end_setups(conn, config, instrument, "H4 continuation")
     elif event_type == "STORY":
         await _handle_story(conn, config, instrument, payload)
+        if payload.event in STORY_EVENTS:
+            await _end_setups(conn, config, instrument, "H4 break")
     elif event_type == "ENTRY_CONFIRMATION":
         await _handle_entry_confirmation(conn, config, instrument, payload)
     elif event_type == "PRICE_UPDATE":
@@ -512,6 +516,15 @@ def _setup_class(conn, instrument: str, breakout_id: Optional[int] = None) -> Op
         if "H4 Internal breakout @" in txt:
             return "internal"
     return None
+
+
+async def _end_setups(conn, config, instrument: str, kind: str) -> None:
+    """The next H4 breakout ends the setups on this pair (owner, 2026-11-23): see trade_follow.end_watches_on_breakout."""
+    try:
+        from alerts.trade_follow import end_watches_on_breakout
+        await end_watches_on_breakout(conn, config, instrument, kind)
+    except Exception:
+        logger.exception("%s ending the setups after a breakout failed", instrument)
 
 
 async def _handle_breakout(conn, config, instrument: str, payload: TVWebhookPayload) -> None:

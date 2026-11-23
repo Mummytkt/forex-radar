@@ -295,7 +295,7 @@ function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDel
             {formatPrice(item.instrument, item.price)}
           </span>
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            wick must reach · until an H4 close beyond
+            wick must reach · until an H4 close beyond, the TP or the next breakout
           </span>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
@@ -647,7 +647,7 @@ function EntryAlertsPanel({ instruments, prices }: {
             </label>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               The pattern&apos;s wick has to touch your price or go through it (a buy: at or below your level; a sell: at or above), any distance. No pips to set.
-              The level stays open until an H4 candle closes with its body beyond it (a buy: below; a sell: above); then it closes and Telegram tells you.
+              The level stays open until an H4 candle closes with its body beyond it (a buy: below; a sell: above), its trade reaches the take profit, or the next H4 breakout happens on this pair; then it closes and Telegram tells you.
             </div>
           </div>
 
@@ -691,7 +691,8 @@ function EntryAlertsPanel({ instruments, prices }: {
             {keepOpen && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
                 Keep watching: every confirmation you ticked that forms at the level sends its alert, until an H4 candle closes with its
-                body beyond your level (a buy: below it; a sell: above it). Then the level closes by itself and you&apos;re told why.
+                body beyond your level (a buy: below it; a sell: above it), a followed trade reaches its take profit, or the next H4 breakout
+                happens on this pair. Then the level closes by itself and you&apos;re told why.
               </div>
             )}
           </div>
@@ -705,7 +706,7 @@ function EntryAlertsPanel({ instruments, prices }: {
               Entry = the confirmation candle&apos;s close (Instant), or a limit order at the pattern&apos;s level (Limit). Stop loss = behind the pattern&apos;s wick. You get a Telegram message at the
               breakeven point, at take profit and at stop loss. After a stop loss, the level watches for a re-entry: any pattern you ticked, on any ticked timeframe,
               with its wick at or past your old stop loss (a buy: at or below it; a sell: at or above it). The watch runs until an H4 candle closes with its body beyond your
-              level (a buy: below it; a sell: above it). SL buffer = how many pips behind the pattern&apos;s wick your stop loss goes.
+              level (a buy: below it; a sell: above it) or the next H4 breakout on this pair (that also cancels a limit still waiting). Once a trade reaches its take profit, the setup is done and the level stops watching. SL buffer = how many pips behind the pattern&apos;s wick your stop loss goes.
               If price goes on to the take profit without a re-entry, you&apos;re told.
               Checked on 5-minute candles, so a message can come a few minutes after the touch.
             </div>

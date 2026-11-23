@@ -1407,6 +1407,21 @@ tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern=
 _rr = _db.execute("SELECT reentry_no, status FROM trade_follows WHERE alert_id = ? ORDER BY id DESC LIMIT 1", (_ko["id"],)).fetchone()
 check("after the SL, a pattern whose wick reaches past the old SL comes as RE-ENTRY 1", _rr is not None and _rr[0] == 1)
 c.delete(f"/api/entry-alerts/{_ko['id']}", headers=H(owner))
+# The next H4 breakout ends the setups on that pair (2026-11-23): levels close, a waiting limit is cancelled
+_nb = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDUSD", "direction": "bullish", "price": 0.6500,
+             "tolerance_pips": 10, "watches": ["H1:cisd"], "follow": True, "tp_r": 3, "entry_mode": "limit"}).json()
+tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="60",
+   price=0.6540, swept_level=0.6530, touch_price=0.6498, candles=_cs)
+_db = sqlite3.connect(DB)
+check("a limit confirmation leaves a waiting order", _db.execute(
+    "SELECT status FROM trade_follows WHERE alert_id = ? ORDER BY id DESC", (_nb["id"],)).fetchone()[0] == "pending")
+_db.execute("UPDATE entry_pattern_alerts SET is_active = 1 WHERE id = ?", (_nb["id"],)); _db.commit()
+tv(type="H4_CONTINUATION", instrument="AUDUSD", direction="bullish", cont_type="breakout_cont", breakout_level=0.66,
+   h4_level=0.655, timeframe="240")
+check("the next H4 breakout closes the level and cancels its waiting limit",
+      _db.execute("SELECT is_active FROM entry_pattern_alerts WHERE id = ?", (_nb["id"],)).fetchone()[0] == 0
+      and _db.execute("SELECT status FROM trade_follows WHERE alert_id = ? ORDER BY id DESC", (_nb["id"],)).fetchone()[0] == "cancelled")
+c.delete(f"/api/entry-alerts/{_nb['id']}", headers=H(owner))
 
 passed = sum(ok for _, ok in results)
 for name, ok in results:

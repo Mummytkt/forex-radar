@@ -416,7 +416,7 @@ def _text(fo: dict, ev: str) -> Optional[str]:
     if ev == "be":
         return f"🟡 Breakeven point reached: {head}\n\nPrice reached {f(fo['be'])} (1:{be_r}). You can move the stop to your entry {f(fo['entry'])}.\nTP {f(fo['tp'])} is still ahead."
     if ev == "tp":
-        return f"✅ Take profit hit: {head}\n\nPrice reached TP {f(fo['tp'])}: +{tp_r}R."
+        return f"✅ Take profit hit: {head}\n\nPrice reached TP {f(fo['tp'])}: +{tp_r}R. The setup is done, so this level stops watching."
     if ev == "sl":
         pat = _PAT_NAMES.get(fo.get("pattern") or "", fo.get("pattern") or "pattern")
         bull = fo["direction"] == "bullish"
@@ -434,7 +434,8 @@ def _text(fo: dict, ev: str) -> Optional[str]:
                 f"your level{' ' + f(lvl) if lvl is not None else ''} after the stop: the POI failed, so no re-entry is watched.")
     if ev == "sl_tp":
         return (f"ℹ️ Price went on to the TP after your stop: {head}\n\nAfter the SL at {f(fo['sl'])}, price reached the TP {f(fo['tp'])} "
-                f"with no new confirmation at your level. The stop was a shake-out: a re-entry would have won.")
+                f"with no new confirmation at your level. The stop was a shake-out: a re-entry would have won. "
+                f"The setup is done, so this level stops watching.")
     return None
 
 
@@ -502,6 +503,9 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
                     conn.execute("UPDATE trade_follows SET rearmed = 1 WHERE id = ?", (fo["id"],))
                     fo["rearmed"] = 1
             if ev in ("left", "sl_tp") and fo.get("rearmed") and fo["alert_id"] and not fo.get("keep_open"):
+                conn.execute("UPDATE entry_pattern_alerts SET is_active = 0 WHERE id = ?", (fo["alert_id"],))
+            if ev in ("tp", "sl_tp") and fo["alert_id"]:
+                # price reached the TP: the setup is done, the level stops watching (owner, 2026-11-23)
                 conn.execute("UPDATE entry_pattern_alerts SET is_active = 0 WHERE id = ?", (fo["alert_id"],))
         conn.commit()
         if not events:
@@ -604,3 +608,50 @@ def summary(fo: dict) -> str:
              "sl_tp": "SL hit, then price reached the TP",
              "left": "SL hit · an H4 candle closed beyond the level", "reentered": "SL hit · re-entered", "expired": "ended"}.get(fo["status"], fo["status"])
     return f"Entry {f(fo['entry'])} · SL {f(fo['sl'])} · TP {f(fo['tp'])} · {state}"
+
+
+# ── A new H4 breakout ends the setup (owner, 2026-11-23) ─────────────────────────────────────────────────
+async def end_watches_on_breakout(conn: sqlite3.Connection, config, instrument: str, kind: str) -> None:
+    """Every H4 breakout alert on a pair ends the setups watched there: its active levels close, a waiting limit
+    order is cancelled, a re-entry watch after a stop ends. A trade already running goes on to its TP / SL."""
+    from api.tv_webhook import _resolve_chat, _send_entry
+    now = datetime.now(timezone.utc)
+    conn.row_factory = sqlite3.Row
+    levels = conn.execute("""
+        SELECT epa.*, u.telegram_chat_id AS chat, u.role, u.plan, u.plan_expires_at
+        FROM entry_pattern_alerts epa LEFT JOIN users u ON u.id = epa.user_id
+        WHERE epa.instrument = ? AND epa.is_active = 1""", (instrument,)).fetchall()
+    follows = conn.execute("""
+        SELECT tf.*, u.telegram_chat_id AS chat, u.role, u.plan, u.plan_expires_at
+        FROM trade_follows tf LEFT JOIN users u ON u.id = tf.user_id
+        WHERE tf.instrument = ? AND tf.status IN ('pending', 'sl')""", (instrument,)).fetchall()
+    if not levels and not follows:
+        return
+    f = lambda v: fmt_price(instrument, v)
+    msgs = []
+    for lv in levels:
+        conn.execute("UPDATE entry_pattern_alerts SET is_active = 0, triggered_at = ? WHERE id = ?", (_iso(now), lv["id"]))
+        side = "BUY" if lv["direction"] == "bullish" else "SELL"
+        msgs.append((lv, f"🚫 Level closed: {tagged(instrument)} · {side} level {f(lv['price'])}\n\nA new H4 breakout ({kind}) "
+                         "happened on this pair, so this setup has ended. Set your next level from the new breakout."))
+    for fo in follows:
+        head = f"{tagged(instrument)} · {'BUY' if fo['direction'] == 'bullish' else 'SELL'}"
+        if fo["status"] == "pending":
+            conn.execute("UPDATE trade_follows SET status = 'cancelled', closed_at = ? WHERE id = ?", (_iso(now), fo["id"]))
+            msgs.append((fo, f"❌ Cancel the order: {head} limit {f(fo['entry'])}\n\nA new H4 breakout ({kind}) happened "
+                             "before the limit filled, so this setup has ended."))
+        else:
+            conn.execute("UPDATE trade_follows SET status = 'left', closed_at = ? WHERE id = ?", (_iso(now), fo["id"]))
+            msgs.append((fo, f"↩️ Re-entry watch ended: {head}\n\nA new H4 breakout ({kind}) happened after the stop, "
+                             "so this setup has ended: no re-entry is watched."))
+    conn.commit()
+    logger.info("%s new H4 breakout (%s): %d level(s) closed, %d follow(s) ended", instrument, kind, len(levels), len(follows))
+    if not config.telegram_enabled:
+        return
+    for row, text in msgs:
+        try:
+            chat_id = _resolve_chat(config, row["user_id"], row["chat"], row["role"], row["plan"], row["plan_expires_at"])
+        except Exception:
+            chat_id = row["chat"]
+        if chat_id:
+            await _send_entry(config.telegram_bot_token, chat_id, text, None)

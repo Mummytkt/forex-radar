@@ -10,8 +10,8 @@ The owner marks the setup by eye (her edge: the liquidity and the POI closest to
      (a buy: close below its bottom; a sell: close above its top);
   4. trades each confirmation the owner's way: entry at the confirmation candle's close, SL at its wick (the
      script's touch), TP at tp_r R (3), stop to breakeven at be_r R (2), played on 1-minute candles (if the SL and the
-     TP fall in the same minute, the SL counts). A loss is retaken at that confirmation's next formation while the POI
-     holds; the takes stop at the first win or breakeven;
+     TP fall in the same minute, the SL counts). A loss is retaken at that confirmation's next formation whose wick reaches
+     the old SL or goes past it (the live re-entry rule), while the setup lasts; the takes stop at the first win or breakeven;
   5. stars the confirmation that formed first.
 
 The prices are Dukascopy's (bid), not her TradingView feed: a pattern that forms by a fraction of a pip can differ.
@@ -294,10 +294,12 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
         return [e for e in evs if start < e["ct"] <= until]
 
     def trade(key: str, until: datetime) -> Optional[dict]:
-        trades, free_at = [], start
+        trades, free_at, old_sl = [], start, None
         for e in formations(key, until):
             if e["ct"] < free_at:
                 continue                     # one trade at a time
+            if old_sl is not None and not ((e["touch"] <= old_sl) if buy else (e["touch"] >= old_sl)):
+                continue                     # a retake needs its wick at or past the stopped trade's SL (live re-entry rule)
             j0 = index.get(e["ct"])
             if j0 is None:
                 j0 = next((j for j, m in enumerate(mins) if m[0] >= e["ct"]), len(mins))
@@ -322,7 +324,7 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
                            "exit": r["exit"].isoformat() if r["exit"] else None})
             if r["outcome"] != "loss":
                 break
-            free_at = r["exit"]
+            free_at, old_sl = r["exit"], e["touch"]
         if not trades:
             return None
         last = trades[-1]["outcome"]
