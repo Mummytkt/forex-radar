@@ -186,3 +186,50 @@ RISK_HELP = ("💼 <b>Lot size in your entry alerts</b>\nSend your account balan
              "trade:\n<code>/risk 1000 1</code> = a $1,000 account risking 1% ($10) per trade.\n\nEvery followed "
              "entry then shows the lot size between the entry and the SL. Forex pairs and gold/silver only; for "
              "other instruments it shows the dollar risk. <code>/risk off</code> removes it.")
+
+
+# ── Auto-journal (owner request 2026-11-23) ───────────────────────────────────
+# The owner's followed trades go into her trade journal by themselves: a row when the trade is on (instant entry, or a
+# limit once filled), its result when it closes (TP = win, SL = loss). Pictures stay in her browser, so she adds those.
+WAT = timezone(timedelta(hours=1))
+OPEN_ON = ("open", "tp", "sl", "sl_tp", "left", "reentered", "expired")
+
+
+def journal_sync(conn, fo: dict) -> None:
+    """Make the owner's journal match one follow. Safe to call every price check."""
+    if fo.get("role") != "OWNER" or fo.get("status") not in OPEN_ON:
+        return
+    if fo.get("mode") == "limit" and not fo.get("filled_at"):
+        return
+    from config import pip_size_for
+    bull = fo["direction"] == "bullish"
+    t0 = datetime.fromisoformat(fo.get("filled_at") or fo["opened_at"]).astimezone(WAT)
+    res = "win" if fo["status"] == "tp" else ("loss" if fo["status"] in STOPPED else "open")
+    exit_p = fo["tp"] if res == "win" else (fo["sl"] if res == "loss" else None)
+    pips = None
+    if exit_p is not None:
+        pips = round(((exit_p - fo["entry"]) if bull else (fo["entry"] - exit_p)) / pip_size_for(fo["instrument"]), 1)
+    rr = float(fo["tp_r"] or 2) if res == "win" else (-1.0 if res == "loss" else None)
+    t1 = None
+    when = fo.get("sl_at") if res == "loss" else fo.get("closed_at") if res == "win" else None
+    if when:
+        t1 = datetime.fromisoformat(when).astimezone(WAT)
+    name = f"{fo.get('tf') or ''} {NAMES.get(fo.get('pattern'), fo.get('pattern') or '')}".strip()
+    row = conn.execute("SELECT id, result FROM journal_entries WHERE follow_id = ?", (fo["id"],)).fetchone()
+    if row is None:
+        notes = (f"Auto-logged from the Bias Pointer's trade follow: {name} confirmation, "
+                 f"{'limit' if fo.get('mode') == 'limit' else 'instant'} entry"
+                 + (f", re-entry {fo['reentry_no']}" if fo.get("reentry_no") else "") + ". Add your chart and notes.")
+        conn.execute("""INSERT INTO journal_entries
+            (trade_date, instrument, direction, entry_price, stop_loss, take_profit, exit_price, pips, rr_ratio,
+             result, setup_type, setup_type_notes, trade_type, entry_date, exit_date, entry_time, exit_time, notes,
+             user_id, follow_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'other', ?, 'live', ?, ?, ?, ?, ?, ?, ?)""",
+            (t0.date().isoformat(), fo["instrument"], "buy" if bull else "sell", fo["entry"], fo["sl"], fo["tp"],
+             exit_p, pips, rr, res, name, t0.date().isoformat(), t1.date().isoformat() if t1 else None,
+             t0.strftime("%H:%M"), t1.strftime("%H:%M") if t1 else None, notes, fo.get("user_id"), fo["id"]))
+    elif row[1] == "open" and res != "open":
+        conn.execute("UPDATE journal_entries SET result = ?, exit_price = ?, pips = ?, rr_ratio = ?, exit_date = ?, "
+                     "exit_time = ? WHERE id = ?",
+                     (res, exit_p, pips, rr, t1.date().isoformat() if t1 else None, t1.strftime("%H:%M") if t1 else None,
+                      row[0]))

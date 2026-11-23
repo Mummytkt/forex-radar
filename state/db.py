@@ -356,6 +356,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         "entry_time TEXT", "exit_time TEXT",
         "setup_type_notes TEXT",
         "trade_type TEXT NOT NULL DEFAULT 'live'",
+        "follow_id INTEGER",          # auto-journal: the trade_follows row this entry came from (2026-11-23)
     ]:
         col_name = col_def.split()[0]
         if col_name not in journal_cols:

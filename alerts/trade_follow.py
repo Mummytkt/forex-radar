@@ -487,6 +487,11 @@ async def check_follows(conn: sqlite3.Connection, config, prices: dict, now: dat
         events = step(fo, bars, now, _stored_h4(conn, fo, now))
         conn.execute("UPDATE trade_follows SET status = ?, be_sent = ?, last_bar_at = ?, sl_at = ?, closed_at = ?, filled_at = ? WHERE id = ?",
                      (fo["status"], fo["be_sent"], fo["last_bar_at"], fo["sl_at"], fo["closed_at"], fo.get("filled_at"), fo["id"]))
+        try:      # the owner's journal follows her trades (2026-11-23)
+            from alerts.forward_report import journal_sync
+            journal_sync(conn, fo)
+        except Exception:
+            logger.exception("auto-journal failed for follow %s", fo.get("id"))
         now_iso = _iso(now)
         for ev in events:
             if ev == "sl" and fo["alert_id"]:
