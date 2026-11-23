@@ -50,7 +50,9 @@ NIGERIA_FEEDS = (
 TOPICS = {
     3: r"central bank|interest rate|rate (cut|hike)|federal reserve|\bfed\b|\becb\b|bank of england|\bcbn\b|"
        r"inflation|recession|\bgdp\b|tariff|trade (war|deal)|sanction|\boil\b|opec|crude|naira|exchange rate|"
-       r"devalu|\bimf\b|world bank|debt|budget|tax|subsid|fuel price|food price|ceasefire|invasion|war\b",
+       r"devalu|\bimf\b|world bank|debt|budget|tax|subsid|fuel price|food price|ceasefire|invasion|war\b|"
+       r"supply chain|shipping|red sea|semiconductor|\bchips?\b|chipmaker|critical mineral|rare earth|lithium|"
+       r"copper|cobalt|export ban|export control",
     2: r"election|president|prime minister|government|policy|law\b|bill\b|senate|congress|summit|\bg7\b|\bg20\b|"
        r"china|united states|\bus\b|russia|ukraine|europe|\beu\b|stock|market|shares|dollar|gold|bitcoin|"
        r"\bai\b|artificial intelligence|jobs|unemployment|wage|minimum wage|strike|bank",
@@ -193,6 +195,10 @@ DRILLS = [
     "Connect two stories: how does one affect the other? Say it in under a minute.",
     "Read one article out loud slowly. Then say its point in one sentence without looking.",
     "Write a 3-line post on one story: the fact, why it matters, a question for your followers.",
+    "Ask one sharp question about a story, the kind that steers a conversation: \"Who actually benefits from this?\" "
+    "or \"What happens to prices in Nigeria if this lasts?\" Say the question and your own answer out loud.",
+    "Explain one story with an everyday comparison: \"The CBN raising rates is like…\" Find a comparison from the "
+    "market, the kitchen or school fees, and say it in under a minute.",
 ]
 
 # One-tap X searches: most-liked original posts since yesterday, per niche (min_faves = likes floor)
