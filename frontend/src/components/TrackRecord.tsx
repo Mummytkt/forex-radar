@@ -73,7 +73,7 @@ export default function TrackRecord() {
       )}
 
       {data.recent.length > 0 && (
-        <div className="table-wrap" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+        <div className="table-wrap" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
           <table className="data-table" style={{ minWidth: 520 }}>
             <thead>
               <tr><th>Pair</th><th>Call</th><th>Date</th><th>After 24h</th><th>After 5 days</th></tr>

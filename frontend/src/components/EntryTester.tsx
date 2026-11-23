@@ -453,6 +453,7 @@ function authHdr(): HeadersInit {
 function Thumb({ id, label, onRemove, w = 150, h = 96 }: { id: number; label: string; onRemove?: () => void; w?: number | string; h?: number }) {
   const [url, setUrl] = useState<string | null>(null)
   const [big, setBig] = useState(false)
+  const [wide, setWide] = useState(false)
   useEffect(() => {
     let gone = false, made: string | null = null
     fetch(`${API_BASE}/api/entry-tests/images/${id}`, { headers: authHdr() })
@@ -479,9 +480,20 @@ function Thumb({ id, label, onRemove, w = 150, h = 96 }: { id: number; label: st
       {/* On the page body, so no card or animation around the picture can trap or clip it */}
       {big && url && createPortal(
         <div onClick={e => { e.stopPropagation(); setBig(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 10000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, cursor: 'zoom-out' }}>
-          <img src={url} alt={label} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />
-          <button aria-label="Close" style={{ position: 'absolute', top: 16, right: 16, background: 'var(--card)', border: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center', padding: 16, cursor: 'zoom-out',
+          overflowX: wide ? 'auto' : 'hidden', WebkitOverflowScrolling: 'touch' }}>
+          {/* A wide picture (two charts side by side) on an upright phone: shown tall enough to read, swipe sideways */}
+          <img src={url} alt={label} onClick={e => { if (wide) e.stopPropagation() }}
+            onLoad={e => {
+              const im = e.currentTarget
+              setWide(window.innerWidth < 700 && im.naturalWidth / im.naturalHeight > 1.4 * (window.innerWidth / window.innerHeight))
+            }}
+            style={wide
+              ? { height: 'min(70vh, 100%)', width: 'auto', maxWidth: 'none', flexShrink: 0, objectFit: 'contain', borderRadius: 8 }
+              : { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />
+          {wide && <div style={{ position: 'fixed', bottom: 18, left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,0.75)', fontSize: 12, pointerEvents: 'none' }}>
+            Swipe sideways to see the whole picture · tap outside it to close</div>}
+          <button aria-label="Close" style={{ position: 'fixed', top: 16, right: 16, zIndex: 1, background: 'var(--card)', border: '1px solid var(--border)',
             borderRadius: 8, padding: 6, color: 'var(--text-primary)', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
         </div>,
         document.body,

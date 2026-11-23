@@ -40,6 +40,8 @@ export default function TopBar({ title, subtitle }: Props) {
   const [timeStr, setTimeStr] = useState('')
   const [forexOpen, setForexOpen] = useState(false)
   const [menu, setMenu] = useState<'jump' | 'account' | null>(null)
+  // On a phone the Jump-to button isn't at the screen edge, so its menu would hang off the left: pin it on screen
+  const [jumpTop, setJumpTop] = useState<number | null>(null)
   const { timezone } = useTimezone()
   const { user, authEnabled, logout } = useAuth()
   const { theme, toggle } = useTheme()
@@ -152,14 +154,23 @@ export default function TopBar({ title, subtitle }: Props) {
 
       {/* Jump to */}
       <div style={{ position: 'relative', zIndex: 35 }}>
-        <button onClick={() => setMenu(menu === 'jump' ? null : 'jump')} style={pillBtn} aria-label={unread > 0 ? 'Jump to (new updates)' : 'Jump to'}>
+        <button onClick={e => {
+          const r = e.currentTarget.getBoundingClientRect()
+          setJumpTop(window.innerWidth < 640 ? r.bottom + 8 : null)
+          setMenu(menu === 'jump' ? null : 'jump')
+        }} style={pillBtn} aria-label={unread > 0 ? 'Jump to (new updates)' : 'Jump to'}>
           <LayoutGrid size={14} />
           <span className="desktop-only">Jump to</span>
           <ChevronDown size={13} className="desktop-only" />
           {unread > 0 && <span style={{ position: 'absolute', top: -3, right: -3, width: 9, height: 9, borderRadius: '50%', background: 'var(--bearish)', boxShadow: '0 0 0 2px var(--surface)' }} />}
         </button>
         {menu === 'jump' && (
-          <div style={{ ...menuPanel, width: 'min(560px, calc(100vw - 32px))', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 4 }}>
+          <div style={{
+            ...menuPanel, width: 'min(560px, calc(100vw - 32px))', display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 4,
+            ...(jumpTop != null ? { position: 'fixed', top: jumpTop, left: 16, right: 16, width: 'auto',
+                                    maxHeight: `calc(100vh - ${jumpTop + 16}px)`, overflowY: 'auto' } : {}),
+          }}>
             <Link href={HUB_HREF} style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 8, textDecoration: 'none', color: 'var(--accent-hover)', fontSize: 13, fontWeight: 600, background: 'var(--accent-bg)' }}>
               <LayoutGrid size={14} /> All pages (home)
             </Link>
