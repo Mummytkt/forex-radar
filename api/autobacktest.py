@@ -208,10 +208,11 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float 
     buy = side == "buy"
     hit = lambda k: (k["l"] <= level + tol) if buy else (k["h"] >= level - tol)
     with_trade = lambda k: (k["c"] > k["o"]) if buy else (k["c"] < k["o"])
-    out = []
+    out, touch_no = [], 0
     for i, k in enumerate(cs):
         if k["ct"] <= start or not hit(k) or (i and cs[i - 1]["ct"] > start and hit(cs[i - 1])):
             continue                              # not a NEW touch
+        touch_no += 1
         a = i if with_trade(k) else i + 1
         if a + 1 >= len(cs):
             continue
@@ -220,7 +221,7 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float 
             continue                              # the first two aren't both in the trade's direction
         wick = min(c1["l"], c2["l"]) if buy else max(c1["h"], c2["h"])
         out.append({"i": a + 1, "ct": c2["ct"], "pat": "octgd2", "dir": side, "close": c2["c"], "touch": wick,
-                    "level": c1["c"], "limit": c1["c"]})
+                    "level": c1["c"], "limit": c1["c"], "touch_no": touch_no})
     return out
 
 
@@ -302,6 +303,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
         for e in formations(key, until):
             if e["ct"] < free_at:
                 continue                     # one trade at a time
+            if e.get("touch_no", 1) > 1 and old_sl is None:
+                continue                     # OCTGD 2: only the first touch, unless a stop has been hit (owner)
             if old_sl is not None and not ((e["touch"] <= old_sl) if buy else (e["touch"] >= old_sl)):
                 continue                     # a retake needs its wick at or past the stopped trade's SL (live re-entry rule)
             j0 = index.get(e["ct"])
