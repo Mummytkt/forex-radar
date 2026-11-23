@@ -1115,6 +1115,17 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         elif pattern not in ("pcl", "engulfing_sweep") or tf_label not in ("H1", "H2"):
             continue  # an older level: PCL / Engulfing Sweep on H1 / H2 only
 
+        # One trade at a time per level (user rule, confirmed with a picture; re-stated 2026-11-23): while the trade
+        # this level opened is still running (open) or its limit is still waiting (pending), further confirmations on
+        # the level are NOT sent at all. The next alert from this level can only be a RE-ENTRY, after that trade's SL.
+        if row["follow"]:
+            busy = conn.execute("SELECT status FROM trade_follows WHERE alert_id = ? AND status IN ('open','pending') "
+                                "LIMIT 1", (alert_id,)).fetchone()
+            if busy:
+                logger.info("%s ENTRY_CONFIRMATION %s %s @ %.5f silenced for alert_id=%d: its trade is still %s",
+                            instrument, direction, pattern, price, alert_id, busy[0])
+                continue
+
         # A level re-armed after a stop loss (Follow the trade): a RE-ENTRY = any pattern/timeframe the level
         # watches (checked above) with its wick at or past the stopped trade's SL, any distance (user, 2026-11-18)
         stopped = None

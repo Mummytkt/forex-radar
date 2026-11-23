@@ -1382,6 +1382,31 @@ check("the CISD confirmation opens a pending limit order at the CISD line, TP me
       _lf is not None and _lf[0] == "pending" and _lf[1] == "limit" and abs(_lf[2] - 0.6530) < 1e-9
       and abs(_lf[4] - (0.6530 + 3 * (0.6530 - _lf[3]))) < 1e-9)
 c.delete(f"/api/entry-alerts/{_lm['id']}", headers=H(owner))
+# One trade at a time per level (2026-11-23): while its trade is open / its limit waits, more confirmations are silent
+_ko = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDUSD", "direction": "bullish", "price": 0.6500,
+             "tolerance_pips": 10, "watches": ["H1:cisd"], "follow": True, "tp_r": 3, "keep_open": True}).json()
+tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="60",
+   price=0.6540, swept_level=0.6530, touch_price=0.6498, candles=_cs)
+_db = sqlite3.connect(DB)
+_t1 = _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_ko["id"],)).fetchone()[0]
+tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="60",
+   price=0.6545, swept_level=0.6535, touch_price=0.6497, candles=_cs)
+_t2 = _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_ko["id"],)).fetchone()[0]
+_n = _db.execute("SELECT COUNT(*) FROM trade_follows WHERE alert_id = ?", (_ko["id"],)).fetchone()[0]
+check("a second confirmation while the level's trade is open is silenced (no alert, no second trade)",
+      _t1 is not None and _t1 == _t2 and _n == 1)
+_db.execute("UPDATE trade_follows SET status = 'sl', sl_at = ? WHERE alert_id = ?", ("2026-11-23T10:00:00+00:00", _ko["id"]))
+_db.commit()
+_sl = _db.execute("SELECT sl FROM trade_follows WHERE alert_id = ?", (_ko["id"],)).fetchone()[0]
+tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="60",
+   price=0.6540, swept_level=0.6530, touch_price=_sl + 0.0005, candles=_cs)
+_n2 = _db.execute("SELECT COUNT(*) FROM trade_follows WHERE alert_id = ?", (_ko["id"],)).fetchone()[0]
+check("after the SL, a pattern whose wick stays above the old SL is not a re-entry", _n2 == 1)
+tv(type="ENTRY_CONFIRMATION", instrument="AUDUSD", direction="bullish", pattern="cisd", timeframe="60",
+   price=0.6540, swept_level=0.6530, touch_price=_sl - 0.0003, candles=_cs)
+_rr = _db.execute("SELECT reentry_no, status FROM trade_follows WHERE alert_id = ? ORDER BY id DESC LIMIT 1", (_ko["id"],)).fetchone()
+check("after the SL, a pattern whose wick reaches past the old SL comes as RE-ENTRY 1", _rr is not None and _rr[0] == 1)
+c.delete(f"/api/entry-alerts/{_ko['id']}", headers=H(owner))
 
 passed = sum(ok for _, ok in results)
 for name, ok in results:
