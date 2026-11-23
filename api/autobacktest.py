@@ -429,7 +429,9 @@ async def run_prefetch(config) -> None:
 
 # ── Pictures (owner, 2026-11-23): one chart per trade, saved with the setup ───────────────────────────────
 TF_NAME = {60: "H1", 15: "M15", 5: "M5"}
-OUT_TXT = {"win": "TP ✓", "loss": "SL", "be": "breakeven", "open": "still open"}
+OUT_TXT = {"win": "TP hit", "loss": "SL hit", "be": "breakeven", "open": "still open"}
+LABELS = {"pcl": "H1 PCL", "eng": "H1 Engulfing", "octgd1": "H1 OCTGD 1", "octgd2": "H1 OCTGD 2", "cisd": "H1 CISD",
+          "octgd15": "M15 OCTGD", "octgd215": "M15 OCTGD 2", "cisd15": "M15 CISD", "cisd5": "M5 CISD"}
 
 
 def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, tp_r: float, be_r: float) -> list[tuple]:
@@ -453,7 +455,7 @@ def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, 
             b = min(len(cs), max(fi + 30, (ei + 6) if ei is not None else fi + 30), a + 120)
             candles = [(k["t"].isoformat(), k["o"], k["h"], k["l"], k["c"]) for k in cs[a:b]]
             bucket = lambda d: next((k["t"].isoformat() for k in cs[a:b] if k["t"] <= d < k["ct"]), None)
-            marks = [(cs[fi]["t"].isoformat(), "confirmation")]
+            marks = [(cs[fi]["t"].isoformat(), "confirmed")]
             if t.get("limit") and t.get("filled"):
                 fb = bucket(datetime.fromisoformat(t["filled"]))
                 if fb:
@@ -464,7 +466,7 @@ def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, 
                     marks.append((xb, OUT_TXT.get(t["outcome"], t["outcome"])))
             risk = abs(t["entry"] - t["sl"])
             be = t["entry"] + (be_r * risk if side == "buy" else -be_r * risk) if be_r and be_r < tp_r else None
-            meta = {"tf_title": TF_NAME[tf], "side": f"{side.upper()} · {key} · take {n} · {t['outcome'].upper()}",
+            meta = {"tf_title": TF_NAME[tf], "side": f"{side.upper()} · {LABELS.get(key, key)} · take {n} · {t['outcome'].upper()}",
                     "subtitle": f"{'Limit' if t.get('limit') else 'Entry'} {f(t['entry'])}  ·  SL {f(t['sl'])}  ·  TP {f(t['tp'])}",
                     "fired_at": at.astimezone(timezone(timedelta(hours=1))).strftime("%d %b %Y %H:%M WAT"), "marks": marks}
             try:

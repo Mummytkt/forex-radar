@@ -121,13 +121,19 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
         d.rectangle([cx - bw / 2, top, cx + bw / 2, max(bot, top + 1)], fill=col)
 
     # extra candle markers (meta "marks": [(candle open time, text)]), e.g. the break candle
+    placed = []      # marks close together: each next label one row lower, so none overlap
     for mts, mtxt in meta.get("marks") or []:
         im = max((i for i, cd in enumerate(candles) if cd[0] <= mts), default=None)
         if im is not None:
             mx = x0 + step * (im + 0.5)
             for ys in range(int(y0), int(y1), 10):
                 d.line([(mx, ys), (mx, min(ys + 5, y1))], fill=(148, 163, 184), width=1)
-            d.text((mx + 4, y0 + 4), mtxt, font=f_ax, fill=(148, 163, 184))
+            w = d.textlength(mtxt, font=f_ax) + 8
+            row = 0
+            while any(r == row and abs(px - mx) < pw for px, pw, r in placed):
+                row += 1
+            placed.append((mx, w, row))
+            d.text((mx + 4, y0 + 4 + row * 16), mtxt, font=f_ax, fill=(148, 163, 184))
 
     # alert marker on the last candle
     lx = x0 + step * (n - 0.5)
