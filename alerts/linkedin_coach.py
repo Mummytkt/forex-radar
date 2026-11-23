@@ -572,7 +572,40 @@ async def send_slot(conn, token: str, chat: str, d: date, slot: str, send) -> bo
     text = SLOT_TEXT[slot](d)
     if not text:
         return False
-    return await send(token, chat, text, _buttons(d.isoformat(), slot))
+    ok = await send(token, chat, text, _buttons(d.isoformat(), slot))
+    p = POSTS.get(d.isoformat())
+    if ok and slot == "morning" and p:      # the day's flyer prompt, its own message (owner request 2026-11-23)
+        await send(token, chat, flyer_message(p["text"]))
+    return ok
+
+
+# ── Flyers (owner request 2026-11-23): a one-page cartoon flyer to attach to each post ────────────────────────
+FLYER_STYLE = (
+    "Create ONE square (1:1) social media flyer for LinkedIn in a bright, friendly cartoon / flat illustration style.\n"
+    "Main character: a cheerful Nigerian woman tech professional with short natural black hair and a warm smile, "
+    "wearing a black top, drawn as a cartoon (if I attached my photo, base her face and hair on it). Give her an "
+    "expression and pose that fit the post.\n"
+    "Layout, all on one page:\n"
+    "- Top: a big bold headline taken from the post's opening line (short, playful).\n"
+    "- Middle: a card or speech bubbles with the post's 3 or 4 key points as SHORT phrases, each with a small icon.\n"
+    "- Bottom: the post's closing question in a highlighted banner.\n"
+    "- Small text in a corner: \"Taiwo Damilola Mayowa · QA · Design · Support\".\n"
+    "Colours: purple, warm yellow and white with playful doodles (question marks, sparkles, arrows). Clean, uncluttered "
+    "and easy to read on a phone. Spell every word exactly as written, and keep the text on the flyer short.\n\n"
+    "Here is the post:\n")
+
+
+def flyer_prompt(post: str) -> str:
+    body = "\n".join(l for l in post.strip().splitlines() if not l.strip().startswith("#")).strip()
+    return FLYER_STYLE + body
+
+
+def flyer_message(post: str) -> str:
+    return ("🎨 <b>Flyer for this post</b>\nTap the box to copy, paste it into Gemini or ChatGPT (attach your "
+            "photo the first time so the cartoon looks like you), then post the flyer with the text. Check the "
+            "spelling on the image before you post. Rephrased the post? Send <code>/flyer</code> followed by your "
+            "version and I'll rebuild the prompt from your words.\n\n"
+            f"<code>{_e(flyer_prompt(post))}</code>")
 
 
 async def run_linkedin_slot(db_path: str, config, slot: str, now: Optional[datetime] = None) -> bool:

@@ -722,6 +722,7 @@ COMMANDS = [("brief", "Morning Brief: world news, word of the day, what's blowin
             ("plan", "Style House weekly plan: today's niche"),
             ("posts", "Your saved posts to copy (send any text to save one)"),
             ("quote", "Price a Style House order: /quote tailor-price costs…"),
+            ("flyer", "Cartoon flyer prompt for today's post, or /flyer + your text"),
             ("today", "Today's checklist: what to do next"),
             ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
@@ -905,6 +906,14 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
         from alerts.morning_brief import send_brief
         await _send(token, chat, "☀️ Gathering today's brief…")
         await send_brief(token, chat, _send)
+    elif cmd == "/flyer":
+        from alerts.linkedin_coach import flyer_message, POSTS, wat_today
+        post = arg or (POSTS.get(wat_today().isoformat()) or {}).get("text", "")
+        if not post:
+            await _send(token, chat, "🎨 Send <code>/flyer</code> followed by your post (paste it after a space) "
+                                     "and I'll make a cartoon flyer prompt from it.")
+        else:
+            await _send(token, chat, flyer_message(post))
     elif cmd in ("/linkedin", "/stats"):
         from alerts.linkedin_coach import handle_command as li_command
         await li_command(conn, token, chat, cmd, arg, _send)
