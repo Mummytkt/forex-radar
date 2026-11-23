@@ -580,18 +580,22 @@ async def send_slot(conn, token: str, chat: str, d: date, slot: str, send) -> bo
 
 
 # ── Flyers (owner request 2026-11-23): a one-page cartoon flyer to attach to each post ────────────────────────
+# Owner, 2026-11-23: her face from her real photo must never change; portfolio colours; label "Design Gist".
 FLYER_STYLE = (
-    "Create ONE square (1:1) social media flyer for LinkedIn in a bright, friendly cartoon / flat illustration style.\n"
-    "Main character: a cheerful Nigerian woman tech professional with short natural black hair and a warm smile, "
-    "wearing a black top, drawn as a cartoon (if I attached my photo, base her face and hair on it). Give her an "
-    "expression and pose that fit the post.\n"
+    "Create ONE square (1:1) LinkedIn flyer, photorealistic.\n"
+    "Model: the woman in the attached photo. Her face must stay EXACTLY the same as the photo: same facial "
+    "features, face shape, eyes, nose, lips, skin tone, and the same short natural black hair. Do not beautify, "
+    "slim, smooth, lighten or alter her face or hair in any way. Only her outfit, pose and expression may change: "
+    "a professional pose and expression that fit the post.\n"
     "Layout, all on one page:\n"
-    "- Top: a big bold headline taken from the post's opening line (short, playful).\n"
-    "- Middle: a card or speech bubbles with the post's 3 or 4 key points as SHORT phrases, each with a small icon.\n"
-    "- Bottom: the post's closing question in a highlighted banner.\n"
+    "- Top-left label in a rounded pill: \"Design Gist\"\n"
+    "- A big bold headline taken from the post's opening line (short, playful).\n"
+    "- A card with the post's 3 or 4 key points as SHORT phrases, each with a small icon.\n"
+    "- A bottom banner with the post's closing question.\n"
     "- Small text in a corner: \"Taiwo Damilola Mayowa · QA · Design · Support\".\n"
-    "Colours: purple, warm yellow and white with playful doodles (question marks, sparkles, arrows). Clean, uncluttered "
-    "and easy to read on a phone. Spell every word exactly as written, and keep the text on the flyer short.\n\n"
+    "Colours: dark charcoal background (#0b0b10) with lime green (#d4ff3a), coral (#ff6a4d), soft violet (#9b8cff) "
+    "and sky blue (#5fd4ff) accents. Clean, modern, premium, easy to read on a phone. Spell every word exactly as "
+    "written, and keep the text on the flyer short.\n\n"
     "Here is the post:\n")
 
 
