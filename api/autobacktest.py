@@ -35,8 +35,8 @@ WATCH_DAYS = 21      # a setup is followed at most this long after its start
 LOOKBACK_DAYS = 3    # candles before the start, so runs and OCs that began earlier are known
 
 # Quick Backtest keys -> (timeframe minutes, pattern). OCTGD 1 / OCTGD 2 are the owner's own split (not in the script).
-KEYS = {"pcl": (60, "pcl"), "eng": (60, "eng"), "cisd": (60, "cisd"), "octgd15": (15, "octgd"),
-        "cisd15": (15, "cisd"), "cisd5": (5, "cisd"), "octgd": (60, "octgd")}
+KEYS = {"pcl": (60, "pcl"), "eng": (60, "eng"), "octgd1": (60, "octgd"), "octgd2": (60, "octgd2"), "cisd": (60, "cisd"),
+        "octgd15": (15, "octgd"), "octgd215": (15, "octgd2"), "cisd15": (15, "cisd"), "cisd5": (5, "cisd")}
 OCWIN, CIWIN = 10, 20   # the script's defaults: OCTGD / CISD candles allowed
 
 
@@ -125,29 +125,29 @@ def confirmations(cs: list[dict]) -> list[dict]:
         p = cs[i - 1] if i else None
         pbull = bool(p) and p["c"] > p["o"]
         pbear = bool(p) and p["c"] < p["o"]
-        add = lambda pat, d, touch, lvl: ev.append({"i": i, "ct": k["ct"], "pat": pat, "dir": d, "close": c,
-                                                    "touch": touch, "level": lvl})
+        add = lambda pat, d, touch, lvl, lim=None: ev.append({"i": i, "ct": k["ct"], "pat": pat, "dir": d, "close": c,
+                                                              "touch": touch, "level": lvl, "limit": lim})
         if p:
             if pbear and cbull and l < p["l"] and c > p["l"]:
-                add("pcl", "buy", l, p["l"])
+                add("pcl", "buy", l, p["l"], o)
             if pbull and cbear and h > p["h"] and c < p["h"]:
-                add("pcl", "sell", h, p["h"])
+                add("pcl", "sell", h, p["h"], o)
             if pbear and cbull and o <= p["c"] and c > p["o"]:
-                add("eng", "buy", min(l, p["l"]), p["o"])
+                add("eng", "buy", min(l, p["l"]), p["o"], p["o"])
             if pbull and cbear and o >= p["c"] and c < p["o"]:
-                add("eng", "sell", max(h, p["h"]), p["o"])
+                add("eng", "sell", max(h, p["h"]), p["o"], p["o"])
         # OCTGD: checked before this candle can start a new OC
         b_oc = s_oc = False
         if boc:
             if i - boc[2] > OCWIN:
                 boc = None
             elif cbull and c > boc[0]:
-                add("octgd", "buy", boc[1], boc[0]); boc = None; b_oc = True
+                add("octgd", "buy", boc[1], boc[0], boc[0]); boc = None; b_oc = True
         if soc:
             if i - soc[2] > OCWIN:
                 soc = None
             elif cbear and c < soc[0]:
-                add("octgd", "sell", soc[1], soc[0]); soc = None; s_oc = True
+                add("octgd", "sell", soc[1], soc[0], soc[0]); soc = None; s_oc = True
         if p and pbear and cbear:
             boc = [p["c"], min(l, p["l"]), i]
         if p and pbull and cbull:
@@ -160,14 +160,14 @@ def confirmations(cs: list[dict]) -> list[dict]:
             if i - bci[2] > CIWIN:
                 bci = None
             elif cbull and c > bci[0]:
-                add("cisd", "buy", bci[1], bci[0]); bci = None; b_ci = True
+                add("cisd", "buy", bci[1], bci[0], bci[0]); bci = None; b_ci = True
         if sci:
             if h > sci[1]:
                 sci[1], sci[2] = h, i
             if i - sci[2] > CIWIN:
                 sci = None
             elif cbear and c < sci[0]:
-                add("cisd", "sell", sci[1], sci[0]); sci = None; s_ci = True
+                add("cisd", "sell", sci[1], sci[0], sci[0]); sci = None; s_ci = True
         if cbear:
             dn = [o, l, 1] if not pbear or dn is None else [dn[0], min(dn[1], l), dn[2] + 1]
             if not b_ci and dn[2] >= 2 and (bci is None or dn[1] <= bci[1]):
@@ -198,82 +198,157 @@ def play(mins: list[tuple], start_i: int, side: str, entry: float, sl: float, tp
     return {"outcome": "open", "exit": None, "j": len(mins), "tp": tp, "sl": sl}
 
 
-def run(pair: str, side: str, top: float, bottom: float, start: datetime, cache: str,
-        tp_r: float = 3.0, be_r: float = 2.0) -> dict:
-    """Auto-check one setup. start = when the watch begins (aware datetime)."""
-    if top < bottom:
-        top, bottom = bottom, top
+def octgd2(cs: list[dict], side: str, level: float, start: datetime) -> list[dict]:
+    """OCTGD 2 (owner, 2026-11-23): once price has reached the level (a buy: a wick at or below it), every two
+    candles IN A ROW in the trade's direction (a buy: two bullish). Entry = their OC (C1's close = C2's open), as a
+    limit; SL = the pair's wick (a buy: the lower low of the two), like OCTGD 1."""
+    out, touched = [], False
+    for i, k in enumerate(cs):
+        if k["ct"] <= start:
+            continue
+        if not touched and ((k["l"] <= level) if side == "buy" else (k["h"] >= level)):
+            touched = True
+            continue                       # the pair forms after the touch
+        if not touched or i == 0 or cs[i - 1]["ct"] <= start:
+            continue
+        p = cs[i - 1]
+        same = (p["c"] > p["o"] and k["c"] > k["o"]) if side == "buy" else (p["c"] < p["o"] and k["c"] < k["o"])
+        if same:
+            wick = min(p["l"], k["l"]) if side == "buy" else max(p["h"], k["h"])
+            out.append({"i": i, "ct": k["ct"], "pat": "octgd2", "dir": side, "close": k["c"], "touch": wick,
+                        "level": p["c"], "limit": p["c"]})
+    return out
+
+
+def play_limit(mins, j0, side, limit, sl, tp_r, be_r, cancel_at):
+    """A limit order from minute j0: filled when price comes back to it, cancelled if price reaches the TP first or
+    the setup ends (cancel_at) before the fill. Then played like play()."""
+    buy = side == "buy"
+    risk = abs(limit - sl)
+    tp = limit + (tp_r * risk if buy else -tp_r * risk)
+    for j in range(j0, len(mins)):
+        ts, o, h, l, c = mins[j]
+        if cancel_at and ts >= cancel_at:
+            return {"outcome": "cancelled", "exit": ts, "j": j, "tp": tp, "sl": sl, "filled": None}
+        if (l <= limit) if buy else (h >= limit):
+            if (l <= sl) if buy else (h >= sl):      # filled and stopped in the same minute: count the loss
+                return {"outcome": "loss", "exit": ts, "j": j, "tp": tp, "sl": sl, "filled": ts}
+            r = play(mins, j + 1, side, limit, sl, tp_r, be_r)
+            r["filled"] = ts
+            return r
+        if (h >= tp) if buy else (l <= tp):
+            return {"outcome": "cancelled", "exit": ts, "j": j, "tp": tp, "sl": sl, "filled": None}
+    return {"outcome": "open", "exit": None, "j": len(mins), "tp": tp, "sl": sl, "filled": None}
+
+
+def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: float = 3.0, be_r: float = 2.0,
+        mode: str = "limit", end_at: Optional[datetime] = None) -> dict:
+    """Auto-check one setup: the level line, when the watch starts, and optionally the next breakout (end_at)."""
     start = start.astimezone(UTC)
+    if end_at:
+        end_at = end_at.astimezone(UTC)
     d0 = (start - timedelta(days=LOOKBACK_DAYS)).date()
-    mins: list[tuple] = []
-    d = d0
-    h4_end = None
     last_day = (start + timedelta(days=WATCH_DAYS)).date()
     today = datetime.now(UTC).date()
-    # load day by day until an H4 candle closes beyond the POI (or the watch ends)
-    need = [d0 + timedelta(days=k) for k in range((min(last_day, today) - d0).days + 1)]
-    want(pair, need, cache)
+    want(pair, [d0 + timedelta(days=k) for k in range((min(last_day, today) - d0).days + 1)], cache)
+    buy = side == "buy"
+    mins: list[tuple] = []
+    d, h4_end = d0, None
+    # load day by day until an H4 candle closes beyond the level, the next breakout, or the watch's limit
     while d <= min(last_day, today):
         mins += day_minutes(pair, d, cache)
         d += timedelta(days=1)
-        if d > start.date():
-            for k in resample([m for m in mins if m[0] >= start - timedelta(hours=4)], 240):
-                if k["t"] < start - timedelta(hours=0) and k["ct"] <= start:
-                    continue
-                if k["ct"] > (mins[-1][0] + timedelta(minutes=1) if mins else start):
-                    break   # not closed yet
-                if (k["c"] < bottom) if side == "buy" else (k["c"] > top):
-                    h4_end = k["ct"]
-                    break
-            if h4_end:
+        if d <= start.date() or not mins:
+            continue
+        last_t = mins[-1][0] + timedelta(minutes=1)
+        for k in resample([m for m in mins if m[0] >= start - timedelta(hours=4)], 240):
+            if k["ct"] <= start:
+                continue
+            if k["ct"] > last_t:
                 break
+            if (k["c"] < level) if buy else (k["c"] > level):
+                h4_end = k["ct"]
+                break
+        if h4_end or (end_at and last_t >= end_at):
+            break
     if not mins:
         raise RuntimeError("No candles for that date (weekend, holiday, or the data isn't published yet).")
-    end = h4_end or mins[-1][0]
-    # the trades need candles after the POI fails too (an open trade runs to its SL / TP)
-    extra_to = min((end + timedelta(days=WATCH_DAYS)).date(), today)
-    while d <= extra_to and d <= (end + timedelta(days=7)).date():
+    end = min(x for x in (h4_end, end_at, mins[-1][0]) if x)
+    # open trades run on after the setup ends: a week more of candles
+    while d <= min((end + timedelta(days=7)).date(), today):
         mins += day_minutes(pair, d, cache)
         d += timedelta(days=1)
     index = {m[0]: j for j, m in enumerate(mins)}
+    frames = {tf: resample(mins, tf) for tf in {60, 15, 5}}
+    found = {tf: confirmations(frames[tf]) for tf in frames}
 
-    out: dict = {}
-    firsts = []
-    for key, (tf, pat) in KEYS.items():
-        evs = [e for e in confirmations(resample(mins, tf))
-               if e["pat"] == pat and e["dir"] == side and start <= e["ct"] <= end
-               and ((e["touch"] <= top) if side == "buy" else (e["touch"] >= bottom))]
-        if not evs:
-            continue
+    def formations(key: str, until: datetime) -> list[dict]:
+        tf, pat = KEYS[key]
+        if pat == "octgd2":
+            evs = octgd2(frames[tf], side, level, start)
+        else:
+            evs = [e for e in found[tf] if e["pat"] == pat and e["dir"] == side
+                   and ((e["touch"] <= level) if buy else (e["touch"] >= level))]
+        return [e for e in evs if start < e["ct"] <= until]
+
+    def trade(key: str, until: datetime) -> Optional[dict]:
         trades, free_at = [], start
-        for e in evs:
+        for e in formations(key, until):
             if e["ct"] < free_at:
-                continue       # one trade at a time: the previous one is still running
-            if abs(e["close"] - e["touch"]) <= 0:
-                continue
+                continue                     # one trade at a time
             j0 = index.get(e["ct"])
             if j0 is None:
                 j0 = next((j for j, m in enumerate(mins) if m[0] >= e["ct"]), len(mins))
-            r = play(mins, j0, side, e["close"], e["touch"], tp_r, be_r)
-            trades.append({"time": e["ct"].isoformat(), "entry": round(e["close"], 5), "sl": round(e["touch"], 5),
-                           "tp": round(r["tp"], 5), "outcome": r["outcome"],
+            lim = e.get("limit")
+            use_limit = mode == "limit" and lim is not None and ((e["touch"] < lim < e["close"]) if buy
+                                                                  else (e["close"] < lim < e["touch"]))
+            if use_limit:
+                r = play_limit(mins, j0, side, lim, e["touch"], tp_r, be_r, until)
+                entry = lim
+            else:
+                if abs(e["close"] - e["touch"]) <= 0:
+                    continue
+                r = play(mins, j0, side, e["close"], e["touch"], tp_r, be_r)
+                r["filled"] = e["ct"]
+                entry = e["close"]
+            if r["outcome"] == "cancelled":
+                free_at = r["exit"]
+                continue                     # never filled: not a take
+            trades.append({"time": e["ct"].isoformat(), "entry": round(entry, 5), "sl": round(e["touch"], 5),
+                           "tp": round(r["tp"], 5), "outcome": r["outcome"], "limit": use_limit,
+                           "filled": r["filled"].isoformat() if r.get("filled") else None,
                            "exit": r["exit"].isoformat() if r["exit"] else None})
             if r["outcome"] != "loss":
                 break
             free_at = r["exit"]
         if not trades:
-            continue
+            return None
         last = trades[-1]["outcome"]
-        out[key] = {"outcome": "loss" if last == "open" and len(trades) > 1 else last, "takes": len(trades),
-                    "trades": trades}
-        if key != "octgd":
-            firsts.append((evs[0]["ct"], key))
-    first = min(firsts)[1] if firsts else None
+        return {"outcome": "loss" if last == "open" and len(trades) > 1 else last, "takes": len(trades),
+                "trades": trades, "formed": trades[0]["time"]}
+
+    # pass 1: which confirmation formed (and was taken) first; its TP ends the setup for the others
+    first_pass = {k: trade(k, end) for k in KEYS}
+    taken = {k: v for k, v in first_pass.items() if v}
+    first = min(taken, key=lambda k: taken[k]["formed"]) if taken else None
+    tp_end = None
+    if first:
+        win = next((t for t in taken[first]["trades"] if t["outcome"] == "win"), None)
+        if win and win["exit"]:
+            tp_end = datetime.fromisoformat(win["exit"])
+    setup_end = min(x for x in (end, tp_end) if x)
+    out = {k: v for k, v in ((k, trade(k, setup_end)) for k in KEYS) if v}
+    if first and first not in out:
+        first = min(out, key=lambda k: out[k]["formed"]) if out else None
+    reason = ("price reached the first trade's TP" if tp_end and setup_end == tp_end else
+              "an H4 candle closed beyond the level" if h4_end and setup_end == h4_end else
+              "the next breakout" if end_at and setup_end == end_at else "the end of the data")
     return {"results": out, "first": first, "poi_failed_at": h4_end.isoformat() if h4_end else None,
-            "watched_until": end.isoformat(),
+            "setup_end": setup_end.isoformat(), "end_reason": reason, "watched_until": setup_end.isoformat(),
             "note": "Prices are Dukascopy's (bid), not your TradingView feed: a pattern formed by a fraction of a pip "
-                    "can differ. OCTGD 1 and OCTGD 2 aren't filled yet: the script has one OCTGD rule (shown as "
-                    "'Script OCTGD')."}
+                    "can differ. " + ("Entries are limit orders (OC, CISD line, PCL candle's open, the covered "
+                    "candle's open); a limit that never fills isn't a take." if mode == "limit" else
+                    "Entries are at the confirmation candle's close.")}
 
 
 # ── Background download of the whole period (the free data server throttles bursts) ──────────────────────

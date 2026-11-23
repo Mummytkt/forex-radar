@@ -28,9 +28,9 @@ interface Draft {
   results: Record<string, Res>; first: string | null; note: string
 }
 
-const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD 1'], ['octgd2', 'H1 OCTGD 2'], ['cisd', 'H1 CISD'], ['octgd15', 'M15 OCTGD'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
+const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD 1'], ['octgd2', 'H1 OCTGD 2'], ['cisd', 'H1 CISD'], ['octgd15', 'M15 OCTGD'], ['octgd215', 'M15 OCTGD 2'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
 const LABEL = Object.fromEntries(CONFS)
-const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OC1', octgd2: 'OC2', cisd: 'H1 CISD', octgd15: 'M15 OCTGD', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
+const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OC1', octgd2: 'OC2', cisd: 'H1 CISD', octgd15: 'M15 OCTGD', octgd215: 'M15 OCTGD 2', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
 const OUT: [Outcome, string, string][] = [['win', 'Win', 'var(--bullish)'], ['be', 'BE', '#eab308'], ['loss', 'Loss', 'var(--bearish)']]
 const LAST_KEY = 'mbp_qbt_last'   // remembers the date / pair / range of the last saved setup
 
@@ -76,9 +76,9 @@ function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) =
 
 // ---- Auto-check (2026-11-23): she gives the POI box and when the watch starts; the server finds every confirmation
 // with the Entry Confirmations script's rules on real minute candles and plays each trade (api/autobacktest.py)
-interface AutoTrade { time: string; entry: number; sl: number; tp: number; outcome: string; exit: string | null }
+interface AutoTrade { time: string; entry: number; sl: number; tp: number; outcome: string; exit: string | null; limit?: boolean; filled?: string | null }
 interface AutoRes { results: Record<string, { outcome: string; takes: number; trades: AutoTrade[] }>; first: string | null
-  poi_failed_at: string | null; watched_until: string; note: string }
+  poi_failed_at: string | null; watched_until: string; setup_end?: string; end_reason?: string; note: string }
 
 // a wall-clock date + time in an IANA timezone -> ISO 8601 in UTC
 function zonedIso(dateIso: string, hhmm: string, tz: string): string {
@@ -93,9 +93,11 @@ function zonedIso(dateIso: string, hhmm: string, tz: string): string {
 
 function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => void }) {
   const { timezone } = useTimezone()
-  const [top, setTop] = useState('')
-  const [bottom, setBottom] = useState('')
+  const [level, setLevel] = useState('')
   const [time, setTime] = useState('00:00')
+  const [mode, setMode] = useState<'limit' | 'instant'>('limit')
+  const [endDate, setEndDate] = useState('')
+  const [endTime, setEndTime] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [res, setRes] = useState<AutoRes | null>(null)
@@ -108,52 +110,59 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
   const go = async () => {
     setErr('')
     if (!draft.side) return setErr('Pick Buy or Sell first')
-    const t = parseFloat(top), b = parseFloat(bottom)
-    if (!(t > 0) || !(b > 0) || t === b) return setErr('Type the POI top and bottom prices')
+    const lv = parseFloat(level)
+    if (!(lv > 0)) return setErr("Type the level's price (the line you watch)")
     setBusy(true); setRes(null)
     const r = await api('/api/quick-bt/auto', { method: 'POST', body: JSON.stringify({ pair: draft.pair, side: draft.side,
-      top: Math.max(t, b), bottom: Math.min(t, b), start: zonedIso(draft.date, time, timezone || 'UTC') }) })
+      level: lv, mode, start: zonedIso(draft.date, time, timezone || 'UTC'),
+      end_at: endDate && endTime ? zonedIso(endDate, endTime, timezone || 'UTC') : null }) })
     setBusy(false)
     const j = await r.json().catch(() => ({}))
     if (!r.ok) return setErr(j.detail || 'Auto-check failed')
     setRes(j)
     onApply(j)
   }
-  const labelOf = (k: string) => k === 'octgd' ? 'Script OCTGD (H1)' : LABEL[k] || k
+  const labelOf = (k: string) => LABEL[k] || k
   const col = (o: string) => o === 'win' ? 'var(--bullish)' : o === 'loss' ? 'var(--bearish)' : '#eab308'
   return (
     <div style={{ border: '1px dashed var(--accent)', borderRadius: 10, padding: 12, marginBottom: 12, background: 'var(--surface)' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <b style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)' }}><Wand2 size={15} color="var(--accent)" /> Auto-check</b>
-        <input value={top} onChange={e => setTop(e.target.value)} placeholder="POI top" inputMode="decimal" style={{ ...field, width: 110 }} aria-label="POI top price" />
-        <input value={bottom} onChange={e => setBottom(e.target.value)} placeholder="POI bottom" inputMode="decimal" style={{ ...field, width: 110 }} aria-label="POI bottom price" />
+        <input value={level} onChange={e => setLevel(e.target.value)} placeholder="Level price" inputMode="decimal" style={{ ...field, width: 120 }} aria-label="The level line's price" />
         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>watch from</span>
         <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...field, width: 110 }} aria-label="Watch start time" />
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>on {isoToDmy(draft.date)} ({timezone || 'UTC'})</span>
+        <span style={{ display: 'inline-flex', gap: 4 }}>
+          <button type="button" style={{ ...pill(mode === 'limit'), padding: '5px 10px' }} onClick={() => setMode('limit')} title="Limit at the OC / CISD line / PCL open / covered candle's open">Limit</button>
+          <button type="button" style={{ ...pill(mode === 'instant'), padding: '5px 10px' }} onClick={() => setMode('instant')} title="At the confirmation candle's close">Instant</button>
+        </span>
         <button onClick={go} disabled={busy} style={{ ...pill(true), display: 'flex', alignItems: 'center', gap: 6 }}>
           {busy ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} {busy ? 'Checking…' : 'Find and trade every confirmation'}
         </button>
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+        Next H4 breakout (optional, ends the setup):
+        <input value={endDate} onChange={e => setEndDate(e.target.value)} type="date" style={{ ...field, width: 150 }} aria-label="Next breakout date" />
+        <input value={endTime} onChange={e => setEndTime(e.target.value)} type="time" style={{ ...field, width: 110 }} aria-label="Next breakout time" />
+      </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
-        Mark the POI box (after the liquidity is taken) and when to start watching. It finds every confirmation that reaches the box until an H4 candle closes through it, trades each one at TP 3R / BE 2R with your retakes, and ticks the results below for you to check before saving.
+        Type the level you watch (an OC: the first candle&apos;s close; a V: its level) and when you started watching. It finds every confirmation whose wick reaches the line, trades each one at TP 3R / BE 2R with your retakes, and ticks the results below for you to check before saving. The setup ends when an H4 candle closes beyond the line, the first trade reaches its TP, or the next breakout.
         {cov && cov.pct < 100 && <> · Data downloaded so far: <b>{cov.pct}%</b>{cov.next_missing ? ` (up to ${isoToDmy(cov.next_missing)})` : ''}</>}
       </div>
       {err && <div style={{ color: 'var(--bearish)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{err}</div>}
       {res && (
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--text-secondary)' }}>
           <div style={{ marginBottom: 6 }}>
-            {res.poi_failed_at ? <>POI failed (an H4 candle closed through it) at <b>{when(res.poi_failed_at)}</b>.</>
-              : <>Watched until <b>{when(res.watched_until)}</b> (the POI hadn&apos;t failed).</>}
+            Setup ended <b>{when(res.setup_end || res.watched_until)}</b>{res.end_reason ? ` (${res.end_reason})` : ''}.
             {' '}{Object.keys(res.results).length ? 'Results ticked below: check them, then save.' : 'No confirmation reached the POI.'}
           </div>
           {Object.entries(res.results).map(([k, v]) => (
             <div key={k} style={{ marginBottom: 4 }}>
               <b style={{ color: 'var(--text-primary)' }}>{labelOf(k)}</b>{res.first === k ? ' ★' : ''}:{' '}
               {v.trades.map((t, i) => (
-                <span key={i}>{i ? ' → ' : ''}{when(t.time)} entry {t.entry} SL {t.sl} TP {t.tp}{' '}
+                <span key={i}>{i ? ' → ' : ''}{when(t.time)} {t.limit ? `limit ${t.entry}${t.filled ? ` (filled ${when(t.filled)})` : ''}` : `entry ${t.entry}`} SL {t.sl} TP {t.tp}{' '}
                   <b style={{ color: col(t.outcome) }}>{t.outcome.toUpperCase()}</b>{t.exit ? ` (${when(t.exit)})` : ''}</span>
               ))}
-              {k === 'octgd' && <span style={{ color: 'var(--text-muted)' }}> · not ticked: tell Claude how OCTGD 1 and OCTGD 2 differ</span>}
             </div>
           ))}
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>{res.note}</div>

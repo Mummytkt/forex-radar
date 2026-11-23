@@ -28,7 +28,8 @@ router = APIRouter()
 
 # Stored keys: never rename one (labels can change). Order = how they show.
 CONFIRMATIONS = [("pcl", "H1 PCL"), ("eng", "H1 Engulfing"), ("octgd1", "H1 OCTGD 1"), ("octgd2", "H1 OCTGD 2"),
-                 ("cisd", "H1 CISD"), ("octgd15", "M15 OCTGD"), ("cisd15", "M15 CISD"), ("cisd5", "M5 CISD")]
+                 ("cisd", "H1 CISD"), ("octgd15", "M15 OCTGD"), ("octgd215", "M15 OCTGD 2"), ("cisd15", "M15 CISD"),
+                 ("cisd5", "M5 CISD")]
 OUTCOMES = ("win", "be", "loss")
 RANGES = ("inside", "opposite")
 DEFAULT_TP_R = 3.0
@@ -149,9 +150,10 @@ def delete_setup(sid: int, request: Request):
 class AutoBody(BaseModel):
     pair: str = "EURUSD"
     side: str
-    top: float
-    bottom: float
+    level: float               # the level line (an OC: the first candle's close; a V: its level; ...)
     start: str                 # when the watch begins, ISO 8601 with its UTC offset (the owner's timezone)
+    end_at: Optional[str] = None   # the next H4 breakout, if she knows it (ends the setup)
+    mode: str = "limit"        # limit (her live rule) or instant
     tp_r: float = DEFAULT_TP_R
     be_r: float = 2.0
 
@@ -175,15 +177,20 @@ def auto_check(request: Request, body: AutoBody):
     from api.autobacktest import run
     if body.side not in ("buy", "sell"):
         raise HTTPException(400, "side must be buy or sell")
+    def _when(v: str) -> datetime:
+        t = datetime.fromisoformat(v)
+        return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
     try:
-        start = datetime.fromisoformat(body.start)
+        start = _when(body.start)
+        end_at = _when(body.end_at) if body.end_at else None
     except ValueError:
-        raise HTTPException(400, "start must be a date and time")
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=timezone.utc)
-    if body.top == body.bottom:
-        raise HTTPException(400, "The POI needs a top and a bottom price")
+        raise HTTPException(400, "start / end must be a date and time")
+    if not body.level > 0:
+        raise HTTPException(400, "Type the level's price")
+    if body.mode not in ("limit", "instant"):
+        raise HTTPException(400, "mode must be limit or instant")
     try:
-        return run(body.pair.upper(), body.side, body.top, body.bottom, start, _cache_base(request), body.tp_r, body.be_r)
+        return run(body.pair.upper(), body.side, body.level, start, _cache_base(request), body.tp_r, body.be_r,
+                   body.mode, end_at)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
