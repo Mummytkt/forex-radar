@@ -79,7 +79,7 @@ function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) =
 // with the Entry Confirmations script's rules on real minute candles and plays each trade (api/autobacktest.py)
 interface AutoTrade { time: string; entry: number; sl: number; tp: number; outcome: string; exit: string | null; limit?: boolean; filled?: string | null }
 interface AutoRes { results: Record<string, { outcome: string; takes: number; trades: AutoTrade[] }>; first: string | null
-  poi_failed_at: string | null; watched_until: string; setup_end?: string; end_reason?: string; note: string }
+  poi_failed_at: string | null; watched_until: string; setup_end?: string; end_reason?: string; armed_at?: string | null; note: string }
 
 // a wall-clock date + time in an IANA timezone -> ISO 8601 in UTC
 function zonedIso(dateIso: string, hhmm: string, tz: string): string {
@@ -154,13 +154,14 @@ function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { 
         <input value={endTime} onChange={e => setEndTime(e.target.value)} type="time" style={{ ...field, width: 110 }} aria-label="Next breakout time" />
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
-        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Leave the time at 00:00 unless price had already reached your level earlier that day. It finds every confirmation whose wick reaches the line, trades each one at TP 3R / BE 2R with your retakes, and ticks the results below for you to check before saving. The setup ends when an H4 candle closes beyond the line, the first trade reaches its TP, or the next breakout.
+        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Watching starts by itself once a whole H4 candle has moved away from your level, so leave the time at 00:00. It finds every confirmation whose wick reaches the line, trades each one at TP 3R / BE 2R with your retakes, and ticks the results below for you to check before saving. The setup ends when an H4 candle closes beyond the line, the first trade reaches its TP, or the next breakout.
         {cov && cov.pct < 100 && <> · Data downloaded so far: <b>{cov.pct}%</b>{cov.next_missing ? ` (up to ${isoToDmy(cov.next_missing)})` : ''}</>}
       </div>
       {err && <div style={{ color: 'var(--bearish)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{err}</div>}
       {res && (
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--text-secondary)' }}>
           <div style={{ marginBottom: 6 }}>
+            {res.armed_at && <>Watching began <b>{when(res.armed_at)}</b> (the first whole H4 candle away from your level). </>}
             Setup ended <b>{when(res.setup_end || res.watched_until)}</b>{res.end_reason ? ` (${res.end_reason})` : ''}.
             {' '}{Object.keys(res.results).length ? 'Saved with its pictures, marked "to review".' : 'No confirmation reached the level (saved as a setup with none).'}
           </div>

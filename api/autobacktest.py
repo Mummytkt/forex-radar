@@ -260,7 +260,7 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     # a wick within tol of the line counts as reaching it: her FOREX.com feed and this data differ by fractions of a pip
     tol = tol_pips * (0.01 if pair.endswith("JPY") else 0.0001)
     mins: list[tuple] = []
-    d, h4_end = d0, None
+    d, h4_end, armed = d0, None, None
     # load day by day until an H4 candle closes beyond the level, the next breakout, or the watch's limit
     while d <= min(last_day, today):
         mins += day_minutes(pair, d, cache)
@@ -269,17 +269,32 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
             continue
         last_t = mins[-1][0] + timedelta(minutes=1)
         for k in resample([m for m in mins if m[0] >= start - timedelta(hours=4)], 240):
-            if k["ct"] <= start:
+            if k["t"] < start - timedelta(hours=4) or k["ct"] <= start:
                 continue
             if k["ct"] > last_t:
                 break
-            if (k["c"] < level) if buy else (k["c"] > level):
+            if armed is not None and k["ct"] <= armed:
+                continue
+            if armed is None:
+                # the setup starts once price has moved away: a whole H4 candle on the trade side of the level
+                # (a sell: its high below the level), owner 2026-11-23. Touches before that aren't the setup.
+                if (k["l"] > level) if buy else (k["h"] < level):
+                    armed = k["ct"]
+                continue
+            # it ends when an H4 candle closes beyond the level (by more than the tolerance: feeds differ a little)
+            if (k["c"] < level - tol) if buy else (k["c"] > level + tol):
                 h4_end = k["ct"]
                 break
         if h4_end or (end_at and last_t >= end_at):
             break
     if not mins:
         raise RuntimeError("No candles for that date (weekend, holiday, or the data isn't published yet).")
+    if armed is None:
+        return {"_pictures": [], "results": {}, "first": None, "poi_failed_at": None, "setup_end": start.isoformat(),
+                "end_reason": "price never moved away from the level (no whole H4 candle on the trade side of it)",
+                "watched_until": start.isoformat(), "armed_at": None,
+                "note": "Check the level and the side: for a sell the level must be above price, for a buy below."}
+    start = armed
     end = min(x for x in (h4_end, end_at, mins[-1][0]) if x)
     # open trades run on after the setup ends: a week more of candles
     while d <= min((end + timedelta(days=7)).date(), today):
@@ -357,7 +372,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
               "an H4 candle closed beyond the level" if h4_end and setup_end == h4_end else
               "the next breakout" if end_at and setup_end == end_at else "the end of the data")
     pics = trade_pictures(pair, side, level, out, frames, tp_r, be_r) if pictures else []
-    return {"_pictures": pics, "results": out, "first": first, "poi_failed_at": h4_end.isoformat() if h4_end else None,
+    return {"_pictures": pics, "results": out, "first": first, "armed_at": armed.isoformat(),
+            "poi_failed_at": h4_end.isoformat() if h4_end else None,
             "setup_end": setup_end.isoformat(), "end_reason": reason, "watched_until": setup_end.isoformat(),
             "note": "Prices are Dukascopy's (bid), not your TradingView feed: a pattern formed by a fraction of a pip "
                     "can differ. " + ("Entries are limit orders (OC, CISD line, PCL candle's open, the covered "
