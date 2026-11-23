@@ -723,7 +723,7 @@ COMMANDS = [("routine", "Your daily routine, block by block"),
             ("plan", "Style House weekly plan: today's niche"),
             ("posts", "Your saved posts to copy (send any text to save one)"),
             ("quote", "Price a Style House order: /quote tailor-price costs…"),
-            ("flyer", "Cartoon flyer prompt for today's post, or /flyer + your text"),
+            ("flyer", "Flyer prompt for today's post, or /flyer + your text"),
             ("today", "Today's checklist: what to do next"),
             ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
@@ -733,6 +733,13 @@ COMMANDS = [("routine", "Your daily routine, block by block"),
             ("linkedin", "Today's LinkedIn post and tasks"),
             ("stats", "Log LinkedIn numbers: /stats views impressions connections"),
             ("tracker", "Open the Job Hunt page"), ("help", "How this bot works")]
+# While the job hunt is paused the menu shows only what the owner uses now (owner, 2026-11-23); the job
+# commands still work when typed, and come back to the menu by themselves when JOB_HUNT_PAUSED is False.
+JOB_ONLY = {"today", "jobs", "review", "applied", "followups", "add", "ai", "links", "tracker"}
+
+
+def menu_commands() -> list[tuple[str, str]]:
+    return [(c, d) for c, d in COMMANDS if not (JOB_HUNT_PAUSED and c in JOB_ONLY)]
 
 # AI training / evaluation work is mostly sign-up on the platforms' own sites, not posted on job boards.
 # Eligibility for Nigeria as checked 2026-11-19 (origindatapartners.com guide of 2026-11-14); it changes often.
@@ -833,10 +840,15 @@ def links_markup(config):
 
 
 def help_text() -> str:
+    if JOB_HUNT_PAUSED:
+        return ("👋 <b>Your daily assistant</b>\nYour routine, brief, posts, flyers and Style House tools. Send any "
+                "text (not starting with /) to save it as a post.\n\n"
+                + "\n".join(f"/{c} · {d}" for c, d in menu_commands())
+                + "\n\nThe job hunt is paused; its commands still work if you type them.")
     return ("👋 <b>Job Hunt bot</b>\nYour remote job digest arrives here every morning at 08:30 WAT. Each job has "
             "Apply / ✅ Applied / ⏭ Skip buttons, and ✍️ Cover note gives you a ready cover note for that job to copy. "
             "7 days after you tap Applied, I ask how it went.\n\n"
-            + "\n".join(f"/{c} · {d}" for c, d in COMMANDS)
+            + "\n".join(f"/{c} · {d}" for c, d in menu_commands())
             + "\n\nFor a tailored CV and cover letter, paste the job description to Claude.")
 
 
@@ -947,7 +959,7 @@ async def ensure_webhook(config) -> None:
                                   allowed_updates=["message", "callback_query"])
             logger.info("Job Hunt bot webhook set")
         from telegram import BotCommand, MenuButtonCommands
-        await bot.set_my_commands([BotCommand(c, d) for c, d in COMMANDS])
+        await bot.set_my_commands([BotCommand(c, d) for c, d in menu_commands()])
         await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     except TelegramError as e:
         logger.warning("Job Hunt bot webhook could not be set: %s", e)
