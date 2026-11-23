@@ -411,7 +411,27 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                   <span style={{ color: 'var(--text-muted)' }}>Auto-checked setups wait here until you look at their pictures and tick ✓.</span>
                 </div>
               )}
-              {(() => { const list = reviewOnly ? setups.filter(s => s.auto && !s.reviewed) : setups; return (showAll ? list : list.slice(0, 40)) })().map(s => (
+              {reviewOnly && setups.filter(s => s.auto && !s.reviewed).map(s => (
+                <div key={`rv${s.id}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                    <b style={{ fontSize: 15, color: 'var(--text-primary)' }}>{setupTitle(s)}</b>
+                    {CONFS.filter(([k]) => s.results[k]).map(([k]) => {
+                      const r = s.results[k]
+                      const c = OUT.find(o => o[0] === r.outcome)?.[2] ?? 'var(--text-muted)'
+                      return <span key={k} style={{ padding: '2px 7px', borderRadius: 6, fontSize: 12, fontWeight: 700, border: `1px solid ${c}`, color: c }}>
+                        {s.first === k && '★ '}{SHORT[k]} {r.outcome === 'win' ? 'W' : r.outcome === 'be' ? 'BE' : 'L'}{r.takes > 1 ? ` ×${r.takes}` : ''}</span>
+                    })}
+                  </div>
+                  <SetupPictures setup={s} />
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button onClick={async () => { await api(`/api/quick-bt/${s.id}/reviewed`, { method: 'POST' }); load() }}
+                      style={{ ...pill(true, 'var(--bullish)'), display: 'flex', alignItems: 'center', gap: 5 }}><Check size={14} /> Looks right: reviewed</button>
+                    <button onClick={() => edit(s)} style={{ ...pill(false), display: 'flex', alignItems: 'center', gap: 5 }}><Pencil size={13} /> Correct it</button>
+                    <button onClick={() => remove(s)} style={{ ...pill(false), display: 'flex', alignItems: 'center', gap: 5 }}><Trash2 size={13} /> Delete</button>
+                  </div>
+                </div>
+              ))}
+              {!reviewOnly && (showAll ? setups : setups.slice(0, 40)).map(s => (
                 <div key={s.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 9px',
                   borderRadius: 8, border: '1px solid var(--border)', opacity: s.valid ? 1 : 0.55 }}>
                   <b style={{ width: 92, color: 'var(--text-primary)' }}>{fmtDay(s.date)}</b>
@@ -455,7 +475,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
 interface Stat { label: string; setups: number; takes: number; win: number; be: number; loss: number; total: number }
 
 // The pictures of an auto-checked setup: one chart per trade (fetched with the login token, shown full width)
-function Gallery({ setup, onClose, onReviewed }: { setup: Setup; onClose: () => void; onReviewed: () => void }) {
+function SetupPictures({ setup }: { setup: Setup }) {
   const [pics, setPics] = useState<{ id: number; label: string; url: string }[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
@@ -476,24 +496,32 @@ function Gallery({ setup, onClose, onReviewed }: { setup: Setup; onClose: () => 
     })()
     return () => { gone = true; made.forEach(u => URL.revokeObjectURL(u)) }
   }, [setup.id])
+  if (loading) return <Loader2 size={18} className="spin" />
+  if (pics.length === 0) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No pictures for this setup (no confirmation reached the level, or it was logged by hand).</p>
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      {pics.map(p => (
+        <figure key={p.id} style={{ margin: 0 }}>
+          <figcaption style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>{p.label}</figcaption>
+          <img src={p.url} alt={p.label} style={{ width: '100%', borderRadius: 8, display: 'block' }} />
+        </figure>
+      ))}
+    </div>
+  )
+}
+
+const setupTitle = (s: Setup) => `${fmtDay(s.date)} · ${s.side.toUpperCase()} · ${s.range_type === 'inside' ? 'Inside' : 'Opposite'} range${s.level ? ` · level ${s.level}` : ''}`
+
+function Gallery({ setup, onClose, onReviewed }: { setup: Setup; onClose: () => void; onReviewed: () => void }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.85)', overflowY: 'auto', padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ maxWidth: 1000, margin: '0 auto', background: 'var(--card)', borderRadius: 12, padding: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <b style={{ color: 'var(--text-primary)' }}>{fmtDay(setup.date)} · {setup.side.toUpperCase()}{setup.level ? ` · level ${setup.level}` : ''}</b>
+          <b style={{ color: 'var(--text-primary)' }}>{setupTitle(setup)}</b>
           {setup.auto && !setup.reviewed && <button onClick={onReviewed} style={{ ...pill(true, 'var(--bullish)'), display: 'flex', alignItems: 'center', gap: 5 }}><Check size={14} /> Looks right: reviewed</button>}
           <button onClick={onClose} style={{ ...iconBtn, marginLeft: 'auto' }} aria-label="Close"><X size={15} /></button>
         </div>
-        {loading ? <Loader2 size={18} className="spin" /> : pics.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>No pictures.</p> : (
-          <div style={{ display: 'grid', gap: 14 }}>
-            {pics.map(p => (
-              <figure key={p.id} style={{ margin: 0 }}>
-                <figcaption style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>{p.label}</figcaption>
-                <img src={p.url} alt={p.label} style={{ width: '100%', borderRadius: 8, display: 'block' }} />
-              </figure>
-            ))}
-          </div>
-        )}
+        <SetupPictures setup={setup} />
       </div>
     </div>
   )

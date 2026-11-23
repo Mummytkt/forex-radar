@@ -329,12 +329,14 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
             return None
         last = trades[-1]["outcome"]
         return {"outcome": "loss" if last == "open" and len(trades) > 1 else last, "takes": len(trades),
-                "trades": trades, "formed": trades[0]["time"]}
+                "trades": trades, "formed": trades[0]["time"],
+                # the first trade = the one ENTERED first (a limit: when it filled), owner 2026-11-23
+                "entered": trades[0]["filled"] or trades[0]["time"]}
 
-    # pass 1: which confirmation formed (and was taken) first; its TP ends the setup for the others
+    # pass 1: which confirmation's trade was entered first (a limit: filled first); its TP ends the setup for the others
     first_pass = {k: trade(k, end) for k in KEYS}
     taken = {k: v for k, v in first_pass.items() if v}
-    first = min(taken, key=lambda k: taken[k]["formed"]) if taken else None
+    first = min(taken, key=lambda k: (taken[k]["entered"], taken[k]["formed"])) if taken else None
     tp_end = None
     if first:
         win = next((t for t in taken[first]["trades"] if t["outcome"] == "win"), None)
@@ -343,7 +345,7 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     setup_end = min(x for x in (end, tp_end) if x)
     out = {k: v for k, v in ((k, trade(k, setup_end)) for k in KEYS) if v}
     if first and first not in out:
-        first = min(out, key=lambda k: out[k]["formed"]) if out else None
+        first = min(out, key=lambda k: (out[k]["entered"], out[k]["formed"])) if out else None
     reason = ("price reached the first trade's TP" if tp_end and setup_end == tp_end else
               "an H4 candle closed beyond the level" if h4_end and setup_end == h4_end else
               "the next breakout" if end_at and setup_end == end_at else "the end of the data")
