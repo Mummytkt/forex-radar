@@ -258,6 +258,11 @@ async def main(dry_run: bool = False) -> None:
     scheduler.add_job(run_weekly_report, "cron", day_of_week="sun", hour=17, minute=20,
                       kwargs={"db_path": config.db_path, "config": config},
                       id="forward_report", name="Owner's weekly forward-test results", misfire_grace_time=6 * 3600)
+    # Auto-check data (2026-11-23): EURUSD minute candles 2019-12 → today, fetched a few days a minute (the free
+    # source throttles bursts), cached on the volume for Quick Backtest's Auto-check
+    from api.autobacktest import run_prefetch
+    scheduler.add_job(run_prefetch, "interval", minutes=1, kwargs={"config": config}, id="candle_prefetch",
+                      name="EURUSD minute candles download", misfire_grace_time=60, max_instances=1, coalesce=True)
     from alerts.job_checklist import run_checklist_nudge
     scheduler.add_job(
         run_checklist_nudge, "cron", hour=15, minute=2,     # 16:02 WAT, only when steps are left

@@ -1,0 +1,317 @@
+"""
+Auto-check for Quick Backtest (owner request 2026-11-23).
+
+The owner marks the setup by eye (her edge: the liquidity and the POI closest to it). This does the rest:
+  1. loads that period's real candles (Dukascopy free minute data, cached on disk) and builds M5, M15, H1 and H4
+     (H4 on the forex day: New York 17:00, so 22:00 UTC in winter / 21:00 in summer, like TradingView);
+  2. finds the entry confirmations with EXACTLY the Entry Confirmations script's rules (pine/MummyTKT_EntryConfirmations.pine,
+     f_forms), one timeframe at a time;
+  3. keeps the ones whose wick reached the POI after the watch start, until an H4 candle CLOSES beyond the POI
+     (a buy: close below its bottom; a sell: close above its top);
+  4. trades each confirmation the owner's way: entry at the confirmation candle's close, SL at its wick (the
+     script's touch), TP at tp_r R (3), stop to breakeven at be_r R (2), played on 1-minute candles (if the SL and the
+     TP fall in the same minute, the SL counts). A loss is retaken at that confirmation's next formation while the POI
+     holds; the takes stop at the first win or breakeven;
+  5. stars the confirmation that formed first.
+
+The prices are Dukascopy's (bid), not her TradingView feed: a pattern that forms by a fraction of a pip can differ.
+"""
+from __future__ import annotations
+
+import lzma
+import os
+import struct
+import time
+import urllib.request
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+from zoneinfo import ZoneInfo
+
+NY = ZoneInfo("America/New_York")
+UTC = timezone.utc
+URL = "https://datafeed.dukascopy.com/datafeed/{pair}/{y}/{m:02d}/{d:02d}/BID_candles_min_1.bi5"
+_DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # straight to the data server, no system proxy
+WATCH_DAYS = 21      # a setup is followed at most this long after its start
+LOOKBACK_DAYS = 3    # candles before the start, so runs and OCs that began earlier are known
+
+# Quick Backtest keys -> (timeframe minutes, pattern). OCTGD 1 / OCTGD 2 are the owner's own split (not in the script).
+KEYS = {"pcl": (60, "pcl"), "eng": (60, "eng"), "cisd": (60, "cisd"), "octgd15": (15, "octgd"),
+        "cisd15": (15, "cisd"), "cisd5": (5, "cisd"), "octgd": (60, "octgd")}
+OCWIN, CIWIN = 10, 20   # the script's defaults: OCTGD / CISD candles allowed
+
+
+# ── Data ─────────────────────────────────────────────────────────────────────
+def _point(pair: str) -> float:
+    return 1e3 if pair.endswith("JPY") else 1e5
+
+
+def _cache_dir(base: str, pair: str) -> str:
+    d = os.path.join(base, "candle_cache", pair)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def day_minutes(pair: str, day: date, cache: str) -> list[tuple]:
+    """One UTC day of 1-minute candles: [(utc datetime, o, h, l, c)]. Weekends are empty."""
+    if day.weekday() == 5:
+        return []
+    path = os.path.join(_cache_dir(cache, pair), f"{day.isoformat()}.bi5")
+    raw = None
+    if os.path.exists(path):
+        raw = open(path, "rb").read()
+    else:
+        url = URL.format(pair=pair, y=day.year, m=day.month - 1, d=day.day)
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                raw = _DIRECT.open(req, timeout=30).read()
+                break
+            except Exception:
+                time.sleep(1.5 * (attempt + 1))
+        if raw is None:
+            raise RuntimeError(f"The candles for {day.isoformat()} aren't downloaded yet and the free data server is busy. "
+                               "The server is fetching 2020 to today in the background: try again in a while.")
+        if raw or day < datetime.now(UTC).date() - timedelta(days=3):   # don't cache today's half-written file
+            with open(path, "wb") as f:
+                f.write(raw)
+    if not raw:
+        return []
+    data = lzma.decompress(raw)
+    pt = _point(pair)
+    start = datetime(day.year, day.month, day.day, tzinfo=UTC)
+    out = []
+    for i in range(len(data) // 24):
+        t, o, c, lo, h, _v = struct.unpack(">IIIIIf", data[i * 24:(i + 1) * 24])
+        out.append((start + timedelta(seconds=t), o / pt, h / pt, lo / pt, c / pt))
+    return out
+
+
+def _bucket(ts: datetime, tf: int) -> datetime:
+    if tf < 240:
+        m = (ts.hour * 60 + ts.minute) // tf * tf
+        return ts.replace(hour=m // 60, minute=m % 60, second=0, microsecond=0)
+    ny = ts.astimezone(NY)
+    s = ny.replace(hour=17, minute=0, second=0, microsecond=0)
+    if ny < s:
+        s -= timedelta(days=1)
+    k = int((ny - s).total_seconds() // (tf * 60))
+    return (s + timedelta(minutes=k * tf)).astimezone(UTC)
+
+
+def resample(mins: list[tuple], tf: int) -> list[dict]:
+    """Candles of tf minutes: [{t (open, UTC), ct (close time), o, h, l, c}] from 1-minute candles."""
+    out: list[dict] = []
+    for ts, o, h, l, c in mins:
+        b = _bucket(ts, tf)
+        if out and out[-1]["t"] == b:
+            k = out[-1]
+            k["h"] = max(k["h"], h); k["l"] = min(k["l"], l); k["c"] = c
+        else:
+            out.append({"t": b, "ct": b + timedelta(minutes=tf), "o": o, "h": h, "l": l, "c": c})
+    return out
+
+
+# ── The script's confirmations (f_forms), one timeframe ──────────────────────
+def confirmations(cs: list[dict]) -> list[dict]:
+    """Every PCL / Engulfing / OCTGD / CISD the script would flag on these candles, both directions.
+    Each: {i, ct, pat, dir ('buy'/'sell'), close, touch (the wick at the POI = the SL), level}."""
+    ev = []
+    boc = soc = None            # [level, wick, bar]
+    bci = sci = None            # [line, extreme, bar]
+    dn = up = None              # current run: [open, extreme, n]
+    for i, k in enumerate(cs):
+        o, h, l, c = k["o"], k["h"], k["l"], k["c"]
+        cbull, cbear = c > o, c < o
+        p = cs[i - 1] if i else None
+        pbull = bool(p) and p["c"] > p["o"]
+        pbear = bool(p) and p["c"] < p["o"]
+        add = lambda pat, d, touch, lvl: ev.append({"i": i, "ct": k["ct"], "pat": pat, "dir": d, "close": c,
+                                                    "touch": touch, "level": lvl})
+        if p:
+            if pbear and cbull and l < p["l"] and c > p["l"]:
+                add("pcl", "buy", l, p["l"])
+            if pbull and cbear and h > p["h"] and c < p["h"]:
+                add("pcl", "sell", h, p["h"])
+            if pbear and cbull and o <= p["c"] and c > p["o"]:
+                add("eng", "buy", min(l, p["l"]), p["o"])
+            if pbull and cbear and o >= p["c"] and c < p["o"]:
+                add("eng", "sell", max(h, p["h"]), p["o"])
+        # OCTGD: checked before this candle can start a new OC
+        b_oc = s_oc = False
+        if boc:
+            if i - boc[2] > OCWIN:
+                boc = None
+            elif cbull and c > boc[0]:
+                add("octgd", "buy", boc[1], boc[0]); boc = None; b_oc = True
+        if soc:
+            if i - soc[2] > OCWIN:
+                soc = None
+            elif cbear and c < soc[0]:
+                add("octgd", "sell", soc[1], soc[0]); soc = None; s_oc = True
+        if p and pbear and cbear:
+            boc = [p["c"], min(l, p["l"]), i]
+        if p and pbull and cbull:
+            soc = [p["c"], max(h, p["h"]), i]
+        # CISD: checked before this candle can change the run
+        b_ci = s_ci = False
+        if bci:
+            if l < bci[1]:
+                bci[1], bci[2] = l, i
+            if i - bci[2] > CIWIN:
+                bci = None
+            elif cbull and c > bci[0]:
+                add("cisd", "buy", bci[1], bci[0]); bci = None; b_ci = True
+        if sci:
+            if h > sci[1]:
+                sci[1], sci[2] = h, i
+            if i - sci[2] > CIWIN:
+                sci = None
+            elif cbear and c < sci[0]:
+                add("cisd", "sell", sci[1], sci[0]); sci = None; s_ci = True
+        if cbear:
+            dn = [o, l, 1] if not pbear or dn is None else [dn[0], min(dn[1], l), dn[2] + 1]
+            if not b_ci and dn[2] >= 2 and (bci is None or dn[1] <= bci[1]):
+                bci = [dn[0], dn[1], i]
+        if cbull:
+            up = [o, h, 1] if not pbull or up is None else [up[0], max(up[1], h), up[2] + 1]
+            if not s_ci and up[2] >= 2 and (sci is None or up[1] >= sci[1]):
+                sci = [up[0], up[1], i]
+    return ev
+
+
+# ── Trading it ───────────────────────────────────────────────────────────────
+def play(mins: list[tuple], start_i: int, side: str, entry: float, sl: float, tp_r: float, be_r: float) -> dict:
+    """Follow one trade on 1-minute candles from index start_i. Returns outcome, exit time and index."""
+    buy = side == "buy"
+    risk = abs(entry - sl)
+    tp = entry + (tp_r * risk if buy else -tp_r * risk)
+    be = entry + (be_r * risk if buy else -be_r * risk) if be_r and be_r < tp_r else None
+    stop, at_be = sl, False
+    for j in range(start_i, len(mins)):
+        ts, o, h, l, c = mins[j]
+        if (l <= stop) if buy else (h >= stop):
+            return {"outcome": "be" if at_be else "loss", "exit": ts, "j": j, "tp": tp, "sl": sl}
+        if (h >= tp) if buy else (l <= tp):
+            return {"outcome": "win", "exit": ts, "j": j, "tp": tp, "sl": sl}
+        if be is not None and not at_be and ((h >= be) if buy else (l <= be)):
+            stop, at_be = entry, True
+    return {"outcome": "open", "exit": None, "j": len(mins), "tp": tp, "sl": sl}
+
+
+def run(pair: str, side: str, top: float, bottom: float, start: datetime, cache: str,
+        tp_r: float = 3.0, be_r: float = 2.0) -> dict:
+    """Auto-check one setup. start = when the watch begins (aware datetime)."""
+    if top < bottom:
+        top, bottom = bottom, top
+    start = start.astimezone(UTC)
+    d0 = (start - timedelta(days=LOOKBACK_DAYS)).date()
+    mins: list[tuple] = []
+    d = d0
+    h4_end = None
+    last_day = (start + timedelta(days=WATCH_DAYS)).date()
+    today = datetime.now(UTC).date()
+    # load day by day until an H4 candle closes beyond the POI (or the watch ends)
+    while d <= min(last_day, today):
+        mins += day_minutes(pair, d, cache)
+        d += timedelta(days=1)
+        if d > start.date():
+            for k in resample([m for m in mins if m[0] >= start - timedelta(hours=4)], 240):
+                if k["t"] < start - timedelta(hours=0) and k["ct"] <= start:
+                    continue
+                if k["ct"] > (mins[-1][0] + timedelta(minutes=1) if mins else start):
+                    break   # not closed yet
+                if (k["c"] < bottom) if side == "buy" else (k["c"] > top):
+                    h4_end = k["ct"]
+                    break
+            if h4_end:
+                break
+    if not mins:
+        raise RuntimeError("No candles for that date (weekend, holiday, or the data isn't published yet).")
+    end = h4_end or mins[-1][0]
+    # the trades need candles after the POI fails too (an open trade runs to its SL / TP)
+    extra_to = min((end + timedelta(days=WATCH_DAYS)).date(), today)
+    while d <= extra_to and d <= (end + timedelta(days=7)).date():
+        mins += day_minutes(pair, d, cache)
+        d += timedelta(days=1)
+    index = {m[0]: j for j, m in enumerate(mins)}
+
+    out: dict = {}
+    firsts = []
+    for key, (tf, pat) in KEYS.items():
+        evs = [e for e in confirmations(resample(mins, tf))
+               if e["pat"] == pat and e["dir"] == side and start <= e["ct"] <= end
+               and ((e["touch"] <= top) if side == "buy" else (e["touch"] >= bottom))]
+        if not evs:
+            continue
+        trades, free_at = [], start
+        for e in evs:
+            if e["ct"] < free_at:
+                continue       # one trade at a time: the previous one is still running
+            if abs(e["close"] - e["touch"]) <= 0:
+                continue
+            j0 = index.get(e["ct"])
+            if j0 is None:
+                j0 = next((j for j, m in enumerate(mins) if m[0] >= e["ct"]), len(mins))
+            r = play(mins, j0, side, e["close"], e["touch"], tp_r, be_r)
+            trades.append({"time": e["ct"].isoformat(), "entry": round(e["close"], 5), "sl": round(e["touch"], 5),
+                           "tp": round(r["tp"], 5), "outcome": r["outcome"],
+                           "exit": r["exit"].isoformat() if r["exit"] else None})
+            if r["outcome"] != "loss":
+                break
+            free_at = r["exit"]
+        if not trades:
+            continue
+        last = trades[-1]["outcome"]
+        out[key] = {"outcome": "loss" if last == "open" and len(trades) > 1 else last, "takes": len(trades),
+                    "trades": trades}
+        if key != "octgd":
+            firsts.append((evs[0]["ct"], key))
+    first = min(firsts)[1] if firsts else None
+    return {"results": out, "first": first, "poi_failed_at": h4_end.isoformat() if h4_end else None,
+            "watched_until": end.isoformat(),
+            "note": "Prices are Dukascopy's (bid), not your TradingView feed: a pattern formed by a fraction of a pip "
+                    "can differ. OCTGD 1 and OCTGD 2 aren't filled yet: the script has one OCTGD rule (shown as "
+                    "'Script OCTGD')."}
+
+
+# ── Background download of the whole period (the free data server throttles bursts) ──────────────────────
+PREFETCH_FROM = date(2019, 12, 1)
+
+
+def _have(pair: str, day: date, cache: str) -> bool:
+    return day.weekday() == 5 or os.path.exists(os.path.join(_cache_dir(cache, pair), f"{day.isoformat()}.bi5"))
+
+
+def coverage(pair: str, cache: str) -> dict:
+    today = datetime.now(UTC).date()
+    days = [PREFETCH_FROM + timedelta(days=k) for k in range((today - PREFETCH_FROM).days - 2)]
+    have = sum(_have(pair, d, cache) for d in days)
+    missing = next((d for d in days if not _have(pair, d, cache)), None)
+    return {"ready": have, "total": len(days), "pct": round(have / len(days) * 100, 1) if days else 100,
+            "next_missing": missing.isoformat() if missing else None}
+
+
+def prefetch(pair: str, cache: str, budget: int = 6, gap: float = 2.0) -> int:
+    """Download up to `budget` missing days, oldest first, politely. Stops at the first refusal (try again later)."""
+    today = datetime.now(UTC).date()
+    got = 0
+    d = PREFETCH_FROM
+    while d < today - timedelta(days=2) and got < budget:
+        if not _have(pair, d, cache):
+            url = URL.format(pair=pair, y=d.year, m=d.month - 1, d=d.day)
+            try:
+                raw = _DIRECT.open(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=30).read()
+            except Exception:
+                return got           # busy / unreachable: the next run tries again
+            with open(os.path.join(_cache_dir(cache, pair), f"{d.isoformat()}.bi5"), "wb") as f:
+                f.write(raw)
+            got += 1
+            time.sleep(gap)
+        d += timedelta(days=1)
+    return got
+
+
+async def run_prefetch(config) -> None:
+    import asyncio
+    base = os.path.dirname(os.path.abspath(config.db_path)) or "."
+    await asyncio.to_thread(prefetch, "EURUSD", base)

@@ -143,3 +143,47 @@ def delete_setup(sid: int, request: Request):
     with _db(request) as conn:
         conn.execute("DELETE FROM quick_bt WHERE id = ?", (sid,))
     return {"ok": True}
+
+
+# ── Auto-check (2026-11-23): she marks the POI, the server finds and trades every confirmation ──────────────
+class AutoBody(BaseModel):
+    pair: str = "EURUSD"
+    side: str
+    top: float
+    bottom: float
+    start: str                 # when the watch begins, ISO 8601 with its UTC offset (the owner's timezone)
+    tp_r: float = DEFAULT_TP_R
+    be_r: float = 2.0
+
+
+def _cache_base(request: Request) -> str:
+    import os
+    return os.path.dirname(os.path.abspath(request.app.state.config.db_path)) or "."
+
+
+@router.get("/quick-bt/auto/status")
+def auto_status(request: Request, pair: str = "EURUSD"):
+    require_owner(request)
+    from api.autobacktest import coverage
+    return coverage(pair.upper(), _cache_base(request))
+
+
+@router.post("/quick-bt/auto")
+def auto_check(request: Request, body: AutoBody):
+    """Runs in a worker thread (a plain def route), so the price checks keep running meanwhile."""
+    require_owner(request)
+    from api.autobacktest import run
+    if body.side not in ("buy", "sell"):
+        raise HTTPException(400, "side must be buy or sell")
+    try:
+        start = datetime.fromisoformat(body.start)
+    except ValueError:
+        raise HTTPException(400, "start must be a date and time")
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if body.top == body.bottom:
+        raise HTTPException(400, "The POI needs a top and a bottom price")
+    try:
+        return run(body.pair.upper(), body.side, body.top, body.bottom, start, _cache_base(request), body.tp_r, body.be_r)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
