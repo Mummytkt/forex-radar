@@ -70,7 +70,7 @@ def day_minutes(pair: str, day: date, cache: str) -> list[tuple]:
                 time.sleep(1.5 * (attempt + 1))
         if raw is None:
             raise RuntimeError(f"The candles for {day.isoformat()} aren't downloaded yet and the free data server is busy. "
-                               "The server is fetching 2020 to today in the background: try again in a while.")
+                               "I've put this setup's days at the front of the download queue: try again in 10-20 minutes.")
         if raw or day < datetime.now(UTC).date() - timedelta(days=3):   # don't cache today's half-written file
             with open(path, "wb") as f:
                 f.write(raw)
@@ -211,6 +211,8 @@ def run(pair: str, side: str, top: float, bottom: float, start: datetime, cache:
     last_day = (start + timedelta(days=WATCH_DAYS)).date()
     today = datetime.now(UTC).date()
     # load day by day until an H4 candle closes beyond the POI (or the watch ends)
+    need = [d0 + timedelta(days=k) for k in range((min(last_day, today) - d0).days + 1)]
+    want(pair, need, cache)
     while d <= min(last_day, today):
         mins += day_minutes(pair, d, cache)
         d += timedelta(days=1)
@@ -291,23 +293,51 @@ def coverage(pair: str, cache: str) -> dict:
             "next_missing": missing.isoformat() if missing else None}
 
 
-def prefetch(pair: str, cache: str, budget: int = 6, gap: float = 2.0) -> int:
-    """Download up to `budget` missing days, oldest first, politely. Stops at the first refusal (try again later)."""
+def _wanted_path(pair: str, cache: str) -> str:
+    return os.path.join(_cache_dir(cache, pair), "_wanted.txt")
+
+
+def want(pair: str, days: list[date], cache: str) -> None:
+    """Put days an Auto-check needed at the front of the download queue."""
+    p = _wanted_path(pair, cache)
+    have = set(open(p).read().split()) if os.path.exists(p) else set()
+    have |= {d.isoformat() for d in days if not _have(pair, d, cache)}
+    with open(p, "w") as f:
+        f.write(chr(10).join(sorted(have)))
+
+
+def prefetch(pair: str, cache: str, budget: int = 6, gap: float = 6.0, max_refusals: int = 4) -> int:
+    """Download up to `budget` missing days: the ones an Auto-check asked for first, then oldest first. The free
+    server refuses bursts (HTTP 503), so it waits between tries and stops after a few refusals in a row."""
     today = datetime.now(UTC).date()
-    got = 0
+    wp = _wanted_path(pair, cache)
+    wanted = [date.fromisoformat(x) for x in (open(wp).read().split() if os.path.exists(wp) else [])]
+    queue = [d for d in wanted if not _have(pair, d, cache)]
     d = PREFETCH_FROM
-    while d < today - timedelta(days=2) and got < budget:
-        if not _have(pair, d, cache):
-            url = URL.format(pair=pair, y=d.year, m=d.month - 1, d=d.day)
-            try:
-                raw = _DIRECT.open(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=30).read()
-            except Exception:
-                return got           # busy / unreachable: the next run tries again
-            with open(os.path.join(_cache_dir(cache, pair), f"{d.isoformat()}.bi5"), "wb") as f:
-                f.write(raw)
-            got += 1
-            time.sleep(gap)
+    while d < today - timedelta(days=2) and len(queue) < budget * 3:
+        if not _have(pair, d, cache) and d not in queue:
+            queue.append(d)
         d += timedelta(days=1)
+    got = refused = 0
+    for d in queue:
+        if got >= budget or refused >= max_refusals:
+            break
+        url = URL.format(pair=pair, y=d.year, m=d.month - 1, d=d.day)
+        try:
+            raw = _DIRECT.open(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=30).read()
+        except Exception:
+            refused += 1
+            time.sleep(gap)
+            continue
+        refused = 0
+        with open(os.path.join(_cache_dir(cache, pair), f"{d.isoformat()}.bi5"), "wb") as f:
+            f.write(raw)
+        got += 1
+        time.sleep(gap)
+    if wanted:
+        left = [x for x in wanted if not _have(pair, x, cache)]
+        with open(wp, "w") as f:
+            f.write(chr(10).join(x.isoformat() for x in left))
     return got
 
 
