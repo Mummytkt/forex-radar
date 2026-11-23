@@ -198,7 +198,7 @@ def play(mins: list[tuple], start_i: int, side: str, entry: float, sl: float, tp
     return {"outcome": "open", "exit": None, "j": len(mins), "tp": tp, "sl": sl}
 
 
-def octgd2(cs: list[dict], side: str, level: float, start: datetime) -> list[dict]:
+def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float = 0.0) -> list[dict]:
     """OCTGD 2 (owner, 2026-11-23): once price has reached the level (a buy: a wick at or below it), every two
     candles IN A ROW in the trade's direction (a buy: two bullish). Entry = their OC (C1's close = C2's open), as a
     limit; SL = the pair's wick (a buy: the lower low of the two), like OCTGD 1."""
@@ -206,7 +206,7 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime) -> list[dic
     for i, k in enumerate(cs):
         if k["ct"] <= start:
             continue
-        if not touched and ((k["l"] <= level) if side == "buy" else (k["h"] >= level)):
+        if not touched and ((k["l"] <= level + tol) if side == "buy" else (k["h"] >= level - tol)):
             touched = True
             continue                       # the pair forms after the touch
         if not touched or i == 0 or cs[i - 1]["ct"] <= start:
@@ -242,7 +242,7 @@ def play_limit(mins, j0, side, limit, sl, tp_r, be_r, cancel_at):
 
 
 def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: float = 3.0, be_r: float = 2.0,
-        mode: str = "limit", end_at: Optional[datetime] = None) -> dict:
+        mode: str = "limit", end_at: Optional[datetime] = None, tol_pips: float = 1.0) -> dict:
     """Auto-check one setup: the level line, when the watch starts, and optionally the next breakout (end_at)."""
     start = start.astimezone(UTC)
     if end_at:
@@ -252,6 +252,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     today = datetime.now(UTC).date()
     want(pair, [d0 + timedelta(days=k) for k in range((min(last_day, today) - d0).days + 1)], cache)
     buy = side == "buy"
+    # a wick within tol of the line counts as reaching it: her FOREX.com feed and this data differ by fractions of a pip
+    tol = tol_pips * (0.01 if pair.endswith("JPY") else 0.0001)
     mins: list[tuple] = []
     d, h4_end = d0, None
     # load day by day until an H4 candle closes beyond the level, the next breakout, or the watch's limit
@@ -285,10 +287,10 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     def formations(key: str, until: datetime) -> list[dict]:
         tf, pat = KEYS[key]
         if pat == "octgd2":
-            evs = octgd2(frames[tf], side, level, start)
+            evs = octgd2(frames[tf], side, level, start, tol)
         else:
             evs = [e for e in found[tf] if e["pat"] == pat and e["dir"] == side
-                   and ((e["touch"] <= level) if buy else (e["touch"] >= level))]
+                   and ((e["touch"] <= level + tol) if buy else (e["touch"] >= level - tol))]
         return [e for e in evs if start < e["ct"] <= until]
 
     def trade(key: str, until: datetime) -> Optional[dict]:

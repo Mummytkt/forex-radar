@@ -96,6 +96,7 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
   const [level, setLevel] = useState('')
   const [time, setTime] = useState('00:00')
   const [mode, setMode] = useState<'limit' | 'instant'>('limit')
+  const [tol, setTol] = useState('1')
   const [endDate, setEndDate] = useState('')
   const [endTime, setEndTime] = useState('')
   const [busy, setBusy] = useState(false)
@@ -114,7 +115,7 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
     if (!(lv > 0)) return setErr("Type the level's price (the line you watch)")
     setBusy(true); setRes(null)
     const r = await api('/api/quick-bt/auto', { method: 'POST', body: JSON.stringify({ pair: draft.pair, side: draft.side,
-      level: lv, mode, start: zonedIso(draft.date, time, timezone || 'UTC'),
+      level: lv, mode, tol_pips: parseFloat(tol) || 0, start: zonedIso(draft.date, time, timezone || 'UTC'),
       end_at: endDate && endTime ? zonedIso(endDate, endTime, timezone || 'UTC') : null }) })
     setBusy(false)
     const j = await r.json().catch(() => ({}))
@@ -132,6 +133,9 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>watch from</span>
         <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...field, width: 110 }} aria-label="Watch start time" />
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>on {isoToDmy(draft.date)} ({timezone || 'UTC'})</span>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          title="A wick this close to your line counts as reaching it (your chart's prices and this data differ by fractions of a pip)">
+          within <input value={tol} onChange={e => setTol(e.target.value)} inputMode="decimal" style={{ ...field, width: 46, padding: '6px 6px' }} aria-label="Tolerance in pips" /> pip</span>
         <span style={{ display: 'inline-flex', gap: 4 }}>
           <button type="button" style={{ ...pill(mode === 'limit'), padding: '5px 10px' }} onClick={() => setMode('limit')} title="Limit at the OC / CISD line / PCL open / covered candle's open">Limit</button>
           <button type="button" style={{ ...pill(mode === 'instant'), padding: '5px 10px' }} onClick={() => setMode('instant')} title="At the confirmation candle's close">Instant</button>

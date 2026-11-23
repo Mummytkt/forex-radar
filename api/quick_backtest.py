@@ -156,6 +156,7 @@ class AutoBody(BaseModel):
     mode: str = "limit"        # limit (her live rule) or instant
     tp_r: float = DEFAULT_TP_R
     be_r: float = 2.0
+    tol_pips: float = 1.0      # a wick this close to the line counts as reaching it (feeds differ slightly)
 
 
 def _cache_base(request: Request) -> str:
@@ -191,6 +192,6 @@ def auto_check(request: Request, body: AutoBody):
         raise HTTPException(400, "mode must be limit or instant")
     try:
         return run(body.pair.upper(), body.side, body.level, start, _cache_base(request), body.tp_r, body.be_r,
-                   body.mode, end_at)
+                   body.mode, end_at, max(0.0, min(body.tol_pips, 20.0)))
     except RuntimeError as e:
         raise HTTPException(503, str(e))
