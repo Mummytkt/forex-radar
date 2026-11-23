@@ -39,7 +39,8 @@ FOLLOW_DAYS = 7
 # Owner, 2026-11-21: "pause the job, let me put all my focus on business and trading". While True, the scheduled
 # 08:30 digest, the 16:02 checklist nudge and the LinkedIn coach's scheduled posts don't send. Commands (/jobs,
 # /links, /linkedin, /today ...) still work. Set False to resume.
-JOB_HUNT_PAUSED = False   # True 2026-11-21 (business focus); back on 2026-11-22 for customer service & sales
+JOB_HUNT_PAUSED = True    # True 2026-11-21 (business focus); on 2026-11-22; paused again 2026-11-23 (owner: "make
+                          # people come to me"): no job digest / checklist nudge. The LinkedIn coach keeps running.
 MAX_PER_DAY = 25     # 15 until 2026-11-20; raised for her 15-20 applications a day
 UA = {"User-Agent": "Mozilla/5.0 (personal job digest)"}
 
