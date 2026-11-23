@@ -708,6 +708,7 @@ async def handle_update(conn, config, update: dict) -> None:
 # The bot's menu (owner request 2026-11-19: "the menu like on the Bias Pointer bot")
 COMMANDS = [("brief", "Morning Brief: world news, word of the day, what's blowing up"),
             ("style", "Style House AI prompts to copy (pictures + videos)"),
+            ("plan", "Style House weekly plan: today's niche"),
             ("today", "Today's checklist: what to do next"),
             ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
@@ -874,6 +875,9 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
     elif cmd == "/today":
         from alerts.job_checklist import send_checklist
         await send_checklist(conn, token, chat, _send)
+    elif cmd == "/plan":
+        from alerts.style_prompts import plan_text
+        await _send(token, chat, plan_text(datetime.now(WAT).date()))
     elif cmd == "/style":
         from alerts.style_prompts import messages as style_messages
         for m in style_messages():

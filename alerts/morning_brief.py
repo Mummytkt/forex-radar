@@ -293,6 +293,11 @@ def _story(i: dict) -> str:
     return f"• <a href=\"{_e(i['link'])}\">{_e(i['title'])}</a> ({_e(i['source'])}){gist}"
 
 
+def _niche(d: date) -> str:
+    from alerts.style_prompts import today_niche
+    return today_niche(d)[1]
+
+
 def brief_text(world: list[dict], nigeria: list[dict], d: date) -> str:
     w, meaning, example = word_of_day(d)
     since = d - timedelta(days=1)
@@ -307,6 +312,7 @@ def brief_text(world: list[dict], nigeria: list[dict], d: date) -> str:
     lines += [f"• {_e(label)} on X: <a href=\"{_e(x_search_url(q, n, since))}\">last 24h</a> · "
               f"<a href=\"{_e(x_search_url(q, n * 3, week))}\">this week</a>" for label, q, n in X_SEARCHES]
     lines += [f"• <a href=\"{TIKTOK_TRENDS}\">TikTok trends</a> (Creative Center: pick country + 7 days)",
+              "", f"👗 <b>Style House today:</b> {_e(_niche(d))} · /style for prompts · /plan for the week",
               "", f"🎙 <b>Today's drill</b>\n{_e(DRILLS[d.toordinal() % len(DRILLS)])}",
               "", "<i>Study why a post worked (first line, feeling, format), then tell your own true version.</i>"]
     if world or nigeria:

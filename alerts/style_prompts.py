@@ -116,13 +116,45 @@ CHANGES = ["make the dress wine red", "add long puff sleeves", "make the skirt f
            "add a matching mini gele", "make her 3 years old", "change the shoes to gold sandals"]
 
 
+# Weekly niche plan (owner, 2026-11-23): each niche is posted the day BEFORE people need it.
+# Monday wasn't named; "Sunday" was named twice, so the second (family matching) is taken as Monday.
+WEEK_PLAN = [  # Python weekday(): Monday = 0
+    ("Monday", "👨‍👩‍👧 Family matching", "Family - Owambe - Ankara - Teal Mother and Daughter Set", "mother & daughter, father & son, whole-family aso-ebi"),
+    ("Tuesday", "🤵 Men's clothes", "Men - Church - Embroidered - Wine Senator Kaftan", "kaftans, senators, agbada, shirts, smart casual"),
+    ("Wednesday", "💃 Women's clothes", "Women - Everyday - Adire - Indigo Kimono Set", "gowns, two-pieces, skirts and blouses, everyday chic"),
+    ("Thursday", "🧒 Kids' clothes", "Girls - Birthday - Tulle - Pink Princess Gown", "party dresses, mini agbada, school events, birthdays"),
+    ("Friday", "🎉 Owambe inspiration", "Women - Owambe - Lace - Gold Beaded Gown", "for Saturday parties: lace, aso-ebi, gele, stones"),
+    ("Saturday", "⛪ Church & Sunday best", "Women - Church - Crepe - Emerald Peplum Dress", "for Sunday service: elegant, modest, polished"),
+    ("Sunday", "💼 Work/Office inspiration", "Women - Office - Crepe - Navy Blazer Set", "for Monday morning: crepe, linen, chiffon, blazers"),
+]
+
+
+def today_niche(d) -> tuple[str, str, str, str]:
+    return WEEK_PLAN[d.weekday()]
+
+
+def plan_text(d) -> str:
+    lines = ["🗓 <b>Style House weekly plan</b>\nEach niche goes up the day before people need it.\n"]
+    for i, (day, niche, tag, hint) in enumerate(WEEK_PLAN):
+        mark = "👉 " if i == d.weekday() else ""
+        lines.append(f"{mark}<b>{day}</b>: {html.escape(niche, quote=False)}\n<i>{html.escape(hint)}</i>\n"
+                     f"Example file name: <code>{html.escape(tag)}</code>")
+    day, niche, tag, hint = today_niche(d)
+    lines += ["", f"<b>Today ({day}): {html.escape(niche, quote=False)}.</b> 10 styles, one carousel post. /style has your prompts."]
+    return "\n".join(lines)
+
+
 def _box(text: str) -> str:
     return f"<code>{html.escape(text, quote=False)}</code>"
 
 
-def messages() -> list[str]:
+def messages(d=None) -> list[str]:
     """The /style answer, split so each message stays well under Telegram's 4096-character limit."""
-    intro = ("🎨 <b>MummyTKT Style House: AI prompts</b>\nTap a grey box to copy it, paste into Gemini, then "
+    from datetime import datetime, timedelta, timezone
+    d = d or datetime.now(timezone(timedelta(hours=1))).date()
+    day, niche, _, hint = today_niche(d)
+    intro = (f"🎨 <b>MummyTKT Style House: AI prompts</b>\n👉 Today ({day}): <b>{html.escape(niche, quote=False)}</b> ({html.escape(hint)}). "
+             "/plan shows the week.\n\nTap a grey box to copy it, paste into Gemini, then "
              "replace the [WORD IN BRACKETS].\n\nPictures: Gemini (or Whisk). Videos: Flow / Veo, Kling or "
              "TikTok AI Alive.")
     first = [intro] + [f"\n<b>{t}</b>\n<i>{html.escape(h)}</i>\n{_box(p)}" for t, h, p in PROMPTS[:3]]

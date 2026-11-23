@@ -7,7 +7,9 @@ One post a day, Monday to Friday, plus tasks, from 23 Nov to 18 Dec 2026:
   - Sunday 18:10 WAT: the weekly review (what was done, her logged LinkedIn numbers vs last week).
 /linkedin shows today's messages any time; /stats views impressions connections logs the week's numbers.
 The posts are the Customer Service & Sales Kit doc's (CS_KIT in job_digest.py): keep the two in sync.
-Since 2026-11-22 the theme is customer service and sales (was QA/design).
+Since 2026-11-23 the posts position her as an expert across QA, design, support and sales, never as a job
+seeker (owner: "screaming I am looking for a job is just another noise"); the morning message also links to
+LinkedIn's top posts per pillar so she can write her own versions.
 Facts only: every claim is from her CV / portfolio. Bias Pointer's trading rules never appear.
 """
 from __future__ import annotations
@@ -22,9 +24,31 @@ logger = logging.getLogger(__name__)
 WAT = timezone(timedelta(hours=1))
 PORTFOLIO = "https://taiwo-damilola-mayowa.vercel.app"
 CV_URL = f"{PORTFOLIO}/Taiwo-Damilola-Mayowa-CV-Support-Sales.pdf"
-FIRST_COMMENT = f"Open to remote customer service, customer success and sales roles. My CV: {CV_URL}"
-CONNECT_NOTE = ("Hi [Name], I work in customer support and sales for tech products and I'm growing my network with "
-                "people in CX and sales. I'd love to connect and follow your work.")
+# Owner, 2026-11-23: no "I'm looking for a job" anywhere. Position as an expert; the bio does the rest.
+FIRST_COMMENT = "One more thing that didn't fit in the post: [one extra tip or example]. What would you add?"
+CONNECT_NOTE = ("Hi [Name], your [post/comment] on [topic] stayed with me, especially [one point]. I work across QA, product "
+                "design and customer support, so I'd like to keep learning from your posts.")
+# One-tap LinkedIn searches for the most relevant (top) posts of the last day / week, per pillar.
+PILLARS = [("🧪 QA & testing", '"software testing" OR "quality assurance" OR QA'),
+           ("🎨 Design & UX", '"product design" OR "UX design" OR "UI design"'),
+           ("🤝 Support & CX", '"customer support" OR "customer experience" OR "customer success"'),
+           ("💼 Sales", '"sales tips" OR "B2B sales" OR SDR')]
+
+
+def li_search(query: str, period: str) -> str:
+    from urllib.parse import quote
+    return (f"https://www.linkedin.com/search/results/content/?keywords={quote(query)}"
+            f"&datePosted=%22{period}%22&sortBy=%22relevance%22")
+
+
+def trending_lines() -> list[str]:
+    lines = ["🔥 <b>What's working on LinkedIn</b> (top posts, tap to open)"]
+    lines += [f"• {label}: <a href=\"{_e(li_search(q, 'past-24h'))}\">last 24h</a> · "
+              f"<a href=\"{_e(li_search(q, 'past-week'))}\">this week</a>" for label, q in PILLARS]
+    lines += ["<i>Pick one that has lots of comments. Note its first line, its shape (list, story, hot take) and "
+              "the question it ends on. Then write your own version from your QA, design or support work. Never "
+              "copy the words.</i>"]
+    return lines
 SLOTS = ("morning", "afternoon", "evening")
 
 
@@ -43,22 +67,23 @@ def _post(title, image, text, prep=""):
 # from it until it has. Examples in quotes are labelled as examples, never as things a customer said.
 POSTS: dict[str, dict] = {
     # ---- Week 1 ----
-    "2026-11-23": _post("New chapter: customer service and sales", "None, text only (your profile photo does the work)", """
-New chapter, and I'm saying it out loud.
+    "2026-11-23": _post("The bug report that gets fixed today", "None, text only", """
+A bug report that says "the app is broken" gets ignored.
 
-I'm looking for a remote role in customer service, customer success or sales.
+A bug report that gets fixed the same day has four things:
 
-I spent over two years at Belrald, an education software company. My title said frontend, then QA. But a real part of my work was people: students who couldn't get in, schools that needed a walkthrough, complaints that had to be chased until they were actually fixed.
+1. Steps: exactly what you tapped, in order.
+2. Expected: what should have happened.
+3. Actual: what happened instead.
+4. Proof: a screenshot or a 10-second screen recording.
 
-Later I brought six testers onto a platform I built, and looked after every issue they raised.
+Developers aren't ignoring your bug. They just can't see what you saw.
 
-That's the part of the work I enjoy most. So that's where I'm going.
+Write it so they can, and it moves to the top of the pile.
 
-I work in English, Yoruba and Pidgin, remotely from Nigeria.
+What's the vaguest bug report you've ever received?
 
-If you hire for support or sales, or know someone who does, I'd love to connect.
-
-#OpenToWork #CustomerService #CustomerSuccess"""),
+#QA #SoftwareTesting"""),
     "2026-11-24": _post("\"Sorry for the inconvenience\"", "None, text only", """
 "Sorry for the inconvenience."
 
@@ -249,19 +274,24 @@ A good no has three parts:
 People can accept a no. What they don't accept is being left to guess.
 
 #CustomerService #CustomerExperience"""),
-    "2026-12-11": _post("Why I'm moving from QA to customer roles", "None, text only", """
-Why I'm moving from testing software to customer service and sales:
+    "2026-12-11": _post("Design feedback that starts fixes", "None, text only", """
+"I don't like it" is the least useful design feedback there is.
 
-When I tested software, the best moment wasn't finding a bug. It was telling a user "that's fixed now" and hearing them relieved.
+"When I land here, I'm not sure what to do first" is one of the most useful.
 
-When I onboarded testers onto my own platform, the part I looked forward to was the conversations, not the code.
+Feedback about taste starts arguments. Feedback about what a person is trying to do starts fixes.
 
-I still think like a tester: careful, curious, I don't let things drop.
-I just want to point that at people instead of screens.
+Three questions I ask about any screen:
 
-If your team needs someone like that in support, success or sales, let's talk.
+What is the one thing someone came here to do?
+Can they find it in three seconds?
+What happens if they tap the wrong thing?
 
-#OpenToWork #CustomerSuccess #Sales"""),
+If a screen answers those, the colours are the easy part.
+
+What's the best design feedback you've ever been given?
+
+#ProductDesign #UX"""),
     # ---- Week 4 ----
     "2026-12-14": _post("Remote since 2022", "None, text only", """
 I've worked remotely since 2022.
@@ -314,20 +344,18 @@ A simple question helps: "Too expensive compared to what?"
 Then listen.
 
 #Sales #SalesTips"""),
-    "2026-12-18": _post("A month of posting about customers", "None, text only", """
-I've posted every weekday for a month about customer service and sales.
+    "2026-12-18": _post("One thread through testing, design and support", "None, text only", """
+I've posted every weekday for a month about customers, testing and design.
 
 What surprised me most: [one thing you learnt or noticed this month].
 
 The post that got the most replies was [which one], I think because [your guess].
 
-I'm still looking for a remote role in customer service, customer success or sales, in any industry. I work in English, Yoruba and Pidgin.
+The thread through all of it: whether you're testing an app, designing a screen or answering a customer, the job is the same. Make sure what reaches people actually works for them.
 
-If you're hiring, or know someone who is, my messages are open.
+Thank you for reading and replying. What should I write about next month?
 
-Thank you for reading along.
-
-#OpenToWork #CustomerService #Sales"""),
+#CustomerExperience #QA #ProductDesign"""),
 }
 LAST_DAY = max(POSTS)
 
@@ -369,14 +397,20 @@ def _buttons(day: str, slot: str):
 def morning_text(d: date) -> Optional[str]:
     p = POSTS.get(d.isoformat())
     if not p:
-        return None
-    return (f"☀️ <b>LinkedIn · {d.strftime('%a %d %b')} · today's post</b>\n<b>{_e(p['title'])}</b>\n\n"
+        if d.weekday() > 4:
+            return None
+        return (f"☀️ <b>LinkedIn · {d.strftime('%a %d %b')}</b>\nNo ready post today: write your own version of one "
+                f"that's working.\n\n" + "\n".join(trending_lines()))
+    return (f"☀️ <b>LinkedIn · {d.strftime('%a %d %b')} · today's post</b>\n<b>{_e(p['title'])}</b>\n"
+            f"<i>Or post your own version of a top post instead (links at the bottom).</i>\n\n"
             f"1. Post at <b>9am</b>. Tap the box below to copy it."
             + ("\n2. Fill in the [brackets] first." if "[" in p["text"] else "")
             + f"\n{'3' if '[' in p['text'] else '2'}. Image: {_e(p['image'])}"
-            f"\n{'4' if '[' in p['text'] else '3'}. Straight after posting, add the first comment (tap to copy):\n"
+            f"\n{'4' if '[' in p['text'] else '3'}. Straight after posting, add a first comment that gives a bit "
+            f"more value (tap to copy, fill the [brackets]):\n"
             f"<code>{_e(FIRST_COMMENT)}</code>\n"
-            f"Stay for the first hour and reply to every comment.\n\n<pre>{_e(p['text'])}</pre>")
+            f"Stay for the first hour and reply to every comment.\n\n<pre>{_e(p['text'])}</pre>\n\n"
+            + "\n".join(trending_lines()))
 
 
 def afternoon_text(d: date) -> Optional[str]:
@@ -385,9 +419,11 @@ def afternoon_text(d: date) -> Optional[str]:
     p = POSTS.get(d.isoformat())
     lines = [f"🤝 <b>LinkedIn · afternoon tasks · {d.strftime('%a %d %b')}</b>",
              "",
-             "☐ <b>5 comments</b> on posts by support leads, customer success or sales people, or recruiters. Two sentences or more: agree and add "
-             "something from your own work, or ask a real question.",
-             "☐ <b>5 connection requests</b> with a note (tap to copy, change [Name]):",
+             "☐ <b>5 smart comments</b> on top posts in QA, design, support or sales (use the morning links). Be "
+             "early: comment within the post's first hours. 2–4 sentences: add a real example from your work, a "
+             "different angle, or a sharp question. Never just \"Great post\".",
+             "☐ <b>5 connection requests</b> to people who left good comments on those posts (they're active), "
+             "or who wrote them. Send with a note (tap to copy, fill the [brackets]):",
              f"<code>{_e(CONNECT_NOTE)}</code>"]
     if p and p.get("prep"):
         lines += ["", f"☐ <b>Prep:</b> {_e(p['prep'])}"]
