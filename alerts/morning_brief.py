@@ -336,13 +336,15 @@ def explain_prompt(stories: list[dict]) -> str:
             "- One line I could say in a conversation\n\n" + items)
 
 
-def evening_text(d: date) -> str:
+def evening_text(d: date, saved_posts: int = 0) -> str:
     w = word_of_day(d)[0]
     return ("🌙 <b>Evening check</b>\n\n"
             "1. Did you post today? One honest piece is enough.\n"
             f"2. Did you use <b>{_e(w)}</b> once, in speech or writing?\n"
-            "3. Save one idea you saw today (screenshot or note) for tomorrow's post.\n\n"
-            "Reply to anyone who commented. /brief brings back this morning's brief.")
+            "3. Save one idea you saw today: send it to this bot as a message and it waits in /posts.\n\n"
+            "Reply to anyone who commented. /brief brings back this morning's brief."
+            + (f"\n\n📝 You have <b>{saved_posts}</b> saved post{'s' if saved_posts != 1 else ''} waiting: /posts"
+               if saved_posts else ""))
 
 
 async def build_brief(now: Optional[datetime] = None) -> str:
@@ -371,10 +373,12 @@ async def run_morning_brief(db_path: str, config, evening: bool = False) -> bool
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
         chat = _owner(conn)
+        from alerts.post_drafts import count_waiting
+        saved = count_waiting(conn)
     finally:
         conn.close()
     if not chat:
         return False
     if evening:
-        return await _send(token, chat, evening_text(datetime.now(WAT).date()))
+        return await _send(token, chat, evening_text(datetime.now(WAT).date(), saved))
     return await send_brief(token, chat, _send)

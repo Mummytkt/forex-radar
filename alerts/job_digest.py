@@ -641,6 +641,9 @@ async def handle_update(conn, config, update: dict) -> None:
         if owner and chat == owner and data.startswith("ck:"):
             from alerts.job_checklist import handle_callback as ck_callback
             reply = await ck_callback(conn, bot, cq, data)
+        elif owner and chat == owner and data.startswith("pd:"):
+            from alerts.post_drafts import handle_callback as pd_callback
+            reply = await pd_callback(conn, bot, cq, data)
         elif owner and chat == owner and data.startswith("li:"):
             from alerts.linkedin_coach import handle_callback
             reply = await handle_callback(conn, data)
@@ -701,6 +704,13 @@ async def handle_update(conn, config, update: dict) -> None:
         await _send(token, chat, "This is a private bot.")
         return
     text = (msg.get("text") or "").strip()
+    if text and not text.startswith("/"):   # any plain message is a post to save for later (owner, 2026-11-23)
+        from alerts.post_drafts import save, buttons, count_waiting
+        pid = save(conn, text)
+        n = count_waiting(conn)
+        await _send(token, chat, f"💾 Saved. You have <b>{n}</b> post{'s' if n != 1 else ''} waiting: /posts shows "
+                                 "them all.", buttons(pid))
+        return
     cmd = text.split()[0].split("@")[0].lower() if text else ""
     await handle_command(conn, config, chat, cmd, text[len(text.split()[0]):].strip() if text else "")
 
@@ -709,6 +719,7 @@ async def handle_update(conn, config, update: dict) -> None:
 COMMANDS = [("brief", "Morning Brief: world news, word of the day, what's blowing up"),
             ("style", "Style House AI prompts to copy (pictures + videos)"),
             ("plan", "Style House weekly plan: today's niche"),
+            ("posts", "Your saved posts to copy (send any text to save one)"),
             ("today", "Today's checklist: what to do next"),
             ("jobs", "Check for new jobs now"), ("review", "Jobs waiting for you"),
             ("applied", "Your applications in progress"), ("followups", "Follow-ups due now"),
@@ -875,6 +886,9 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
     elif cmd == "/today":
         from alerts.job_checklist import send_checklist
         await send_checklist(conn, token, chat, _send)
+    elif cmd == "/posts":
+        from alerts.post_drafts import send_list
+        await send_list(conn, token, chat, _send)
     elif cmd == "/plan":
         from alerts.style_prompts import plan_text
         await _send(token, chat, plan_text(datetime.now(WAT).date()))
