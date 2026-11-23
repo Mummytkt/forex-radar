@@ -130,7 +130,7 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <b style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)' }}><Wand2 size={15} color="var(--accent)" /> Auto-check</b>
         <input value={level} onChange={e => setLevel(e.target.value)} placeholder="Level price" inputMode="decimal" style={{ ...field, width: 120 }} aria-label="The level line's price" />
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>watch from</span>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title="Leave 00:00 unless price already reached your level earlier that day, before the breakout">watch from (optional)</span>
         <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...field, width: 110 }} aria-label="Watch start time" />
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>on {isoToDmy(draft.date)} ({timezone || 'UTC'})</span>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -150,7 +150,7 @@ function AutoCheck({ draft, onApply }: { draft: Draft; onApply: (r: AutoRes) => 
         <input value={endTime} onChange={e => setEndTime(e.target.value)} type="time" style={{ ...field, width: 110 }} aria-label="Next breakout time" />
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
-        Type the level you watch (an OC: the first candle&apos;s close; a V: its level) and when you started watching. It finds every confirmation whose wick reaches the line, trades each one at TP 3R / BE 2R with your retakes, and ticks the results below for you to check before saving. The setup ends when an H4 candle closes beyond the line, the first trade reaches its TP, or the next breakout.
+        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Leave the time at 00:00 unless price had already reached your level earlier that day. It finds every confirmation whose wick reaches the line, trades each one at TP 3R / BE 2R with your retakes, and ticks the results below for you to check before saving. The setup ends when an H4 candle closes beyond the line, the first trade reaches its TP, or the next breakout.
         {cov && cov.pct < 100 && <> · Data downloaded so far: <b>{cov.pct}%</b>{cov.next_missing ? ` (up to ${isoToDmy(cov.next_missing)})` : ''}</>}
       </div>
       {err && <div style={{ color: 'var(--bearish)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{err}</div>}
