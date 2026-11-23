@@ -447,7 +447,7 @@ def morning_text(d: date) -> Optional[str]:
                 f"that's working.\n\n" + "\n".join(trending_lines()))
     return (f"☀️ <b>LinkedIn · {d.strftime('%a %d %b')} · today's post</b>\n<b>{_e(p['title'])}</b>\n"
             f"<i>Or post your own version of a top post instead (links at the bottom).</i>\n\n"
-            f"1. Post at <b>9am</b>. Tap the box below to copy it."
+            f"1. Post it in your 07:00 posting block. Tap the box below to copy it."
             + ("\n2. Fill in the [brackets] first." if "[" in p["text"] else "")
             + f"\n{'3' if '[' in p['text'] else '2'}. Image: {_e(p['image'])}"
             f"\n{'4' if '[' in p['text'] else '3'}. Straight after posting, add a first comment that gives a bit "

@@ -229,7 +229,8 @@ async def main(dry_run: bool = False) -> None:
     # LinkedIn coach on the same bot (owner request 2026-11-20): post 08:00, tasks 13:05, evening 19:00 WAT,
     # review Sunday 18:10 WAT. Server times are UTC; 12:05 avoids the 12:00 H4 close.
     from alerts.linkedin_coach import run_linkedin_slot, run_linkedin_review
-    for slot, hh, mm in (("morning", 7, 0), ("afternoon", 12, 5), ("evening", 18, 0)):
+    # Moved 2026-11-23 to fit the owner's daily routine: post 07:00, comment/connect 12:00, evening 19:00 WAT
+    for slot, hh, mm in (("morning", 6, 0), ("afternoon", 11, 1), ("evening", 18, 0)):
         scheduler.add_job(
             run_linkedin_slot, "cron", hour=hh, minute=mm,
             kwargs={"db_path": config.db_path, "config": config, "slot": slot},
@@ -238,11 +239,19 @@ async def main(dry_run: bool = False) -> None:
     # Morning Brief (owner request 2026-11-22): world/Nigeria news, word of the day, viral-post searches.
     # 06:10 UTC = 07:10 WAT, evening check 18:30 UTC = 19:30 WAT. Not paused with the job hunt.
     from alerts.morning_brief import run_morning_brief
-    for bid, hh, mm, ev in (("morning_brief", 6, 10, False), ("evening_check", 18, 30, True)):
+    for bid, hh, mm, ev in (("morning_brief", 5, 0, False), ("evening_check", 18, 30, True)):   # brief 06:00 WAT
         scheduler.add_job(
             run_morning_brief, "cron", hour=hh, minute=mm,
             kwargs={"db_path": config.db_path, "config": config, "evening": ev},
             id=bid, name=f"Owner's {bid.replace('_', ' ')}", misfire_grace_time=3 * 3600,
+        )
+    # The owner's daily routine (2026-11-23): one nudge per block, see alerts/routine.py
+    from alerts.routine import run_routine, SLOTS as ROUTINE_SLOTS
+    for slot, hh, mm, _ in ROUTINE_SLOTS:
+        scheduler.add_job(
+            run_routine, "cron", hour=hh, minute=mm,
+            kwargs={"db_path": config.db_path, "config": config, "slot": slot},
+            id=f"routine_{slot}", name=f"Owner's routine ({slot})", misfire_grace_time=3600,
         )
     from alerts.job_checklist import run_checklist_nudge
     scheduler.add_job(

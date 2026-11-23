@@ -717,7 +717,8 @@ async def handle_update(conn, config, update: dict) -> None:
 
 
 # The bot's menu (owner request 2026-11-19: "the menu like on the Bias Pointer bot")
-COMMANDS = [("brief", "Morning Brief: world news, word of the day, what's blowing up"),
+COMMANDS = [("routine", "Your daily routine, block by block"),
+            ("brief", "Morning Brief: world news, word of the day, what's blowing up"),
             ("style", "Style House AI prompts to copy (pictures + videos)"),
             ("plan", "Style House weekly plan: today's niche"),
             ("posts", "Your saved posts to copy (send any text to save one)"),
@@ -906,6 +907,9 @@ async def handle_command(conn, config, chat: str, cmd: str, arg: str = "") -> No
         from alerts.morning_brief import send_brief
         await _send(token, chat, "☀️ Gathering today's brief…")
         await send_brief(token, chat, _send)
+    elif cmd == "/routine":
+        from alerts.routine import routine_text
+        await _send(token, chat, routine_text())
     elif cmd == "/flyer":
         from alerts.linkedin_coach import flyer_message, POSTS, wat_today
         post = arg or (POSTS.get(wat_today().isoformat()) or {}).get("text", "")
