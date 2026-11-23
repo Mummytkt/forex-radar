@@ -87,136 +87,158 @@ What's the vaguest bug report you've ever received?
     "2026-11-24": _post("\"Sorry for the inconvenience\"", "None, text only", """
 "Sorry for the inconvenience."
 
-Most customers have read that line so many times it means nothing.
+Abeg, how many times have you read that line this year? 😅 By now it doesn't even land. It's just wallpaper.
 
-When someone writes in upset, they want to know three things:
+When someone writes in upset, they want three answers:
 Did you understand my problem?
 What happens now?
 When will I hear from you again?
 
-The replies that calm people down aren't the most polite ones. They're the most specific ones.
+The replies that calm people down aren't the sweetest ones. They're the clearest ones.
 
 Something like: "I can see your result isn't showing. I've passed it to the team and I'll update you by 3pm."
 
-Then you update them by 3pm. Even if it isn't fixed yet.
+Then (and this is the part people skip) you actually update them by 3pm. Even if it isn't fixed yet.
 
-What's the worst support reply you've ever received?
+Be honest: what's the worst support reply you've ever received? Let's laugh about it in the comments 👇
 
 #CustomerService #CustomerExperience"""),
     "2026-11-25": _post("Testing trained me for support", "None, text only", """
-I spent a year as a software tester before I noticed I was training for customer support.
+Funny thing nobody told me: a year of testing software was secretly training me for customer support. 😄
 
-A tester's job: reproduce the problem, describe it so someone else can see it, and follow it until it's fixed.
+Hear me out.
 
-A support agent does the same thing. With a frustrated person on the other end.
+A tester's job: reproduce the problem, describe it so someone else can see it, and chase it until it's fixed.
 
-So when a customer says "it's not working", I start with a tester's three questions:
+Support? Same job. Just with a frustrated human on the other side of the screen.
+
+So when someone says "it's not working", I don't panic. I bring out my tester's three questions:
 1. What were you trying to do?
 2. What did you expect to happen?
 3. What happened instead?
 
-Most of the time, those three answers make the problem clear. And the customer feels heard, because you asked instead of guessing.
+Most of the time, those three answers make the problem clear. And the person feels heard, because you asked instead of guessing.
 
-#CustomerSupport #CustomerService"""),
+Which of the three do people forget to tell you the most?
+
+#CustomerSupport #QA"""),
     "2026-11-26": _post("One problem, three languages", "None, text only", """
-I can walk someone through a password reset in English, Yoruba or Pidgin.
+English, Yoruba or Pidgin: pick your fighter. 😎
 
-It lands differently in each.
+I can walk you through a password reset in all three, and trust me, it lands differently in each.
 
-A lot of us switch languages in the middle of a sentence. When the person helping you switches with you, you relax, and you explain the real problem instead of the polite version.
+A lot of us switch languages in the middle of a sentence. When the person helping you switches with you, something relaxes. You stop giving the polite version and start telling the real problem.
 
-If your customers are in Nigeria or West Africa, support that speaks like them isn't a nice extra. It's how you hear what's actually going wrong.
+A message like "Ehn, the thing just dey show me error since morning" tells you more than "I'm experiencing an issue" ever will.
 
-Do you switch languages when you talk to customers?
+If your customers are in Nigeria or West Africa, support that sounds like them isn't a nice extra. It's how you hear what's actually going wrong.
+
+Do you switch languages with customers? And which one comes out when you're vexed? 😂
 
 #CustomerService #Nigeria #CustomerExperience"""),
     "2026-11-27": _post("Onboarding new users: what I'd tell anyone", "None, text only", """
-I once onboarded six testers onto a product I built, one by one.
+I once onboarded six testers onto a product I built, one by one. Six people, six different ideas of what "simple" means. 😅
 
-If you're onboarding new users, here's what I'd tell you:
+Here's what I'd tell anyone onboarding new users:
 
-1. Nobody reads a long welcome message. Short beats complete.
+1. Nobody reads your long welcome message. Nobody. Short beats complete.
 2. The first problem shows up in the first ten minutes. Be around then.
-3. "It doesn't work" often means "I couldn't find where to tap". Ask before you assume a bug.
-4. When someone takes time to report a problem, thank them, and tell them when it's fixed.
+3. "It doesn't work" often means "I couldn't find where to tap". Ask before you shout "bug!"
+4. When someone takes time to report a problem, thank them. Then tell them when it's fixed. Close the loop.
 
 Onboarding isn't a document. It's the first few conversations.
 
-What made a product easy for you to start using?
+What's one app that made starting so easy you didn't even notice? Drop it 👇
 
 #CustomerSuccess #Onboarding"""),
     # ---- Week 2 ----
     "2026-11-30": _post("Anthropology and customer service", "None, text only", """
-My degree is in Anthropology, from the University of Ibadan.
+People hear "anthropology" and "customer service" in one sentence and give me side-eye. 👀
 
-People ask what that has to do with customer service. More than you'd think.
+Hold on, let me explain.
 
-Anthropology trains you to watch what people do, not only what they say.
+My degree is in Anthropology, from the University of Ibadan, and anthropology trains you to watch what people do, not only what they say.
 
-A customer writes: "Your app is too slow."
+So when a customer writes: "Your app is too slow."
+
 That might mean their network is weak and the page keeps timing out.
 It might mean they couldn't find the button and gave up.
-It might mean something else happened today and this was the last straw.
+It might mean today has been a whole day, and this was the last straw. 😩
 
 Same sentence. Three different fixes.
 
 Good support listens for the problem behind the first sentence.
 
+What's a complaint you've heard that turned out to mean something else entirely?
+
 #CustomerExperience #CustomerService"""),
     "2026-12-01": _post("Sales isn't pushing", "None, text only", """
-I used to think sales meant pushing.
+Confession: I used to think sales meant pushing. Like the hawker who won't let you pass the bus stop without buying gala. 😂
 
 Then I started showing our product to schools at Belrald.
 
-Walking someone through every feature didn't help them decide anything. What helped was asking first: "What's taking up your staff's time right now?"
+Walking someone through every single feature? It didn't help them decide anything.
+
+What actually helped was asking first: "What's taking up your staff's time right now?"
 
 Then showing only the part that fixed that.
 
-Good selling is helping someone make a decision they'll still be happy with in six months.
+Good selling is helping someone make a decision they'll still be happy with in six months. And if they won't be? Better to tell them.
 
-If they won't be, it's better to say so.
+What's the best "I wasn't even planning to buy" experience you've had?
 
 #Sales #CustomerSuccess"""),
     "2026-12-02": _post("The follow-up is the job", "None, text only", """
-Most sales don't happen on the first message.
-Most problems don't get solved in the first reply.
+Plot twist: most sales don't happen on the first message. Most problems don't get solved in the first reply either.
 
-The follow-up is where the work actually happens.
+The follow-up is where the real work happens.
 
-A habit that helps: when you tell someone "I'll get back to you", put the time in your calendar while you're still talking to them.
+A habit that helps: when you tell someone "I'll get back to you", put the time in your calendar while you're still talking to them. Not later. Then.
 
 Then get back to them at that time. Even if all you can say is "still working on it".
 
-People forgive slow. They don't forgive forgotten.
+People forgive slow. They don't forgive forgotten. 🙂
+
+Who's the one person or brand that always follows up with you? Shout them out 👇
 
 #Sales #CustomerService"""),
     "2026-12-03": _post("Write for the bus, not the desk", "None, text only", """
-Write support replies for someone reading on a small phone, on a bus, at the end of a long day.
+Picture your customer: inside danfo, phone on 12%, small screen, long day, somebody's elbow in their side. 🚌
 
-That means:
+That's who you're writing your support reply for. Not someone at a big desk with coffee.
+
+So:
 Short paragraphs.
 One step per line.
 The exact name of the button, the way it appears on their screen.
-No links to a 20-page help article when two lines will do.
+No link to a 20-page help article when two lines will do.
 
-A reply that's easy to read gets followed. A reply that's hard to read becomes a second ticket.
+A reply that's easy to read gets followed. A reply that's hard to read becomes a second ticket. 😅
+
+What's the longest reply you've ever received for a simple question?
 
 #CustomerSupport #Writing"""),
     "2026-12-04": _post("Complaints are free research", "None, text only", """
+Unpopular opinion: angry customer messages are a gift. 🎁
+
+Yes, I said it.
+
 A complaint is a customer telling you, for free, exactly where your product loses people.
 
-As a software tester, I'd spend hours hunting for problems that real users found in five minutes.
+As a software tester, I'd spend hours hunting for problems that real users found in five minutes. Five minutes!
 
-So angry messages aren't noise to me. They're data.
+So complaints aren't noise to me. They're data.
 
 Good support teams log them, group them, and send the patterns to the product team with real examples.
 
 That's how a support team stops answering the same question 50 times a week.
 
+Agree or disagree? Tell me in the comments 👇
+
 #CustomerExperience #CustomerSupport"""),
     # ---- Week 3 ----
     "2026-12-07": _post("Questions before answers", "None, text only", """
-The questions I like to ask before I explain anything:
+Before I explain anything, I ask. At this point it's a whole personality. 😄
 
 In support:
 What were you trying to do?
@@ -230,71 +252,81 @@ Who else needs to be happy with the decision?
 
 Asking first feels slower. It's actually faster, because you answer the right question the first time.
 
-What's your go-to first question?
+What's your go-to first question? I'm collecting good ones 👇
 
 #Sales #CustomerService"""),
     "2026-12-08": _post("\"User error\"", "None, text only", """
-"User error" is often a design problem with a different name.
+"User error." Ah, the two words that close so many tickets. 🙃
 
-When I was testing software, if three people tapped the wrong button, that wasn't three mistakes. That was one unclear button.
+Here's what testing taught me: when three people tap the wrong button, that's not three mistakes. That's one unclear button.
 
 Support teams sit closest to this. You see the same confusion again and again before anyone else does.
 
 Telling a customer "you did it wrong" closes the ticket.
 Telling the product team "people keep doing this" fixes it for everyone.
 
-#CustomerSupport #UX"""),
+Designers, testers, support people: what "user error" turned out to be a design problem in your world?
+
+#CustomerSupport #UX #ProductDesign"""),
     "2026-12-09": _post("Same message, different tone", "None, text only", """
-Same message. Different tone.
+Same message. Different energy. Watch this. 👇
 
 "You need to update the app."
+vs
 "Updating the app should fix this. It takes about a minute."
 
 "That's not possible."
+vs
 "We can't do that one, but here's what we can do."
 
-"As I said earlier..."
+"As I said earlier..." 😬
+vs
 "Just to make sure we're on the same page..."
 
-In writing, nobody hears your voice. Your word choice is your voice.
+In writing, nobody hears your voice. Your word choice IS your voice.
 
-Which phrases do you avoid with customers?
+Which phrase makes you want to throw your phone? Let's hear it 😂
 
 #CustomerService #Communication"""),
     "2026-12-10": _post("Saying no well", "None, text only", """
-Sometimes the answer is no.
+Sometimes the answer is no. And that's okay. What's not okay is making someone read four paragraphs to find it. 😅
 
 The feature doesn't exist. The refund isn't possible. The deadline can't move.
 
 A good no has three parts:
-1. Say it early. Don't make someone read four paragraphs to find it.
+1. Say it early. Don't bury it.
 2. Say why, in one line.
 3. Offer the closest yes you can.
 
 People can accept a no. What they don't accept is being left to guess.
 
+What's the kindest "no" you've ever received?
+
 #CustomerService #CustomerExperience"""),
     "2026-12-11": _post("Design feedback that starts fixes", "None, text only", """
-"I don't like it" is the least useful design feedback there is.
+"I don't like it."
 
-"When I land here, I'm not sure what to do first" is one of the most useful.
+Okay… and? 😭 That's the least useful design feedback on earth.
+
+Now compare: "When I land here, I'm not sure what to do first."
+
+Ahh, now we're talking.
 
 Feedback about taste starts arguments. Feedback about what a person is trying to do starts fixes.
 
 Three questions I ask about any screen:
-
-What is the one thing someone came here to do?
+What's the one thing someone came here to do?
 Can they find it in three seconds?
 What happens if they tap the wrong thing?
 
-If a screen answers those, the colours are the easy part.
+If a screen answers those, the colours are the easy part. 🎨
 
-What's the best design feedback you've ever been given?
+What's the best (or funniest) design feedback you've ever been given?
 
 #ProductDesign #UX"""),
     # ---- Week 4 ----
     "2026-12-14": _post("Remote since 2022", "None, text only", """
-I've worked remotely since 2022.
+I've worked remotely since 2022, and no, it's not all pyjamas and Netflix. 😄
 
 For customer-facing work, remote means:
 
@@ -305,13 +337,15 @@ Over-communicate. Silence feels longer online.
 
 Customers don't care where you're sitting. They care that someone has their back.
 
+Remote people: what's one rule you live by?
+
 #RemoteWork #CustomerService"""),
     "2026-12-15": _post("AI in customer service", "None, text only", """
-AI can answer "how do I reset my password?" at 3am. Good.
+AI can answer "how do I reset my password?" at 3am. Love that for us. 🤖
 
-What it can't do well yet: notice that the same customer has written three times this week and is about to leave.
+What it can't do well yet: notice that the same customer has written three times this week and is one message away from leaving.
 
-I've spent the last two years building with AI tools and checking their answers. They're useful, and they can be confidently wrong.
+I've spent the last two years building with AI tools and checking their answers. They're useful. And they can be confidently, beautifully wrong. 😅
 
 The best setup I can picture: AI handles the simple, repeated questions. People handle the moments that decide whether a customer stays.
 
@@ -319,20 +353,26 @@ Where do you draw the line?
 
 #AI #CustomerService #CustomerExperience"""),
     "2026-12-16": _post("Fast reply vs right reply", "None, text only", """
-A fast first reply is nice.
-A first reply that solves the problem is better.
+Two minutes later: "Thanks for reaching out, we're looking into it."
+Two days later: … silence. 🦗
 
-"Thanks for reaching out, we're looking into it" in 2 minutes, then nothing for two days, isn't great service.
+Is that great service? Abeg.
 
-A reply in 20 minutes that fixes it is.
+A fast first reply is nice. A first reply that solves the problem is better.
 
-Speed matters. But the number that customers remember is how many times they had to explain themselves.
+A reply in 20 minutes that fixes it beats a 2-minute "we're on it" followed by nothing.
+
+Speed matters. But what customers remember is how many times they had to explain themselves.
+
+Team fast reply or team right reply? Defend your side 👇
 
 #CustomerSupport #CustomerExperience"""),
     "2026-12-17": _post("\"It's too expensive\"", "None, text only", """
-"It's too expensive" rarely means the price is too high.
+"It's too expensive."
 
-Often it means:
+Before you rush to give discount, hold on. ✋
+
+It rarely means the price is too high. Often it means:
 "I don't see enough value yet."
 "I can't justify it to my boss."
 "Now isn't the right time."
@@ -341,19 +381,23 @@ Each of those needs a different answer, and none of them is a discount.
 
 A simple question helps: "Too expensive compared to what?"
 
-Then listen.
+Then listen. Really listen.
+
+Sales people: what's the real meaning behind the objection you hear most?
 
 #Sales #SalesTips"""),
     "2026-12-18": _post("One thread through testing, design and support", "None, text only", """
-I've posted every weekday for a month about customers, testing and design.
+A whole month of posting every weekday. Who did this? Me! 🎉
 
 What surprised me most: [one thing you learnt or noticed this month].
 
-The post that got the most replies was [which one], I think because [your guess].
+The post that got the most replies was [which one], and I think it's because [your guess].
 
 The thread through all of it: whether you're testing an app, designing a screen or answering a customer, the job is the same. Make sure what reaches people actually works for them.
 
-Thank you for reading and replying. What should I write about next month?
+Thank you for reading, laughing and replying with me. 💛
+
+So tell me: what should I talk about next month?
 
 #CustomerExperience #QA #ProductDesign"""),
 }
