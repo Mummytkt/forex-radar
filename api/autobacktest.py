@@ -358,7 +358,9 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     # pass 1: which confirmation's trade was entered first (a limit: filled first); its TP ends the setup for the others
     first_pass = {k: trade(k, end) for k in KEYS}
     taken = {k: v for k, v in first_pass.items() if v}
-    first = min(taken, key=lambda k: (taken[k]["entered"], taken[k]["formed"])) if taken else None
+    # same fill minute: the limit price reached first wins (a sell: price rises, so the lower limit; a buy: the higher)
+    order = lambda v: (v["entered"], v["trades"][0]["entry"] if not buy else -v["trades"][0]["entry"], v["formed"])
+    first = min(taken, key=lambda k: order(taken[k])) if taken else None
     tp_end = None
     if first:
         win = next((t for t in taken[first]["trades"] if t["outcome"] == "win"), None)
@@ -367,7 +369,7 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     setup_end = min(x for x in (end, tp_end) if x)
     out = {k: v for k, v in ((k, trade(k, setup_end)) for k in KEYS) if v}
     if first and first not in out:
-        first = min(out, key=lambda k: (out[k]["entered"], out[k]["formed"])) if out else None
+        first = min(out, key=lambda k: order(out[k])) if out else None
     reason = ("price reached the first trade's TP" if tp_end and setup_end == tp_end else
               "an H4 candle closed beyond the level" if h4_end and setup_end == h4_end else
               "the next breakout" if end_at and setup_end == end_at else "the end of the data")
