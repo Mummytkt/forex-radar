@@ -373,6 +373,10 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             load()
           }} onRead={id => { setOpenId(id); load() }}
             onReviewed={async id => { await api(`/api/quick-bt/${id}/reviewed`, { method: 'POST' }); load() }} />
+          <TfPicker results={draft.results} onSet={(keys, on) => keys.forEach(k => {
+            if (on && !draft.results[k]) setRes(k, {})
+            if (!on && draft.results[k]) setRes(k, null)
+          })} />
           <div style={{ display: 'grid', gap: 6 }}>
             {CONFS.map(([k, label]) => {
               const r = draft.results[k]
@@ -541,6 +545,55 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
         {gallery && <Gallery setup={gallery} onClose={() => setGallery(null)}
           onReviewed={async () => { await api(`/api/quick-bt/${gallery.id}/reviewed`, { method: 'POST' }); setGallery(null); load() }} />}
       </main>
+    </div>
+  )
+}
+
+// Tick a whole timeframe's confirmations at once (user, 2026-11-24): a small dropdown of H1 / M15 / M5
+const TF_GROUPS: [string, string[]][] = [
+  ['H1', ['pcl', 'eng', 'octgd1', 'octgd2', 'cisd']],
+  ['M15', ['octgd15', 'octgd215', 'cisd15']],
+  ['M5', ['cisd5']],
+]
+function TfPicker({ results, onSet }: { results: Record<string, Res>; onSet: (keys: string[], on: boolean) => void }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+  const state = (keys: string[]) => { const n = keys.filter(k => results[k]).length; return n === keys.length ? 'all' : n ? 'some' : 'none' }
+  const chosen = TF_GROUPS.filter(([, ks]) => state(ks) === 'all').map(([tf]) => tf)
+  return (
+    <div ref={box} style={{ position: 'relative', marginBottom: 8, display: 'inline-block' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        style={{ ...pill(chosen.length > 0), display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12.5 }}>
+        <Check size={13} /> Tick timeframes{chosen.length ? `: ${chosen.join(', ')}` : ''}
+        <ChevronDown size={13} style={{ transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none' }} />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', zIndex: 50, top: 'calc(100% + 4px)', left: 0, minWidth: 230, background: 'var(--card)',
+          border: '1px solid var(--border)', borderRadius: 10, padding: 8, boxShadow: '0 10px 30px -12px rgba(0,0,0,0.5)' }}>
+          {TF_GROUPS.map(([tf, ks]) => {
+            const st = state(ks)
+            return (
+              <label key={tf} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', borderRadius: 7, cursor: 'pointer',
+                fontSize: 13, color: 'var(--text-primary)' }}>
+                <input type="checkbox" checked={st === 'all'} ref={el => { if (el) el.indeterminate = st === 'some' }}
+                  onChange={e => onSet(ks, e.target.checked)} style={{ width: 16, height: 16 }} />
+                <b>{tf}</b>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{ks.map(k => SHORT[k] || k).join(' · ')}</span>
+              </label>
+            )
+          })}
+          <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 6 }}>
+            <button type="button" onClick={() => onSet(TF_GROUPS.flatMap(([, ks]) => ks), true)} style={{ ...pill(false), padding: '4px 10px', fontSize: 12 }}>All</button>
+            <button type="button" onClick={() => onSet(TF_GROUPS.flatMap(([, ks]) => ks), false)} style={{ ...pill(false), padding: '4px 10px', fontSize: 12 }}>Clear</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
