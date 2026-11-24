@@ -230,6 +230,13 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [yearF, setYearF] = useState('all')
   const [showAll, setShowAll] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
+  // the Setups section opens and closes (user, 2026-11-24); her choice is remembered on this browser
+  const [setupsOpen, setSetupsOpen] = useState(true)
+  useEffect(() => { try { if (localStorage.getItem('mbp_qbt_setups') === 'closed') setSetupsOpen(false) } catch { /* private mode */ } }, [])
+  const toggleSetups = () => setSetupsOpen(o => {
+    try { localStorage.setItem('mbp_qbt_setups', o ? 'closed' : 'open') } catch { /* private mode */ }
+    return !o
+  })
   const pendingN = setups.filter(s => s.auto && !s.reviewed).length
   const reviewView = reviewOnly && pendingN > 0
   const [gallery, setGallery] = useState<Setup | null>(null)
@@ -433,8 +440,15 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
 
         {/* ---------- setups ---------- */}
         <div style={card}>
-          <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }}>Setups</h2>
-          {loading ? <Loader2 size={18} className="spin" /> : setups.length === 0 ? (
+          <button onClick={() => toggleSetups()} aria-expanded={setupsOpen}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              marginBottom: setupsOpen ? 10 : 0, textAlign: 'left' }}>
+            <ChevronDown size={16} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: setupsOpen ? 'none' : 'rotate(-90deg)' }} />
+            <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Setups</h2>
+            <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{setups.length}{pendingN ? ` · ${pendingN} to review` : ''}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{setupsOpen ? 'Hide' : 'Show'}</span>
+          </button>
+          {!setupsOpen ? null : loading ? <Loader2 size={18} className="spin" /> : setups.length === 0 ? (
             <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No setups yet. Start at January 2020 and save your first one above.</p>
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
