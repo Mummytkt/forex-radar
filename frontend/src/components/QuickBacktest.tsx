@@ -1,9 +1,11 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy, CalendarDays, Wand2, Camera, Check, X } from 'lucide-react'
+import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy, CalendarDays, Wand2, Camera, Check, X, BookOpen } from 'lucide-react'
 import { useTimezone } from '@/lib/timezone'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { buildStory } from '@/lib/diaryStory'
 
 // Owner only (2026-11-21): one fast pass through the years. For each setup (breakout → liquidity → POI) tick which
 // H1 confirmations formed, how each ended and how many times it was taken; star the first one to form.
@@ -200,6 +202,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [showAll, setShowAll] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
   const [gallery, setGallery] = useState<Setup | null>(null)
+  const [reading, setReading] = useState<Setup | null>(null)
 
   const load = useCallback(async () => {
     const r = await api('/api/quick-bt')
@@ -424,6 +427,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
               {!reviewOnly && (showAll ? setups : setups.slice(0, 40)).map(s => (
                 <div key={s.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 9px',
                   borderRadius: 8, border: '1px solid var(--border)', opacity: s.valid ? 1 : 0.55 }}>
+                  <button onClick={() => setReading(s)} style={{ ...iconBtn, color: 'var(--accent)' }} aria-label="Read this setup" title="Read it like a diary page"><BookOpen size={14} /></button>
                   <b style={{ width: 92, color: 'var(--text-primary)' }}>{fmtDay(s.date)}</b>
                   <span style={{ fontWeight: 800, color: s.side === 'buy' ? 'var(--bullish)' : 'var(--bearish)', width: 34 }}>{s.side.toUpperCase()}</span>
                   <span style={{ color: 'var(--text-secondary)', width: 62 }}>{s.range_type === 'inside' ? 'Inside' : 'Opposite'}</span>
@@ -455,9 +459,101 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             </div>
           )}
         </div>
+        {reading && <SetupBook setup={reading} onClose={() => setReading(null)} onEdit={() => { const s = reading; setReading(null); edit(s) }}
+          onReviewed={async () => { await api(`/api/quick-bt/${reading.id}/reviewed`, { method: 'POST' }); setReading(null); load() }} />}
         {gallery && <Gallery setup={gallery} onClose={() => setGallery(null)}
           onReviewed={async () => { await api(`/api/quick-bt/${gallery.id}/reviewed`, { method: 'POST' }); setGallery(null); load() }} />}
       </main>
+    </div>
+  )
+}
+
+// A setup read back as a page of the diary (user, 2026-11-24: "read the information like a book")
+function SetupBook({ setup, onClose, onEdit, onReviewed }: { setup: Setup; onClose: () => void; onEdit: () => void; onReviewed: () => void }) {
+  const { user } = useAuth()
+  const [pics, setPics] = useState<{ id: number; conf: string; label: string; url: string }[] | null>(null)
+  useEffect(() => {
+    let gone = false
+    const made: string[] = []
+    ;(async () => {
+      if (!setup.pictures) { setPics([]); return }
+      const r = await api(`/api/quick-bt/${setup.id}/pictures`)
+      const list: { id: number; conf: string; label: string }[] = r.ok ? (await r.json()).pictures : []
+      const out = []
+      for (const p of list) {
+        const b = await api(`/api/quick-bt/picture/${p.id}`)
+        if (!b.ok) continue
+        const url = URL.createObjectURL(await b.blob())
+        made.push(url)
+        out.push({ ...p, url })
+      }
+      if (!gone) setPics(out)
+    })()
+    return () => { gone = true; made.forEach(u => URL.revokeObjectURL(u)) }
+  }, [setup.id, setup.pictures])
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [onClose])
+  const note = setup.note && !setup.note.startsWith('Auto-checked') ? setup.note.trim() : ''
+  // ★ first reads first, then the rest in the page's usual order
+  const keys = CONFS.map(([k]) => k).filter(k => setup.results[k] && setup.results[k].outcome)
+    .sort((a, b) => (a === setup.first ? -1 : b === setup.first ? 1 : 0))
+  const story = buildStory({
+    id: setup.id, name: user?.name, date: setup.date, pair: setup.pair, direction: setup.side, hasNote: !!note,
+    rows: keys.map(k => {
+      const r = setup.results[k]
+      return { slot: k, label: `${LABEL[k] || k}${setup.first === k ? ' (my ★ first)' : ''}${r.after_tp ? ' (after the first TP)' : ''}`,
+        outcome: r.outcome as 'win' | 'loss' | 'be', rr: r.outcome === 'win' ? setup.tp_r : null, takes: r.takes, net: rOf(r, setup.tp_r) }
+    }),
+  })
+  const setupLine = `It was ${setup.range_type === 'inside' ? 'an inside' : 'an opposite'} range setup${setup.level ? `, and my level was ${setup.level}` : ''}. `
+    + (setup.valid ? 'The breakout, the liquidity and the POI were all there ✅' : "It didn't count as a valid setup, so it stays out of my numbers.")
+  let n = 0
+  const line = () => ({ animationDelay: `${(n++) * 0.14}s` })
+  const picsOf = (k: string) => (pics || []).filter(p => p.conf === k)
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.85)', overflowY: 'auto', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} className="fairy-diary dp-purple" style={{ maxWidth: 900, margin: '0 auto', background: 'var(--card)', borderRadius: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 10px 0' }}>
+          <button onClick={onClose} style={iconBtn} aria-label="Close"><X size={15} /></button>
+        </div>
+        <div className="dp-wrap" style={{ borderTop: 'none' }}>
+          <div className={`dp-page dp-${story.mood}`}>
+            {story.sparks.map((e, i) => <span key={i} className={`dp-spark dp-spark${i}`} aria-hidden>{e}</span>)}
+            <div className="dp-head dp-line" style={line()}>
+              <span className="dp-ribbon">{story.ribbon}</span>
+              <span className="dp-stamp">Backtest · {setup.pair} · {fmtDay(setup.date)}{setup.auto ? ' · auto-checked' : ''}</span>
+            </div>
+            <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
+            <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
+            {note && <div className="dp-note dp-line" style={line()}>{note}</div>}
+            <p className="dp-p dp-line" style={line()}>{setupLine}</p>
+            {!keys.length && <p className="dp-p dp-line" style={line()}>No confirmation formed at my level this time 🌙 I watched, and I kept my peace.</p>}
+            {story.rows.map(r => (
+              <div key={r.slot} className="dp-line" style={line()}>
+                <p className="dp-p">{r.text}</p>
+                {pics === null && setup.pictures ? <Loader2 size={16} className="spin" /> : picsOf(r.slot).map(p => (
+                  <figure key={p.id} style={{ margin: '0 0 14px' }}>
+                    <img src={p.url} alt={p.label} style={{ width: '100%', borderRadius: 10, display: 'block' }} />
+                  </figure>
+                ))}
+              </div>
+            ))}
+            <div className="dp-foot dp-line" style={line()}>
+              <div>
+                <div className="dp-yours">{story.yours}</div>
+                <div className="diary-script dp-sign">{story.signature}</div>
+              </div>
+              <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {setup.auto && !setup.reviewed && <button onClick={onReviewed} style={{ ...pill(true, 'var(--bullish)'), display: 'flex', alignItems: 'center', gap: 5 }}><Check size={13} /> Looks right: reviewed</button>}
+                <button onClick={onEdit} style={{ ...pill(false), display: 'flex', alignItems: 'center', gap: 5 }}><Pencil size={12} /> Edit this page</button>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
