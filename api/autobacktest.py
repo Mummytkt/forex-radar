@@ -366,15 +366,17 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
         win = next((t for t in taken[first]["trades"] if t["outcome"] == "win"), None)
         if win and win["exit"]:
             tp_end = datetime.fromisoformat(win["exit"])
-    setup_end = min(x for x in (end, tp_end) if x)
-    out = {k: v for k, v in ((k, trade(k, setup_end)) for k in KEYS) if v}
-    if first and first not in out:
-        first = min(out, key=lambda k: order(out[k])) if out else None
-    reason = ("price reached the first trade's TP" if tp_end and setup_end == tp_end else
-              "an H4 candle closed beyond the level" if h4_end and setup_end == h4_end else
+    # Every confirmation keeps being checked after the first trade's TP until the level ends (owner 2026-11-24), so
+    # each one gets its own record and win rate. One entered after that TP is marked after_tp (★ first stays the real trade).
+    out = taken
+    for k, v in out.items():
+        v["after_tp"] = bool(tp_end and datetime.fromisoformat(v["entered"]) >= tp_end and k != first)
+    setup_end = end
+    reason = ("an H4 candle closed beyond the level" if h4_end and setup_end == h4_end else
               "the next breakout" if end_at and setup_end == end_at else "the end of the data")
     pics = trade_pictures(pair, side, level, out, frames, tp_r, be_r) if pictures else []
     return {"_pictures": pics, "results": out, "first": first, "armed_at": armed.isoformat(),
+            "first_tp_at": tp_end.isoformat() if tp_end else None,
             "poi_failed_at": h4_end.isoformat() if h4_end else None,
             "setup_end": setup_end.isoformat(), "end_reason": reason, "watched_until": setup_end.isoformat(),
             "note": "Prices are Dukascopy's (bid), not your TradingView feed: a pattern formed by a fraction of a pip "
@@ -493,7 +495,8 @@ def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, 
                     marks.append((xb, OUT_TXT.get(t["outcome"], t["outcome"])))
             risk = abs(t["entry"] - t["sl"])
             be = t["entry"] + (be_r * risk if side == "buy" else -be_r * risk) if be_r and be_r < tp_r else None
-            meta = {"tf_title": TF_NAME[tf], "side": f"{side.upper()} · {LABELS.get(key, key)} · take {n} · {t['outcome'].upper()}",
+            meta = {"tf_title": TF_NAME[tf], "side": f"{side.upper()} · {LABELS.get(key, key)} · take {n} · {t['outcome'].upper()}"
+                                                  + (" · after TP" if v.get("after_tp") else ""),
                     "subtitle": f"{'Limit' if t.get('limit') else 'Entry'} {f(t['entry'])}  ·  SL {f(t['sl'])}  ·  TP {f(t['tp'])}",
                     "fired_at": at.astimezone(timezone(timedelta(hours=1))).strftime("%d %b %Y %H:%M WAT"), "marks": marks}
             try:

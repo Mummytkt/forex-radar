@@ -83,6 +83,7 @@ def _db(request: Request):
 class Result(BaseModel):
     outcome: str
     takes: int = 1
+    after_tp: bool = False     # entered after the ★ first trade's TP: tracked for its own win rate (owner 2026-11-24)
 
 
 class SetupBody(BaseModel):
@@ -110,6 +111,8 @@ def _clean(b: SetupBody) -> tuple:
         if k not in keys or r.outcome not in OUTCOMES:
             raise HTTPException(400, f"Unknown confirmation or result: {k}")
         res[k] = {"outcome": r.outcome, "takes": max(1, min(int(r.takes or 1), 20))}
+        if r.after_tp:
+            res[k]["after_tp"] = True
     first = b.first if b.first in res else None
     if res and not first:      # one formed: it is the first; several: she must star one
         first = next(iter(res)) if len(res) == 1 else None
@@ -181,7 +184,10 @@ def list_pictures(sid: int, request: Request):
     require_owner(request)
     labels = dict(CONFIRMATIONS)
     with _db(request) as conn:
-        return {"pictures": [{"id": r[0], "conf": r[1], "n": r[2], "label": f"{labels.get(r[1], r[1])} · take {r[2]}"}
+        row = conn.execute("SELECT results_json FROM quick_bt WHERE id = ?", (sid,)).fetchone()
+        res = json.loads(row[0] or "{}") if row else {}
+        late = lambda k: " · after TP" if (res.get(k) or {}).get("after_tp") else ""
+        return {"pictures": [{"id": r[0], "conf": r[1], "n": r[2], "label": f"{labels.get(r[1], r[1])} · take {r[2]}{late(r[1])}"}
                              for r in conn.execute("SELECT id, conf, n FROM quick_bt_images WHERE setup_id = ? "
                                                    "ORDER BY id", (sid,))]}
 
@@ -257,8 +263,8 @@ def auto_check(request: Request, body: AutoBody):
     pics = res.pop("_pictures", [])
     if body.save:
         keys = {k for k, _ in CONFIRMATIONS}
-        results = {k: {"outcome": v["outcome"], "takes": v["takes"]} for k, v in res["results"].items()
-                   if k in keys and v["outcome"] in OUTCOMES}
+        results = {k: dict({"outcome": v["outcome"], "takes": v["takes"]}, **({"after_tp": True} if v.get("after_tp") else {}))
+                   for k, v in res["results"].items() if k in keys and v["outcome"] in OUTCOMES}
         first = res["first"] if res["first"] in results else (next(iter(results)) if len(results) == 1 else None)
         now = datetime.now(timezone.utc).isoformat()
         note = (body.note.strip() or f"Auto-checked · level {body.level:g}")[:300]

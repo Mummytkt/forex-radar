@@ -18,7 +18,7 @@ function api(path: string, opts: RequestInit = {}) {
 }
 
 type Outcome = 'win' | 'be' | 'loss'
-interface Res { outcome: Outcome | ''; takes: number }   // '' only in the form: ticked, result not picked yet
+interface Res { outcome: Outcome | ''; takes: number; after_tp?: boolean }   // '' only in the form: ticked, result not picked yet
 interface Setup {
   id: number; pair: string; date: string; side: 'buy' | 'sell'; range_type: 'inside' | 'opposite'; valid: boolean
   results: Record<string, Res>; first: string | null; tp_r: number; note: string
@@ -78,7 +78,7 @@ function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) =
 // ---- Auto-check (2026-11-23): she gives the POI box and when the watch starts; the server finds every confirmation
 // with the Entry Confirmations script's rules on real minute candles and plays each trade (api/autobacktest.py)
 interface AutoTrade { time: string; entry: number; sl: number; tp: number; outcome: string; exit: string | null; limit?: boolean; filled?: string | null }
-interface AutoRes { results: Record<string, { outcome: string; takes: number; trades: AutoTrade[] }>; first: string | null
+interface AutoRes { results: Record<string, { outcome: string; takes: number; trades: AutoTrade[]; after_tp?: boolean }>; first: string | null; first_tp_at?: string | null
   poi_failed_at: string | null; watched_until: string; setup_end?: string; end_reason?: string; armed_at?: string | null; note: string }
 
 // a wall-clock date + time in an IANA timezone -> ISO 8601 in UTC
@@ -95,11 +95,8 @@ function zonedIso(dateIso: string, hhmm: string, tz: string): string {
 function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { saved_id?: number; pictures?: number }) => void }) {
   const { timezone } = useTimezone()
   const [level, setLevel] = useState('')
-  const [time, setTime] = useState('00:00')
   const [mode, setMode] = useState<'limit' | 'instant'>('limit')
   const [tol, setTol] = useState('1')
-  const [endDate, setEndDate] = useState('')
-  const [endTime, setEndTime] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [res, setRes] = useState<AutoRes | null>(null)
@@ -117,8 +114,7 @@ function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { 
     if (!(lv > 0)) return setErr("Type the level's price (the line you watch)")
     setBusy(true); setRes(null)
     const r = await api('/api/quick-bt/auto', { method: 'POST', body: JSON.stringify({ pair: draft.pair, side: draft.side,
-      level: lv, mode, tol_pips: parseFloat(tol) || 0, start: zonedIso(draft.date, time, timezone || 'UTC'),
-      end_at: endDate && endTime ? zonedIso(endDate, endTime, timezone || 'UTC') : null,
+      level: lv, mode, tol_pips: parseFloat(tol) || 0, start: zonedIso(draft.date, '00:00', timezone || 'UTC'),
       save: true, date: draft.date, range_type: draft.range_type, valid: draft.valid, note: draft.note }) })
     setBusy(false)
     const j = await r.json().catch(() => ({}))
@@ -134,9 +130,6 @@ function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <b style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)' }}><Wand2 size={15} color="var(--accent)" /> Auto-check</b>
         <input value={level} onChange={e => setLevel(e.target.value)} placeholder="Level price" inputMode="decimal" style={{ ...field, width: 120 }} aria-label="The level line's price" />
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }} title="Leave 00:00 unless price already reached your level earlier that day, before the breakout">watch from (optional)</span>
-        <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...field, width: 110 }} aria-label="Watch start time" />
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>on {isoToDmy(draft.date)} ({timezone || 'UTC'})</span>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           title="A wick this close to your line counts as reaching it (your chart's prices and this data differ by fractions of a pip)">
           within <input value={tol} onChange={e => setTol(e.target.value)} inputMode="decimal" style={{ ...field, width: 46, padding: '6px 6px' }} aria-label="Tolerance in pips" /> pip</span>
@@ -148,13 +141,8 @@ function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { 
           {busy ? <Loader2 size={14} className="spin" /> : <Wand2 size={14} />} {busy ? 'Checking…' : 'Check and save'}
         </button>
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-        Next H4 breakout (optional, ends the setup):
-        <input value={endDate} onChange={e => setEndDate(e.target.value)} type="date" style={{ ...field, width: 150 }} aria-label="Next breakout date" />
-        <input value={endTime} onChange={e => setEndTime(e.target.value)} type="time" style={{ ...field, width: 110 }} aria-label="Next breakout time" />
-      </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
-        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Watching starts by itself once a whole H4 candle has moved away from your level, so leave the time at 00:00. It finds every confirmation whose wick reaches the line, trades each one at TP 3R / BE 2R with your retakes, and ticks the results below for you to check before saving. The setup ends when an H4 candle closes beyond the line, the first trade reaches its TP, or the next breakout.
+        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Watching starts by itself once a whole H4 candle has moved away from your level. It finds every confirmation whose wick reaches the line and trades each one at TP 3R / BE 2R with your retakes. ★ first is the trade you&apos;d really take; the others keep being checked after its TP (marked &quot;after TP&quot;) until an H4 candle closes beyond the line, so each confirmation gets its own win rate.
         {cov && cov.pct < 100 && <> · Data downloaded so far: <b>{cov.pct}%</b>{cov.next_missing ? ` (up to ${isoToDmy(cov.next_missing)})` : ''}</>}
       </div>
       {err && <div style={{ color: 'var(--bearish)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{err}</div>}
@@ -162,12 +150,13 @@ function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { 
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--text-secondary)' }}>
           <div style={{ marginBottom: 6 }}>
             {res.armed_at && <>Watching began <b>{when(res.armed_at)}</b> (the first whole H4 candle away from your level). </>}
+            {res.first_tp_at && <>★ first reached its TP <b>{when(res.first_tp_at)}</b>. </>}
             Setup ended <b>{when(res.setup_end || res.watched_until)}</b>{res.end_reason ? ` (${res.end_reason})` : ''}.
             {' '}{Object.keys(res.results).length ? 'Saved with its pictures, marked "to review".' : 'No confirmation reached the level (saved as a setup with none).'}
           </div>
           {Object.entries(res.results).map(([k, v]) => (
             <div key={k} style={{ marginBottom: 4 }}>
-              <b style={{ color: 'var(--text-primary)' }}>{labelOf(k)}</b>{res.first === k ? ' ★' : ''}:{' '}
+              <b style={{ color: 'var(--text-primary)' }}>{labelOf(k)}</b>{res.first === k ? ' ★' : ''}{v.after_tp ? ' (after TP)' : ''}:{' '}
               {v.trades.map((t, i) => (
                 <span key={i}>{i ? ' → ' : ''}{when(t.time)} {t.limit ? `limit ${t.entry}${t.filled ? ` (filled ${when(t.filled)})` : ''}` : `entry ${t.entry}`} SL {t.sl} TP {t.tp}{' '}
                   <b style={{ color: col(t.outcome) }}>{t.outcome.toUpperCase()}</b>{t.exit ? ` (${when(t.exit)})` : ''}</span>
@@ -420,7 +409,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                       const r = s.results[k]
                       const c = OUT.find(o => o[0] === r.outcome)?.[2] ?? 'var(--text-muted)'
                       return <span key={k} style={{ padding: '2px 7px', borderRadius: 6, fontSize: 12, fontWeight: 700, border: `1px solid ${c}`, color: c }}>
-                        {s.first === k && '★ '}{SHORT[k]} {r.outcome === 'win' ? 'W' : r.outcome === 'be' ? 'BE' : 'L'}{r.takes > 1 ? ` ×${r.takes}` : ''}</span>
+                        {s.first === k && '★ '}{SHORT[k]} {r.outcome === 'win' ? 'W' : r.outcome === 'be' ? 'BE' : 'L'}{r.takes > 1 ? ` ×${r.takes}` : ''}{r.after_tp ? ' · after TP' : ''}</span>
                     })}
                   </div>
                   <SetupPictures setup={s} />
@@ -445,7 +434,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                     return (
                       <span key={k} style={{ padding: '2px 7px', borderRadius: 6, fontWeight: 700, border: `1px solid ${c}`, color: c,
                         background: s.first === k ? 'color-mix(in srgb, #eab308 15%, transparent)' : 'transparent' }}>
-                        {s.first === k && '★ '}{SHORT[k]} {r.outcome === 'win' ? 'W' : r.outcome === 'be' ? 'BE' : 'L'}{r.takes > 1 ? ` ×${r.takes}` : ''}
+                        {s.first === k && '★ '}{SHORT[k]} {r.outcome === 'win' ? 'W' : r.outcome === 'be' ? 'BE' : 'L'}{r.takes > 1 ? ` ×${r.takes}` : ''}{r.after_tp ? ' · after TP' : ''}
                       </span>
                     )
                   })}
