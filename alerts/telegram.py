@@ -50,13 +50,14 @@ def _retry_after_seconds(e: RetryAfter) -> float:
 _RETRY_DELAY_S = 5.0
 
 
-async def send_alert(bot_token: str, chat_id: str, text: str, reply_markup=None) -> bool:
+async def send_alert(bot_token: str, chat_id: str, text: str, reply_markup=None, parse_mode: str | None = None) -> bool:
     """
     Send a plain-text message to one Telegram chat, paced with every other send.
     Returns True on success, False if it could not be delivered.
 
     text is sent as plain text (no HTML/Markdown parse mode) to avoid
     formatting errors from special characters in instrument names or prices.
+    parse_mode="HTML" only for texts built with escaped HTML (the market news alerts, 2026-11-24).
     """
     bot = Bot(token=bot_token)
     errors = 0
@@ -66,7 +67,7 @@ async def send_alert(bot_token: str, chat_id: str, text: str, reply_markup=None)
         if delay > 0:
             await asyncio.sleep(delay)
         try:
-            await bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
+            await bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
             logger.info("Alert sent to chat %s", chat_id)
             return True
         except RetryAfter as e:

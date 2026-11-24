@@ -248,7 +248,7 @@ async def run_market_alerts(db_path: str, config) -> int:
             return 0
         sent = 0
         for i in due_alerts(conn, items, now):
-            if await send_alert(config.telegram_bot_token, str(r[0]), alert_text(i)):
+            if await send_alert(config.telegram_bot_token, str(r[0]), alert_text(i), parse_mode="HTML"):
                 conn.execute("INSERT OR IGNORE INTO market_news_sent (link, title, sent_at) VALUES (?, ?, ?)",
                              (i["link"], i["title"], now.isoformat()))
                 conn.commit()
