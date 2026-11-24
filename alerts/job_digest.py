@@ -788,7 +788,7 @@ def portfolio_text() -> str:
             "Full name: <code>Taiwo Damilola Mayowa</code>\n"
             "Location: <code>Ibadan, Nigeria</code>\n"
             "Time zone: <code>WAT (UTC+1)</code>\n"
-            "Years of experience: <code>4+ in tech, 2+ with customers</code>\n"
+            "Years of experience: <code>5+ in tech, 2+ with customers</code>\n"
             "Languages: <code>English (fluent), Yoruba (fluent), Nigerian Pidgin</code>\n"
             "Current role: <code>Product Designer &amp; QA Tester, Bias Pointer</code>\n"
             "Notice period: <code>Immediately</code>\n"
