@@ -135,7 +135,7 @@ function AutoCheck({ draft, onSaved, onRead, onReviewed }: { draft: Draft; onSav
     if (!(lv > 0)) return setErr("Type the level's price (the line you watch)")
     setBusy(true); setRes(null); setDone(false)
     const r = await api('/api/quick-bt/auto', { method: 'POST', body: JSON.stringify({ pair: draft.pair, side: draft.side,
-      level: lv, mode, tol_pips: parseFloat(tol) || 0, start: zonedIso(draft.date, '00:00', timezone || 'UTC'),
+      level: lv, mode, tol_pips: parseFloat(tol) || 0, keys: Object.keys(draft.results).length ? Object.keys(draft.results) : null, start: zonedIso(draft.date, '00:00', timezone || 'UTC'),
       save: true, date: draft.date, range_type: draft.range_type, valid: draft.valid, note: draft.note }) })
     setBusy(false)
     const j = await r.json().catch(() => ({}))
@@ -163,7 +163,7 @@ function AutoCheck({ draft, onSaved, onRead, onReviewed }: { draft: Draft; onSav
         </button>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
-        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Watching starts by itself once a whole H4 candle has moved away from your level. It finds every confirmation whose wick reaches the line and trades each one at TP 3R / BE 2R with your retakes. ★ first is the trade you&apos;d really take; the others keep being checked after its TP (marked &quot;after TP&quot;) until an H4 candle closes beyond the line, so each confirmation gets its own win rate.
+        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Watching starts by itself once a whole H4 candle has moved away from your level. It checks only the confirmations you tick below (none ticked = all of them), finds each one whose wick reaches the line and trades it at TP 3R / BE 2R with your retakes. ★ first is the trade you&apos;d really take; the others keep being checked after its TP (marked &quot;after TP&quot;) until an H4 candle closes beyond the line, so each confirmation gets its own win rate.
         {cov && cov.pct < 100 && <> · Data downloaded so far: <b>{cov.pct}%</b>{cov.next_missing ? ` (up to ${isoToDmy(cov.next_missing)})` : ''}</>}
       </div>
       {err && <div style={{ color: 'var(--bearish)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{err}</div>}
@@ -369,7 +369,9 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
           <AutoCheck draft={draft} onSaved={res => {
             try { localStorage.setItem(LAST_KEY, JSON.stringify({ pair: draft.pair, date: draft.date, range_type: draft.range_type })) } catch { /* private mode */ }
             setMsg(`Saved ✓ ${Object.keys(res.results).length} confirmation${Object.keys(res.results).length === 1 ? '' : 's'}, ${res.pictures ?? 0} picture${res.pictures === 1 ? '' : 's'} · marked to review. Next level.`)
-            setDraft(d => ({ ...blank(), date: d.date, pair: d.pair, range_type: d.range_type, side: d.side }))
+            // keep her ticks for the next level: Auto-check checks only the ticked confirmations (2026-11-24)
+            setDraft(d => ({ ...blank(), date: d.date, pair: d.pair, range_type: d.range_type, side: d.side,
+              results: Object.fromEntries(Object.keys(d.results).map(k => [k, { outcome: '' as const, takes: 1 }])) }))
             load()
           }} onRead={id => { setOpenId(id); load() }}
             onReviewed={async id => { await api(`/api/quick-bt/${id}/reviewed`, { method: 'POST' }); load() }} />

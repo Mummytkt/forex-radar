@@ -247,7 +247,8 @@ def play_limit(mins, j0, side, limit, sl, tp_r, be_r, cancel_at):
 
 
 def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: float = 3.0, be_r: float = 2.0,
-        mode: str = "limit", end_at: Optional[datetime] = None, tol_pips: float = 1.0, pictures: bool = False) -> dict:
+        mode: str = "limit", end_at: Optional[datetime] = None, tol_pips: float = 1.0, pictures: bool = False,
+        keys: Optional[list[str]] = None) -> dict:
     """Auto-check one setup: the level line, when the watch starts, and optionally the next breakout (end_at)."""
     start = start.astimezone(UTC)
     if end_at:
@@ -356,7 +357,9 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
                 "entered": trades[0]["filled"] or trades[0]["time"]}
 
     # pass 1: which confirmation's trade was entered first (a limit: filled first); its TP ends the setup for the others
-    first_pass = {k: trade(k, end) for k in KEYS}
+    # only the confirmations she ticked (owner 2026-11-24); none ticked = all of them
+    chosen = [k for k in KEYS if not keys or k in keys]
+    first_pass = {k: trade(k, end) for k in chosen}
     taken = {k: v for k, v in first_pass.items() if v}
     # same fill minute: the limit price reached first wins (a sell: price rises, so the lower limit; a buy: the higher)
     order = lambda v: (v["entered"], v["trades"][0]["entry"] if not buy else -v["trades"][0]["entry"], v["formed"])

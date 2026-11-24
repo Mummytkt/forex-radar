@@ -238,6 +238,7 @@ class AutoBody(BaseModel):
     mode: str = "limit"        # limit (her live rule) or instant
     tp_r: float = DEFAULT_TP_R
     be_r: float = 2.0
+    keys: Optional[list[str]] = None   # check only these confirmations (the ticked ones); none = all
     tol_pips: float = 1.0      # a wick this close to the line counts as reaching it (feeds differ slightly)
     # Save it straight away (2026-11-23: she reviews at her break, so checking never slows the backtest down)
     save: bool = False
@@ -282,7 +283,8 @@ def auto_check(request: Request, body: AutoBody):
         raise HTTPException(400, "Pick Inside range or Opposite range")
     try:
         res = run(body.pair.upper(), body.side, body.level, start, _cache_base(request), body.tp_r, body.be_r,
-                  body.mode, end_at, max(0.0, min(body.tol_pips, 20.0)), pictures=body.save)
+                  body.mode, end_at, max(0.0, min(body.tol_pips, 20.0)), pictures=body.save,
+                  keys=[k for k in (body.keys or []) if k in {c for c, _ in CONFIRMATIONS}] or None)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
     pics = res.pop("_pictures", [])
