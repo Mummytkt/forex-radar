@@ -301,6 +301,13 @@ ea = c.post("/api/entry-alerts", headers=H(ta), json={"instrument": "EURUSD", "d
 check("B cannot see A's entry alerts", "A-entry" not in str(c.get("/api/entry-alerts", headers=H(tb)).json()))
 c.delete(f"/api/entry-alerts/{ea['id']}", headers=H(tb))
 check("B cannot delete A's entry alert", "A-entry" in str(c.get("/api/entry-alerts", headers=H(ta)).json()))
+# Delete all (2026-11-24): clears only the caller's own list, only the tab asked for
+c.delete("/api/entry-alerts?tab=active", headers=H(tb))
+check("B's delete-all leaves A's entry alerts", "A-entry" in str(c.get("/api/entry-alerts", headers=H(ta)).json()))
+c.delete("/api/entry-alerts?tab=history", headers=H(ta))
+check("delete-all history keeps the active ones", "A-entry" in str(c.get("/api/entry-alerts", headers=H(ta)).json()))
+_da = c.delete("/api/entry-alerts?tab=active", headers=H(ta)).json()
+check("delete-all active clears them", _da.get("deleted", 0) >= 1 and c.get("/api/entry-alerts", headers=H(ta)).json()["items"] == [])
 
 # ── Per-user settings ─────────────────────────────────────────────────────
 c.post("/api/preferences/accent", headers=H(ta), json={"accent_color": "emerald"})

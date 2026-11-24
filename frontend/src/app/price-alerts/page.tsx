@@ -157,6 +157,28 @@ const fmtExpiry = (iso: string) => new Date(iso).toLocaleString(undefined, { day
 // Deleting asks first: the bin button is easy to press by mistake (user, 2026-11-10)
 const sureDelete = (what: string) => window.confirm(`Delete this ${what}? This can't be undone.`)
 
+// Delete all (user, 2026-11-24): clears the whole Active or History list at once
+function DeleteAllBar({ count, tab, what, onConfirm }: { count: number; tab: 'active' | 'history'; what: string; onConfirm: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  if (count < 1) return null
+  const go = async () => {
+    const list = tab === 'active' ? `active ${what}` : `${what} history`
+    if (!window.confirm(`Delete all ${count} in your ${list}? ${tab === 'active' ? 'They stop watching and ' : ''}This can't be undone.`)) return
+    setBusy(true)
+    try { await onConfirm() } finally { setBusy(false) }
+  }
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px', borderBottom: '1px solid var(--border)' }}>
+      <button onClick={go} disabled={busy} style={{
+        display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '6px 12px',
+        borderRadius: 7, cursor: 'pointer', border: '1px solid var(--bearish)', background: 'transparent', color: 'var(--bearish)',
+      }}>
+        <Trash2 size={12} /> {busy ? 'Deleting…' : `Delete all (${count})`}
+      </button>
+    </div>
+  )
+}
+
 // ── Alert row component ───────────────────────────────────────────────────────
 
 function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: (id: number) => void; onEdit: (item: PriceAlertItem) => void }) {
@@ -284,6 +306,10 @@ function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDel
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {item.is_active && triggered && (
+            <span className="pulse" title="Active, and its alert has been sent to you"
+              style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--bullish)', boxShadow: '0 0 6px var(--bullish)', flexShrink: 0, animationDuration: '1.2s' }} />
+          )}
           <span style={{ fontWeight: 600, fontSize: 13 }}>{item.instrument}</span>
           <span style={{
             fontSize: 11, padding: '2px 7px', borderRadius: 5,
@@ -899,6 +925,11 @@ function EntryAlertsPanel({ instruments, prices }: {
         )}
         {entryData && entryData.items.length > 0 && (
           <div>
+            <DeleteAllBar count={entryData.items.length} tab={tab} what="entry alerts" onConfirm={async () => {
+              await fetch(`${API_BASE}/api/entry-alerts?tab=${tab}`, { method: 'DELETE', headers: authHeaders() })
+              if (editing) cancelEdit()
+              mutateEntry()
+            }} />
             {entryData.items.map(item => (
               <EntryAlertRow key={item.id} item={item} onDelete={handleDelete} onEdit={handleEdit} />
             ))}
@@ -1358,6 +1389,11 @@ export default function PriceAlertsPage() {
             )}
             {alertsData && alertsData.items.length > 0 && (
               <div>
+                <DeleteAllBar count={alertsData.items.length} tab={tab} what="level alerts" onConfirm={async () => {
+                  await fetch(`${API_BASE}/api/price-alerts?tab=${tab}`, { method: 'DELETE', headers: authHeaders() })
+                  setEditingId(null)
+                  mutateAlerts()
+                }} />
                 {alertsData.items.map(item => (
                   <AlertRow key={item.id} item={item} onDelete={handleDelete} onEdit={handleEdit} />
                 ))}

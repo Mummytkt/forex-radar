@@ -1376,6 +1376,18 @@ def delete_price_alert(alert_id: int, request: Request):
             conn.execute("DELETE FROM price_alerts WHERE id = ? AND user_id IS NULL", (alert_id,))
     return {"ok": True}
 
+@router.delete("/price-alerts")
+def delete_all_price_alerts(request: Request, tab: str = Query("history")):
+    """Delete all (user, 2026-11-24): clears the whole Active or History list in one go."""
+    uid = _user_id(request)
+    active = 0 if tab == "history" else 1
+    with _db_write(request) as conn:
+        if uid:
+            n = conn.execute("DELETE FROM price_alerts WHERE user_id = ? AND is_active = ?", (uid, active)).rowcount
+        else:
+            n = conn.execute("DELETE FROM price_alerts WHERE user_id IS NULL AND is_active = ?", (active,)).rowcount
+    return {"ok": True, "deleted": n}
+
 
 # ── Entry Pattern Alerts (PCL + Engulfing Sweep at user-set levels) ──────────
 
@@ -1571,3 +1583,15 @@ def delete_entry_alert(alert_id: int, request: Request):
         else:
             conn.execute("DELETE FROM entry_pattern_alerts WHERE id = ? AND user_id IS NULL", (alert_id,))
     return {"ok": True}
+
+@router.delete("/entry-alerts")
+def delete_all_entry_alerts(request: Request, tab: str = Query("history")):
+    """Delete all (user, 2026-11-24): clears the whole Active or History list in one go."""
+    uid = _user_id(request)
+    active = 0 if tab == "history" else 1
+    with _db_write(request) as conn:
+        if uid:
+            n = conn.execute("DELETE FROM entry_pattern_alerts WHERE user_id = ? AND is_active = ?", (uid, active)).rowcount
+        else:
+            n = conn.execute("DELETE FROM entry_pattern_alerts WHERE user_id IS NULL AND is_active = ?", (active,)).rowcount
+    return {"ok": True, "deleted": n}
