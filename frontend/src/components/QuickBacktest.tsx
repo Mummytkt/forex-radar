@@ -569,15 +569,16 @@ function TfPicker({ results, onSet }: { results: Record<string, Res>; onSet: (ke
   const state = (keys: string[]) => { const n = keys.filter(k => results[k]).length; return n === keys.length ? 'all' : n ? 'some' : 'none' }
   const chosen = TF_GROUPS.filter(([, ks]) => state(ks) === 'all').map(([tf]) => tf)
   return (
-    <div ref={box} style={{ position: 'relative', marginBottom: 8, display: 'inline-block' }}>
+    <div ref={box} style={{ marginBottom: 8 }}>
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
-        style={{ ...pill(chosen.length > 0), display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12.5 }}>
+        style={{ ...pill(chosen.length > 0), display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12.5 }}>
         <Check size={13} /> Tick timeframes{chosen.length ? `: ${chosen.join(', ')}` : ''}
         <ChevronDown size={13} style={{ transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none' }} />
       </button>
       {open && (
-        <div style={{ position: 'absolute', zIndex: 50, top: 'calc(100% + 4px)', left: 0, minWidth: 230, background: 'var(--card)',
-          border: '1px solid var(--border)', borderRadius: 10, padding: 8, boxShadow: '0 10px 30px -12px rgba(0,0,0,0.5)' }}>
+        // opens in the page's flow, pushing the rows down, so it never hides the rows it ticks (user, 2026-11-24)
+        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, background: 'var(--card)',
+          border: '1px solid var(--border)', borderRadius: 10, padding: 6 }}>
           {TF_GROUPS.map(([tf, ks]) => {
             const st = state(ks)
             return (
@@ -590,7 +591,7 @@ function TfPicker({ results, onSet }: { results: Record<string, Res>; onSet: (ke
               </label>
             )
           })}
-          <div style={{ display: 'flex', gap: 6, borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 6 }}>
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', paddingLeft: 6 }}>
             <button type="button" onClick={() => onSet(TF_GROUPS.flatMap(([, ks]) => ks), true)} style={{ ...pill(false), padding: '4px 10px', fontSize: 12 }}>All</button>
             <button type="button" onClick={() => onSet(TF_GROUPS.flatMap(([, ks]) => ks), false)} style={{ ...pill(false), padding: '4px 10px', fontSize: 12 }}>Clear</button>
           </div>
