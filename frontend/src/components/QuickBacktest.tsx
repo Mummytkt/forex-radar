@@ -232,6 +232,17 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [reviewOnly, setReviewOnly] = useState(false)
   // the Setups section opens and closes (user, 2026-11-24); her choice is remembered on this browser
   const [setupsOpen, setSetupsOpen] = useState(true)
+  const [picked, setPicked] = useState<Set<number>>(new Set())   // ticked setups, for Delete selected
+  const pick = (id: number) => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const deleteMany = async (all: boolean) => {
+    const n = all ? setups.length : picked.size
+    if (!n) return
+    if (!confirm(all ? `Delete ALL ${n} setups and their pictures? This can't be undone.` : `Delete the ${n} ticked setup${n === 1 ? '' : 's'} and their pictures? This can't be undone.`)) return
+    if (all && prompt('Type DELETE to confirm deleting every setup') !== 'DELETE') return
+    await api('/api/quick-bt/delete', { method: 'POST', body: JSON.stringify(all ? { all: true, confirm: 'DELETE' } : { ids: [...picked] }) })
+    setPicked(new Set())
+    load()
+  }
   useEffect(() => { try { if (localStorage.getItem('mbp_qbt_setups') === 'closed') setSetupsOpen(false) } catch { /* private mode */ } }, [])
   const toggleSetups = () => setSetupsOpen(o => {
     try { localStorage.setItem('mbp_qbt_setups', o ? 'closed' : 'open') } catch { /* private mode */ }
@@ -457,6 +468,17 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                 <button style={pill(!reviewView)} onClick={() => setReviewOnly(false)}>All setups ({setups.length})</button>
                 {pendingN > 0 && <button style={pill(reviewView, '#eab308')} onClick={() => setReviewOnly(true)}>To review ({pendingN})</button>}
                 <span style={{ color: 'var(--text-muted)' }}>{pendingN > 0 ? 'Auto-checked setups wait in "To review" until you tick ✓; reviewed ones stay in All setups.' : 'Click 📖 on a setup to read it like a diary page.'}</span>
+                <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {!reviewView && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={picked.size > 0 && picked.size === setups.length}
+                        onChange={e => setPicked(e.target.checked ? new Set(setups.map(x => x.id)) : new Set())} /> Tick all</label>
+                  )}
+                  {picked.size > 0 && <button onClick={() => deleteMany(false)} style={{ ...pill(false, 'var(--bearish)'), padding: '5px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)', borderColor: 'var(--bearish)' }}>
+                    <Trash2 size={12} /> Delete selected ({picked.size})</button>}
+                  <button onClick={() => deleteMany(true)} style={{ ...pill(false), padding: '5px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)' }}>
+                    <Trash2 size={12} /> Delete all</button>
+                </span>
               </div>
               {reviewView && setups.filter(s => s.auto && !s.reviewed).map(s => (
                 <div key={`rv${s.id}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, display: 'grid', gap: 10 }}>
@@ -481,6 +503,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
               {!reviewView && (showAll ? setups : setups.slice(0, 40)).map(s => (
                 <div key={s.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 9px',
                   borderRadius: 8, border: '1px solid var(--border)', opacity: s.valid ? 1 : 0.55 }}>
+                  <input type="checkbox" checked={picked.has(s.id)} onChange={() => pick(s.id)} aria-label={`Tick the setup of ${fmtDay(s.date)}`} style={{ width: 16, height: 16, cursor: 'pointer' }} />
                   <button onClick={() => setReading(s)} style={{ ...iconBtn, color: 'var(--accent)' }} aria-label="Read this setup" title="Read it like a diary page"><BookOpen size={14} /></button>
                   <b style={{ width: 92, color: 'var(--text-primary)' }}>{fmtDay(s.date)}</b>
                   <span style={{ fontWeight: 800, color: s.side === 'buy' ? 'var(--bullish)' : 'var(--bearish)', width: 34 }}>{s.side.toUpperCase()}</span>

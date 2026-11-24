@@ -171,6 +171,31 @@ def delete_setup(sid: int, request: Request):
     return {"ok": True}
 
 
+class DeleteMany(BaseModel):
+    ids: list[int] = []
+    all: bool = False
+    confirm: str = ""          # "DELETE" typed, for all (same as the Entry Tester)
+
+
+@router.post("/quick-bt/delete")
+def delete_many(body: DeleteMany, request: Request):
+    """Delete the ticked setups, or every one (user, 2026-11-24), with their pictures."""
+    require_owner(request)
+    with _db(request) as conn:
+        if body.all:
+            if body.confirm != "DELETE":
+                raise HTTPException(400, "Type DELETE to delete every setup")
+            n = conn.execute("DELETE FROM quick_bt").rowcount
+            conn.execute("DELETE FROM quick_bt_images")
+        else:
+            ids = [int(i) for i in body.ids][:5000]
+            n = 0
+            for i in ids:
+                n += conn.execute("DELETE FROM quick_bt WHERE id = ?", (i,)).rowcount
+                conn.execute("DELETE FROM quick_bt_images WHERE setup_id = ?", (i,))
+    return {"ok": True, "deleted": n}
+
+
 @router.post("/quick-bt/{sid}/reviewed")
 def mark_reviewed(sid: int, request: Request):
     require_owner(request)

@@ -261,6 +261,15 @@ for _d in ("2020-03-02", "2020-03-03"):
 check("delete-all needs DELETE typed", c.post("/api/entry-tests/delete-all", headers=H(owner), json={"confirm": "yes"}).status_code == 400
       and len(c.get("/api/entry-tests", headers=H(owner)).json()) == 2)
 check("a subscriber can't delete-all", c.post("/api/entry-tests/delete-all", headers=H(ta), json={"confirm": "DELETE"}).status_code == 403)
+# Quick Backtest delete (2026-11-24): ticked ones, or all with DELETE typed; owner only
+_q = [c.post("/api/quick-bt", headers=H(owner), json={"date": "2020-01-0%d" % i, "side": "buy", "range_type": "inside"}).json()["id"] for i in (1, 2, 3)]
+check("a subscriber can't delete setups", c.post("/api/quick-bt/delete", headers=H(ta), json={"all": True, "confirm": "DELETE"}).status_code == 403)
+c.post("/api/quick-bt/delete", headers=H(owner), json={"ids": [_q[0]]})
+_left = {x["id"] for x in c.get("/api/quick-bt", headers=H(owner)).json()["setups"]}
+check("delete selected removes only the ticked setup", _q[0] not in _left and _q[1] in _left and _q[2] in _left)
+check("delete all setups needs DELETE typed", c.post("/api/quick-bt/delete", headers=H(owner), json={"all": True}).status_code == 400)
+c.post("/api/quick-bt/delete", headers=H(owner), json={"all": True, "confirm": "DELETE"})
+check("delete all setups clears them", c.get("/api/quick-bt", headers=H(owner)).json()["setups"] == [])
 _da = c.post("/api/entry-tests/delete-all", headers=H(owner), json={"confirm": "DELETE"}).json()
 check("delete-all clears every Entry Tester trade", _da.get("deleted") == 2 and c.get("/api/entry-tests", headers=H(owner)).json() == [])
 check("deleting a trade deletes its images",
