@@ -245,6 +245,11 @@ async def main(dry_run: bool = False) -> None:
             kwargs={"db_path": config.db_path, "config": config, "evening": ev},
             id=bid, name=f"Owner's {bid.replace('_', ' ')}", misfire_grace_time=3 * 3600,
         )
+    # High-impact market news for her instruments, through the day on the main bot (owner request 2026-11-24)
+    from alerts.market_news import run_market_alerts
+    scheduler.add_job(run_market_alerts, "interval", minutes=15, kwargs={"db_path": config.db_path, "config": config},
+                      id="market_news_alerts", name="Owner's market news alerts", misfire_grace_time=600,
+                      max_instances=1, coalesce=True)
     # The owner's daily routine (2026-11-23): one nudge per block, see alerts/routine.py
     from alerts.routine import run_routine, SLOTS as ROUTINE_SLOTS
     for slot, hh, mm, _ in ROUTINE_SLOTS:

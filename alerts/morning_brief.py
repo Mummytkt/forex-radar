@@ -9,6 +9,8 @@ going viral so they can make their own version. Free sources only.
     the day with its meaning and an example; one-tap X searches for the most
     liked posts of the last 24 hours in each niche; the TikTok trends page;
     today's speaking drill.
+  • Then two more messages (2026-11-24, alerts/market_news.py): AI releases explained, and the news that
+    moves her instruments.
   • 19:30 WAT: a short evening nudge (post today's piece, save one idea).
   • /brief sends the morning brief on demand.
 
@@ -333,7 +335,13 @@ def explain_prompt(stories: list[dict]) -> str:
     return ("Open each link and explain each story in simple words, like to a smart friend:\n"
             "- What happened\n- Why it happened\n- Who and what it affects (especially Nigeria, prices, the naira)\n"
             "- What to watch next\n- Any hard words, explained\n"
-            "- One line I could say in a conversation\n\n" + items)
+            "- One line I could say in a conversation\n"
+            + _social_ask() + "\n\n" + items)
+
+
+def _social_ask() -> str:
+    from alerts.market_news import social_ask     # added 2026-11-24: a post per story; the questions above stay
+    return social_ask()
 
 
 def evening_text(d: date, saved_posts: int = 0) -> str:
@@ -361,7 +369,15 @@ def _owner(conn) -> Optional[str]:
 
 
 async def send_brief(token: str, chat: str, send) -> bool:
-    return await send(token, chat, await build_brief())
+    ok = await send(token, chat, await build_brief())
+    # then AI releases and her markets, each its own message (owner 2026-11-24; Telegram caps a message's length)
+    try:
+        from alerts.market_news import build_extras
+        for text in await build_extras():
+            await send(token, chat, text)
+    except Exception as e:                       # the brief itself must never fail because of the extras
+        logger.warning("Morning brief extras failed: %s", e)
+    return ok
 
 
 async def run_morning_brief(db_path: str, config, evening: bool = False) -> bool:

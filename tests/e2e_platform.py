@@ -1439,6 +1439,28 @@ check("the next H4 breakout closes the level and cancels its waiting limit",
       and _db.execute("SELECT status FROM trade_follows WHERE alert_id = ? ORDER BY id DESC", (_nb["id"],)).fetchone()[0] == "cancelled")
 c.delete(f"/api/entry-alerts/{_nb['id']}", headers=H(owner))
 
+# Morning Brief additions (2026-11-24): AI releases only, market news tagged by her instruments, alerts once
+from alerts import market_news as _mn
+from alerts.morning_brief import explain_prompt as _ep
+from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+_now = _dt.now(_tz.utc)
+_it = lambda t, s="", ago=10: {"title": t, "summary": s, "link": "https://x/" + t.replace(" ", "-"), "source": "T",
+                               "published": _now - _td(minutes=ago)}
+check("an AI launch is picked, a funding round is not",
+      [i["title"] for i in _mn.ai_pick([_it("OpenAI launches GPT-6 with faster reasoning"),
+                                         _it("AI startup raises $300 million in funding")], 3, _now)] == ["OpenAI launches GPT-6 with faster reasoning"])
+check("ECB rate cut tags EURUSD and GER40", {"EURUSD", "GER40"} <= set(_mn.tags(_it("ECB cuts interest rate as eurozone inflation cools"))))
+check("Canadian dollar story is not tagged EURUSD", "EURUSD" not in _mn.tags(_it("Canadian Dollar slips before Bank of Canada")))
+check("OPEC cut tags USOIL", "USOIL" in _mn.tags(_it("OPEC+ agrees deeper oil output cut")))
+_mc = sqlite3.connect(":memory:")
+_big = _it("Fed cuts interest rate as US CPI inflation cools, Powell says", ago=20)
+_due = _mn.due_alerts(_mc, [_big, _it("Fed cuts interest rate as US CPI inflation cools: Powell speaks", ago=15),
+                            _it("Gold edges higher", ago=5)], _now)
+check("a high-impact story alerts once, the same event from another source does not", len(_due) == 1)
+_mc.execute("INSERT INTO market_news_sent VALUES (?, ?, ?)", (_big["link"], _big["title"], _now.isoformat()))
+check("an alert already sent is not sent again", _mn.due_alerts(_mc, [_big], _now) == [])
+_q = _ep([{"title": "A story", "link": "https://x/a"}])
+check("the brief's own questions stay and a post per story is added", "Who and what it affects" in _q and "social media post" in _q)
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)
