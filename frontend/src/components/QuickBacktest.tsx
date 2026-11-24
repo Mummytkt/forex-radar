@@ -52,7 +52,23 @@ function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) =
   const [text, setText] = useState(isoToDmy(value))
   const pickRef = useRef<HTMLInputElement>(null)
   useEffect(() => { setText(isoToDmy(value)) }, [value])
+  // 7/1/20, 7.1.2020, 07-01-20 ... (day / month / year; a 2-digit year is 20xx). User 2026-11-24: "quick access"
+  const parseShort = (t: string): string | null => {
+    const m = t.trim().match(/^(\d{1,2})[\/.\- ](\d{1,2})[\/.\- ](\d{2}|\d{4})$/)
+    if (!m) return null
+    const d = +m[1], mo = +m[2], y = m[3].length === 2 ? 2000 + +m[3] : +m[3]
+    const dt = new Date(Date.UTC(y, mo - 1, d))
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null
+    return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
+  const commit = () => { const iso = parseShort(text); if (iso) { onChange(iso); setText(isoToDmy(iso)) } }
   const type = (raw: string) => {
+    if (/[\/.\- ]/.test(raw)) {           // typed with separators: keep what she types, take it once it's a full date
+      setText(raw.slice(0, 10))
+      const iso = parseShort(raw)
+      if (iso) onChange(iso)
+      return
+    }
     const dg = raw.replace(/\D/g, '').slice(0, 8)
     const t = dg.length > 4 ? `${dg.slice(0, 2)}/${dg.slice(2, 4)}/${dg.slice(4)}` : dg.length > 2 ? `${dg.slice(0, 2)}/${dg.slice(2)}` : dg
     setText(t)
@@ -63,10 +79,11 @@ function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) =
         onChange(`${dg.slice(4)}-${dg.slice(2, 4)}-${dg.slice(0, 2)}`)
     }
   }
-  const bad = text.length === 10 && isoToDmy(value) !== text
+  const bad = text.length >= 6 && isoToDmy(value) !== text && parseShort(text) === null && text.length === 10
   return (
     <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <input value={text} onChange={e => type(e.target.value)} placeholder="DD/MM/YYYY" inputMode="numeric"
+      <input value={text} onChange={e => type(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit() }}
+        placeholder="DD/MM/YYYY" title="Type 7/1/20 or 07/01/2020 (day/month/year)" inputMode="numeric"
         style={{ ...field, width: 150, paddingRight: 36, borderColor: bad ? 'var(--bearish)' : undefined }} aria-label="Setup date (day/month/year)" />
       <button type="button" aria-label="Pick from calendar" onClick={() => { try { pickRef.current?.showPicker() } catch { pickRef.current?.focus() } }}
         style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' }}>
@@ -94,14 +111,16 @@ function zonedIso(dateIso: string, hhmm: string, tz: string): string {
   return new Date(guess - (shown - guess)).toISOString()
 }
 
-function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { saved_id?: number; pictures?: number }) => void }) {
+function AutoCheck({ draft, onSaved, onRead, onReviewed }: { draft: Draft; onSaved: (r: AutoRes & { saved_id?: number; pictures?: number }) => void
+  onRead: (id: number) => void; onReviewed: (id: number) => Promise<void> }) {
   const { timezone } = useTimezone()
   const [level, setLevel] = useState('')
   const [mode, setMode] = useState<'limit' | 'instant'>('limit')
   const [tol, setTol] = useState('1')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [res, setRes] = useState<AutoRes | null>(null)
+  const [res, setRes] = useState<(AutoRes & { saved_id?: number; pictures?: number }) | null>(null)
+  const [done, setDone] = useState(false)
   const [cov, setCov] = useState<{ pct: number; next_missing: string | null } | null>(null)
   useEffect(() => {
     api(`/api/quick-bt/auto/status?pair=${draft.pair || 'EURUSD'}`).then(r => r.ok ? r.json() : null).then(setCov).catch(() => {})
@@ -114,7 +133,7 @@ function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { 
     if (!draft.range_type) return setErr('Pick Inside range or Opposite range first')
     const lv = parseFloat(level)
     if (!(lv > 0)) return setErr("Type the level's price (the line you watch)")
-    setBusy(true); setRes(null)
+    setBusy(true); setRes(null); setDone(false)
     const r = await api('/api/quick-bt/auto', { method: 'POST', body: JSON.stringify({ pair: draft.pair, side: draft.side,
       level: lv, mode, tol_pips: parseFloat(tol) || 0, start: zonedIso(draft.date, '00:00', timezone || 'UTC'),
       save: true, date: draft.date, range_type: draft.range_type, valid: draft.valid, note: draft.note }) })
@@ -165,6 +184,16 @@ function AutoCheck({ draft, onSaved }: { draft: Draft; onSaved: (r: AutoRes & { 
               ))}
             </div>
           ))}
+          {res.saved_id && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0 4px' }}>
+              <button onClick={() => onRead(res.saved_id!)} style={{ ...pill(true), display: 'flex', alignItems: 'center', gap: 6 }}>
+                <BookOpen size={14} /> Review it now (pictures)</button>
+              {done
+                ? <span style={{ color: 'var(--bullish)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}><Check size={14} /> Reviewed</span>
+                : <button onClick={async () => { await onReviewed(res.saved_id!); setDone(true) }} style={{ ...pill(false, 'var(--bullish)'), display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Check size={14} /> Looks right: reviewed</button>}
+            </div>
+          )}
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>{res.note}</div>
         </div>
       )}
@@ -203,6 +232,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [reviewOnly, setReviewOnly] = useState(false)
   const [gallery, setGallery] = useState<Setup | null>(null)
   const [reading, setReading] = useState<Setup | null>(null)
+  const [openId, setOpenId] = useState<number | null>(null)   // open this setup's page once the list has it
 
   const load = useCallback(async () => {
     const r = await api('/api/quick-bt')
@@ -210,6 +240,11 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
     setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (openId == null) return
+    const s = setups.find(x => x.id === openId)
+    if (s) { setReading(s); setOpenId(null) }
+  }, [openId, setups])
 
   // ---- form
   const formed = Object.keys(draft.results)
@@ -316,7 +351,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             setMsg(`Saved ✓ ${Object.keys(res.results).length} confirmation${Object.keys(res.results).length === 1 ? '' : 's'}, ${res.pictures ?? 0} picture${res.pictures === 1 ? '' : 's'} · marked to review. Next level.`)
             setDraft(d => ({ ...blank(), date: d.date, pair: d.pair, range_type: d.range_type, side: d.side }))
             load()
-          }} />
+          }} onRead={id => { setOpenId(id); load() }}
+            onReviewed={async id => { await api(`/api/quick-bt/${id}/reviewed`, { method: 'POST' }); load() }} />
           <div style={{ display: 'grid', gap: 6 }}>
             {CONFS.map(([k, label]) => {
               const r = draft.results[k]
