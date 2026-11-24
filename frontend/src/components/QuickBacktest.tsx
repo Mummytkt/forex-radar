@@ -230,6 +230,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [yearF, setYearF] = useState('all')
   const [showAll, setShowAll] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
+  const pendingN = setups.filter(s => s.auto && !s.reviewed).length
+  const reviewView = reviewOnly && pendingN > 0
   const [gallery, setGallery] = useState<Setup | null>(null)
   const [reading, setReading] = useState<Setup | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)   // open this setup's page once the list has it
@@ -433,14 +435,13 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No setups yet. Start at January 2020 and save your first one above.</p>
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
-              {setups.some(s => s.auto && !s.reviewed) && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
-                  <button style={pill(reviewOnly, '#eab308')} onClick={() => setReviewOnly(v => !v)}>
-                    To review ({setups.filter(s => s.auto && !s.reviewed).length})</button>
-                  <span style={{ color: 'var(--text-muted)' }}>Auto-checked setups wait here until you look at their pictures and tick ✓.</span>
-                </div>
-              )}
-              {reviewOnly && setups.filter(s => s.auto && !s.reviewed).map(s => (
+              {/* the filter switches itself off once nothing is left to review, so the full list never goes blank */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, flexWrap: 'wrap' }}>
+                <button style={pill(!reviewView)} onClick={() => setReviewOnly(false)}>All setups ({setups.length})</button>
+                {pendingN > 0 && <button style={pill(reviewView, '#eab308')} onClick={() => setReviewOnly(true)}>To review ({pendingN})</button>}
+                <span style={{ color: 'var(--text-muted)' }}>{pendingN > 0 ? 'Auto-checked setups wait in "To review" until you tick ✓; reviewed ones stay in All setups.' : 'Click 📖 on a setup to read it like a diary page.'}</span>
+              </div>
+              {reviewView && setups.filter(s => s.auto && !s.reviewed).map(s => (
                 <div key={`rv${s.id}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, display: 'grid', gap: 10 }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                     <b style={{ fontSize: 15, color: 'var(--text-primary)' }}>{setupTitle(s)}</b>
@@ -460,7 +461,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                   </div>
                 </div>
               ))}
-              {!reviewOnly && (showAll ? setups : setups.slice(0, 40)).map(s => (
+              {!reviewView && (showAll ? setups : setups.slice(0, 40)).map(s => (
                 <div key={s.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 9px',
                   borderRadius: 8, border: '1px solid var(--border)', opacity: s.valid ? 1 : 0.55 }}>
                   <button onClick={() => setReading(s)} style={{ ...iconBtn, color: 'var(--accent)' }} aria-label="Read this setup" title="Read it like a diary page"><BookOpen size={14} /></button>
