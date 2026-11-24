@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy, CalendarDays, Wand2, Camera, Check, X, BookOpen } from 'lucide-react'
+import { Zap, Star, Trash2, Pencil, Minus, Plus, Loader2, Trophy, CalendarDays, ChevronDown, Wand2, Camera, Check, X, BookOpen } from 'lucide-react'
 import { useTimezone } from '@/lib/timezone'
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
@@ -428,6 +428,9 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
           </div>
         </div>
 
+        {/* ---------- monthly review (user, 2026-11-24) ---------- */}
+        <MonthlyReview setups={shown} />
+
         {/* ---------- setups ---------- */}
         <div style={card}>
           <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }}>Setups</h2>
@@ -674,6 +677,93 @@ function StatRow({ r, best, first }: { r: Stat; best?: boolean; first?: boolean 
       <td style={{ ...td, color: r.total > 0 ? 'var(--bullish)' : r.total < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>{r.setups ? fmtR(r.total) : '—'}</td>
       <td style={td}>{r.setups ? fmtR(r.total / r.setups) : '—'}</td>
     </tr>
+  )
+}
+
+// ---- Monthly review: each month folded shut; opened, every confirmation's month as if she took that one every time
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+type MonthRow = Stat & { bestW: number; bestL: number }
+// every trade in date order: a result with n takes = n-1 stop-outs, then its ticked outcome. A BE ends both streaks.
+function streaks(rs: { r: Res }[]): { bestW: number; bestL: number } {
+  let w = 0, l = 0, bestW = 0, bestL = 0
+  for (const { r } of rs) {
+    if (!r.outcome) continue
+    const seq: Outcome[] = [...Array(Math.max(0, r.takes - 1)).fill('loss'), r.outcome]
+    for (const o of seq) {
+      if (o === 'win') { w++; l = 0 } else if (o === 'loss') { l++; w = 0 } else { w = 0; l = 0 }
+      bestW = Math.max(bestW, w); bestL = Math.max(bestL, l)
+    }
+  }
+  return { bestW, bestL }
+}
+function MonthlyReview({ setups }: { setups: Setup[] }) {
+  const months = useMemo(() => {
+    const byMonth = new Map<string, Setup[]>()
+    for (const s of [...setups].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)) {
+      const m = s.date.slice(0, 7)
+      byMonth.set(m, [...(byMonth.get(m) || []), s])
+    }
+    return [...byMonth.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([m, list]) => {
+      const mk = (label: string, rs: { r: Res; tp: number }[]): MonthRow => ({ ...row(label, rs), ...streaks(rs) })
+      const rows = CONFS.map(([k, label]) => mk(label, list.filter(s => s.results[k]).map(s => ({ r: s.results[k], tp: s.tp_r }))))
+        .filter(r => r.setups > 0).sort((a, b) => b.total - a.total)
+      const first = mk('★ Always take the first to form', list.filter(s => s.first && s.results[s.first]).map(s => ({ r: s.results[s.first as string], tp: s.tp_r })))
+      return { m, n: list.length, rows, first }
+    })
+  }, [setups])
+  if (!months.length) return null
+  const rc = (v: number) => v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-secondary)'
+  const verdict = (v: number) => v > 0 ? 'Profit' : v < 0 ? 'Loss' : 'Flat'
+  return (
+    <div style={{ ...card, marginBottom: 18 }}>
+      <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <CalendarDays size={16} color="var(--accent)" /> Monthly review
+      </h2>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+        Each month as if you took that setup every time it formed. Streaks count every trade in date order (a stop-out before a retake is a loss; a breakeven ends a streak). Follows the range and year filters above.
+      </p>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {months.map(({ m, n, rows, first }) => (
+          <details key={m} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '8px 12px' }}>
+            <summary style={{ cursor: 'pointer', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 13.5, listStyle: 'none' }}>
+              <ChevronDown size={14} className="mr-chev" color="var(--text-muted)" />
+              <b style={{ color: 'var(--text-primary)', minWidth: 130 }}>{MONTHS_LONG[+m.slice(5, 7) - 1]} {m.slice(0, 4)}</b>
+              <span style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>{n} setup{n === 1 ? '' : 's'}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>★ first: <b style={{ color: rc(first.total) }}>{fmtR(first.total)}</b></span>
+              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 800, padding: '2px 9px', borderRadius: 999, color: rc(first.total),
+                border: `1px solid ${rc(first.total)}` }}>{verdict(first.total)}</span>
+            </summary>
+            <div style={{ overflowX: 'auto', marginTop: 8 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ color: 'var(--text-muted)', fontSize: 11, textAlign: 'right' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 8px' }}>Setup taken every time</th>
+                    <th style={th}>Setups</th><th style={th}>Trades</th><th style={th}>W / BE / L</th>
+                    <th style={th}>Wins in a row</th><th style={th}>Losses in a row</th><th style={th}>Total R</th><th style={th}>Month</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...rows, first].map(r => {
+                    const isFirst = r === first
+                    return (
+                      <tr key={r.label} style={{ borderTop: '1px solid var(--border)', textAlign: 'right', fontWeight: isFirst ? 800 : 500 }}>
+                        <td style={{ textAlign: 'left', padding: '7px 8px', color: isFirst ? '#eab308' : 'var(--text-primary)' }}>{r.label}</td>
+                        <td style={td}>{r.setups}</td><td style={td}>{r.takes}</td>
+                        <td style={td}>{r.win} / {r.be} / {r.loss}</td>
+                        <td style={{ ...td, color: r.bestW ? 'var(--bullish)' : td.color }}>{r.bestW}</td>
+                        <td style={{ ...td, color: r.bestL ? 'var(--bearish)' : td.color }}>{r.bestL}</td>
+                        <td style={{ ...td, color: rc(r.total) }}>{r.setups ? fmtR(r.total) : '—'}</td>
+                        <td style={{ ...td, color: rc(r.total), fontWeight: 700 }}>{r.setups ? verdict(r.total) : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
   )
 }
 

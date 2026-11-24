@@ -460,3 +460,8 @@ body {
 @keyframes dp-float { 0%, 100% { transform: translateY(0) rotate(-4deg); opacity: 0.28; } 50% { transform: translateY(-9px) rotate(5deg); opacity: 0.6; } }
 @media (max-width: 600px) { .dp-wrap { padding: 8px; } .dp-page { padding: 16px; } .dp-spark { display: none; } }
 @media (prefers-reduced-motion: reduce) { .dp-page, .dp-line, .dp-spark { animation: none; } }
+
+/* Quick Backtest monthly review: the arrow turns when a month is open; no browser triangle */
+details > summary::-webkit-details-marker { display: none; }
+.mr-chev { transition: transform 0.15s; transform: rotate(-90deg); flex-shrink: 0; }
+details[open] .mr-chev { transform: none; }
