@@ -192,7 +192,7 @@ function RiskBox() {
     if (!(v > 0)) { setMsg('Type an amount, e.g. 20'); return }
     const r = await fetch(`${API_BASE}/api/journal/risk`, { method: 'POST', headers: { ...(hdrs() as Record<string, string>), 'Content-Type': 'application/json' },
       body: JSON.stringify({ risk_usd: v }) })
-    if (r.ok) { setSaved(v); setMsg('Saved ✓ new trades use it') } else setMsg('Could not save')
+    if (r.ok) { setSaved(v); setMsg(`Saved ✓ trades from now on use $${v}; trades already logged keep their risk`) } else setMsg('Could not save')
   }
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}
@@ -203,7 +203,8 @@ function RiskBox() {
       {saved == null || parseFloat(val) !== saved
         ? <button onClick={save} style={{ padding: '4px 9px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'white', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Save</button>
         : null}
-      {msg && <span style={{ color: msg.startsWith('Saved') ? 'var(--bullish)' : 'var(--bearish)' }}>{msg}</span>}
+      {msg ? <span style={{ color: msg.startsWith('Saved') ? 'var(--bullish)' : 'var(--bearish)' }}>{msg}</span>
+        : <span style={{ color: 'var(--text-muted)', fontSize: 10.5 }}>applies to new trades only</span>}
     </span>
   )
 }
@@ -212,9 +213,11 @@ function RiskBox() {
 function EquityCurve({ entries }: { entries: Entry[] }) {
   const pts = useMemo(() => {
     return [...entries]
-      .filter(e => e.result !== 'open' && e.pips !== null)
-      .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
+      .filter(e => e.result !== 'open' && (e.pips !== null || resultMoney(e) != null))
+      .sort((a, b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
   }, [entries])
+  // in money when every closed trade has its risk (owner 2026-11-25: $20 a trade, not pips); else pips as before
+  const inMoney = pts.length > 0 && pts.every(p => resultMoney(p) != null)
 
   if (pts.length < 2) {
     return (
@@ -231,7 +234,7 @@ function EquityCurve({ entries }: { entries: Entry[] }) {
   const cumulative: number[] = []
   let sum = 0
   for (const p of pts) {
-    sum += resultPips(p) ?? 0
+    sum += (inMoney ? resultMoney(p) : resultPips(p)) ?? 0
     cumulative.push(sum)
   }
 
@@ -256,9 +259,9 @@ function EquityCurve({ entries }: { entries: Entry[] }) {
     <div style={{ position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 22, fontWeight: 700, color: lineColor }}>
-          {final >= 0 ? '+' : ''}{final.toFixed(1)}
+          {inMoney ? `${final >= 0 ? '+' : '−'}$${Math.abs(final).toFixed(Math.abs(final) % 1 ? 2 : 0)}` : `${final >= 0 ? '+' : ''}${final.toFixed(1)}`}
         </span>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>pips cumulative · {pts.length} trades</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{inMoney ? 'profit & loss' : 'pips'} cumulative · {pts.length} trades</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -1339,7 +1342,7 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
             {stats.hasPnl ? (
               <>
                 <div style={{ fontSize: 30, fontWeight: 800, color: stats.netPnl >= 0 ? 'var(--bullish)' : 'var(--bearish)', lineHeight: 1 }}>{stats.netPnl >= 0 ? '+' : '−'}${Math.abs(stats.netPnl).toFixed(0)}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{stats.totalPips >= 0 ? '+' : ''}{stats.totalPips.toFixed(1)} pips</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{stats.wins} won · {stats.losses} lost · from your risk per trade</div>
               </>
             ) : (
               <>
