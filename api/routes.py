@@ -1009,6 +1009,32 @@ def _row_to_entry(row) -> JournalEntry:
     )
 
 
+class JournalRisk(BaseModel):
+    risk_usd: float
+
+
+@router.get("/journal/risk")
+def get_journal_risk(request: Request):
+    """Her money risked per trade (2026-11-25): auto-logged trades read $ from it, not pips."""
+    from alerts.forward_report import risk_usd
+    with _db_write(request) as conn:
+        return {"risk_usd": risk_usd(conn, _user_id(request))}
+
+
+@router.post("/journal/risk")
+def set_journal_risk(request: Request, body: JournalRisk):
+    """New trades use the new amount; trades already logged keep the risk they had."""
+    from alerts.forward_report import set_risk_usd
+    if not (0 < body.risk_usd <= 1_000_000):
+        raise HTTPException(400, "Type the money you risk per trade, e.g. 20")
+    uid = _user_id(request)
+    if not uid:
+        raise HTTPException(401, "Sign in first")
+    with _db_write(request) as conn:
+        set_risk_usd(conn, uid, round(body.risk_usd, 2))
+    return {"risk_usd": round(body.risk_usd, 2)}
+
+
 @router.get("/journal", response_model=list[JournalEntry])
 def get_journal(request: Request, period: str = Query("all"), trade_type: str = Query("live")):
     uid = _user_id(request)

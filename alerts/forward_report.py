@@ -195,6 +195,23 @@ WAT = timezone(timedelta(hours=1))
 OPEN_ON = ("open", "tp", "sl", "sl_tp", "left", "reentered", "expired")
 
 
+DEFAULT_RISK_USD = 20.0     # the owner's risk per trade (2026-11-25): 3R = $60
+
+
+def risk_usd(conn, user_id) -> float:
+    """Her money risked per trade, for the journal ($20 unless she changed it on the Journal page)."""
+    conn.execute("CREATE TABLE IF NOT EXISTS journal_risk (user_id INTEGER PRIMARY KEY, risk_usd REAL NOT NULL, updated_at TEXT)")
+    r = conn.execute("SELECT risk_usd FROM journal_risk WHERE user_id = ?", (user_id,)).fetchone() if user_id else None
+    return float(r[0]) if r else DEFAULT_RISK_USD
+
+
+def set_risk_usd(conn, user_id, amount: float) -> None:
+    risk_usd(conn, user_id)
+    conn.execute("INSERT INTO journal_risk (user_id, risk_usd, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE "
+                 "SET risk_usd = excluded.risk_usd, updated_at = excluded.updated_at",
+                 (user_id, amount, datetime.now(timezone.utc).isoformat()))
+
+
 def journal_sync(conn, fo: dict) -> None:
     """Make the owner's journal match one follow. Safe to call every price check."""
     if fo.get("role") != "OWNER" or fo.get("status") not in OPEN_ON:
@@ -220,14 +237,17 @@ def journal_sync(conn, fo: dict) -> None:
         notes = (f"Auto-logged from the Bias Pointer's trade follow: {name} confirmation, "
                  f"{'limit' if fo.get('mode') == 'limit' else 'instant'} entry"
                  + (f", re-entry {fo['reentry_no']}" if fo.get("reentry_no") else "") + ". Add your chart and notes.")
+        # money, not pips (owner 2026-11-25): her risk per trade at the time of the trade, and the TP in money
+        risk = risk_usd(conn, fo.get("user_id"))
         conn.execute("""INSERT INTO journal_entries
             (trade_date, instrument, direction, entry_price, stop_loss, take_profit, exit_price, pips, rr_ratio,
              result, setup_type, setup_type_notes, trade_type, entry_date, exit_date, entry_time, exit_time, notes,
-             user_id, follow_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'other', ?, 'live', ?, ?, ?, ?, ?, ?, ?)""",
+             user_id, follow_id, amount_risked, amount_aimed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'other', ?, 'live', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (t0.date().isoformat(), fo["instrument"], "buy" if bull else "sell", fo["entry"], fo["sl"], fo["tp"],
              exit_p, pips, rr, res, name, t0.date().isoformat(), t1.date().isoformat() if t1 else None,
-             t0.strftime("%H:%M"), t1.strftime("%H:%M") if t1 else None, notes, fo.get("user_id"), fo["id"]))
+             t0.strftime("%H:%M"), t1.strftime("%H:%M") if t1 else None, notes, fo.get("user_id"), fo["id"],
+             risk, round(risk * float(fo["tp_r"] or 2), 2)))
     elif row[1] == "open" and res != "open":
         conn.execute("UPDATE journal_entries SET result = ?, exit_price = ?, pips = ?, rr_ratio = ?, exit_date = ?, "
                      "exit_time = ? WHERE id = ?",

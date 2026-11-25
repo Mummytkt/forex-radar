@@ -1489,6 +1489,25 @@ check("level closed carries the cancel-the-order line in the same message",
       "Cancel your limit order" in _xt and _db.execute("SELECT status FROM trade_follows WHERE alert_id = ?", (_lo["id"],)).fetchone()[0] == "cancelled")
 for _x in (_lo, _hi):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
+# Journal in money (owner 2026-11-25): $20 risk by default, changeable; an auto-logged trade keeps the risk it had
+check("risk per trade starts at $20", c.get("/api/journal/risk", headers=H(owner)).json().get("risk_usd") == 20)
+check("a bad risk amount is refused", c.post("/api/journal/risk", headers=H(owner), json={"risk_usd": 0}).status_code == 400)
+from alerts.forward_report import journal_sync as _js
+_db = sqlite3.connect(DB)
+_own = _db.execute("SELECT id FROM users WHERE role = 'OWNER' LIMIT 1").fetchone()[0]
+_fo = {"id": 990001, "role": "OWNER", "status": "tp", "mode": "instant", "direction": "bullish", "instrument": "EURUSD",
+       "opened_at": "2026-11-24T10:00:00+00:00", "closed_at": "2026-11-24T12:00:00+00:00", "entry": 1.1, "sl": 1.099,
+       "tp": 1.103, "tp_r": 3, "tf": "M5", "pattern": "cisd", "user_id": _own}
+_js(_db, _fo); _db.commit()
+check("an auto-logged 3R win reads $20 risked, $60 aimed",
+      _db.execute("SELECT amount_risked, amount_aimed FROM journal_entries WHERE follow_id = 990001").fetchone() == (20.0, 60.0))
+c.post("/api/journal/risk", headers=H(owner), json={"risk_usd": 25})
+_js(_db, dict(_fo, id=990002)); _db.commit()
+check("after changing the risk, new trades use it and old ones keep theirs",
+      _db.execute("SELECT amount_risked FROM journal_entries WHERE follow_id = 990002").fetchone()[0] == 25.0
+      and _db.execute("SELECT amount_risked FROM journal_entries WHERE follow_id = 990001").fetchone()[0] == 20.0)
+_db.execute("DELETE FROM journal_entries WHERE follow_id IN (990001, 990002)"); _db.commit()
+c.post("/api/journal/risk", headers=H(owner), json={"risk_usd": 20})
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

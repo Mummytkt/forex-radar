@@ -166,6 +166,46 @@ function resultPips(e: { pips: number | null; result: string }): number | null {
   return e.pips
 }
 
+// The trade's result in money when its risk is known: a win = the amount aimed (risk × the R it hit), a loss =
+// minus the risk, a breakeven = $0. Open / missed trades have none yet.
+function resultMoney(e: { result: string; amount_risked: number | null; amount_aimed: number | null; rr_ratio: number | null }): number | null {
+  if (e.amount_risked == null) return null
+  if (e.result === 'win') return e.amount_aimed ?? (e.rr_ratio != null ? e.amount_risked * Math.abs(e.rr_ratio) : null)
+  if (e.result === 'loss') return -e.amount_risked
+  if (e.result === 'breakeven') return 0
+  return null
+}
+
+// Her money risked per trade (owner 2026-11-25): auto-logged trades use it; changing it only affects new trades
+function RiskBox() {
+  const [val, setVal] = useState('')
+  const [saved, setSaved] = useState<number | null>(null)
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    fetch(`${API_BASE}/api/journal/risk`, { headers: hdrs() }).then(r => r.ok ? r.json() : null)
+      .then(j => { if (j) { setSaved(j.risk_usd); setVal(String(j.risk_usd)) } }).catch(() => {})
+  }, [])
+  const save = async () => {
+    const v = parseFloat(val)
+    if (!(v > 0)) { setMsg('Type an amount, e.g. 20'); return }
+    const r = await fetch(`${API_BASE}/api/journal/risk`, { method: 'POST', headers: { ...(hdrs() as Record<string, string>), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ risk_usd: v }) })
+    if (r.ok) { setSaved(v); setMsg('Saved ✓ new trades use it') } else setMsg('Could not save')
+  }
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}
+      title="Money you risk per trade. Auto-logged trades show $ from it (a 3R win = 3 × this). Trades already logged keep the risk they had.">
+      Risk per trade $
+      <input value={val} onChange={e => { setVal(e.target.value); setMsg('') }} onKeyDown={e => { if (e.key === 'Enter') save() }}
+        inputMode="decimal" style={{ width: 64, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', fontSize: 12 }} aria-label="Risk per trade in dollars" />
+      {saved == null || parseFloat(val) !== saved
+        ? <button onClick={save} style={{ padding: '4px 9px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: 'white', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+        : null}
+      {msg && <span style={{ color: msg.startsWith('Saved') ? 'var(--bullish)' : 'var(--bearish)' }}>{msg}</span>}
+    </span>
+  )
+}
+
 // ── Equity curve ──────────────────────────────────────────────────────────────
 function EquityCurve({ entries }: { entries: Entry[] }) {
   const pts = useMemo(() => {
@@ -498,6 +538,12 @@ function TradeRow({ entry, onView, onEdit, onDelete, onResultChange }: {
       )}
       <div style={{ width: 60, textAlign: 'right', flexShrink: 0 }}>
         {(() => {
+          const money = resultMoney(entry)
+          if (money != null) return (
+            <span style={{ fontSize: 13, fontWeight: 700, color: money > 0 ? 'var(--bullish)' : money < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>
+              {money > 0 ? '+' : money < 0 ? '−' : ''}${Math.abs(money).toFixed(Math.abs(money) % 1 ? 2 : 0)}
+            </span>
+          )
           const sp = resultPips(entry)
           return sp != null ? (
             <span style={{ fontSize: 13, fontWeight: 700, color: sp >= 0 ? 'var(--bullish)' : 'var(--bearish)' }}>
@@ -1269,7 +1315,10 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
             <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
               {config.tradeType === 'backtest' ? 'Backtest Log' : 'Trade Log'}
             </h2>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{entries.length} {entries.length === 1 ? 'entry' : 'entries'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {config.tradeType !== 'backtest' && <RiskBox />}
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{entries.length} {entries.length === 1 ? 'entry' : 'entries'}</span>
+            </span>
           </div>
 
           {loading ? (
