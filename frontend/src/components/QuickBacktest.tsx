@@ -191,7 +191,9 @@ function AutoCheck({ draft, onSaved, onRead, onReviewed }: { draft: Draft; onSav
             <div key={k} style={{ marginBottom: 4 }}>
               <b style={{ color: 'var(--text-primary)' }}>{labelOf(k)}</b>{res.first === k ? ' ★' : ''}{v.after_tp ? ' (after TP)' : ''}:{' '}
               {v.trades.map((t, i) => (
-                <span key={i}>{i ? ' → ' : ''}{when(t.time)} {t.limit ? `limit ${t.entry}${t.filled ? ` (filled ${when(t.filled)})` : ''}` : `entry ${t.entry}`} SL {t.sl} TP {t.tp}{' '}
+                <span key={i}>{i ? ' → ' : ''}{/* named like TradingView: by the confirmation candle's OPEN time (2026-11-25) */}
+                  {(() => { const tf = k.endsWith('5') && k !== 'cisd5' ? 15 : k === 'cisd5' ? 5 : 60
+                    return `${tf === 60 ? 'H1' : tf === 15 ? 'M15' : 'M5'} candle ${when(new Date(new Date(t.time).getTime() - tf * 60000).toISOString())}` })()} {t.limit ? `limit ${t.entry}${t.filled ? ` (filled ${when(t.filled)})` : ''}` : `entry ${t.entry}`} SL {t.sl} TP {t.tp}{' '}
                   <b style={{ color: col(t.outcome) }}>{t.outcome.toUpperCase()}</b>{t.exit ? ` (${when(t.exit)})` : ''}
                   {t.exit && <b style={{ color: 'var(--text-primary)' }}>{` · held ${heldFor(t.filled || t.time, t.exit)}`}</b>}</span>
               ))}

@@ -365,6 +365,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
             if use_limit:
                 r = play_limit(mins, j0, side, lim, e["touch"], tp_r, be_r, until)
                 entry = lim
+            elif mode == "limit":
+                continue                     # no valid limit = no trade: she only trades limits (owner, 2026-11-25)
             else:
                 if abs(e["close"] - e["touch"]) <= 0:
                     continue
