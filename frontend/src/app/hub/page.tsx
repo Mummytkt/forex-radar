@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth'
 import { timeAgo } from '@/lib/utils'
 import { visibleNav, type NavItem } from '@/lib/nav'
 import { UNREAD_KEY } from '@/components/UpdatesSection'
-import type { AlertsPage, PriceAlertsList } from '@/lib/types'
+import type { AlertsPage, PriceAlertsList, EntryAlertsList } from '@/lib/types'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -58,6 +58,9 @@ export default function HubPage() {
   const isOwner = user?.role === 'OWNER'
   const { data: alerts } = useSWR<AlertsPage>('/api/alerts?limit=1', fetcher, { refreshInterval: 60000 })
   const { data: levels } = useSWR<PriceAlertsList>('/api/price-alerts?tab=active', fetcher, { refreshInterval: 60000 })
+  // her entry-pattern levels count too (owner 2026-11-25: it always showed 0 with levels set)
+  const { data: entryLevels } = useSWR<EntryAlertsList>('/api/entry-alerts?tab=active', fetcher, { refreshInterval: 60000 })
+  const levelsN = (levels?.items.length ?? 0) + (entryLevels?.items.length ?? 0)
   const { data: unreadData } = useSWR<{ unread: number }>(user && !isOwner ? UNREAD_KEY : null, fetcher, { refreshInterval: 60000 })
   const unread = unreadData?.unread ?? 0
 
@@ -70,7 +73,7 @@ export default function HubPage() {
   const details: Record<string, string | null> = {
     '/dashboard': board ? `${activeN} active setup${activeN === 1 ? '' : 's'} · ${reactingN} in a Daily pullback` : null,
     '/alerts': lastAlert ? `Last signal ${timeAgo(lastAlert.fired_at)} · ${lastAlert.instrument}` : alerts ? 'No signals yet' : null,
-    '/price-alerts': levels ? `${levels.items.length} level${levels.items.length === 1 ? '' : 's'} watched` : null,
+    '/price-alerts': levels || entryLevels ? `${levelsN} level${levelsN === 1 ? '' : 's'} watched` : null,
     '/strategy': unread > 0 ? `${unread} new update${unread === 1 ? '' : 's'}` : null,
   }
 

@@ -639,6 +639,13 @@ function DiaryBook({ entries, picked, onPick, onEdit, onDelete }: { entries: Ent
 // ── A trade read as a page of her diary (2026-11-25) ─────────────────────────
 const AUTO_NOTE = /^Auto-logged from the Bias Pointer/
 const px = (v: number) => String(Number(v.toFixed(5)))      // 26584.149999999994 -> 26584.15
+// "15:55" -> "3:55pm" (owner 2026-11-25: she reads it faster)
+const t12 = (t: string) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t)
+  if (!m) return t
+  const h = +m[1]
+  return `${h % 12 || 12}:${m[2]}${h < 12 ? 'am' : 'pm'}`
+}
 function JournalPage({ entry, onEdit, onDelete, picked, onPick }: { entry: Entry; onEdit: () => void; onDelete: () => void
   picked?: boolean; onPick?: () => void }) {
   const { user } = useAuth()
@@ -654,14 +661,14 @@ function JournalPage({ entry, onEdit, onDelete, picked, onPick }: { entry: Entry
   })
   const money = resultMoney(entry)
   const plan: string[] = []
-  if (entry.entry_price != null) plan.push(`I got in at ${px(entry.entry_price)}${entry.entry_time ? ` at ${entry.entry_time}` : ''}`)
+  if (entry.entry_price != null) plan.push(`I got in at ${px(entry.entry_price)}${entry.entry_time ? ` at ${t12(entry.entry_time)}` : ''}`)
   if (entry.stop_loss != null) plan.push(`my stop sat at ${px(entry.stop_loss)}`)
   if (entry.take_profit != null) plan.push(`I aimed for ${px(entry.take_profit)}`)
   // the confirmation she took it on (auto-logged trades: "M5 CISD"; else her setup's name)
   const conf = (entry.setup_type === 'other' && entry.setup_type_notes) ? entry.setup_type_notes : label
   const confLine = conf ? `My entry confirmation was the ${conf} ${['🎯', '🔎', '📍'][entry.id % 3]}` : ''
   const exitLine = entry.exit_price != null && entry.result !== 'open'
-    ? `I was out at ${px(entry.exit_price)}${entry.exit_time ? ` at ${entry.exit_time}` : ''}${entry.exit_date && entry.exit_date !== entry.trade_date ? ` on ${entry.exit_date}` : ''}.` : ''
+    ? `I was out at ${px(entry.exit_price)}${entry.exit_time ? ` at ${t12(entry.exit_time)}` : ''}${entry.exit_date && entry.exit_date !== entry.trade_date ? ` on ${entry.exit_date}` : ''}.` : ''
   const planText = plan.length > 1 ? `${plan.slice(0, -1).join(', ')} and ${plan[plan.length - 1]}.` : plan.length ? `${plan[0]}.` : ''
   const risk = entry.amount_risked != null
     ? ` I put $${entry.amount_risked} on the line${entry.amount_aimed != null ? ` to make $${entry.amount_aimed}` : ''}.` : ''
