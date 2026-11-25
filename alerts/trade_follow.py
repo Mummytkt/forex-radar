@@ -571,6 +571,22 @@ def kept_levels_due(conn: sqlite3.Connection, now: datetime) -> list:
     return out
 
 
+def _end_level_follows(conn: sqlite3.Connection, level_id: int, instrument: str, now: datetime) -> str:
+    """When a level closes, its waiting limit is cancelled and its re-entry watch ends in the SAME message
+    (owner, 2026-11-25: "one message saying level closed, cancel order is enough"). Returns the extra lines."""
+    f = lambda v: fmt_price(instrument, v)
+    lines = []
+    for fo in conn.execute("SELECT id, status, entry FROM trade_follows WHERE alert_id = ? AND status IN ('pending', 'sl')",
+                           (level_id,)).fetchall():
+        if fo[1] == "pending":
+            conn.execute("UPDATE trade_follows SET status = 'cancelled', closed_at = ? WHERE id = ?", (_iso(now), fo[0]))
+            lines.append(f"❌ Cancel your limit order {f(fo[2])}: it never filled.")
+        else:
+            conn.execute("UPDATE trade_follows SET status = 'left', closed_at = ? WHERE id = ?", (_iso(now), fo[0]))
+            lines.append("↩️ The re-entry watch after your stop has ended too.")
+    return ("\n\n" + "\n".join(lines)) if lines else ""
+
+
 def kept_level_text(lv: dict, close: float) -> str:
     f = lambda v: fmt_price(lv["instrument"], v)
     bull = lv["direction"] == "bullish"
@@ -584,6 +600,7 @@ async def check_kept_levels(conn: sqlite3.Connection, config, now: datetime) -> 
     for lv, at, close in kept_levels_due(conn, now):
         conn.execute("UPDATE entry_pattern_alerts SET is_active = 0, triggered_at = ? WHERE id = ? AND is_active = 1",
                      (_iso(at), lv["id"]))
+        extra = _end_level_follows(conn, lv["id"], lv["instrument"], now)
         conn.commit()
         logger.info("%s level %d closed: H4 close %s beyond %s", lv["instrument"], lv["id"], close, lv["price"])
         try:
@@ -593,7 +610,7 @@ async def check_kept_levels(conn: sqlite3.Connection, config, now: datetime) -> 
             chat_id = lv["chat"] or config.telegram_chat_id
         if config.telegram_enabled and chat_id:
             from api.tv_webhook import _send_entry
-            await _send_entry(config.telegram_bot_token, chat_id, kept_level_text(lv, close), None)
+            await _send_entry(config.telegram_bot_token, chat_id, kept_level_text(lv, close) + extra, None)
 
 
 def summary(fo: dict) -> str:
@@ -632,9 +649,13 @@ async def end_watches_on_breakout(conn: sqlite3.Connection, config, instrument: 
     for lv in levels:
         conn.execute("UPDATE entry_pattern_alerts SET is_active = 0, triggered_at = ? WHERE id = ?", (_iso(now), lv["id"]))
         side = "BUY" if lv["direction"] == "bullish" else "SELL"
+        extra = _end_level_follows(conn, lv["id"], instrument, now)     # its order is cancelled in this same message
         msgs.append((lv, f"🚫 Level closed: {tagged(instrument)} · {side} level {f(lv['price'])}\n\nA new H4 breakout ({kind}) "
-                         "happened on this pair, so this setup has ended. Set your next level from the new breakout."))
+                         "happened on this pair, so this setup has ended. Set your next level from the new breakout." + extra))
+    handled = {lv["id"] for lv in levels}
     for fo in follows:
+        if fo["alert_id"] in handled:
+            continue                      # already told in its level's message
         head = f"{tagged(instrument)} · {'BUY' if fo['direction'] == 'bullish' else 'SELL'}"
         if fo["status"] == "pending":
             conn.execute("UPDATE trade_follows SET status = 'cancelled', closed_at = ? WHERE id = ?", (_iso(now), fo["id"]))

@@ -1112,6 +1112,25 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     # how close to the level: the wick that reached it when the script sends it, else the close
     touch = payload.touch_price if payload.touch_price is not None else price
 
+    def _watches_it(r) -> bool:
+        ws = [w for w in (r["watches"] or "").split(",") if w]
+        if ws:
+            return bool(watch_keys & set(ws))
+        return pattern in ("pcl", "engulfing_sweep") and tf_label in ("H1", "H2")   # an older level
+
+    # One confirmation = one alert and one trade per person (owner, 2026-11-25: two NAS100 buy levels 30 points
+    # apart both heard the same M5 CISD and every message came twice). When one wick reaches several of her levels
+    # on this side, the nearest level (a buy: the lowest; a sell: the highest) takes it and the others stay quiet;
+    # and while any of those levels has its trade running or its limit waiting, the confirmation is not sent at all.
+    rows = sorted(rows, key=lambda r: r["price"] if direction == "bullish" else -r["price"])
+    reaches = lambda r: touch <= r["price"] if direction == "bullish" else touch >= r["price"]
+    busy_people = set()
+    for r in rows:
+        if r["follow"] and _watches_it(r) and reaches(r) and conn.execute(
+                "SELECT 1 FROM trade_follows WHERE alert_id = ? AND status IN ('open','pending') LIMIT 1", (r["id"],)).fetchone():
+            busy_people.add(r["user_id"])
+    told = set()
+
     for row in rows:
         alert_id = row["id"]
         alert_price = row["price"]
@@ -1121,12 +1140,12 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         chat_id = _resolve_chat(config, row["user_id"], row["telegram_chat_id"],
                                 row["role"], row["plan"], row["plan_expires_at"])
 
-        watches = [w for w in (row["watches"] or "").split(",") if w]
-        if watches:
-            if not watch_keys & set(watches):
-                continue  # this level doesn't watch this formation on this timeframe
-        elif pattern not in ("pcl", "engulfing_sweep") or tf_label not in ("H1", "H2"):
-            continue  # an older level: PCL / Engulfing Sweep on H1 / H2 only
+        if not _watches_it(row):
+            continue  # this level doesn't watch this formation on this timeframe
+        if row["user_id"] in told or (row["user_id"] in busy_people and reaches(row)):
+            logger.info("%s ENTRY_CONFIRMATION %s %s @ %.5f: alert_id=%d stays quiet (same confirmation as another "
+                        "of this person's levels)", instrument, direction, pattern, price, alert_id)
+            continue
 
         # One trade at a time per level (user rule, confirmed with a picture; re-stated 2026-11-23): while the trade
         # this level opened is still running (open) or its limit is still waiting (pending), further confirmations on
@@ -1167,6 +1186,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             WHERE id = ?
         """, (1 if row["keep_open"] else 0, now_iso, pattern, tf_label, alert_id))
         conn.commit()
+        told.add(row["user_id"])          # her other levels stay quiet for this same confirmation
 
         alert_text = format_entry_alert(
             instrument=instrument,

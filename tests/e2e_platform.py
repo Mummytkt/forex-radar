@@ -1323,8 +1323,13 @@ check("an M5 sweep and break fires only the level watching it, matched on the sw
 tv(type="ENTRY_CONFIRMATION", instrument="EURUSD", direction="bullish", pattern="engulfing_sweep", timeframe="60",
    price=1.1015, swept_level=1.1001, touch_price=1.0999)
 _a = _ent()
-check("an H1 sweep closes the level watching H1 sweep, and an older level (no list) still fires on H1 Engulfing Sweep",
-      _ea["id"] not in _a and _old["id"] not in _a and _eb["id"] in _a)
+# one confirmation = one alert per person (2026-11-25): the older level at the same price waits for the next one
+check("an H1 sweep closes the level watching H1 sweep, once (her other level at the same price stays quiet)",
+      _ea["id"] not in _a and _old["id"] in _a and _a[_old["id"]]["triggered_at"] is None and _eb["id"] in _a)
+tv(type="ENTRY_CONFIRMATION", instrument="EURUSD", direction="bullish", pattern="engulfing_sweep", timeframe="60",
+   price=1.1016, swept_level=1.1001, touch_price=1.0998)
+_a = _ent()
+check("an older level (no list) still fires on H1 Engulfing Sweep", _old["id"] not in _a and _eb["id"] in _a)
 for _x in (_ea, _eb, _old):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
 # v3 confirmations (2026-11-10): PCL (= the Sweep), OCTGD, Engulfing
@@ -1461,6 +1466,29 @@ _mc.execute("INSERT INTO market_news_sent VALUES (?, ?, ?)", (_big["link"], _big
 check("an alert already sent is not sent again", _mn.due_alerts(_mc, [_big], _now) == [])
 _q = _ep([{"title": "A story", "link": "https://x/a"}])
 check("the brief's own questions stay and a post per story is added", "Who and what it affects" in _q and "social media post" in _q)
+# One confirmation reaching two of her levels = one alert, one trade (owner, 2026-11-25: NAS100 doubles)
+_lo = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "NZDUSD", "direction": "bullish", "price": 0.5800,
+             "tolerance_pips": 10, "watches": ["M5:cisd"], "follow": True, "tp_r": 3, "keep_open": True}).json()
+_hi = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "NZDUSD", "direction": "bullish", "price": 0.5830,
+             "tolerance_pips": 10, "watches": ["M5:cisd"], "follow": True, "tp_r": 3, "keep_open": True}).json()
+tv(type="ENTRY_CONFIRMATION", instrument="NZDUSD", direction="bullish", pattern="cisd", timeframe="5",
+   price=0.5840, swept_level=0.5835, touch_price=0.5790, candles=_cs)
+_db = sqlite3.connect(DB)
+_fl = _db.execute("SELECT alert_id FROM trade_follows WHERE alert_id IN (?, ?)", (_lo["id"], _hi["id"])).fetchall()
+check("one wick reaching two of her levels gives one trade, on the nearest level", [r[0] for r in _fl] == [_lo["id"]])
+tv(type="ENTRY_CONFIRMATION", instrument="NZDUSD", direction="bullish", pattern="cisd", timeframe="5",
+   price=0.5845, swept_level=0.5836, touch_price=0.5795, candles=_cs)
+_fl2 = _db.execute("SELECT COUNT(*) FROM trade_follows WHERE alert_id IN (?, ?)", (_lo["id"], _hi["id"])).fetchone()[0]
+check("while that trade runs, the other level doesn't send the next confirmation either", _fl2 == 1)
+# a closing level folds its waiting limit into the same message
+from alerts.trade_follow import _end_level_follows as _elf
+from datetime import datetime as _dt2, timezone as _tz2
+_db.execute("UPDATE trade_follows SET status = 'pending' WHERE alert_id = ?", (_lo["id"],)); _db.commit()
+_xt = _elf(_db, _lo["id"], "NZDUSD", _dt2.now(_tz2.utc)); _db.commit()
+check("level closed carries the cancel-the-order line in the same message",
+      "Cancel your limit order" in _xt and _db.execute("SELECT status FROM trade_follows WHERE alert_id = ?", (_lo["id"],)).fetchone()[0] == "cancelled")
+for _x in (_lo, _hi):
+    c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)
