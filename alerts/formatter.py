@@ -951,6 +951,7 @@ _ENTRY_PATTERN_NAMES: dict[str, str] = {
     "engulfing_sweep":  "PCL",          # a v2 script's Sweep: the same formation as the PCL since 2026-11-10
     "octgd":            "OCTGD 1",
     "octgd2":           "OCTGD 2",
+    "octgd3":           "OCTGD 3",
     "cisd":             "CISD",
     "sweep_break":      "Sweep and Break",
     "engulfing":        "Engulfing",
@@ -1011,6 +1012,14 @@ def format_entry_alert(
         side = "bearish" if bear else "bullish"
         desc = (f"Price made a new touch of your level and the first two {tf_label} candles there were both {side}: "
                 f"their OC @ {swept_str} is the entry (OCTGD 2).")
+    elif pattern == "octgd3":
+        level_label = "Candle's open"
+        if bear:
+            desc = (f"Price had touched your level; after it, the last {tf_label} bullish candle opened @ {swept_str} and a "
+                    f"bearish candle has now closed below that open (OCTGD 3).")
+        else:
+            desc = (f"Price had touched your level; after it, the last {tf_label} bearish candle opened @ {swept_str} and a "
+                    f"bullish candle has now closed above that open (OCTGD 3).")
     elif pattern == "cisd":
         level_label = "CISD line"
         if bear:

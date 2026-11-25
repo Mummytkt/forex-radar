@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Entry Confirmations v7 — TradingView Edition (2026-11-25: OCTGD 2 on H1 / M15, OCTGD 1 on M15)
+// MummyTKT's Entry Confirmations v8 — TradingView Edition (2026-11-25: OCTGD 2 + OCTGD 3 on H1 / M15, OCTGD 1 on M15)
 //
 // Companion indicator to MummyTKT's Bias Pointer.
 // MARKS: each timeframe's confirmations show on that timeframe's own chart: H1 ones on
@@ -33,6 +33,11 @@
 //       the entry, the pair's wick the SL. Only the level's first touch (later: a re-entry after an SL).
 //       The script sends every "two bullish candles right after a new low"; the server judges it
 //       against each of your levels from the candles in the alert (the chart has no marks for it).
+//   OCTGD 3 — H1 / M15 (owner rule 2026-11-25)
+//       After price has touched your level, the LAST bearish candle; a bullish candle then closes
+//       above that bearish candle's OPEN = OCTGD 3. Entry = a limit at that open, SL = the wick
+//       since the touch. The script sends every bullish close above the last bearish open; the
+//       server checks your level was touched before that bearish candle (no chart marks).
 //   Sweep and Break — M15 / M5
 //       A fractal low forms (a low below the 2 candles on each side). A candle's wick
 //       goes below it and closes back above (the sweep). Then, before a close below
@@ -55,9 +60,9 @@
 indicator("MummyTKT Entry Confirmations", overlay = true, max_bars_back = 500, max_labels_count = 200)
 
 string wh_secret = input.string("", "Webhook Secret", tooltip = "Paste your TV_WEBHOOK_SECRET value here")
-bool   use_h1  = input.bool(true, "H1 (PCL, OCTGD 1 & 2, CISD, Engulfing)", group = "Timeframes read from this chart", inline = "t1")
+bool   use_h1  = input.bool(true, "H1 (PCL, OCTGD 1-3, CISD, Engulfing)", group = "Timeframes read from this chart", inline = "t1")
 bool   use_h2  = input.bool(true, "H2 (Engulfing)", group = "Timeframes read from this chart", inline = "t1")
-bool   use_m15 = input.bool(true, "M15 (OCTGD 1 & 2, Sweep and Break, CISD)", group = "Timeframes read from this chart", inline = "t2")
+bool   use_m15 = input.bool(true, "M15 (OCTGD 1-3, Sweep and Break, CISD)", group = "Timeframes read from this chart", inline = "t2")
 bool   use_m5  = input.bool(true, "M5 (Sweep and Break, CISD)", group = "Timeframes read from this chart", inline = "t2")
 int    fr_n    = input.int(2, "Sweep and Break: fractal candles each side", minval = 1, maxval = 5, group = "Sweep and Break")
 int    sb_win  = input.int(20, "Candles allowed from the sweep to the break", minval = 1, maxval = 100, group = "Sweep and Break")
@@ -255,10 +260,28 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
     // (sell): C1 made it, or C0 made it against the trade. The server checks them against each level.
     bool b_o2 = pbull and cbull and (low[1] < low[2] or (close[2] < open[2] and low[2] < low[3]))
     bool s_o2 = pbear and cbear and (high[1] > high[2] or (close[2] > open[2] and high[2] > high[3]))
+    // OCTGD 3 candidates (2026-11-25): a bullish (bearish) close above (below) the open of the last bearish
+    // (bullish) candle, within the OCTGD window; the server checks the level was touched before that candle
+    var float lb_o = na
+    var int   lb_b = na
+    var float ls_o = na
+    var int   ls_b = na
+    bool b_o3 = cbull and not na(lb_o) and bar_index - lb_b <= ow and close > lb_o
+    bool s_o3 = cbear and not na(ls_o) and bar_index - ls_b <= ow and close < ls_o
+    if b_o3
+        lb_o := na
+    if s_o3
+        ls_o := na
+    if cbear
+        lb_o := open
+        lb_b := bar_index
+    if cbull
+        ls_o := open
+        ls_b := bar_index
     // The last 30 candles (oldest first) for the alert's chart picture: "minutes,o,h,l,c;..."
     string cs = ""
     // only the last 3 days build it (alerts are live): old candles keep an empty text, which saves memory
-    if (b_pcl or s_pcl or b_en or s_en or b_oc or s_oc or b_sb or s_sb or b_ci or s_ci or b_o2 or s_o2) and time > timenow - 3 * 86400000
+    if (b_pcl or s_pcl or b_en or s_en or b_oc or s_oc or b_sb or s_sb or b_ci or s_ci or b_o2 or s_o2 or b_o3 or s_o3) and time > timenow - 3 * 86400000
         for i = 29 to 0
             if not na(close[i]) and not na(time[i])
                 cs += (cs == "" ? "" : ";") + str.tostring(math.floor(time[i] / 60000)) + "," + str.tostring(open[i], format.mintick) + ","
@@ -270,6 +293,10 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
             cs += "|o2b"
         if s_o2
             cs += "|o2s"
+        if b_o3
+            cs += "|o3b"
+        if s_o3
+            cs += "|o3s"
     [b_pcl, s_pcl, b_en, s_en, b_enw, s_enw, b_oc, s_oc, b_sb, s_sb, close, low, high, low[1], high[1], open[1],
      math.min(low, low[1]), math.max(high, high[1]), b_oclv, b_octp, s_oclv, s_octp, b_lv, b_tp, s_lv, s_tp, time,
      b_ci, s_ci, b_cilv, b_citp, s_cilv, s_citp, cs]
@@ -338,6 +365,11 @@ f_tf(bool on, bool mk, bool snd, bool conf, string tf, string nm, int t, bool pc
             f_send("octgd2", "bullish", tf, c, c, lo2, "", cs)
         if o2 and rt and snd and str.contains(cs, "|o2s")
             f_send("octgd2", "bearish", tf, c, c, hi2, "", cs)
+        // OCTGD 3 rides the same switch (H1 / M15): the server checks your level was touched first
+        if o2 and rt and snd and str.contains(cs, "|o3b")
+            f_send("octgd3", "bullish", tf, c, c, lo2, "", cs)
+        if o2 and rt and snd and str.contains(cs, "|o3s")
+            f_send("octgd3", "bearish", tf, c, c, hi2, "", cs)
         if en and ben
             f_mark(mk, nm + " Engulf", true, nm + " bullish Engulfing: " + (benw ? "body closed above the bearish candle's high (wick)" : "body covered the bearish candle's body"))
             if rt and snd

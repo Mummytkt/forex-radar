@@ -1073,7 +1073,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     price = payload.price
     swept_level = payload.swept_level
 
-    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "octgd", "octgd2", "cisd", "engulfing", "engulfing_sweep", "sweep_break"):
+    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "octgd", "octgd2", "octgd3", "cisd", "engulfing", "engulfing_sweep", "sweep_break"):
         logger.warning("%s ENTRY_CONFIRMATION ignored — bad direction/pattern (%s/%s)",
                        instrument, direction, pattern)
         return
@@ -1119,6 +1119,16 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             logger.info("%s OCTGD 2 ignored: the alert carried no usable candles", instrument)
             return
         swept_level, touch = o2["oc"], o2["wick"]
+    # OCTGD 3 (owner, 2026-11-25): the last opposite candle and the close beyond its open come from the alert's
+    # candles; whether price had touched each level before that candle is checked per level (alert + stored H4)
+    o3 = None
+    if pattern == "octgd3":
+        o3 = _octgd3_pair(payload.candles, direction)
+        if o3 is None:
+            logger.info("%s OCTGD 3 ignored: no closing beyond the last opposite candle's open in the candles sent", instrument)
+            return
+        swept_level = o3["oc"]
+        o3["h4"] = _h4_since(conn, instrument)
 
     def _octgd2_at(r, first_only: bool) -> bool:
         return _octgd2_touch(o2, direction, r["price"], r["created_at"], first_only)
@@ -1134,7 +1144,13 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     # on this side, the nearest level (a buy: the lowest; a sell: the highest) takes it and the others stay quiet;
     # and while any of those levels has its trade running or its limit waiting, the confirmation is not sent at all.
     rows = sorted(rows, key=lambda r: r["price"] if direction == "bullish" else -r["price"])
-    reaches = (lambda r: _octgd2_at(r, False)) if pattern == "octgd2" else \
+    def _octgd3_at(r) -> bool:
+        w = _octgd3_touch(o3, direction, r["price"], r["created_at"])
+        if w is not None:
+            o3["wick"] = w
+        return w is not None
+
+    reaches = (lambda r: _octgd2_at(r, False)) if pattern == "octgd2" else (lambda r: _octgd3_at(r)) if pattern == "octgd3" else \
         (lambda r: touch <= r["price"] if direction == "bullish" else touch >= r["price"])
     busy_people = set()
     for r in rows:
@@ -1191,6 +1207,10 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             reached = touch <= alert_price if direction == "bullish" else touch >= alert_price
             if pattern == "octgd2":
                 reached = _octgd2_at(row, True)   # the first two candles at the FIRST touch of this level only
+            elif pattern == "octgd3":
+                reached = _octgd3_at(row)         # the level was touched before the opposite candle
+                if reached:
+                    touch = o3["wick"]            # SL = the wick since that touch
             if not reached:
                 continue  # the pattern's wick did not reach this user's level
 
@@ -1219,7 +1239,8 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             try:
                 from alerts.trade_follow import open_follow
                 fl = open_follow(conn, dict(row), instrument, direction, pattern,
-                                 tf_label, price, payload.touch_price, swept_level, payload.candles,
+                                 tf_label, price, touch if pattern in ("octgd2", "octgd3") else payload.touch_price,
+                                 swept_level, payload.candles,
                                  payload.limit_price)
                 if fl:
                     alert_text += "\n\n" + fl
@@ -1284,9 +1305,61 @@ def _octgd2_touch(o2: Optional[dict], direction: str, level: float, created_at: 
     return True
 
 
-_ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "cisd": "CISD",
+def _octgd3_pair(candles: Optional[str], direction: str, win: int = 10) -> Optional[dict]:
+    """The candles of an OCTGD 3 alert: the last one goes the trade's way and closes beyond the OPEN of the last
+    opposite candle before it (within `win` candles), and nothing between them already did."""
+    from alerts.chart_image import parse_candles
+    cs = parse_candles(candles)
+    n = len(cs)
+    if n < 3:
+        return None
+    bull = direction == "bullish"
+    cur = cs[-1]
+    if not ((cur[4] > cur[1]) if bull else (cur[4] < cur[1])):
+        return None
+    against = lambda k: (k[4] < k[1]) if bull else (k[4] > k[1])
+    b = next((j for j in range(n - 2, -1, -1) if against(cs[j])), None)
+    if b is None or (n - 1) - b > win:
+        return None
+    o = cs[b][1]
+    if not ((cur[4] > o) if bull else (cur[4] < o)):
+        return None
+    if any(((k[4] > o) if bull else (k[4] < o)) and not against(k) for k in cs[b + 1:n - 1]):
+        return None                       # an earlier candle already closed beyond it: that was the OCTGD 3
+    return {"cs": cs, "b": b, "oc": o, "wick": None}
+
+
+def _h4_since(conn, instrument: str) -> list[tuple]:
+    try:
+        return conn.execute("SELECT ts, o, h, l, c FROM candles WHERE instrument = ? AND tf = 'H4' ORDER BY ts DESC LIMIT 60",
+                            (instrument,)).fetchall()[::-1]
+    except Exception:
+        return []
+
+
+def _octgd3_touch(o3: Optional[dict], direction: str, level: float, created_at: Optional[str]) -> Optional[float]:
+    """Was the level touched (a wick reaching it) after it was set and before the opposite candle? First in the
+    alert's own candles, else in the stored H4 candles. Returns the wick since that touch (the SL), else None."""
+    if not o3:
+        return None
+    cs, b, bull = o3["cs"], o3["b"], direction == "bullish"
+    since = created_at or ""
+    hit_lo = lambda lo, hi: lo <= level if bull else hi >= level
+    ext = (lambda xs: min(xs)) if bull else (lambda xs: max(xs))
+    for j in range(b):
+        if cs[j][0] >= since and hit_lo(cs[j][3], cs[j][2]):
+            return ext([k[3] if bull else k[2] for k in cs[j:]])
+    t_b = cs[b][0]
+    h4 = [r for r in (o3.get("h4") or []) if str(r[0]) >= since and str(r[0]) < t_b]
+    for i, r in enumerate(h4):
+        if hit_lo(r[3], r[2]):
+            return ext([x[3] if bull else x[2] for x in h4[i:]] + [k[3] if bull else k[2] for k in cs])
+    return None
+
+
+_ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "octgd3": "OCTGD 3", "cisd": "CISD",
                 "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
-_ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd": "OC level", "octgd2": "OC level", "cisd": "CISD line",
+_ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd": "OC level", "octgd2": "OC level", "octgd3": "Candle's open", "cisd": "CISD line",
                 "engulfing": "Engulfed level", "sweep_break": "Broken level"}
 
 
