@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 STOPPED = ("sl", "sl_tp", "left", "reentered", "expired")
-NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
+NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "cisd": "CISD",
          "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 
 

@@ -949,7 +949,8 @@ def format_story_alert(instrument: str, event: str, direction: Direction, top: D
 _ENTRY_PATTERN_NAMES: dict[str, str] = {
     "pcl":              "PCL",
     "engulfing_sweep":  "PCL",          # a v2 script's Sweep: the same formation as the PCL since 2026-11-10
-    "octgd":            "OCTGD",
+    "octgd":            "OCTGD 1",
+    "octgd2":           "OCTGD 2",
     "cisd":             "CISD",
     "sweep_break":      "Sweep and Break",
     "engulfing":        "Engulfing",
@@ -1005,6 +1006,11 @@ def format_entry_alert(
         else:
             desc = (f"The last two {tf_label} bearish candles at your level formed an OC @ {swept_str}; "
                     f"a bullish candle has now closed above it — the OC got disrespected (OCTGD).")
+    elif pattern == "octgd2":
+        level_label = "OC level"
+        side = "bearish" if bear else "bullish"
+        desc = (f"Price made a new touch of your level and the first two {tf_label} candles there were both {side}: "
+                f"their OC @ {swept_str} is the entry (OCTGD 2).")
     elif pattern == "cisd":
         level_label = "CISD line"
         if bear:

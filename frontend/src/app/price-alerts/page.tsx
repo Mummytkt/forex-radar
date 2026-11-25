@@ -268,7 +268,10 @@ function AlertRow({ item, onDelete, onEdit }: { item: PriceAlertItem; onDelete: 
 // The formations a level can watch: "<timeframe>:<pattern>"
 const ENTRY_WATCHES: { key: string; label: string; hint: string }[] = [
   { key: 'H1:pcl',          label: 'H1 PCL',              hint: "a bullish candle wicks below the bearish candle before it and closes back above that low (sell: mirror)" },
-  { key: 'H1:octgd',        label: 'H1 OCTGD',            hint: 'the last two bearish candles at the level form an OC; a bullish candle later closes above its level (sell: mirror)' },
+  { key: 'H1:octgd',        label: 'H1 OCTGD 1',          hint: 'the last two bearish candles at the level form an OC; a bullish candle later closes above its level (sell: mirror)' },
+  { key: 'H1:octgd2',       label: 'H1 OCTGD 2',          hint: "at the level's first touch, the first two candles are both bullish: their OC is the entry (the touch candle counts if it closes bullish; sell: mirror)" },
+  { key: 'M15:octgd',       label: 'M15 OCTGD 1',         hint: 'OCTGD 1 on 15-minute candles' },
+  { key: 'M15:octgd2',      label: 'M15 OCTGD 2',         hint: 'OCTGD 2 on 15-minute candles' },
   { key: 'H1:cisd',         label: 'H1 CISD',             hint: 'a bullish body closes above the open of the first candle of the bearish series (2 or more in a row) that reached the level (sell: mirror)' },
   { key: 'M15:cisd',        label: 'M15 CISD',            hint: 'the same on 15-minute candles' },
   { key: 'M5:cisd',         label: 'M5 CISD',             hint: 'the same on 5-minute candles' },
@@ -283,7 +286,7 @@ const ENTRY_DEFAULT_WATCHES = ENTRY_WATCHES.map(w => w.key)
 // ready-made notes for an entry alert (user, 2026-11-18); the note box stays free to edit
 const NOTE_PRESETS = ['Inside range POI triggered', 'Opposite Range POI triggered']
 const watchLabel = (k: string) => ENTRY_WATCHES.find(w => w.key === k)?.label ?? OLD_WATCH_LABELS[k] ?? k
-const patternLabel = (p: string) => ({ pcl: 'PCL', engulfing_sweep: 'PCL', octgd: 'OCTGD', cisd: 'CISD', sweep_break: 'Sweep and Break', engulfing: 'Engulfing' } as Record<string, string>)[p] ?? p
+const patternLabel = (p: string) => ({ pcl: 'PCL', engulfing_sweep: 'PCL', octgd: 'OCTGD 1', octgd2: 'OCTGD 2', cisd: 'CISD', sweep_break: 'Sweep and Break', engulfing: 'Engulfing' } as Record<string, string>)[p] ?? p
 
 function EntryAlertRow({ item, onDelete, onEdit }: { item: EntryAlertItem; onDelete: (id: number) => void; onEdit: (item: EntryAlertItem) => void }) {
   const triggered = !!item.triggered_at

@@ -1356,7 +1356,7 @@ _m = _fea("GBPUSD", "bearish", "engulfing", "120", 1.2950, 1.2990, kind="wick")
 _m2 = _fea("GBPUSD", "bullish", "octgd", "60", 1.3050, 1.3010)
 check("entry messages name OCTGD and the kind of engulfing",
       "Engulfing (wick) · H2 · Bearish" in _m and "below the previous bullish candle's low" in _m
-      and "OCTGD · H1 · Bullish" in _m2 and "OC level:" in _m2 and "closed above it" in _m2)
+      and "OCTGD 1 · H1 · Bullish" in _m2 and "OC level:" in _m2 and "closed above it" in _m2)
 for _x in (_ec, _es):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
 # CISD on H1 / M15 / M5 (2026-11-10)
@@ -1508,6 +1508,49 @@ check("after changing the risk, new trades use it and old ones keep theirs",
       and _db.execute("SELECT amount_risked FROM journal_entries WHERE follow_id = 990001").fetchone()[0] == 20.0)
 _db.execute("DELETE FROM journal_entries WHERE follow_id IN (990001, 990002)"); _db.commit()
 c.post("/api/journal/risk", headers=H(owner), json={"risk_usd": 20})
+# OCTGD 2 live (owner, 2026-11-25): judged per level from the alert's candles; first touch only; M15 OCTGD 1 too
+import time as _time
+_m0 = int(_time.time() // 60) + 600          # candle times after the level was set
+def _cs2(rows):
+    return ";".join(f"{_m0 + 60 * i},{o},{h},{l},{c}" for i, (o, h, l, c) in enumerate(rows))
+_o2 = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "NZDCAD", "direction": "bullish", "price": 0.7000,
+             "tolerance_pips": 10, "watches": ["H1:octgd2"], "keep_open": True}).json()
+check("OCTGD 2 can be watched", _o2.get("watches") == ["H1:octgd2"])
+# Cm and C0 stay above the level, C1 touches it and closes bullish, C2 bullish: the first two candles at the touch
+_first = _cs2([(0.7020, 0.7025, 0.7008, 0.7010), (0.7010, 0.7012, 0.7003, 0.7004), (0.7004, 0.7014, 0.6998, 0.7012), (0.7012, 0.7022, 0.7010, 0.7020)])
+tv(type="ENTRY_CONFIRMATION", instrument="NZDCAD", direction="bullish", pattern="octgd2", timeframe="60",
+   price=0.7020, swept_level=0.7020, touch_price=0.6998, candles=_first + "|o2b")
+_db = sqlite3.connect(DB)
+_tr = _db.execute("SELECT triggered_pattern, triggered_tf FROM entry_pattern_alerts WHERE id = ?", (_o2["id"],)).fetchone()
+check("OCTGD 2 fires at the level's first touch (touch candle bullish + the next)", _tr == ("octgd2", "H1"))
+# later: price left and touched again; the first two there are bullish, but it is not the first touch any more
+_db.execute("UPDATE entry_pattern_alerts SET triggered_at = NULL, triggered_pattern = NULL WHERE id = ?", (_o2["id"],)); _db.commit()
+_again = _cs2([(0.7004, 0.7014, 0.6998, 0.7012), (0.7012, 0.7040, 0.7010, 0.7035), (0.7035, 0.7036, 0.7005, 0.7006),
+               (0.7006, 0.7009, 0.6995, 0.6997), (0.6997, 0.7010, 0.6996, 0.7008), (0.7008, 0.7018, 0.7006, 0.7016)])
+tv(type="ENTRY_CONFIRMATION", instrument="NZDCAD", direction="bullish", pattern="octgd2", timeframe="60",
+   price=0.7016, swept_level=0.7016, touch_price=0.6996, candles=_again + "|o2b")
+check("OCTGD 2 at a later touch of the same level stays quiet (first touch only)",
+      _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_o2["id"],)).fetchone()[0] is None)
+# two bullish candles that are not the first two at a new touch (C0 was already at the level, bullish): quiet
+_late = _cs2([(0.7010, 0.7012, 0.6999, 0.7004), (0.7004, 0.7010, 0.6997, 0.7008), (0.7008, 0.7012, 0.7001, 0.7011), (0.7011, 0.7020, 0.7009, 0.7018)])
+_o2b = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "CADCHF", "direction": "bullish", "price": 0.7000,
+              "tolerance_pips": 10, "watches": ["M15:octgd2"], "keep_open": True}).json()
+tv(type="ENTRY_CONFIRMATION", instrument="CADCHF", direction="bullish", pattern="octgd2", timeframe="15",
+   price=0.7018, swept_level=0.7018, touch_price=0.7001, candles=_late + "|o2b")
+check("two bullish candles after the touch's first two don't count",
+      _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_o2b["id"],)).fetchone()[0] is None)
+from api.tv_webhook import _octgd2_pair
+check("OCTGD 2's entry is the OC (C1's close) and its SL the pair's wick",
+      _octgd2_pair(_first, "bullish") is not None and _octgd2_pair(_first, "bullish")["oc"] == 0.7012
+      and _octgd2_pair(_first, "bullish")["wick"] == 0.6998)
+_m1 = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "CHFJPY", "direction": "bearish", "price": 180.0,
+             "tolerance_pips": 10, "watches": ["M15:octgd"]}).json()
+tv(type="ENTRY_CONFIRMATION", instrument="CHFJPY", direction="bearish", pattern="octgd", timeframe="15",
+   price=179.80, swept_level=179.90, touch_price=180.05)
+check("M15 OCTGD 1 fires a level watching it",
+      _db.execute("SELECT triggered_tf FROM entry_pattern_alerts WHERE id = ?", (_m1["id"],)).fetchone()[0] == "M15")
+for _x in (_o2, _o2b, _m1):
+    c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

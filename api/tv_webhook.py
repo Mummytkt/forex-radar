@@ -1073,7 +1073,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     price = payload.price
     swept_level = payload.swept_level
 
-    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "octgd", "cisd", "engulfing", "engulfing_sweep", "sweep_break"):
+    if direction not in ("bullish", "bearish") or pattern not in ("pcl", "octgd", "octgd2", "cisd", "engulfing", "engulfing_sweep", "sweep_break"):
         logger.warning("%s ENTRY_CONFIRMATION ignored — bad direction/pattern (%s/%s)",
                        instrument, direction, pattern)
         return
@@ -1088,7 +1088,7 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     rows = conn.execute("""
         SELECT epa.id, epa.price, epa.tolerance_pips, epa.note, epa.watches, epa.keep_open,
                epa.follow, epa.tp_r, epa.be_r, epa.sl_buffer_pips, epa.must_reach, epa.entry_mode,
-               u.telegram_chat_id, epa.user_id, u.role, u.plan, u.plan_expires_at
+               u.telegram_chat_id, epa.user_id, u.role, u.plan, u.plan_expires_at, epa.created_at
         FROM entry_pattern_alerts epa
         LEFT JOIN users u ON u.id = epa.user_id
         WHERE epa.instrument = ?
@@ -1111,6 +1111,17 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         watch_keys = {f"{tf_label}:{pattern}"}
     # how close to the level: the wick that reached it when the script sends it, else the close
     touch = payload.touch_price if payload.touch_price is not None else price
+    # OCTGD 2 (owner rule 2026-11-23, live 2026-11-25): judged per level from the alert's candles; its OC = C1's close
+    o2 = None
+    if pattern == "octgd2":
+        o2 = _octgd2_pair(payload.candles, direction)
+        if o2 is None:
+            logger.info("%s OCTGD 2 ignored: the alert carried no usable candles", instrument)
+            return
+        swept_level, touch = o2["oc"], o2["wick"]
+
+    def _octgd2_at(r, first_only: bool) -> bool:
+        return _octgd2_touch(o2, direction, r["price"], r["created_at"], first_only)
 
     def _watches_it(r) -> bool:
         ws = [w for w in (r["watches"] or "").split(",") if w]
@@ -1123,7 +1134,8 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     # on this side, the nearest level (a buy: the lowest; a sell: the highest) takes it and the others stay quiet;
     # and while any of those levels has its trade running or its limit waiting, the confirmation is not sent at all.
     rows = sorted(rows, key=lambda r: r["price"] if direction == "bullish" else -r["price"])
-    reaches = lambda r: touch <= r["price"] if direction == "bullish" else touch >= r["price"]
+    reaches = (lambda r: _octgd2_at(r, False)) if pattern == "octgd2" else \
+        (lambda r: touch <= r["price"] if direction == "bullish" else touch >= r["price"])
     busy_people = set()
     for r in rows:
         if r["follow"] and _watches_it(r) and reaches(r) and conn.execute(
@@ -1170,11 +1182,15 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         if stopped is not None:
             if not is_reentry(stopped, pattern, tf_label, touch):
                 continue  # its wick is not past the old SL: no re-entry
+            if pattern == "octgd2" and not _octgd2_at(row, False):
+                continue  # OCTGD 2 re-entry: still the first two candles at a new touch of the level
         else:
             # No pips (user, 2026-11-18: "can we not use it at all?"): the pattern's wick has to reach the level
             # itself (a buy: at or below it; a sell: at or above it), any distance past. The level ends when an
             # H4 candle closes its body beyond it (alerts/trade_follow.check_kept_levels).
             reached = touch <= alert_price if direction == "bullish" else touch >= alert_price
+            if pattern == "octgd2":
+                reached = _octgd2_at(row, True)   # the first two candles at the FIRST touch of this level only
             if not reached:
                 continue  # the pattern's wick did not reach this user's level
 
@@ -1228,9 +1244,49 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
                 _in_background(_send_entry(config.telegram_bot_token, chat_id, alert_text, pic))
 
 
-_ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
+def _octgd2_pair(candles: Optional[str], direction: str) -> Optional[dict]:
+    """The candles of an OCTGD 2 alert: the last two (C1, C2) go the trade's way; C0 and the one before it decide
+    whether they were the first two at a new touch. Returns them with the OC (C1's close) and the pair's wick."""
+    from alerts.chart_image import parse_candles
+    cs = parse_candles(candles)
+    if len(cs) < 3:
+        return None
+    bull = direction == "bullish"
+    c1, c2 = cs[-2], cs[-1]
+    if not all((k[4] > k[1]) if bull else (k[4] < k[1]) for k in (c1, c2)):
+        return None
+    return {"cs": cs, "oc": c1[4], "wick": min(c1[3], c2[3]) if bull else max(c1[2], c2[2])}
+
+
+def _octgd2_touch(o2: Optional[dict], direction: str, level: float, created_at: Optional[str], first_only: bool) -> bool:
+    """Owner's rule: at a NEW touch of the level (a wick reaches it after a candle that didn't), only the first two
+    candles count: the touch candle itself if it closes the trade's way, else the two right after it. With
+    first_only, an earlier new touch since the level was set (within the candles sent) means it is not the first."""
+    if not o2:
+        return False
+    cs, bull = o2["cs"], direction == "bullish"
+    hit = lambda k: k[3] <= level if bull else k[2] >= level
+    with_trade = lambda k: (k[4] > k[1]) if bull else (k[4] < k[1])
+    n = len(cs)
+    c0, c1 = cs[n - 3], cs[n - 2]
+    cm = cs[n - 4] if n >= 4 else None
+    if with_trade(c1) and hit(c1) and not hit(c0):
+        t = n - 2                         # C1 touched and closed the trade's way: C1 + C2
+    elif not with_trade(c0) and hit(c0) and (cm is None or not hit(cm)):
+        t = n - 3                         # C0 touched against the trade: the two right after it
+    else:
+        return False
+    if first_only:
+        since = created_at or ""
+        for j in range(t):
+            if cs[j][0] >= since and hit(cs[j]) and (j == 0 or not hit(cs[j - 1])):
+                return False              # this level was touched before: only its first touch counts
+    return True
+
+
+_ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "cisd": "CISD",
                 "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
-_ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd": "OC level", "cisd": "CISD line",
+_ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd": "OC level", "octgd2": "OC level", "cisd": "CISD line",
                 "engulfing": "Engulfed level", "sweep_break": "Broken level"}
 
 

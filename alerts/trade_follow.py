@@ -193,10 +193,10 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     return "\n".join(lines)
 
 
-_PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD", "cisd": "CISD",
+_PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "cisd": "CISD",
               "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 _SAME = {"engulfing_sweep": "pcl", "sweep": "pcl"}
-_LIMIT_AT = {"cisd": "the CISD line", "octgd": "the OC level", "pcl": "the PCL candle's open",
+_LIMIT_AT = {"cisd": "the CISD line", "octgd": "the OC level", "octgd2": "the OC level", "pcl": "the PCL candle's open",
              "engulfing": "the open of the candle it engulfed", "sweep_break": "the breaker"}
 
 
@@ -218,7 +218,7 @@ def limit_for(pattern: str, direction: str, close: float, pattern_level: Optiona
             limit_price = None
     if limit_price is not None:
         lim = limit_price
-    elif pat in ("cisd", "octgd"):
+    elif pat in ("cisd", "octgd", "octgd2"):
         lim = pattern_level
     elif pat in ("pcl", "engulfing"):
         cs = parse_candles(candles)

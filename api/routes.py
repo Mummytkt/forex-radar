@@ -1426,7 +1426,7 @@ _MAX_ACTIVE_ENTRY_ALERTS = 20
 #   engulfing    = Engulfing: the body covers the previous candle's body (or its wick too)
 #   sweep        = the old name of the PCL; levels saved with it still work
 ENTRY_WATCH_TFS = ("H1", "H2", "M15", "M5")
-ENTRY_WATCH_PATTERNS = ("pcl", "octgd", "cisd", "sweep_break", "engulfing", "sweep")
+ENTRY_WATCH_PATTERNS = ("pcl", "octgd", "octgd2", "cisd", "sweep_break", "engulfing", "sweep")
 
 
 class EntryAlertItem(BaseModel):

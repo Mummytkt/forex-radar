@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Entry Confirmations v6 — TradingView Edition (2026-11-10)
+// MummyTKT's Entry Confirmations v7 — TradingView Edition (2026-11-25: OCTGD 2 on H1 / M15, OCTGD 1 on M15)
 //
 // Companion indicator to MummyTKT's Bias Pointer.
 // MARKS: each timeframe's confirmations show on that timeframe's own chart: H1 ones on
@@ -22,11 +22,17 @@
 //   PCL — H1 (the same as the H1 Sweep)
 //       C1 is bearish. C2 is bullish: its wick goes BELOW C1's low and its body closes
 //       back ABOVE that low.
-//   OCTGD (Open Close That Got Disrespected) — H1
+//   OCTGD 1 (Open Close That Got Disrespected) — H1 / M15
 //       The last two bearish candles (C1, C2) form a bearish OC; its level is where C1
 //       closes and C2 opens. C2 is the candle that touched the POI (or both formed
 //       inside it). Then, within a few candles, a bullish candle closes ABOVE that level.
 //       A newer bearish OC replaces the older one.
+//   OCTGD 2 — H1 / M15 (owner rule 2026-11-23)
+//       At a NEW touch of your level, only the first two candles count: the touch candle itself if it
+//       closes bullish, else the two right after it. Both bullish = OCTGD 2; their OC (C1's close) is
+//       the entry, the pair's wick the SL. Only the level's first touch (later: a re-entry after an SL).
+//       The script sends every "two bullish candles right after a new low"; the server judges it
+//       against each of your levels from the candles in the alert (the chart has no marks for it).
 //   Sweep and Break — M15 / M5
 //       A fractal low forms (a low below the 2 candles on each side). A candle's wick
 //       goes below it and closes back above (the sweep). Then, before a close below
@@ -49,9 +55,9 @@
 indicator("MummyTKT Entry Confirmations", overlay = true, max_bars_back = 500, max_labels_count = 200)
 
 string wh_secret = input.string("", "Webhook Secret", tooltip = "Paste your TV_WEBHOOK_SECRET value here")
-bool   use_h1  = input.bool(true, "H1 (PCL, OCTGD, CISD, Engulfing)", group = "Timeframes read from this chart", inline = "t1")
+bool   use_h1  = input.bool(true, "H1 (PCL, OCTGD 1 & 2, CISD, Engulfing)", group = "Timeframes read from this chart", inline = "t1")
 bool   use_h2  = input.bool(true, "H2 (Engulfing)", group = "Timeframes read from this chart", inline = "t1")
-bool   use_m15 = input.bool(true, "M15 (Sweep and Break, CISD)", group = "Timeframes read from this chart", inline = "t2")
+bool   use_m15 = input.bool(true, "M15 (OCTGD 1 & 2, Sweep and Break, CISD)", group = "Timeframes read from this chart", inline = "t2")
 bool   use_m5  = input.bool(true, "M5 (Sweep and Break, CISD)", group = "Timeframes read from this chart", inline = "t2")
 int    fr_n    = input.int(2, "Sweep and Break: fractal candles each side", minval = 1, maxval = 5, group = "Sweep and Break")
 int    sb_win  = input.int(20, "Candles allowed from the sweep to the break", minval = 1, maxval = 100, group = "Sweep and Break")
@@ -245,16 +251,25 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
             s_tp := ss_hi
             s_br := ss_br
             ss_on := false
+    // OCTGD 2 candidates (2026-11-25): two candles in a row the trade's way, right after a new low (buy) / high
+    // (sell): C1 made it, or C0 made it against the trade. The server checks them against each level.
+    bool b_o2 = pbull and cbull and (low[1] < low[2] or (close[2] < open[2] and low[2] < low[3]))
+    bool s_o2 = pbear and cbear and (high[1] > high[2] or (close[2] > open[2] and high[2] > high[3]))
     // The last 30 candles (oldest first) for the alert's chart picture: "minutes,o,h,l,c;..."
     string cs = ""
     // only the last 3 days build it (alerts are live): old candles keep an empty text, which saves memory
-    if (b_pcl or s_pcl or b_en or s_en or b_oc or s_oc or b_sb or s_sb or b_ci or s_ci) and time > timenow - 3 * 86400000
+    if (b_pcl or s_pcl or b_en or s_en or b_oc or s_oc or b_sb or s_sb or b_ci or s_ci or b_o2 or s_o2) and time > timenow - 3 * 86400000
         for i = 29 to 0
             if not na(close[i]) and not na(time[i])
                 cs += (cs == "" ? "" : ";") + str.tostring(math.floor(time[i] / 60000)) + "," + str.tostring(open[i], format.mintick) + ","
                      + str.tostring(high[i], format.mintick) + "," + str.tostring(low[i], format.mintick) + "," + str.tostring(close[i], format.mintick)
         if b_sb or s_sb      // the breaker rides in the same text (no extra values: the script is near its memory limit)
             cs += "|" + (na(b_br) ? "" : str.tostring(b_br)) + "|" + (na(s_br) ? "" : str.tostring(s_br))
+        // the OCTGD 2 flags ride at the end of the same text (no extra values: memory)
+        if b_o2
+            cs += "|o2b"
+        if s_o2
+            cs += "|o2s"
     [b_pcl, s_pcl, b_en, s_en, b_enw, s_enw, b_oc, s_oc, b_sb, s_sb, close, low, high, low[1], high[1], open[1],
      math.min(low, low[1]), math.max(high, high[1]), b_oclv, b_octp, s_oclv, s_octp, b_lv, b_tp, s_lv, s_tp, time,
      b_ci, s_ci, b_cilv, b_citp, s_cilv, s_citp, cs]
@@ -294,7 +309,7 @@ f_mark(bool mk, string txt, bool bull, string tip) =>
 
 // One timeframe: once its candle has closed, mark (mk) and/or send (snd) what formed.
 // pcl / oc / en / sb / ci say which confirmations this timeframe watches.
-f_tf(bool on, bool mk, bool snd, bool conf, string tf, string nm, int t, bool pcl, bool oc, bool en, bool sb, bool ci,
+f_tf(bool on, bool mk, bool snd, bool conf, string tf, string nm, int t, bool pcl, bool oc, bool en, bool sb, bool ci, bool o2,
      bool bpcl, bool spcl, bool ben, bool sen, bool benw, bool senw, bool boc, bool soc, bool bsb, bool ssb,
      float c, float l, float h, float pl, float ph, float po, float lo2, float hi2,
      float boclv, float boctp, float soclv, float soctp, float blv, float btp, float slv, float stp,
@@ -311,13 +326,18 @@ f_tf(bool on, bool mk, bool snd, bool conf, string tf, string nm, int t, bool pc
             if rt and snd
                 f_send("pcl", "bearish", tf, c, ph, h, "", cs)
         if oc and boc
-            f_mark(mk, nm + " OCTGD", true, nm + " bullish OCTGD: closed above the bearish OC level " + str.tostring(boclv, format.mintick))
+            f_mark(mk, nm + " OCTGD 1", true, nm + " bullish OCTGD 1: closed above the bearish OC level " + str.tostring(boclv, format.mintick))
             if rt and snd
                 f_send("octgd", "bullish", tf, c, boclv, boctp, "", cs)
         if oc and soc
-            f_mark(mk, nm + " OCTGD", false, nm + " bearish OCTGD: closed below the bullish OC level " + str.tostring(soclv, format.mintick))
+            f_mark(mk, nm + " OCTGD 1", false, nm + " bearish OCTGD 1: closed below the bullish OC level " + str.tostring(soclv, format.mintick))
             if rt and snd
                 f_send("octgd", "bearish", tf, c, soclv, soctp, "", cs)
+        // OCTGD 2: sent for the server to judge against your level (no mark: the chart doesn't know your level)
+        if o2 and rt and snd and str.contains(cs, "|o2b")
+            f_send("octgd2", "bullish", tf, c, c, lo2, "", cs)
+        if o2 and rt and snd and str.contains(cs, "|o2s")
+            f_send("octgd2", "bearish", tf, c, c, hi2, "", cs)
         if en and ben
             f_mark(mk, nm + " Engulf", true, nm + " bullish Engulfing: " + (benw ? "body closed above the bearish candle's high (wick)" : "body covered the bearish candle's body"))
             if rt and snd
@@ -345,20 +365,20 @@ f_tf(bool on, bool mk, bool snd, bool conf, string tf, string nm, int t, bool pc
 
 // ALERTS from a 5-minute (or smaller) chart: H1, H2 and M15 read through their own candles
 // (sent only, no marks: the marks belong on each timeframe's own chart)
-f_tf(use_h1 and chart_ok, false, true, true, "60", "H1", h1_t, true, true, true, false, true,
+f_tf(use_h1 and chart_ok, false, true, true, "60", "H1", h1_t, true, true, true, false, true, true,
      h1_bpcl, h1_spcl, h1_ben, h1_sen, h1_benw, h1_senw, h1_boc, h1_soc, h1_bsb, h1_ssb,
      h1_c, h1_l, h1_h, h1_pl, h1_ph, h1_po, h1_lo2, h1_hi2, h1_boclv, h1_boctp, h1_soclv, h1_soctp, h1_blv, h1_btp, h1_slv, h1_stp,
      h1_bci, h1_sci, h1_bcilv, h1_bcitp, h1_scilv, h1_scitp, h1_cs)
-f_tf(use_h2 and chart_ok, false, true, true, "120", "H2", h2_t, false, false, true, false, false,
+f_tf(use_h2 and chart_ok, false, true, true, "120", "H2", h2_t, false, false, true, false, false, false,
      h2_bpcl, h2_spcl, h2_ben, h2_sen, h2_benw, h2_senw, h2_boc, h2_soc, h2_bsb, h2_ssb,
      h2_c, h2_l, h2_h, h2_pl, h2_ph, h2_po, h2_lo2, h2_hi2, h2_boclv, h2_boctp, h2_soclv, h2_soctp, h2_blv, h2_btp, h2_slv, h2_stp,
      h2_bci, h2_sci, h2_bcilv, h2_bcitp, h2_scilv, h2_scitp, h2_cs)
-f_tf(use_m15 and chart_ok, false, true, true, "15", "M15", m15_t, false, false, false, true, true,
+f_tf(use_m15 and chart_ok, false, true, true, "15", "M15", m15_t, false, true, false, true, true, true,
      m15_bpcl, m15_spcl, m15_ben, m15_sen, m15_benw, m15_senw, m15_boc, m15_soc, m15_bsb, m15_ssb,
      m15_c, m15_l, m15_h, m15_pl, m15_ph, m15_po, m15_lo2, m15_hi2, m15_boclv, m15_boctp, m15_soclv, m15_soctp, m15_blv, m15_btp, m15_slv, m15_stp,
      m15_bci, m15_sci, m15_bcilv, m15_bcitp, m15_scilv, m15_scitp, m15_cs)
 // M5 on a chart below 5 minutes (on a 5-minute chart the call below sends it from the chart's own candles)
-f_tf(use_m5 and chart_ok and not m5_own, false, true, true, "5", "M5", r5_t, false, false, false, true, true,
+f_tf(use_m5 and chart_ok and not m5_own, false, true, true, "5", "M5", r5_t, false, false, false, true, true, false,
      false, false, false, false, false, false, false, false, r5_bsb, r5_ssb,
      r5_c, na, na, na, na, na, na, na, na, na, na, na, r5_blv, r5_btp, r5_slv, r5_stp,
      r5_bci, r5_sci, r5_bcilv, r5_bcitp, r5_scilv, r5_scitp, r5_cs)
@@ -372,7 +392,7 @@ bool   own_m5  = own_tf == "5"
 bool   own_on  = (own_h1 and use_h1) or (own_h2 and use_h2) or (own_m15 and use_m15) or (own_m5 and use_m5)
 string own_nm  = own_h1 ? "H1" : own_h2 ? "H2" : own_m15 ? "M15" : "M5"
 f_tf(own_on, true, own_m5, barstate.isconfirmed, own_tf, own_nm, d5_t,
-     own_h1, own_h1, own_h1 or own_h2, own_m15 or own_m5, own_h1 or own_m15 or own_m5,
+     own_h1, own_h1 or own_m15, own_h1 or own_h2, own_m15 or own_m5, own_h1 or own_m15 or own_m5, false,
      d5_bpcl, d5_spcl, d5_ben, d5_sen, d5_benw, d5_senw, d5_boc, d5_soc, d5_bsb, d5_ssb,
      d5_c, d5_l, d5_h, d5_pl, d5_ph, d5_po, d5_lo2, d5_hi2, d5_boclv, d5_boctp, d5_soclv, d5_soctp, d5_blv, d5_btp, d5_slv, d5_stp,
      d5_bci, d5_sci, d5_bcilv, d5_bcitp, d5_scilv, d5_scitp, d5_cs)
