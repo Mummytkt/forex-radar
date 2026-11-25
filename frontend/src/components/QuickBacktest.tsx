@@ -47,6 +47,11 @@ const fmtDay = (d: string) => {
 
 // Date field that always reads day / month / year (the browser's own date input follows the PC's locale,
 // which showed month first). Type the digits, or use the calendar button. Stores ISO yyyy-mm-dd.
+const shiftDay = (iso: string, n: number) => {
+  const d = new Date(iso + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
 const isoToDmy = (iso: string) => { const [y, m, d] = iso.split('-'); return y && m && d ? `${d}/${m}/${y}` : '' }
 function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   const [text, setText] = useState(isoToDmy(value))
@@ -388,7 +393,13 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
         {/* ---------- the form ---------- */}
         <div style={{ ...card, marginBottom: 18 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-            <DateDMY value={draft.date} onChange={v => setDraft(d => ({ ...d, date: v }))} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <button type="button" title="A day earlier" aria-label="A day earlier" style={{ ...iconBtn, width: 30, height: 36 }}
+                onClick={() => setDraft(d => ({ ...d, date: shiftDay(d.date, -1) }))}><ChevronDown size={16} style={{ transform: 'rotate(90deg)' }} /></button>
+              <DateDMY value={draft.date} onChange={v => setDraft(d => ({ ...d, date: v }))} />
+              <button type="button" title="A day later" aria-label="A day later" style={{ ...iconBtn, width: 30, height: 36 }}
+                onClick={() => setDraft(d => ({ ...d, date: shiftDay(d.date, 1) }))}><ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} /></button>
+            </span>
             <input value={draft.pair} onChange={e => setDraft(d => ({ ...d, pair: e.target.value.toUpperCase() }))} style={{ ...field, width: 100 }} aria-label="Pair" />
             <button style={pill(draft.side === 'buy', 'var(--bullish)')} onClick={() => setDraft(d => ({ ...d, side: 'buy' }))}>Buy</button>
             <button style={pill(draft.side === 'sell', 'var(--bearish)')} onClick={() => setDraft(d => ({ ...d, side: 'sell' }))}>Sell</button>
@@ -611,7 +622,8 @@ function inJournal(list: Setup[], j: Journal): Setup[] {
     if (!ks.length) return []
     const timed = ks.filter(k => results[k].entered).sort((a, b) => results[a].entered!.localeCompare(results[b].entered!))
     const first = s.first && ks.includes(s.first) ? s.first : timed[0] ?? (ks.length === 1 ? ks[0] : null)
-    return [{ ...s, results, first }]
+    const t = first && results[first]?.entered ? results[first].entered : timed.length ? results[timed[0]].entered : null
+    return [{ ...s, results, first, date: t ? new Date(t).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) : s.date }]
   })
 }
 
@@ -817,64 +829,93 @@ function Fold({ id, title, summary, children, force, start = false, plain }: { i
 // A journal opened from its tab (user, 2026-11-25): months → the days with setups → that day's diary pages.
 // Pages (and their pictures) load only when she opens a day.
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+// the day an entry triggered (her local day, WAT); a hand-logged one has no time: the setup's own date
+const wat = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+interface Entry { setup: Setup; key: string | null; day: string }
+const entryOf = (s: Setup, k: string | null): Entry => ({ setup: s, key: k, day: k && s.results[k]?.entered ? wat(s.results[k].entered!) : s.date })
+// one entry's page: the setup with only that confirmation on it
+const onlyEntry = (s: Setup, k: string | null): Setup => k ? { ...s, results: { [k]: s.results[k] }, first: s.first === k ? k : null } : s
+
+// A journal opened from its tab (owner, 2026-11-25): month -> the days entries triggered -> each ENTRY (e.g. "H1
+// Engulfing · BUY EURUSD") -> its own page with its pictures. Delete works per entry; Delete all clears this journal.
 function JournalBook({ title, journal, setups, onEdit, onReviewed, onChanged }: { title: string; journal: Journal; setups: Setup[]
   onEdit: (s: Setup) => void; onReviewed: (s: Setup) => void; onChanged: () => void }) {
-  // delete from this journal (owner, 2026-11-25): All entries = whole setups; H1 / M15 / M5 = only that journal's results
+  const entries = useMemo(() => setups.flatMap(s => {
+    const ks = CONFS.map(([k]) => k).filter(k => s.results[k])
+    return ks.length ? ks.map(k => entryOf(s, k)) : [entryOf(s, null)]
+  }), [setups])
+  const eid = (e: Entry) => `${e.setup.id}:${e.key ?? '-'}`
   const [selecting, setSelecting] = useState(false)
-  const [picked, setPicked] = useState<Set<number>>(new Set())
-  const pick = (id: number) => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const pick = (id: string) => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const keys = TF_GROUPS.find(g => g[0] === journal)?.[1] ?? []
-  const remove = async (ids: number[] | 'all') => {
-    const n = ids === 'all' ? setups.length : ids.length
-    if (!n) return
-    const what = journal === 'all' ? `${n === 1 ? 'this setup' : `${n} setups`} (every timeframe, with the pictures)`
-      : `the ${journal} results of ${n === 1 ? 'this setup' : `${n} setups`} (their other timeframes stay; a setup with nothing left is removed)`
+  // delete entries: each takes only its own confirmation off its setup (a setup with nothing left is removed)
+  const removeEntries = async (list: Entry[]) => {
+    if (!list.length) return
+    if (!confirm(`Delete ${list.length === 1 ? 'this entry' : `${list.length} entries`} (with ${list.length === 1 ? 'its pictures' : 'their pictures'})? This can't be undone.`)) return
+    const byKey = new Map<string, number[]>()
+    const whole: number[] = []
+    for (const e of list) {
+      if (e.key) byKey.set(e.key, [...(byKey.get(e.key) || []), e.setup.id])
+      else whole.push(e.setup.id)
+    }
+    for (const [k, ids] of byKey) await api('/api/quick-bt/remove-keys', { method: 'POST', body: JSON.stringify({ ids, keys: [k] }) })
+    if (whole.length) await api('/api/quick-bt/delete', { method: 'POST', body: JSON.stringify({ ids: whole }) })
+    setPicked(new Set()); setSelecting(false)
+    onChanged()
+  }
+  const removeAll = async () => {
+    if (!entries.length) return
+    const what = journal === 'all' ? 'EVERY setup and entry (with the pictures)' : `every ${journal} entry (other timeframes stay; a setup with nothing left is removed)`
     if (!confirm(`Delete ${what}? This can't be undone.`)) return
-    if (ids === 'all' && prompt(`Type DELETE to clear the whole ${title}`) !== 'DELETE') return
-    const body = journal === 'all'
-      ? (ids === 'all' ? { all: true, confirm: 'DELETE' } : { ids })
-      : (ids === 'all' ? { all: true, confirm: 'DELETE', keys } : { ids, keys })
-    await api(journal === 'all' ? '/api/quick-bt/delete' : '/api/quick-bt/remove-keys', { method: 'POST', body: JSON.stringify(body) })
+    if (prompt(`Type DELETE to clear the whole ${title}`) !== 'DELETE') return
+    await api(journal === 'all' ? '/api/quick-bt/delete' : '/api/quick-bt/remove-keys', { method: 'POST',
+      body: JSON.stringify(journal === 'all' ? { all: true, confirm: 'DELETE' } : { all: true, confirm: 'DELETE', keys }) })
     setPicked(new Set()); setSelecting(false)
     onChanged()
   }
   const months = useMemo(() => {
-    const m = new Map<string, Map<string, Setup[]>>()
-    for (const s of [...setups].sort((a, b) => b.date.localeCompare(a.date) || a.id - b.id)) {
-      const mk = s.date.slice(0, 7)
+    const m = new Map<string, Map<string, Entry[]>>()
+    const order = (e: Entry) => (e.key && e.setup.results[e.key]?.entered) || e.day
+    for (const e of [...entries].sort((a, b) => b.day.localeCompare(a.day) || order(a).localeCompare(order(b)))) {
+      const mk = e.day.slice(0, 7)
       if (!m.has(mk)) m.set(mk, new Map())
       const days = m.get(mk)!
-      days.set(s.date, [...(days.get(s.date) || []), s])
+      days.set(e.day, [...(days.get(e.day) || []), e])
     }
     return [...m.entries()]
-  }, [setups])
+  }, [entries])
   const [openM, setOpenM] = useState<Set<string>>(new Set())
   const [openD, setOpenD] = useState<Set<string>>(new Set())
+  const [openE, setOpenE] = useState<Set<string>>(new Set())
   const [bookOpen, setBookOpen] = useFold('book', true)
   const back = (id: string) => toHeading(document.getElementById(id))
   useEffect(() => { if (months.length) setOpenM(new Set([months[0][0]])) }, [title, months.length])   // newest month open
   const flip = (set: Set<string>, k: string) => { const n = new Set(set); if (n.has(k)) n.delete(k); else n.add(k); return n }
-  const rTotal = (list: Setup[]) => list.reduce((t, s) => t + (s.first && s.results[s.first] ? rOf(s.results[s.first], s.tp_r) : 0), 0)
-  const head: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', width: '100%', background: 'none', border: 'none',
+  const rEntry = (e: Entry) => e.key && e.setup.results[e.key]?.outcome ? rOf(e.setup.results[e.key], e.setup.tp_r) : 0
+  const rTotal = (list: Entry[]) => list.reduce((t, e) => t + rEntry(e), 0)
+  const rCol = (v: number) => v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-secondary)'
+  const head: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1, background: 'none', border: 'none',
     cursor: 'pointer', textAlign: 'left', padding: 0, color: 'var(--text-primary)' }
   const chev = (open: boolean) => <ChevronDown size={15} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: open ? 'none' : 'rotate(-90deg)', flexShrink: 0 }} />
   if (!setups.length) return <div style={{ ...card, marginBottom: 16, color: 'var(--text-muted)', fontSize: 13 }}>{title}: nothing logged here yet.</div>
   return (
     <div id="qbt-book" className="fairy-diary dp-purple" style={{ ...card, marginBottom: 16, display: 'grid', gap: 10 }}>
-      <button onClick={() => setBookOpen(!bookOpen)} aria-expanded={bookOpen} style={{ ...head, gap: 8 }}>
+      <button onClick={() => setBookOpen(!bookOpen)} aria-expanded={bookOpen} style={{ ...head, width: '100%', gap: 8 }}>
         <ChevronDown size={16} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: bookOpen ? 'none' : 'rotate(-90deg)' }} />
         <span className="diary-script" style={{ fontSize: 26, color: 'var(--accent-hover)' }}>{title}</span>
+        <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{entries.length} entr{entries.length === 1 ? 'y' : 'ies'}</span>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{bookOpen ? 'Hide' : 'Show'}</span>
       </button>
       {bookOpen && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={() => { setSelecting(v => !v); setPicked(new Set()) }} style={{ ...pill(selecting), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
             <Check size={12} /> {selecting ? 'Done selecting' : 'Select'}</button>
-          {selecting && <button onClick={() => setPicked(picked.size === setups.length ? new Set() : new Set(setups.map(x => x.id)))}
-            style={{ ...pill(false), padding: '5px 11px', fontSize: 12 }}>{picked.size === setups.length ? 'Untick all' : 'Tick all'}</button>}
-          {selecting && picked.size > 0 && <button onClick={() => remove([...picked])} style={{ ...pill(false), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)', borderColor: 'var(--bearish)' }}>
+          {selecting && <button onClick={() => setPicked(picked.size === entries.length ? new Set() : new Set(entries.map(eid)))}
+            style={{ ...pill(false), padding: '5px 11px', fontSize: 12 }}>{picked.size === entries.length ? 'Untick all' : 'Tick all'}</button>}
+          {selecting && picked.size > 0 && <button onClick={() => removeEntries(entries.filter(e => picked.has(eid(e))))} style={{ ...pill(false), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)', borderColor: 'var(--bearish)' }}>
             <Trash2 size={12} /> Delete selected ({picked.size})</button>}
-          <button onClick={() => remove('all')} style={{ ...pill(false), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)', marginLeft: 'auto' }}>
+          <button onClick={removeAll} style={{ ...pill(false), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)', marginLeft: 'auto' }}>
             <Trash2 size={12} /> Delete all</button>
         </div>
       )}
@@ -884,11 +925,11 @@ function JournalBook({ title, journal, setups, onEdit, onReviewed, onChanged }: 
         const tot = rTotal(all)
         return (
           <div key={mk} id={`qbt-m-${mk}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', background: 'var(--surface)' }}>
-            <button style={head} onClick={() => setOpenM(o => flip(o, mk))} aria-expanded={mOpen}>
+            <button style={{ ...head, width: '100%' }} onClick={() => setOpenM(o => flip(o, mk))} aria-expanded={mOpen}>
               {chev(mOpen)}
               <span className="diary-script" style={{ fontSize: 22, color: 'var(--accent-hover)' }}>{MONTHS_FULL[+mk.slice(5, 7) - 1]} {mk.slice(0, 4)}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{all.length} setup{all.length === 1 ? '' : 's'} · {days.size} day{days.size === 1 ? '' : 's'}</span>
-              <b style={{ marginLeft: 'auto', fontSize: 13, color: tot > 0 ? 'var(--bullish)' : tot < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>★ {fmtR(tot)}</b>
+              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{all.length} entr{all.length === 1 ? 'y' : 'ies'} · {days.size} day{days.size === 1 ? '' : 's'}</span>
+              <b style={{ marginLeft: 'auto', fontSize: 13, color: rCol(tot) }}>{fmtR(tot)}</b>
             </button>
             {mOpen && (
               <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
@@ -897,28 +938,39 @@ function JournalBook({ title, journal, setups, onEdit, onReviewed, onChanged }: 
                   const dt = rTotal(list)
                   return (
                     <div key={day} id={`qbt-d-${day}`} style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '8px 12px' }}>
-                      {selecting && (
-                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                          {list.map(s => (
-                            <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                              <input type="checkbox" checked={picked.has(s.id)} onChange={() => pick(s.id)} style={{ width: 15, height: 15 }} />
-                              {s.side.toUpperCase()} {s.pair}{s.level ? ` · ${s.level}` : ''}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                      <button style={head} onClick={() => setOpenD(o => flip(o, day))} aria-expanded={dOpen}>
+                      <button style={{ ...head, width: '100%' }} onClick={() => setOpenD(o => flip(o, day))} aria-expanded={dOpen}>
                         {chev(dOpen)}
                         <b style={{ fontSize: 14 }}>{fmtDay(day)}</b>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {list.map(s => `${s.side.toUpperCase()} ${s.pair}`).join(' · ')}
-                          {' · '}{list.flatMap(s => Object.keys(s.results).map(k => SHORT[k] || k)).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'no confirmation'}
-                        </span>
-                        <b style={{ marginLeft: 'auto', fontSize: 12.5, color: dt > 0 ? 'var(--bullish)' : dt < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>★ {fmtR(dt)}</b>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{list.length} entr{list.length === 1 ? 'y' : 'ies'} · {list.map(e => e.key ? (LABEL[e.key] || e.key) : 'no confirmation').join(', ')}</span>
+                        <b style={{ marginLeft: 'auto', fontSize: 12.5, color: rCol(dt) }}>{fmtR(dt)}</b>
                       </button>
-                      {dOpen && list.map(s => <SetupBook key={s.id} inline setup={s} onClose={() => {}} onEdit={() => onEdit(s)} onReviewed={() => onReviewed(s)}
-                        onDelete={() => remove([s.id])} />)}
-                      {dOpen && <CloseBar label={`Close ${fmtDay(day)}`} onClose={() => { setOpenD(o => flip(o, day)); back(`qbt-d-${day}`) }} />}
+                      {dOpen && (
+                        <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                          {list.map(e => {
+                            const id = eid(e)
+                            const eOpen = openE.has(id)
+                            const r = e.key ? e.setup.results[e.key] : null
+                            const oc = r ? OUT.find(o => o[0] === r.outcome) : null
+                            return (
+                              <div key={id} id={`qbt-e-${id}`} style={{ border: '1px solid var(--border)', borderRadius: 9, padding: '7px 10px', background: 'var(--card)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  {selecting && <input type="checkbox" checked={picked.has(id)} onChange={() => pick(id)} style={{ width: 15, height: 15 }} aria-label="Tick this entry" />}
+                                  <button style={head} onClick={() => setOpenE(o => flip(o, id))} aria-expanded={eOpen}>
+                                    {chev(eOpen)}
+                                    <b style={{ fontSize: 13.5 }}>{e.setup.first === e.key ? '★ ' : ''}{e.key ? (LABEL[e.key] || e.key) : 'No confirmation'}</b>
+                                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{e.setup.side.toUpperCase()} {e.setup.pair}{e.setup.level ? ` · level ${e.setup.level}` : ''}{r?.after_tp ? ' · after TP' : ''}</span>
+                                    {oc && <b style={{ marginLeft: 'auto', fontSize: 12.5, color: oc[2] }}>{oc[1]}{r && r.takes > 1 ? ` ×${r.takes}` : ''} · {fmtR(rEntry(e))}</b>}
+                                  </button>
+                                </div>
+                                {eOpen && <SetupBook inline setup={onlyEntry(e.setup, e.key)} onClose={() => {}} onEdit={() => onEdit(e.setup)} onReviewed={() => onReviewed(e.setup)}
+                                  onDelete={() => removeEntries([e])} />}
+                                {eOpen && <CloseBar label={`Close ${e.key ? (LABEL[e.key] || e.key) : 'this page'}`} onClose={() => { setOpenE(o => flip(o, id)); back(`qbt-e-${id}`) }} />}
+                              </div>
+                            )
+                          })}
+                          <CloseBar label={`Close ${fmtDay(day)}`} onClose={() => { setOpenD(o => flip(o, day)); back(`qbt-d-${day}`) }} />
+                        </div>
+                      )}
                     </div>
                   )
                 })}
