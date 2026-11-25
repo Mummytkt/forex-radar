@@ -15,6 +15,7 @@ from api.announcements import router as announcements_router
 from api.entry_tests import router as entry_tests_router
 from api.job_hunt import router as job_hunt_router
 from api.quick_backtest import router as quick_backtest_router
+from api.strategy_requests import router as strategy_requests_router
 
 app = FastAPI(title="MummyTKT's Bias Pointer API", version="1.0.0")
 
@@ -50,3 +51,4 @@ app.include_router(announcements_router, prefix="/api")
 app.include_router(entry_tests_router, prefix="/api")
 app.include_router(job_hunt_router, prefix="/api")
 app.include_router(quick_backtest_router, prefix="/api")
+app.include_router(strategy_requests_router, prefix="/api")   # "Test my strategy" requests (2026-11-25)

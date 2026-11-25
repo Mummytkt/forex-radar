@@ -6,7 +6,7 @@ import { TimezoneProvider } from '@/lib/timezone'
 import { AccentProvider } from '@/lib/useAccent'
 
 const FULL_PAGE_PATHS = ['/login', '/join', '/', '/signup', '/forgot', '/reset', '/claim',
-  '/terms', '/privacy', '/refunds', '/risk']
+  '/terms', '/privacy', '/refunds', '/risk', '/test-my-strategy']
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const path = usePathname()

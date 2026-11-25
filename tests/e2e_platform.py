@@ -1610,6 +1610,18 @@ check("OCTGD 3 stays quiet on a level never touched",
       _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_o3n["id"],)).fetchone()[0] is None)
 for _x in (_o3, _o3n):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
+# "Test my strategy" requests (owner, 2026-11-25): anyone can send one; only the owner reads them
+_sr = {"name": "Ada Trader", "contact": "ada@example.com", "role": "mentor", "markets": "EURUSD",
+       "strategy": "I mark the H4 order block, wait for an M15 engulfing at it, SL under the wick, TP 3R."}
+check("a strategy request can be sent without an account", c.post("/api/public/strategy-request", json=_sr).status_code == 200)
+check("a too-short strategy is refused", c.post("/api/public/strategy-request", json=dict(_sr, strategy="buy low")).status_code == 400)
+c.post("/api/public/strategy-request", json=dict(_sr, name="Bot", website="spam.example"))
+_lr = c.get("/api/strategy-requests", headers=H(owner)).json()["requests"]
+check("the owner sees the request (and not the bot's)", any(x["name"] == "Ada Trader" for x in _lr) and not any(x["name"] == "Bot" for x in _lr))
+check("a subscriber can't read requests", c.get("/api/strategy-requests", headers=H(ta)).status_code == 403)
+_rid = next(x["id"] for x in _lr if x["name"] == "Ada Trader")
+check("the owner moves a request along", c.patch(f"/api/strategy-requests/{_rid}", headers=H(owner), json={"status": "contacted", "notes": "call Fri"}).json()["status"] == "contacted")
+c.delete(f"/api/strategy-requests/{_rid}", headers=H(owner))
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

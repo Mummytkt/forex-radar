@@ -33,7 +33,7 @@ const Auth = createContext<AuthCtx>({
 
 const TOKEN_KEY = 'mbp_token'
 const NO_AUTH_PATHS = ['/login', '/join', '/', '/signup', '/checkout', '/forgot', '/reset', '/claim',
-  '/terms', '/privacy', '/refunds', '/risk']
+  '/terms', '/privacy', '/refunds', '/risk', '/test-my-strategy']
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
