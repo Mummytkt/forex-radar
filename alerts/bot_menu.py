@@ -160,8 +160,14 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
                      f"{hi}Your alerts come to this chat.\n\nTap Menu for shortcuts, or open the Bias Pointer here:",
                      _page_markup(base, "📈 Open Bias Pointer", "/hub"))
     elif cmd == "results":
-        from alerts.forward_report import report_text
-        await _reply(conn, token, chat_id, report_text(conn, user["id"]), html=True)
+        from alerts.forward_report import report_text, set_results_from
+        if text.split()[1:2] == ["reset"]:          # a fresh start (owner 2026-11-25): old trades stop counting
+            from datetime import datetime, timezone
+            set_results_from(conn, user["id"], datetime.now(timezone.utc).isoformat()); conn.commit()
+            await _reply(conn, token, chat_id, "📊 Fresh start: /results now counts only trades from this moment. "
+                                               "Nothing was deleted.")
+        else:
+            await _reply(conn, token, chat_id, report_text(conn, user["id"]), html=True)
     elif cmd == "risk":
         from alerts.forward_report import RISK_HELP, set_risk, get_risk, ensure_risk_table
         args = text.split()[1:]
@@ -171,17 +177,27 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
             await _reply(conn, token, chat_id, "💼 Lot size removed from your alerts.")
         else:
             try:
-                bal, pct = float(args[0].replace(",", "").lstrip("$")), float(args[1].rstrip("%"))
-                ok = bal > 0 and 0 < pct <= 10
+                if len(args) == 1:          # "/risk 20": $20 a trade (owner 2026-11-25); kept as $20 at 100%
+                    bal, pct = float(args[0].replace(",", "").lstrip("$")), 100.0
+                    ok = 0 < bal <= 100000
+                else:
+                    bal, pct = float(args[0].replace(",", "").lstrip("$")), float(args[1].rstrip("%"))
+                    ok = bal > 0 and 0 < pct <= 10
             except (IndexError, ValueError):
                 ok = False
-            if ok:
+            if ok and pct >= 100:
+                from alerts.forward_report import set_risk_usd
+                set_risk(conn, user["id"], bal, 100.0)
+                set_risk_usd(conn, user["id"], bal); conn.commit()
+                await _reply(conn, token, chat_id, f"💼 Saved: ${bal:,.2f} risk per trade. Your lot sizes, journal and "
+                                                   "/results use it from the next trade; trades already logged keep theirs.")
+            elif ok:
                 set_risk(conn, user["id"], bal, pct)
                 await _reply(conn, token, chat_id, f"💼 Saved: ${bal:,.0f} account, {pct:g}% (${bal * pct / 100:,.2f}) "
                                                    "risk per trade. Your followed entries now show the lot size.")
             else:
                 cur = get_risk(conn, user["id"])
-                now_txt = f"\n\nNow: ${cur[0]:,.0f} at {cur[1]:g}%." if cur else ""
+                now_txt = (f"\n\nNow: ${cur[0] * cur[1] / 100:,.2f} per trade" + ("." if cur[1] >= 100 else f" ({cur[1]:g}% of ${cur[0]:,.0f}).")) if cur else ""
                 await _reply(conn, token, chat_id, RISK_HELP + now_txt, html=True)
     elif cmd == "news":
         from api.alert_prefs import get_alert_prefs

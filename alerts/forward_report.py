@@ -32,10 +32,25 @@ def _r(row) -> Optional[float]:
     return None
 
 
+def results_from(conn, user_id) -> Optional[str]:
+    """Her fresh start for /results (owner 2026-11-25: "clear old data, start counting from the next trade")."""
+    r = conn.execute("SELECT value FROM user_config WHERE key = ?", (f"results_from:{user_id}",)).fetchone()
+    return r[0] if r else None
+
+
+def set_results_from(conn, user_id, when: str) -> None:
+    conn.execute("INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                 (f"results_from:{user_id}", when))
+
+
 def results(conn, user_id: int, since: Optional[datetime] = None) -> dict:
     conn.row_factory = sqlite3.Row
     q = "SELECT * FROM trade_follows WHERE user_id = ?"
     args: list = [user_id]
+    start = results_from(conn, user_id)
+    if start:
+        q += " AND opened_at >= ?"
+        args.append(start)
     if since:
         q += " AND opened_at >= ?"
         args.append(since.astimezone(timezone.utc).isoformat())
@@ -73,6 +88,9 @@ def report_text(conn, user_id: int, title: str = "📊 <b>Your live results</b>"
                     "applied (the follow alerts you, it doesn't move your stop).</i>"]
     risk = risk_usd(conn, user_id)
     parts[1] = parts[1][:-4] + f" $ at your ${risk:g} per trade.</i>"
+    start = results_from(conn, user_id)
+    if start:
+        parts[1] += f"\n<i>Counting from {start[:10]} (your fresh start; /results reset starts again).</i>"
     blocks = [("This week", now - timedelta(days=7))] if week else []
     blocks.append(("All time", None))
     for label, since in blocks:
@@ -178,17 +196,19 @@ def lot_line(conn, user_id, instrument: str, entry: float, sl: float) -> Optiona
     if not rk:
         return None
     bal, pct = rk
+    basis = f"${bal * pct / 100:,.2f}" if pct >= 100 else f"{pct:g}% of ${bal:,.0f} = ${bal * pct / 100:,.2f}"
     ls = lot_size(conn, instrument, entry, sl, bal, pct)
     if not ls:
-        return f"Position size: work it out on your broker's calculator ({pct:g}% of ${bal:,.0f} = ${bal * pct / 100:,.2f} risk)."
+        return f"Position size: work it out on your broker's calculator ({basis} risk)."
     lots = ls["lots"]
     shown = f"{lots:.2f}" if lots >= 0.01 else "below 0.01"
-    return (f"💼 Lot size: <b>{shown}</b> ({pct:g}% of ${bal:,.0f} = ${ls['risk_usd']:,.2f} risk to the SL). "
+    return (f"💼 Lot size: <b>{shown}</b> ({basis} risk to the SL). "
             "Check it on your broker before you place it.")
 
 
-RISK_HELP = ("💼 <b>Lot size in your entry alerts</b>\nSend your account balance (in USD) and the % you risk per "
-             "trade:\n<code>/risk 1000 1</code> = a $1,000 account risking 1% ($10) per trade.\n\nEvery followed "
+RISK_HELP = ("💼 <b>Your risk per trade</b>\nType it after /risk:\n<code>/risk 20</code> = $20 per trade\n"
+             "<code>/risk 1000 1</code> = a $1,000 account risking 1% ($10) per trade\n\nYour journal and /results "
+             "use it from the next trade (trades already logged keep theirs). Every followed "
              "entry then shows the lot size between the entry and the SL. Forex pairs and gold/silver only; for "
              "other instruments it shows the dollar risk. <code>/risk off</code> removes it.")
 
