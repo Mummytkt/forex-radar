@@ -9,6 +9,8 @@ import {
 import TopBar from '@/components/TopBar'
 import { API_BASE } from '@/lib/api'
 import DateInput from '@/components/DateInput'
+import { useAuth } from '@/lib/auth'
+import { buildStory } from '@/lib/diaryStory'
 import {
   TradeImage, getTradeImages, addTradeImage,
   deleteTradeImage, deleteAllTradeImages,
@@ -563,6 +565,65 @@ function TradeRow({ entry, onView, onEdit, onDelete, onResultChange }: {
   )
 }
 
+// ── A trade read as a page of her diary (2026-11-25) ─────────────────────────
+const AUTO_NOTE = /^Auto-logged from the Bias Pointer/
+function JournalPage({ entry, onEdit, onDelete }: { entry: Entry; onEdit: () => void; onDelete: () => void }) {
+  const { user } = useAuth()
+  const note = entry.notes && !AUTO_NOTE.test(entry.notes) ? entry.notes.trim() : ''
+  const label = getSetupLabel(entry.setup_type, entry.setup_type_notes) || 'my setup'
+  const outcome = entry.result === 'win' ? 'win' : entry.result === 'loss' ? 'loss' : entry.result === 'breakeven' ? 'be' : entry.result === 'missed' ? 'none' : null
+  const rr = entry.rr_ratio != null ? Math.abs(entry.rr_ratio) : null
+  const story = buildStory({
+    id: entry.id, name: user?.name, date: entry.trade_date, pair: entry.instrument,
+    direction: entry.direction === 'sell' ? 'sell' : 'buy', hasNote: !!note, exitDate: entry.exit_date,
+    rows: outcome ? [{ slot: 'r', label, outcome, rr: outcome === 'win' ? rr : null, takes: 1,
+      net: outcome === 'win' ? rr : outcome === 'loss' ? -1 : outcome === 'be' ? 0 : null }] : [],
+  })
+  const money = resultMoney(entry)
+  const plan: string[] = []
+  if (entry.entry_price != null) plan.push(`I got in at ${entry.entry_price}${entry.entry_time ? ` at ${entry.entry_time}` : ''}`)
+  if (entry.stop_loss != null) plan.push(`my stop sat at ${entry.stop_loss}`)
+  if (entry.take_profit != null) plan.push(`I aimed for ${entry.take_profit}`)
+  const planText = plan.length > 1 ? `${plan.slice(0, -1).join(', ')} and ${plan[plan.length - 1]}.` : plan.length ? `${plan[0]}.` : ''
+  const risk = entry.amount_risked != null
+    ? ` I put $${entry.amount_risked} on the line${entry.amount_aimed != null ? ` to make $${entry.amount_aimed}` : ''}.` : ''
+  const amt = (v: number) => Math.abs(v).toFixed(Math.abs(v) % 1 ? 2 : 0)
+  const moneyLine = money == null ? (entry.result === 'open' ? 'The trade is still running, so this page is still being written ✍️' : '')
+    : money > 0 ? `That's +$${amt(money)} in the book 💰` : money < 0 ? `That's −$${amt(money)}, and I'm okay with it 🌱` : 'Not a dollar lost 🕊️'
+  let n = 0
+  const line = () => ({ animationDelay: `${(n++) * 0.12}s` })
+  return (
+    <div className="dp-wrap">
+      <div className={`dp-page dp-${story.mood}`}>
+        {story.sparks.map((e, i) => <span key={i} className={`dp-spark dp-spark${i}`} aria-hidden>{e}</span>)}
+        <div className="dp-head dp-line" style={line()}>
+          <span className="dp-ribbon">{story.ribbon}</span>
+          <span className="dp-stamp">{entry.instrument} · {label}{entry.session ? ` · ${SESSION_LABELS[entry.session] || entry.session}` : ''} · {entry.trade_date}</span>
+        </div>
+        <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
+        <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
+        {note && <div className="dp-note dp-line" style={line()}>{note}</div>}
+        {planText && <p className="dp-p dp-line" style={line()}>{planText}{risk}</p>}
+        {story.rows.map(r => <p key={r.slot} className="dp-p dp-line" style={line()}>{r.text}</p>)}
+        {moneyLine && <p className="dp-p dp-line" style={line()}>{moneyLine}</p>}
+        {story.held && <p className="dp-p dp-line" style={line()}>{story.held}</p>}
+        <div className="dp-foot dp-line" style={line()}>
+          <div>
+            <div className="dp-yours">{story.yours}</div>
+            <div className="diary-script dp-sign">{story.signature}</div>
+          </div>
+          <span style={{ display: 'flex', gap: 6 }}>
+            <button onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--accent)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              <Edit2 size={12} /> Edit this page</button>
+            <button onClick={onDelete} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              <Trash2 size={12} /> Delete</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Trade detail view ─────────────────────────────────────────────────────────
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   if (!value && value !== 0) return null
@@ -967,6 +1028,10 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
   const [modalOpen, setModalOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<Entry | null>(null)
   const [viewEntry, setViewEntry] = useState<Entry | null>(null)
+  // reading mode (user, 2026-11-25): the same trades read as diary pages; the stats, streak and curve stay above
+  const [readMode, setReadMode] = useState<'list' | 'diary'>('list')
+  useEffect(() => { try { if (localStorage.getItem('mbp_journal_read') === 'diary') setReadMode('diary') } catch { /* private mode */ } }, [])
+  const pickRead = (m: 'list' | 'diary') => { setReadMode(m); try { localStorage.setItem('mbp_journal_read', m) } catch { /* private mode */ } }
   const [form, setForm] = useState(blank())
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
@@ -1317,6 +1382,13 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
             </h2>
             <span style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {config.tradeType !== 'backtest' && <RiskBox />}
+              <span style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                {(['list', 'diary'] as const).map(m => (
+                  <button key={m} onClick={() => pickRead(m)} style={{ padding: '4px 10px', fontSize: 11.5, fontWeight: 700, border: 'none', cursor: 'pointer',
+                    background: readMode === m ? 'var(--accent)' : 'transparent', color: readMode === m ? 'white' : 'var(--text-secondary)' }}>
+                    {m === 'list' ? 'List' : '📖 Diary'}</button>
+                ))}
+              </span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{entries.length} {entries.length === 1 ? 'entry' : 'entries'}</span>
             </span>
           </div>
@@ -1337,6 +1409,11 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
               </button>
             </div>
           ) : (
+            readMode === 'diary' ? (
+              <div className="fairy-diary dp-purple" style={{ display: 'grid', gap: 4, background: 'var(--card)' }}>
+                {entries.map(e => <JournalPage key={e.id} entry={e} onEdit={() => openEdit(e)} onDelete={() => setConfirmDelete(e.id)} />)}
+              </div>
+            ) :
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as 'auto' }}>
               {entries.map(e => (
                 <TradeRow key={e.id} entry={e} onView={setViewEntry} onEdit={openEdit} onDelete={id => setConfirmDelete(id)} onResultChange={handleResultChange} />
