@@ -350,8 +350,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             )
           })}
         </div>
-        <JournalBook title={JOURNALS.find(x => x[0] === journal)?.[1].replace(/^\S+\s/, '') ?? 'Journal'} setups={setups}
-          onEdit={edit} onReviewed={async s => { await api(`/api/quick-bt/${s.id}/reviewed`, { method: 'POST' }); load() }} />
+        <JournalBook title={JOURNALS.find(x => x[0] === journal)?.[1].replace(/^\S+\s/, '') ?? 'Journal'} journal={journal} setups={setups}
+          onEdit={edit} onReviewed={async s => { await api(`/api/quick-bt/${s.id}/reviewed`, { method: 'POST' }); load() }} onChanged={load} />
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Zap size={20} color="var(--accent)" /> Quick Backtest
@@ -652,7 +652,7 @@ function TfPicker({ results, onSet }: { results: Record<string, Res>; onSet: (ke
 }
 
 // A setup read back as a page of the diary (user, 2026-11-24: "read the information like a book")
-function SetupBook({ setup, onClose, onEdit, onReviewed, inline }: { setup: Setup; onClose: () => void; onEdit: () => void; onReviewed: () => void; inline?: boolean }) {
+function SetupBook({ setup, onClose, onEdit, onReviewed, inline, onDelete }: { setup: Setup; onClose: () => void; onEdit: () => void; onReviewed: () => void; inline?: boolean; onDelete?: () => void }) {
   const { user } = useAuth()
   const [pics, setPics] = useState<{ id: number; conf: string; label: string; url: string }[] | null>(null)
   useEffect(() => {
@@ -728,6 +728,7 @@ function SetupBook({ setup, onClose, onEdit, onReviewed, inline }: { setup: Setu
               <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {setup.auto && !setup.reviewed && <button onClick={onReviewed} style={{ ...pill(true, 'var(--bullish)'), display: 'flex', alignItems: 'center', gap: 5 }}><Check size={13} /> Looks right: reviewed</button>}
                 <button onClick={onEdit} style={{ ...pill(false), display: 'flex', alignItems: 'center', gap: 5 }}><Pencil size={12} /> Edit this page</button>
+                {onDelete && <button onClick={onDelete} style={{ ...pill(false), display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)' }}><Trash2 size={12} /> Delete</button>}
               </span>
             </div>
           </div>
@@ -787,7 +788,27 @@ function Fold({ id, title, summary, children, force, start = false, plain }: { i
 // A journal opened from its tab (user, 2026-11-25): months → the days with setups → that day's diary pages.
 // Pages (and their pictures) load only when she opens a day.
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; setups: Setup[]; onEdit: (s: Setup) => void; onReviewed: (s: Setup) => void }) {
+function JournalBook({ title, journal, setups, onEdit, onReviewed, onChanged }: { title: string; journal: Journal; setups: Setup[]
+  onEdit: (s: Setup) => void; onReviewed: (s: Setup) => void; onChanged: () => void }) {
+  // delete from this journal (owner, 2026-11-25): All entries = whole setups; H1 / M15 / M5 = only that journal's results
+  const [selecting, setSelecting] = useState(false)
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+  const pick = (id: number) => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const keys = TF_GROUPS.find(g => g[0] === journal)?.[1] ?? []
+  const remove = async (ids: number[] | 'all') => {
+    const n = ids === 'all' ? setups.length : ids.length
+    if (!n) return
+    const what = journal === 'all' ? `${n === 1 ? 'this setup' : `${n} setups`} (every timeframe, with the pictures)`
+      : `the ${journal} results of ${n === 1 ? 'this setup' : `${n} setups`} (their other timeframes stay; a setup with nothing left is removed)`
+    if (!confirm(`Delete ${what}? This can't be undone.`)) return
+    if (ids === 'all' && prompt(`Type DELETE to clear the whole ${title}`) !== 'DELETE') return
+    const body = journal === 'all'
+      ? (ids === 'all' ? { all: true, confirm: 'DELETE' } : { ids })
+      : (ids === 'all' ? { all: true, confirm: 'DELETE', keys } : { ids, keys })
+    await api(journal === 'all' ? '/api/quick-bt/delete' : '/api/quick-bt/remove-keys', { method: 'POST', body: JSON.stringify(body) })
+    setPicked(new Set()); setSelecting(false)
+    onChanged()
+  }
   const months = useMemo(() => {
     const m = new Map<string, Map<string, Setup[]>>()
     for (const s of [...setups].sort((a, b) => b.date.localeCompare(a.date) || a.id - b.id)) {
@@ -816,6 +837,18 @@ function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; set
         <span className="diary-script" style={{ fontSize: 26, color: 'var(--accent-hover)' }}>{title}</span>
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{bookOpen ? 'Hide' : 'Show'}</span>
       </button>
+      {bookOpen && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={() => { setSelecting(v => !v); setPicked(new Set()) }} style={{ ...pill(selecting), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Check size={12} /> {selecting ? 'Done selecting' : 'Select'}</button>
+          {selecting && <button onClick={() => setPicked(picked.size === setups.length ? new Set() : new Set(setups.map(x => x.id)))}
+            style={{ ...pill(false), padding: '5px 11px', fontSize: 12 }}>{picked.size === setups.length ? 'Untick all' : 'Tick all'}</button>}
+          {selecting && picked.size > 0 && <button onClick={() => remove([...picked])} style={{ ...pill(false), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)', borderColor: 'var(--bearish)' }}>
+            <Trash2 size={12} /> Delete selected ({picked.size})</button>}
+          <button onClick={() => remove('all')} style={{ ...pill(false), padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, color: 'var(--bearish)', marginLeft: 'auto' }}>
+            <Trash2 size={12} /> Delete all</button>
+        </div>
+      )}
       {bookOpen && months.map(([mk, days]) => {
         const all = [...days.values()].flat()
         const mOpen = openM.has(mk)
@@ -835,6 +868,16 @@ function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; set
                   const dt = rTotal(list)
                   return (
                     <div key={day} id={`qbt-d-${day}`} style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '8px 12px' }}>
+                      {selecting && (
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+                          {list.map(s => (
+                            <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={picked.has(s.id)} onChange={() => pick(s.id)} style={{ width: 15, height: 15 }} />
+                              {s.side.toUpperCase()} {s.pair}{s.level ? ` · ${s.level}` : ''}
+                            </label>
+                          ))}
+                        </div>
+                      )}
                       <button style={head} onClick={() => setOpenD(o => flip(o, day))} aria-expanded={dOpen}>
                         {chev(dOpen)}
                         <b style={{ fontSize: 14 }}>{fmtDay(day)}</b>
@@ -844,7 +887,8 @@ function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; set
                         </span>
                         <b style={{ marginLeft: 'auto', fontSize: 12.5, color: dt > 0 ? 'var(--bullish)' : dt < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>★ {fmtR(dt)}</b>
                       </button>
-                      {dOpen && list.map(s => <SetupBook key={s.id} inline setup={s} onClose={() => {}} onEdit={() => onEdit(s)} onReviewed={() => onReviewed(s)} />)}
+                      {dOpen && list.map(s => <SetupBook key={s.id} inline setup={s} onClose={() => {}} onEdit={() => onEdit(s)} onReviewed={() => onReviewed(s)}
+                        onDelete={() => remove([s.id])} />)}
                       {dOpen && <CloseBar label={`Close ${fmtDay(day)}`} onClose={() => { setOpenD(o => flip(o, day)); back(`qbt-d-${day}`) }} />}
                     </div>
                   )

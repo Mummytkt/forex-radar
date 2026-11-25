@@ -199,6 +199,45 @@ def delete_many(body: DeleteMany, request: Request):
     return {"ok": True, "deleted": n}
 
 
+class RemoveKeys(BaseModel):
+    ids: list[int] = []
+    all: bool = False
+    keys: list[str] = []        # this journal's confirmations (H1 / M15 / M5)
+    confirm: str = ""           # "DELETE" typed, for all
+
+
+@router.post("/quick-bt/remove-keys")
+def remove_keys(body: RemoveKeys, request: Request):
+    """Delete from one timeframe journal (owner, 2026-11-25): only those confirmations' results (and pictures) leave
+    the setups; a setup with nothing left is deleted. all = every setup that has one of them."""
+    require_owner(request)
+    keys = {k for k in body.keys if k in {c for c, _ in CONFIRMATIONS}}
+    if not keys:
+        raise HTTPException(400, "Which journal?")
+    if body.all and body.confirm != "DELETE":
+        raise HTTPException(400, "Type DELETE to clear this journal")
+    removed = deleted = 0
+    with _db(request) as conn:
+        rows = conn.execute("SELECT id, results_json, first FROM quick_bt").fetchall() if body.all else \
+            [r for i in body.ids[:5000] for r in conn.execute("SELECT id, results_json, first FROM quick_bt WHERE id = ?", (int(i),))]
+        for sid, rj, first in rows:
+            res = json.loads(rj or "{}")
+            if not keys & set(res):
+                continue
+            left = {k: v for k, v in res.items() if k not in keys}
+            for k in keys & set(res):
+                conn.execute("DELETE FROM quick_bt_images WHERE setup_id = ? AND conf = ?", (sid, k))
+            if not left:
+                conn.execute("DELETE FROM quick_bt WHERE id = ?", (sid,))
+                conn.execute("DELETE FROM quick_bt_images WHERE setup_id = ?", (sid,))
+                deleted += 1
+            else:
+                conn.execute("UPDATE quick_bt SET results_json = ?, first = ? WHERE id = ?",
+                             (json.dumps(left), first if first in left else None, sid))
+                removed += 1
+    return {"ok": True, "trimmed": removed, "deleted": deleted}
+
+
 @router.post("/quick-bt/{sid}/reviewed")
 def mark_reviewed(sid: int, request: Request):
     require_owner(request)

@@ -1574,6 +1574,22 @@ check("journal: delete all clears the live journal and keeps the backtest one",
       c.get("/api/journal?trade_type=live", headers=H(owner)).json() == []
       and _jb in {e["id"] for e in c.get("/api/journal?trade_type=backtest", headers=H(owner)).json()})
 c.post("/api/journal/delete", headers=H(owner), json={"ids": [_jb]})
+# Quick Backtest: delete from one timeframe journal = only its results; a setup with nothing left goes (2026-11-25)
+_both = c.post("/api/quick-bt", headers=H(owner), json={"date": "2020-02-03", "side": "buy", "range_type": "inside",
+               "results": {"cisd5": {"outcome": "win", "takes": 1}, "octgd1": {"outcome": "loss", "takes": 1}}, "first": "cisd5"}).json()["id"]
+_m5only = c.post("/api/quick-bt", headers=H(owner), json={"date": "2020-02-04", "side": "buy", "range_type": "inside",
+                 "results": {"cisd5": {"outcome": "win", "takes": 1}}}).json()["id"]
+check("deleting from a journal needs its confirmations",
+      c.post("/api/quick-bt/remove-keys", headers=H(owner), json={"ids": [_both]}).status_code == 400)
+c.post("/api/quick-bt/remove-keys", headers=H(owner), json={"ids": [_both, _m5only], "keys": ["cisd5"]})
+_after = {x["id"]: x for x in c.get("/api/quick-bt", headers=H(owner)).json()["setups"]}
+check("M5 journal delete keeps the setup's H1 result and removes the M5-only setup",
+      _both in _after and list(_after[_both]["results"]) == ["octgd1"] and _m5only not in _after)
+check("clearing a whole journal needs DELETE typed",
+      c.post("/api/quick-bt/remove-keys", headers=H(owner), json={"all": True, "keys": ["octgd1"]}).status_code == 400)
+c.post("/api/quick-bt/remove-keys", headers=H(owner), json={"all": True, "keys": ["octgd1"], "confirm": "DELETE"})
+check("clearing the H1 journal removes the setup left with nothing",
+      _both not in {x["id"] for x in c.get("/api/quick-bt", headers=H(owner)).json()["setups"]})
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)
