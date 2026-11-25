@@ -350,6 +350,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             )
           })}
         </div>
+        <JournalBook title={JOURNALS.find(x => x[0] === journal)?.[1].replace(/^\S+\s/, '') ?? 'Journal'} setups={setups}
+          onEdit={edit} onReviewed={async s => { await api(`/api/quick-bt/${s.id}/reviewed`, { method: 'POST' }); load() }} />
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Zap size={20} color="var(--accent)" /> Quick Backtest
@@ -643,7 +645,7 @@ function TfPicker({ results, onSet }: { results: Record<string, Res>; onSet: (ke
 }
 
 // A setup read back as a page of the diary (user, 2026-11-24: "read the information like a book")
-function SetupBook({ setup, onClose, onEdit, onReviewed }: { setup: Setup; onClose: () => void; onEdit: () => void; onReviewed: () => void }) {
+function SetupBook({ setup, onClose, onEdit, onReviewed, inline }: { setup: Setup; onClose: () => void; onEdit: () => void; onReviewed: () => void; inline?: boolean }) {
   const { user } = useAuth()
   const [pics, setPics] = useState<{ id: number; conf: string; label: string; url: string }[] | null>(null)
   useEffect(() => {
@@ -666,10 +668,11 @@ function SetupBook({ setup, onClose, onEdit, onReviewed }: { setup: Setup; onClo
     return () => { gone = true; made.forEach(u => URL.revokeObjectURL(u)) }
   }, [setup.id, setup.pictures])
   useEffect(() => {
+    if (inline) return
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [onClose])
+  }, [onClose, inline])
   const note = setup.note && !setup.note.startsWith('Auto-checked') ? setup.note.trim() : ''
   // ★ first reads first, then the rest in the page's usual order
   const keys = CONFS.map(([k]) => k).filter(k => setup.results[k] && setup.results[k].outcome)
@@ -687,12 +690,7 @@ function SetupBook({ setup, onClose, onEdit, onReviewed }: { setup: Setup; onClo
   let n = 0
   const line = () => ({ animationDelay: `${(n++) * 0.14}s` })
   const picsOf = (k: string) => (pics || []).filter(p => p.conf === k)
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.85)', overflowY: 'auto', padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="fairy-diary dp-purple" style={{ maxWidth: 900, margin: '0 auto', background: 'var(--card)', borderRadius: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 10px 0' }}>
-          <button onClick={onClose} style={iconBtn} aria-label="Close"><X size={15} /></button>
-        </div>
+  const page = (
         <div className="dp-wrap" style={{ borderTop: 'none' }}>
           <div className={`dp-page dp-${story.mood}`}>
             {story.sparks.map((e, i) => <span key={i} className={`dp-spark dp-spark${i}`} aria-hidden>{e}</span>)}
@@ -727,7 +725,83 @@ function SetupBook({ setup, onClose, onEdit, onReviewed }: { setup: Setup; onClo
             </div>
           </div>
         </div>
+  )
+  if (inline) return page
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.85)', overflowY: 'auto', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} className="fairy-diary dp-purple" style={{ maxWidth: 900, margin: '0 auto', background: 'var(--card)', borderRadius: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 10px 0' }}>
+          <button onClick={onClose} style={iconBtn} aria-label="Close"><X size={15} /></button>
+        </div>
+        {page}
       </div>
+    </div>
+  )
+}
+
+// A journal opened from its tab (user, 2026-11-25): months → the days with setups → that day's diary pages.
+// Pages (and their pictures) load only when she opens a day.
+const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; setups: Setup[]; onEdit: (s: Setup) => void; onReviewed: (s: Setup) => void }) {
+  const months = useMemo(() => {
+    const m = new Map<string, Map<string, Setup[]>>()
+    for (const s of [...setups].sort((a, b) => b.date.localeCompare(a.date) || a.id - b.id)) {
+      const mk = s.date.slice(0, 7)
+      if (!m.has(mk)) m.set(mk, new Map())
+      const days = m.get(mk)!
+      days.set(s.date, [...(days.get(s.date) || []), s])
+    }
+    return [...m.entries()]
+  }, [setups])
+  const [openM, setOpenM] = useState<Set<string>>(new Set())
+  const [openD, setOpenD] = useState<Set<string>>(new Set())
+  useEffect(() => { if (months.length) setOpenM(new Set([months[0][0]])) }, [title, months.length])   // newest month open
+  const flip = (set: Set<string>, k: string) => { const n = new Set(set); if (n.has(k)) n.delete(k); else n.add(k); return n }
+  const rTotal = (list: Setup[]) => list.reduce((t, s) => t + (s.first && s.results[s.first] ? rOf(s.results[s.first], s.tp_r) : 0), 0)
+  const head: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', width: '100%', background: 'none', border: 'none',
+    cursor: 'pointer', textAlign: 'left', padding: 0, color: 'var(--text-primary)' }
+  const chev = (open: boolean) => <ChevronDown size={15} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: open ? 'none' : 'rotate(-90deg)', flexShrink: 0 }} />
+  if (!setups.length) return <div style={{ ...card, marginBottom: 16, color: 'var(--text-muted)', fontSize: 13 }}>{title}: nothing logged here yet.</div>
+  return (
+    <div className="fairy-diary dp-purple" style={{ ...card, marginBottom: 16, display: 'grid', gap: 10 }}>
+      <div className="diary-script" style={{ fontSize: 26, color: 'var(--accent-hover)' }}>{title}</div>
+      {months.map(([mk, days]) => {
+        const all = [...days.values()].flat()
+        const mOpen = openM.has(mk)
+        const tot = rTotal(all)
+        return (
+          <div key={mk} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', background: 'var(--surface)' }}>
+            <button style={head} onClick={() => setOpenM(o => flip(o, mk))} aria-expanded={mOpen}>
+              {chev(mOpen)}
+              <span className="diary-script" style={{ fontSize: 22, color: 'var(--accent-hover)' }}>{MONTHS_FULL[+mk.slice(5, 7) - 1]} {mk.slice(0, 4)}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{all.length} setup{all.length === 1 ? '' : 's'} · {days.size} day{days.size === 1 ? '' : 's'}</span>
+              <b style={{ marginLeft: 'auto', fontSize: 13, color: tot > 0 ? 'var(--bullish)' : tot < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>★ {fmtR(tot)}</b>
+            </button>
+            {mOpen && (
+              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                {[...days.entries()].map(([day, list]) => {
+                  const dOpen = openD.has(day)
+                  const dt = rTotal(list)
+                  return (
+                    <div key={day} style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '8px 12px' }}>
+                      <button style={head} onClick={() => setOpenD(o => flip(o, day))} aria-expanded={dOpen}>
+                        {chev(dOpen)}
+                        <b style={{ fontSize: 14 }}>{fmtDay(day)}</b>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {list.map(s => `${s.side.toUpperCase()} ${s.pair}`).join(' · ')}
+                          {' · '}{list.flatMap(s => Object.keys(s.results).map(k => SHORT[k] || k)).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'no confirmation'}
+                        </span>
+                        <b style={{ marginLeft: 'auto', fontSize: 12.5, color: dt > 0 ? 'var(--bullish)' : dt < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>★ {fmtR(dt)}</b>
+                      </button>
+                      {dOpen && list.map(s => <SetupBook key={s.id} inline setup={s} onClose={() => {}} onEdit={() => onEdit(s)} onReviewed={() => onReviewed(s)} />)}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
