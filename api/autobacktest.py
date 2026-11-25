@@ -143,12 +143,12 @@ def confirmations(cs: list[dict]) -> list[dict]:
             if i - boc[2] > OCWIN:
                 boc = None
             elif cbull and c > boc[0]:
-                add("octgd", "buy", boc[1], boc[0], boc[0]); boc = None; b_oc = True
+                add("octgd", "buy", boc[1], boc[0], boc[0]); ev[-1]["s"] = boc[2] - 1; boc = None; b_oc = True
         if soc:
             if i - soc[2] > OCWIN:
                 soc = None
             elif cbear and c < soc[0]:
-                add("octgd", "sell", soc[1], soc[0], soc[0]); soc = None; s_oc = True
+                add("octgd", "sell", soc[1], soc[0], soc[0]); ev[-1]["s"] = soc[2] - 1; soc = None; s_oc = True
         if p and pbear and cbear:
             boc = [p["c"], min(l, p["l"]), i]
         if p and pbull and cbull:
@@ -214,15 +214,46 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float 
         if k["ct"] <= start or not hit(k) or (i and cs[i - 1]["ct"] > start and hit(cs[i - 1])):
             continue                              # not a NEW touch
         touch_no += 1
-        a = i if with_trade(k) else i + 1
-        if a + 1 >= len(cs):
+        # the first two candles in a row going the trade's way from the touch on (candles against it before them
+        # don't matter: owner 2026-11-25, 2 Jan 2020); the search stops at the next new touch
+        a = None
+        for j in range(i, len(cs) - 1):
+            if j > i and hit(cs[j]) and not hit(cs[j - 1]):
+                break
+            if with_trade(cs[j]) and with_trade(cs[j + 1]):
+                a = j
+                break
+        if a is None:
             continue
         c1, c2 = cs[a], cs[a + 1]
-        if not (with_trade(c1) and with_trade(c2)):
-            continue                              # the first two aren't both in the trade's direction
         wick = min(c1["l"], c2["l"]) if buy else max(c1["h"], c2["h"])
         out.append({"i": a + 1, "ct": c2["ct"], "pat": "octgd2", "dir": side, "close": c2["c"], "touch": wick,
                     "level": c1["c"], "limit": c1["c"], "touch_no": touch_no})
+    return out
+
+
+def void_points(cs: list[dict], side: str, level: float, start: datetime, tol: float = 0.0) -> list[int]:
+    """The candles that void an OCTGD 1 / OCTGD 3 still forming (owner, 2026-11-25, Documents/Jan2_Rule.png). A buy:
+    after the touch, the low of the FIRST bullish candle is the line; a candle that CLOSES below it voids whatever
+    OCTGD 1 / 3 began before it (a wick below doesn't). After a void, the next bullish candle sets the new line.
+    Sells are the mirror. Other confirmations are not affected."""
+    buy = side == "buy"
+    hit = lambda k: (k["l"] <= level + tol) if buy else (k["h"] >= level - tol)
+    with_trade = lambda k: (k["c"] > k["o"]) if buy else (k["c"] < k["o"])
+    t = next((i for i, k in enumerate(cs) if k["ct"] > start and hit(k)), None)
+    if t is None:
+        return []
+    out, j = [], t
+    while j < len(cs):
+        a = next((x for x in range(j, len(cs)) if with_trade(cs[x])), None)
+        if a is None:
+            break
+        line = cs[a]["l"] if buy else cs[a]["h"]
+        v = next((x for x in range(a + 1, len(cs)) if (cs[x]["c"] < line if buy else cs[x]["c"] > line)), None)
+        if v is None:
+            break
+        out.append(v)
+        j = v + 1
     return out
 
 
@@ -248,7 +279,7 @@ def octgd3(cs: list[dict], side: str, level: float, start: datetime, tol: float 
             bear = None
         if bear is not None and with_trade(k) and ((k["c"] > cs[bear]["o"]) if buy else (k["c"] < cs[bear]["o"])):
             out.append({"i": i, "ct": k["ct"], "pat": "octgd3", "dir": side, "close": k["c"], "touch": wick,
-                        "level": cs[bear]["o"], "limit": cs[bear]["o"]})
+                        "level": cs[bear]["o"], "limit": cs[bear]["o"], "s": bear})
             bear = None
             continue
         if against(k):
@@ -336,6 +367,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
     frames = {tf: resample(mins, tf) for tf in {60, 15, 5}}
     found = {tf: confirmations(frames[tf]) for tf in frames}
 
+    voids: dict = {}
+
     def formations(key: str, until: datetime) -> list[dict]:
         tf, pat = KEYS[key]
         if pat == "octgd2":
@@ -345,6 +378,10 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
         else:
             evs = [e for e in found[tf] if e["pat"] == pat and e["dir"] == side
                    and ((e["touch"] <= level + tol) if buy else (e["touch"] >= level - tol))]
+        if pat in ("octgd", "octgd3"):
+            if tf not in voids:
+                voids[tf] = void_points(frames[tf], side, level, start, tol)
+            evs = [e for e in evs if not any(e.get("s", e["i"]) <= v < e["i"] for v in voids[tf])]
         return [e for e in evs if start < e["ct"] <= until]
 
     def trade(key: str, until: datetime) -> Optional[dict]:
