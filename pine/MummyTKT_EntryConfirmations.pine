@@ -1,6 +1,6 @@
 //@version=6
 // ─────────────────────────────────────────────────────────────────────────────
-// MummyTKT's Entry Confirmations v8 — TradingView Edition (2026-11-25: OCTGD 2 + OCTGD 3 on H1 / M15, OCTGD 1 on M15)
+// MummyTKT's Entry Confirmations v9 — TradingView Edition (2026-11-25: OCTGD 2 = first two in a row; OCTGD 3; void rule on the server)
 //
 // Companion indicator to MummyTKT's Bias Pointer.
 // MARKS: each timeframe's confirmations show on that timeframe's own chart: H1 ones on
@@ -27,12 +27,14 @@
 //       closes and C2 opens. C2 is the candle that touched the POI (or both formed
 //       inside it). Then, within a few candles, a bullish candle closes ABOVE that level.
 //       A newer bearish OC replaces the older one.
-//   OCTGD 2 — H1 / M15 (owner rule 2026-11-23)
-//       At a NEW touch of your level, only the first two candles count: the touch candle itself if it
-//       closes bullish, else the two right after it. Both bullish = OCTGD 2; their OC (C1's close) is
-//       the entry, the pair's wick the SL. Only the level's first touch (later: a re-entry after an SL).
-//       The script sends every "two bullish candles right after a new low"; the server judges it
-//       against each of your levels from the candles in the alert (the chart has no marks for it).
+//   OCTGD 2 — H1 / M15 (owner rule 2026-11-25)
+//       After a NEW touch of your level, the FIRST two bullish candles in a row (bearish candles
+//       before them don't matter) = OCTGD 2; their OC (C1's close) is the entry, the pair's wick
+//       the SL. Only the level's first touch (later: a re-entry after an SL). The script sends every
+//       pair that starts a bullish run; the server judges it against each of your levels from the
+//       candles in the alert (the chart has no marks for it).
+//   VOID (server): after the touch, a candle that CLOSES below the low of the first bullish candle
+//       voids an OCTGD 1 / OCTGD 3 still forming (a wick below doesn't); other confirmations count.
 //   OCTGD 3 — H1 / M15 (owner rule 2026-11-25)
 //       After price has touched your level, the LAST bearish candle; a bullish candle then closes
 //       above that bearish candle's OPEN = OCTGD 3. Entry = a limit at that open, SL = the wick
@@ -258,8 +260,8 @@ f_forms(simple int n, simple int win, simple int ow, simple int cw) =>
             ss_on := false
     // OCTGD 2 candidates (2026-11-25): two candles in a row the trade's way, right after a new low (buy) / high
     // (sell): C1 made it, or C0 made it against the trade. The server checks them against each level.
-    bool b_o2 = pbull and cbull and (low[1] < low[2] or (close[2] < open[2] and low[2] < low[3]))
-    bool s_o2 = pbear and cbear and (high[1] > high[2] or (close[2] > open[2] and high[2] > high[3]))
+    bool b_o2 = pbull and cbull and not (close[2] > open[2])     // the first two of a bullish run
+    bool s_o2 = pbear and cbear and not (close[2] < open[2])     // the first two of a bearish run
     // OCTGD 3 candidates (2026-11-25): a bullish (bearish) close above (below) the open of the last bearish
     // (bullish) candle, within the OCTGD window; the server checks the level was touched before that candle
     var float lb_o = na

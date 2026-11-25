@@ -1622,6 +1622,28 @@ check("a subscriber can't read requests", c.get("/api/strategy-requests", header
 _rid = next(x["id"] for x in _lr if x["name"] == "Ada Trader")
 check("the owner moves a request along", c.patch(f"/api/strategy-requests/{_rid}", headers=H(owner), json={"status": "contacted", "notes": "call Fri"}).json()["status"] == "contacted")
 c.delete(f"/api/strategy-requests/{_rid}", headers=H(owner))
+# Live = backtest (owner, 2026-11-25, EURUSD H1 2 Jan 2020, level 1.11944): OCTGD 2 = the first two bullish in a
+# row after the touch (13:00 + 14:00); 15:00 closes below 13:00's low, so 16:00's OCTGD 1 / OCTGD 3 are void
+_j2 = [(1.12099, 1.12137, 1.12051, 1.12120), (1.12119, 1.12141, 1.12011, 1.12030), (1.12030, 1.12039, 1.11927, 1.11982),
+       (1.11984, 1.12021, 1.11842, 1.11848), (1.11847, 1.11943, 1.11829, 1.11930), (1.11929, 1.11970, 1.11896, 1.11963),
+       (1.11963, 1.11965, 1.11700, 1.11741), (1.11739, 1.12023, 1.11708, 1.12005)]
+_lv = {}
+for _w in ("octgd2", "octgd", "octgd3"):
+    _lv[_w] = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "GBPCHF", "direction": "bullish", "price": 1.11944,
+                     "tolerance_pips": 10, "watches": [f"H1:{_w}"], "keep_open": True}).json()
+tv(type="ENTRY_CONFIRMATION", instrument="GBPCHF", direction="bullish", pattern="octgd2", timeframe="60",
+   price=1.11963, swept_level=1.11963, touch_price=1.11829, candles=_cs2(_j2[:6]) + "|o2b")
+tv(type="ENTRY_CONFIRMATION", instrument="GBPCHF", direction="bullish", pattern="octgd", timeframe="60",
+   price=1.12005, swept_level=1.11982, touch_price=1.11842, candles=_cs2(_j2))
+tv(type="ENTRY_CONFIRMATION", instrument="GBPCHF", direction="bullish", pattern="octgd3", timeframe="60",
+   price=1.12005, swept_level=1.12005, touch_price=1.11708, candles=_cs2(_j2) + "|o3b")
+_db = sqlite3.connect(DB)
+_tp = lambda w: _db.execute("SELECT triggered_pattern FROM entry_pattern_alerts WHERE id = ?", (_lv[w]["id"],)).fetchone()[0]
+check("2 Jan: OCTGD 2 fires on the first two bullish candles in a row after the touch", _tp("octgd2") == "octgd2")
+check("2 Jan: OCTGD 1 at 16:00 is void (15:00 closed below 13:00's low)", _tp("octgd") is None)
+check("2 Jan: OCTGD 3 at 16:00 is void for the same reason", _tp("octgd3") is None)
+for _x in _lv.values():
+    c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

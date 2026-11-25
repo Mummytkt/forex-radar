@@ -1214,6 +1214,13 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             if not reached:
                 continue  # the pattern's wick did not reach this user's level
 
+        # OCTGD 1 / 3 that a close beyond the first with-trade candle cut through are void (owner, 2026-11-25)
+        if pattern in ("octgd", "octgd3") and _octgd_voided(payload.candles, pattern, direction, alert_price,
+                                                            row["created_at"], o3 if pattern == "octgd3" else None):
+            logger.info("%s %s %s @ %.5f void for alert_id=%d: a candle closed beyond the first with-trade candle "
+                        "after the touch", instrument, pattern, direction, price, alert_id)
+            continue
+
         # The first formation closes the level, unless it keeps watching the others
         conn.execute("""
             UPDATE entry_pattern_alerts
@@ -1280,29 +1287,67 @@ def _octgd2_pair(candles: Optional[str], direction: str) -> Optional[dict]:
 
 
 def _octgd2_touch(o2: Optional[dict], direction: str, level: float, created_at: Optional[str], first_only: bool) -> bool:
-    """Owner's rule: at a NEW touch of the level (a wick reaches it after a candle that didn't), only the first two
-    candles count: the touch candle itself if it closes the trade's way, else the two right after it. With
-    first_only, an earlier new touch since the level was set (within the candles sent) means it is not the first."""
+    """Owner's rule (2026-11-25, 2 Jan 2020): after a NEW touch of the level (a wick reaches it after a candle that
+    didn't), OCTGD 2 is the FIRST two candles in a row going the trade's way (candles against it before them don't
+    matter). With first_only, an earlier new touch since the level was set (within the candles sent) means it is not
+    the first touch."""
     if not o2:
         return False
     cs, bull = o2["cs"], direction == "bullish"
     hit = lambda k: k[3] <= level if bull else k[2] >= level
     with_trade = lambda k: (k[4] > k[1]) if bull else (k[4] < k[1])
     n = len(cs)
-    c0, c1 = cs[n - 3], cs[n - 2]
-    cm = cs[n - 4] if n >= 4 else None
-    if with_trade(c1) and hit(c1) and not hit(c0):
-        t = n - 2                         # C1 touched and closed the trade's way: C1 + C2
-    elif not with_trade(c0) and hit(c0) and (cm is None or not hit(cm)):
-        t = n - 3                         # C0 touched against the trade: the two right after it
-    else:
-        return False
+    i1 = n - 2                            # C1 of the pair (C2 is the last candle)
+    t = next((j for j in range(i1, -1, -1) if hit(cs[j]) and (j == 0 or not hit(cs[j - 1]))), None)
+    if t is None:
+        return False                      # no touch of this level in the candles sent
+    if any(with_trade(cs[j]) and with_trade(cs[j + 1]) for j in range(t, i1)):
+        return False                      # an earlier pair after this touch was the OCTGD 2
     if first_only:
         since = created_at or ""
         for j in range(t):
             if cs[j][0] >= since and hit(cs[j]) and (j == 0 or not hit(cs[j - 1])):
                 return False              # this level was touched before: only its first touch counts
     return True
+
+
+def _octgd_voided(candles: Optional[str], pattern: str, direction: str, level: float, created_at: Optional[str],
+                  o3: Optional[dict] = None, win: int = 10) -> bool:
+    """Owner's rule (2026-11-25, Documents/Jan2_Rule.png): after the touch, the low (a sell: high) of the FIRST candle
+    going the trade's way is a line; a candle that CLOSES beyond it voids an OCTGD 1 / OCTGD 3 that began before it
+    (a wick beyond doesn't). After a void, the next candle the trade's way sets the next line. Other confirmations
+    are not affected."""
+    from alerts.chart_image import parse_candles
+    cs = o3["cs"] if o3 else parse_candles(candles)
+    n = len(cs)
+    if n < 3:
+        return False
+    bull = direction == "bullish"
+    hit = lambda k: k[3] <= level if bull else k[2] >= level
+    with_trade = lambda k: (k[4] > k[1]) if bull else (k[4] < k[1])
+    against = lambda k: (k[4] < k[1]) if bull else (k[4] > k[1])
+    if pattern == "octgd3":
+        s = o3["b"] if o3 else None
+    else:                                 # OCTGD 1: its OC = the last two opposite candles before the close
+        c2 = next((j for j in range(n - 2, max(0, n - 2 - win), -1) if j >= 1 and against(cs[j]) and against(cs[j - 1])), None)
+        s = c2 - 1 if c2 is not None else None
+    if s is None:
+        return False
+    since = created_at or ""
+    t = next((j for j, k in enumerate(cs) if k[0] >= since and hit(k)), None)
+    j = t
+    while j is not None and j < n:
+        a = next((x for x in range(j, n) if with_trade(cs[x])), None)
+        if a is None:
+            break
+        line = cs[a][3] if bull else cs[a][2]
+        v = next((x for x in range(a + 1, n) if (cs[x][4] < line if bull else cs[x][4] > line)), None)
+        if v is None:
+            break
+        if s <= v < n - 1:
+            return True
+        j = v + 1
+    return False
 
 
 def _octgd3_pair(candles: Optional[str], direction: str, win: int = 10) -> Optional[dict]:

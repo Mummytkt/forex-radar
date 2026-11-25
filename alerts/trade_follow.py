@@ -113,7 +113,9 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     if (alert.get("entry_mode") or "instant") == "limit":
         lim = limit_for(pattern, direction, entry, pattern_level, candles, limit_price)
         if lim is None:
-            note = "Limit entry: this alert carried no limit price (recreate the TradingView alert from the latest script), so it is followed as an instant entry.\n"
+            # limits only (owner, 2026-11-25): no valid limit = no trade, never a silent instant entry
+            return ("Limit entry: no valid limit price could be placed for this confirmation, so it isn't followed "
+                    "(you trade limits only).")
     confirm_close = entry
     if lim is not None:
         entry = lim
