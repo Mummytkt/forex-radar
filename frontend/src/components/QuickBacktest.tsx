@@ -356,11 +356,13 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Zap size={20} color="var(--accent)" /> Quick Backtest
           </h1>
+          <Fold id="intro" plain title={<span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>How this page works</span>}>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
             Only you see this. One pass through the years: at each setup, tick every confirmation (H1, M15 OCTGD, M15 CISD, M5 CISD) that formed at the
             POI and star the first one. TP 3R, breakeven at 2R. Every trade you place counts: takes before the last are
             losses, and Win % is wins out of all trades.
           </p>
+          </Fold>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
@@ -399,6 +401,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
             if (on && !draft.results[k]) setRes(k, {})
             if (!on && draft.results[k]) setRes(k, null)
           })} />
+          <Fold id="byhand" plain force={!!editId} title={<span style={{ fontSize: 13.5 }}>Confirmations, results and note (to log by hand)</span>}
+            summary={Object.keys(draft.results).length ? `${Object.keys(draft.results).length} ticked` : 'none ticked'}>
           <div style={{ display: 'grid', gap: 6 }}>
             {CONFS.map(([k, label]) => {
               const r = draft.results[k]
@@ -436,15 +440,15 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
               {saving && <Loader2 size={14} className="spin" />} {editId ? 'Update setup' : 'Save setup'}
             </button>
           </div>
+          </Fold>
           {msg && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: msg.includes('✓') ? 'var(--bullish)' : msg.startsWith('Editing') ? 'var(--text-secondary)' : 'var(--bearish)' }}>{msg}</div>}
         </div>
 
         {/* ---------- results ---------- */}
-        <div style={{ ...card, marginBottom: 18 }}>
+        <Fold id="results" title={<><Trophy size={16} color="#eab308" /> Results ({shown.length} setup{shown.length === 1 ? '' : 's'})</>}
+          summary={best ? `best: ${best.label} ${fmtR(best.total)} · ★ first ${fmtR(stats.first.total)}` : undefined}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, marginRight: 'auto' }}>
-              <Trophy size={16} color="#eab308" /> Results ({shown.length} setup{shown.length === 1 ? '' : 's'})
-            </h2>
+            <span style={{ marginRight: 'auto' }} />
             {(['all', 'inside', 'opposite'] as const).map(f => (
               <button key={f} style={{ ...pill(rangeF === f), padding: '5px 11px', fontSize: 12 }} onClick={() => setRangeF(f)}>
                 {f === 'all' ? 'All ranges' : f === 'inside' ? 'Inside' : 'Opposite'}
@@ -470,13 +474,15 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </Fold>
 
         {/* ---------- monthly review (user, 2026-11-24) ---------- */}
-        <MonthlyReview setups={shown} />
+        <Fold id="monthly" title={<><CalendarDays size={16} color="var(--accent)" /> Monthly review</>} summary="each month, as if you took each setup every time">
+          <MonthlyReview setups={shown} bare />
+        </Fold>
 
         {/* ---------- setups ---------- */}
-        <div style={card}>
+        <div id="qbt-setups" style={card}>
           <button onClick={() => toggleSetups()} aria-expanded={setupsOpen}
             style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
               marginBottom: setupsOpen ? 10 : 0, textAlign: 'left' }}>
@@ -559,6 +565,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
               {!showAll && setups.length > 40 && (
                 <button onClick={() => setShowAll(true)} style={{ ...pill(false), justifySelf: 'start' }}>Show all {setups.length}</button>
               )}
+              <CloseBar label="Close setups" onClose={() => { toggleSetups(); document.getElementById('qbt-setups')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }} />
             </div>
           )}
         </div>
@@ -739,6 +746,44 @@ function SetupBook({ setup, onClose, onEdit, onReviewed, inline }: { setup: Setu
   )
 }
 
+// A section that folds away (user, 2026-11-25: "the page is too busy"). Closed until she opens it; remembered on
+// this browser. Open, it ends with a Close button that folds it and brings her back to its heading.
+function useFold(id: string, start = false): [boolean, (v: boolean) => void] {
+  const [open, setOpen] = useState(start)
+  useEffect(() => { try { const v = localStorage.getItem(`mbp_qbt_fold_${id}`); if (v) setOpen(v === '1') } catch { /* private mode */ } }, [id])
+  const set = (v: boolean) => { setOpen(v); try { localStorage.setItem(`mbp_qbt_fold_${id}`, v ? '1' : '0') } catch { /* private mode */ } }
+  return [open, set]
+}
+function CloseBar({ onClose, label = 'Close' }: { onClose: () => void; label?: string }) {
+  return (
+    <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', marginTop: 10,
+      padding: '7px 10px', borderRadius: 8, border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-secondary)',
+      cursor: 'pointer', fontSize: 12.5, fontWeight: 700 }}>
+      <ChevronDown size={14} style={{ transform: 'rotate(180deg)' }} /> {label}
+    </button>
+  )
+}
+function Fold({ id, title, summary, children, force, start = false, plain }: { id: string; title: React.ReactNode; summary?: React.ReactNode
+  children: React.ReactNode; force?: boolean; start?: boolean; plain?: boolean }) {
+  const [open, setOpen] = useFold(id, start)
+  const ref = useRef<HTMLDivElement>(null)
+  const shown = open || !!force
+  const close = () => { setOpen(false); ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }
+  return (
+    <div ref={ref} style={plain ? { marginBottom: 12 } : { ...card, marginBottom: 18 }}>
+      <button onClick={() => (shown ? close() : setOpen(true))} aria-expanded={shown}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: '100%', background: 'none', border: 'none', padding: 0,
+          cursor: 'pointer', textAlign: 'left', color: 'var(--text-primary)', marginBottom: shown ? 12 : 0 }}>
+        <ChevronDown size={16} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: shown ? 'none' : 'rotate(-90deg)', flexShrink: 0 }} />
+        <span style={{ fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>{title}</span>
+        {summary && <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{summary}</span>}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{shown ? 'Hide' : 'Show'}</span>
+      </button>
+      {shown && <>{children}<CloseBar onClose={close} /></>}
+    </div>
+  )
+}
+
 // A journal opened from its tab (user, 2026-11-25): months → the days with setups → that day's diary pages.
 // Pages (and their pictures) load only when she opens a day.
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -755,6 +800,8 @@ function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; set
   }, [setups])
   const [openM, setOpenM] = useState<Set<string>>(new Set())
   const [openD, setOpenD] = useState<Set<string>>(new Set())
+  const [bookOpen, setBookOpen] = useFold('book', true)
+  const back = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   useEffect(() => { if (months.length) setOpenM(new Set([months[0][0]])) }, [title, months.length])   // newest month open
   const flip = (set: Set<string>, k: string) => { const n = new Set(set); if (n.has(k)) n.delete(k); else n.add(k); return n }
   const rTotal = (list: Setup[]) => list.reduce((t, s) => t + (s.first && s.results[s.first] ? rOf(s.results[s.first], s.tp_r) : 0), 0)
@@ -763,14 +810,18 @@ function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; set
   const chev = (open: boolean) => <ChevronDown size={15} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: open ? 'none' : 'rotate(-90deg)', flexShrink: 0 }} />
   if (!setups.length) return <div style={{ ...card, marginBottom: 16, color: 'var(--text-muted)', fontSize: 13 }}>{title}: nothing logged here yet.</div>
   return (
-    <div className="fairy-diary dp-purple" style={{ ...card, marginBottom: 16, display: 'grid', gap: 10 }}>
-      <div className="diary-script" style={{ fontSize: 26, color: 'var(--accent-hover)' }}>{title}</div>
-      {months.map(([mk, days]) => {
+    <div id="qbt-book" className="fairy-diary dp-purple" style={{ ...card, marginBottom: 16, display: 'grid', gap: 10 }}>
+      <button onClick={() => setBookOpen(!bookOpen)} aria-expanded={bookOpen} style={{ ...head, gap: 8 }}>
+        <ChevronDown size={16} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: bookOpen ? 'none' : 'rotate(-90deg)' }} />
+        <span className="diary-script" style={{ fontSize: 26, color: 'var(--accent-hover)' }}>{title}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{bookOpen ? 'Hide' : 'Show'}</span>
+      </button>
+      {bookOpen && months.map(([mk, days]) => {
         const all = [...days.values()].flat()
         const mOpen = openM.has(mk)
         const tot = rTotal(all)
         return (
-          <div key={mk} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', background: 'var(--surface)' }}>
+          <div key={mk} id={`qbt-m-${mk}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', background: 'var(--surface)' }}>
             <button style={head} onClick={() => setOpenM(o => flip(o, mk))} aria-expanded={mOpen}>
               {chev(mOpen)}
               <span className="diary-script" style={{ fontSize: 22, color: 'var(--accent-hover)' }}>{MONTHS_FULL[+mk.slice(5, 7) - 1]} {mk.slice(0, 4)}</span>
@@ -783,7 +834,7 @@ function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; set
                   const dOpen = openD.has(day)
                   const dt = rTotal(list)
                   return (
-                    <div key={day} style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '8px 12px' }}>
+                    <div key={day} id={`qbt-d-${day}`} style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '8px 12px' }}>
                       <button style={head} onClick={() => setOpenD(o => flip(o, day))} aria-expanded={dOpen}>
                         {chev(dOpen)}
                         <b style={{ fontSize: 14 }}>{fmtDay(day)}</b>
@@ -794,9 +845,11 @@ function JournalBook({ title, setups, onEdit, onReviewed }: { title: string; set
                         <b style={{ marginLeft: 'auto', fontSize: 12.5, color: dt > 0 ? 'var(--bullish)' : dt < 0 ? 'var(--bearish)' : 'var(--text-secondary)' }}>★ {fmtR(dt)}</b>
                       </button>
                       {dOpen && list.map(s => <SetupBook key={s.id} inline setup={s} onClose={() => {}} onEdit={() => onEdit(s)} onReviewed={() => onReviewed(s)} />)}
+                      {dOpen && <CloseBar label={`Close ${fmtDay(day)}`} onClose={() => { setOpenD(o => flip(o, day)); back(`qbt-d-${day}`) }} />}
                     </div>
                   )
                 })}
+                <CloseBar label={`Close ${MONTHS_FULL[+mk.slice(5, 7) - 1]}`} onClose={() => { setOpenM(o => flip(o, mk)); back(`qbt-m-${mk}`) }} />
               </div>
             )}
           </div>
@@ -904,7 +957,7 @@ function streaks(rs: { r: Res }[]): { bestW: number; bestL: number } {
   }
   return { bestW, bestL }
 }
-function MonthlyReview({ setups }: { setups: Setup[] }) {
+function MonthlyReview({ setups, bare }: { setups: Setup[]; bare?: boolean }) {
   const months = useMemo(() => {
     const byMonth = new Map<string, Setup[]>()
     for (const s of [...setups].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)) {
@@ -923,10 +976,10 @@ function MonthlyReview({ setups }: { setups: Setup[] }) {
   const rc = (v: number) => v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-secondary)'
   const verdict = (v: number) => v > 0 ? 'Profit' : v < 0 ? 'Loss' : 'Flat'
   return (
-    <div style={{ ...card, marginBottom: 18 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div style={bare ? undefined : { ...card, marginBottom: 18 }}>
+      {!bare && <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
         <CalendarDays size={16} color="var(--accent)" /> Monthly review
-      </h2>
+      </h2>}
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
         Each month as if you took that setup every time it formed. Streaks count every trade in date order (a stop-out before a retake is a loss; a breakeven ends a streak). Follows the range and year filters above.
       </p>
