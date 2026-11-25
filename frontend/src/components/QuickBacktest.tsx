@@ -20,7 +20,7 @@ function api(path: string, opts: RequestInit = {}) {
 }
 
 type Outcome = 'win' | 'be' | 'loss'
-interface Res { outcome: Outcome | ''; takes: number; after_tp?: boolean }   // '' only in the form: ticked, result not picked yet
+interface Res { outcome: Outcome | ''; takes: number; after_tp?: boolean; entered?: string }   // '' only in the form: ticked, result not picked yet
 interface Setup {
   id: number; pair: string; date: string; side: 'buy' | 'sell'; range_type: 'inside' | 'opposite'; valid: boolean
   results: Record<string, Res>; first: string | null; tp_r: number; note: string
@@ -220,7 +220,13 @@ const field: React.CSSProperties = {
 }
 
 export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
-  const [setups, setSetups] = useState<Setup[]>([])
+  const [allSetups, setSetups] = useState<Setup[]>([])
+  // One journal per timeframe (user, 2026-11-25): H1, M15 and M5 entries each read on their own; All = every one
+  const [journal, setJournal] = useState<Journal>('all')
+  useEffect(() => { try { const j = localStorage.getItem('mbp_qbt_journal'); if (j && JOURNALS.some(x => x[0] === j)) setJournal(j as Journal) } catch { /* private mode */ } }, [])
+  const pickJournal = (j: Journal) => { setJournal(j); try { localStorage.setItem('mbp_qbt_journal', j) } catch { /* private mode */ } }
+  const setups = useMemo(() => inJournal(allSetups, journal), [allSetups, journal])
+  const orig = (s: Setup) => allSetups.find(x => x.id === s.id) ?? s
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState<Draft>(() => blank())
   const [editId, setEditId] = useState<number | null>(null)
@@ -235,7 +241,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [picked, setPicked] = useState<Set<number>>(new Set())   // ticked setups, for Delete selected
   const pick = (id: number) => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const deleteMany = async (all: boolean) => {
-    const n = all ? setups.length : picked.size
+    const n = all ? allSetups.length : picked.size
     if (!n) return
     if (!confirm(all ? `Delete ALL ${n} setups and their pictures? This can't be undone.` : `Delete the ${n} ticked setup${n === 1 ? '' : 's'} and their pictures? This can't be undone.`)) return
     if (all && prompt('Type DELETE to confirm deleting every setup') !== 'DELETE') return
@@ -262,9 +268,9 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   useEffect(() => { load() }, [load])
   useEffect(() => {
     if (openId == null) return
-    const s = setups.find(x => x.id === openId)
+    const s = allSetups.find(x => x.id === openId)
     if (s) { setReading(s); setOpenId(null) }
-  }, [openId, setups])
+  }, [openId, allSetups])
 
   // ---- form
   const formed = Object.keys(draft.results)
@@ -298,7 +304,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
     setDraft(blank())
     load()
   }
-  const edit = (s: Setup) => {
+  const edit = (shown: Setup) => {
+    const s = orig(shown)      // the whole setup, every timeframe's results
     setEditId(s.id)
     setDraft({ pair: s.pair, date: s.date, side: s.side, range_type: s.range_type, valid: s.valid,
       results: s.results, first: s.first, note: s.note })
@@ -332,6 +339,17 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
       <TopBar title="Quick Backtest" />
       <main style={{ flex: 1, width: '100%', padding: '20px 24px', maxWidth: 1100 }}>
         {tabs}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '4px 0 14px' }}>
+          {JOURNALS.map(([j, name, holds]) => {
+            const n = j === 'all' ? allSetups.length : inJournal(allSetups, j).length
+            return (
+              <button key={j} onClick={() => pickJournal(j)} style={{ ...pill(journal === j), display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, padding: '7px 13px', textAlign: 'left' }}>
+                <span style={{ fontWeight: 800, fontSize: 13 }}>{name} <span style={{ opacity: 0.75, fontWeight: 600 }}>({n})</span></span>
+                <span style={{ fontSize: 10.5, opacity: 0.8, fontWeight: 600 }}>{holds}</span>
+              </button>
+            )
+          })}
+        </div>
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Zap size={20} color="var(--accent)" /> Quick Backtest
@@ -549,6 +567,29 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
       </main>
     </div>
   )
+}
+
+// ---- The three journals (user, 2026-11-25): each shows only its timeframe's entries, with its own ★ first
+type Journal = 'all' | 'H1' | 'M15' | 'M5'
+const JOURNALS: [Journal, string, string][] = [
+  ['all', '📚 All entries', 'every confirmation'],
+  ['H1', '🕐 H1 journal', 'PCL · Engulfing · OCTGD 1 · OCTGD 2 · H1 CISD'],
+  ['M15', '🕒 M15 journal', 'M15 OCTGD · M15 OCTGD 2 · M15 CISD'],
+  ['M5', '🕔 M5 journal', 'M5 CISD'],
+]
+// a setup as one journal sees it: only that timeframe's results; ★ first = the earliest of those to enter
+// (saved entry times; for a hand-logged setup: its own ★ if it is in this journal, or the only one)
+function inJournal(list: Setup[], j: Journal): Setup[] {
+  if (j === 'all') return list
+  const keys = TF_GROUPS.find(g => g[0] === j)?.[1] ?? []
+  return list.flatMap(s => {
+    const results = Object.fromEntries(Object.entries(s.results).filter(([k]) => keys.includes(k)))
+    const ks = Object.keys(results)
+    if (!ks.length) return []
+    const timed = ks.filter(k => results[k].entered).sort((a, b) => results[a].entered!.localeCompare(results[b].entered!))
+    const first = s.first && ks.includes(s.first) ? s.first : timed[0] ?? (ks.length === 1 ? ks[0] : null)
+    return [{ ...s, results, first }]
+  })
 }
 
 // Tick a whole timeframe's confirmations at once (user, 2026-11-24): a small dropdown of H1 / M15 / M5

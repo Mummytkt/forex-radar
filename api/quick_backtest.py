@@ -83,6 +83,7 @@ def _db(request: Request):
 class Result(BaseModel):
     outcome: str
     takes: int = 1
+    entered: Optional[str] = None   # when it entered (auto-check), so each timeframe journal finds its ★ first
     after_tp: bool = False     # entered after the ★ first trade's TP: tracked for its own win rate (owner 2026-11-24)
 
 
@@ -113,6 +114,8 @@ def _clean(b: SetupBody) -> tuple:
         res[k] = {"outcome": r.outcome, "takes": max(1, min(int(r.takes or 1), 20))}
         if r.after_tp:
             res[k]["after_tp"] = True
+        if r.entered:
+            res[k]["entered"] = str(r.entered)[:40]
     first = b.first if b.first in res else None
     if res and not first:      # one formed: it is the first; several: she must star one
         first = next(iter(res)) if len(res) == 1 else None
@@ -290,7 +293,8 @@ def auto_check(request: Request, body: AutoBody):
     pics = res.pop("_pictures", [])
     if body.save:
         keys = {k for k, _ in CONFIRMATIONS}
-        results = {k: dict({"outcome": v["outcome"], "takes": v["takes"]}, **({"after_tp": True} if v.get("after_tp") else {}))
+        results = {k: dict({"outcome": v["outcome"], "takes": v["takes"], "entered": v.get("entered")},
+                           **({"after_tp": True} if v.get("after_tp") else {}))
                    for k, v in res["results"].items() if k in keys and v["outcome"] in OUTCOMES}
         first = res["first"] if res["first"] in results else (next(iter(results)) if len(results) == 1 else None)
         now = datetime.now(timezone.utc).isoformat()
