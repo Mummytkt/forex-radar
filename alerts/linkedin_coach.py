@@ -401,6 +401,9 @@ So tell me: what should I talk about next month?
 
 #CustomerExperience #QA #ProductDesign"""),
 }
+# December 2026: the backtesting-tool series (owner, 2026-11-25), alerts/december_posts.py
+from alerts.december_posts import DECEMBER as _DECEMBER  # noqa: E402
+POSTS.update(_DECEMBER)
 LAST_DAY = max(POSTS)
 
 
