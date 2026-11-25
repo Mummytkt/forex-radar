@@ -20,7 +20,7 @@ function api(path: string, opts: RequestInit = {}) {
 }
 
 type Outcome = 'win' | 'be' | 'loss'
-interface Res { outcome: Outcome | ''; takes: number; after_tp?: boolean; entered?: string }   // '' only in the form: ticked, result not picked yet
+interface Res { outcome: Outcome | ''; takes: number; after_tp?: boolean; entered?: string; exit?: string }   // '' only in the form: ticked, result not picked yet
 interface Setup {
   id: number; pair: string; date: string; side: 'buy' | 'sell'; range_type: 'inside' | 'opposite'; valid: boolean
   results: Record<string, Res>; first: string | null; tp_r: number; note: string
@@ -98,7 +98,14 @@ function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) =
 // with the Entry Confirmations script's rules on real minute candles and plays each trade (api/autobacktest.py)
 interface AutoTrade { time: string; entry: number; sl: number; tp: number; outcome: string; exit: string | null; limit?: boolean; filled?: string | null }
 interface AutoRes { results: Record<string, { outcome: string; takes: number; trades: AutoTrade[]; after_tp?: boolean }>; first: string | null; first_tp_at?: string | null
-  poi_failed_at: string | null; watched_until: string; setup_end?: string; end_reason?: string; armed_at?: string | null; note: string }
+  poi_failed_at: string | null; watched_until: string; trigger_date?: string; setup_end?: string; end_reason?: string; armed_at?: string | null; note: string }
+
+const heldFor = (from?: string | null, to?: string | null): string => {
+  if (!from || !to) return ''
+  const mins = Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 60000))
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60
+  return d ? `${d} day${d === 1 ? '' : 's'}${h ? ` ${h}h` : ''}` : h ? `${h}h${m ? ` ${m}m` : ''}` : `${m}m`
+}
 
 // a wall-clock date + time in an IANA timezone -> ISO 8601 in UTC
 function zonedIso(dateIso: string, hhmm: string, tz: string): string {
@@ -163,7 +170,7 @@ function AutoCheck({ draft, onSaved, onRead, onReviewed }: { draft: Draft; onSav
         </button>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>
-        Put the breakout day in the date and type the level you watch (an OC: the first candle&apos;s close; a V: its level). Watching starts by itself once a whole H4 candle has moved away from your level. It checks only the confirmations you tick below (none ticked = all of them), finds each one whose wick reaches the line and trades it at TP 3R / BE 2R with your retakes. ★ first is the trade you&apos;d really take; the others keep being checked after its TP (marked &quot;after TP&quot;) until an H4 candle closes beyond the line, so each confirmation gets its own win rate.
+        The date is only where the search starts: after each check it moves by itself to the day the ★ first trade triggered (and the setup is saved under that day), so you only change it when you jump ahead. Type the level you watch (an OC: the first candle&apos;s close; a V: its level). Watching starts by itself once a whole H4 candle has moved away from your level. It checks only the confirmations you tick below (none ticked = all of them), finds each one whose wick reaches the line and trades it at TP 3R / BE 2R with your retakes. ★ first is the trade you&apos;d really take; the others keep being checked after its TP (marked &quot;after TP&quot;) until an H4 candle closes beyond the line, so each confirmation gets its own win rate.
         {cov && cov.pct < 100 && <> · Data downloaded so far: <b>{cov.pct}%</b>{cov.next_missing ? ` (up to ${isoToDmy(cov.next_missing)})` : ''}</>}
       </div>
       {err && <div style={{ color: 'var(--bearish)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{err}</div>}
@@ -180,7 +187,8 @@ function AutoCheck({ draft, onSaved, onRead, onReviewed }: { draft: Draft; onSav
               <b style={{ color: 'var(--text-primary)' }}>{labelOf(k)}</b>{res.first === k ? ' ★' : ''}{v.after_tp ? ' (after TP)' : ''}:{' '}
               {v.trades.map((t, i) => (
                 <span key={i}>{i ? ' → ' : ''}{when(t.time)} {t.limit ? `limit ${t.entry}${t.filled ? ` (filled ${when(t.filled)})` : ''}` : `entry ${t.entry}`} SL {t.sl} TP {t.tp}{' '}
-                  <b style={{ color: col(t.outcome) }}>{t.outcome.toUpperCase()}</b>{t.exit ? ` (${when(t.exit)})` : ''}</span>
+                  <b style={{ color: col(t.outcome) }}>{t.outcome.toUpperCase()}</b>{t.exit ? ` (${when(t.exit)})` : ''}
+                  {t.exit && <b style={{ color: 'var(--text-primary)' }}>{` · held ${heldFor(t.filled || t.time, t.exit)}`}</b>}</span>
               ))}
             </div>
           ))}
@@ -389,10 +397,10 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
           </label>
 
           <AutoCheck draft={draft} onSaved={res => {
-            try { localStorage.setItem(LAST_KEY, JSON.stringify({ pair: draft.pair, date: draft.date, range_type: draft.range_type })) } catch { /* private mode */ }
+            try { localStorage.setItem(LAST_KEY, JSON.stringify({ pair: draft.pair, date: res.trigger_date || draft.date, range_type: draft.range_type })) } catch { /* private mode */ }
             setMsg(`Saved ✓ ${Object.keys(res.results).length} confirmation${Object.keys(res.results).length === 1 ? '' : 's'}, ${res.pictures ?? 0} picture${res.pictures === 1 ? '' : 's'} · marked to review. Next level.`)
             // keep her ticks for the next level: Auto-check checks only the ticked confirmations (2026-11-24)
-            setDraft(d => ({ ...blank(), date: d.date, pair: d.pair, range_type: d.range_type, side: d.side,
+            setDraft(d => ({ ...blank(), date: res.trigger_date || d.date, pair: d.pair, range_type: d.range_type, side: d.side,
               results: Object.fromEntries(Object.keys(d.results).map(k => [k, { outcome: '' as const, takes: 1 }])) }))
             load()
           }} onRead={id => { setOpenId(id); load() }}
@@ -712,7 +720,15 @@ function SetupBook({ setup, onClose, onEdit, onReviewed, inline, onDelete }: { s
             {!keys.length && <p className="dp-p dp-line" style={line()}>No confirmation formed at my level this time 🌙 I watched, and I kept my peace.</p>}
             {story.rows.map(r => (
               <div key={r.slot} className="dp-line" style={line()}>
-                <p className="dp-p">{r.text}</p>
+                <p className="dp-p">{r.text}{(() => {
+                  const res = setup.results[r.slot]
+                  if (!res?.entered) return null
+                  const at = (iso: string) => new Date(iso).toLocaleString('en-GB', { timeZone: 'Africa/Lagos', weekday: 'short', day: 'numeric', month: 'short',
+                    hour: 'numeric', minute: '2-digit', hour12: true }).replace(' am', 'am').replace(' pm', 'pm')
+                  const end = res.outcome === 'win' ? 'it hit TP' : res.outcome === 'loss' ? 'the stop was hit' : 'it closed at breakeven'
+                  return res.exit ? ` It triggered on ${at(res.entered)} and ${end} on ${at(res.exit)}: I held it for ${heldFor(res.entered, res.exit)} ⏳`
+                    : ` It triggered on ${at(res.entered)} ⏳`
+                })()}</p>
                 {pics === null && setup.pictures ? <Loader2 size={16} className="spin" /> : picsOf(r.slot).map(p => (
                   <figure key={p.id} style={{ margin: '0 0 14px' }}>
                     <img src={p.url} alt={p.label} style={{ width: '100%', borderRadius: 10, display: 'block' }} />

@@ -16,7 +16,7 @@ import json
 import re
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -83,6 +83,7 @@ def _db(request: Request):
 class Result(BaseModel):
     outcome: str
     takes: int = 1
+    exit: Optional[str] = None      # when its last trade ended (auto-check)
     entered: Optional[str] = None   # when it entered (auto-check), so each timeframe journal finds its ★ first
     after_tp: bool = False     # entered after the ★ first trade's TP: tracked for its own win rate (owner 2026-11-24)
 
@@ -116,6 +117,8 @@ def _clean(b: SetupBody) -> tuple:
             res[k]["after_tp"] = True
         if r.entered:
             res[k]["entered"] = str(r.entered)[:40]
+        if r.exit:
+            res[k]["exit"] = str(r.exit)[:40]
     first = b.first if b.first in res else None
     if res and not first:      # one formed: it is the first; several: she must star one
         first = next(iter(res)) if len(res) == 1 else None
@@ -332,17 +335,23 @@ def auto_check(request: Request, body: AutoBody):
     pics = res.pop("_pictures", [])
     if body.save:
         keys = {k for k, _ in CONFIRMATIONS}
-        results = {k: dict({"outcome": v["outcome"], "takes": v["takes"], "entered": v.get("entered")},
+        # each result keeps when it triggered and when it ended, so the journal can say how long it held (2026-11-25)
+        results = {k: dict({"outcome": v["outcome"], "takes": v["takes"], "entered": v.get("entered"),
+                            "exit": (v.get("trades") or [{}])[-1].get("exit")},
                            **({"after_tp": True} if v.get("after_tp") else {}))
                    for k, v in res["results"].items() if k in keys and v["outcome"] in OUTCOMES}
         first = res["first"] if res["first"] in results else (next(iter(results)) if len(results) == 1 else None)
+        # the setup's date = the day the ★ first trade triggered (her local day, WAT), else the day she searched from
+        trig = results.get(first, {}).get("entered") if first else None
+        if trig:
+            res["trigger_date"] = datetime.fromisoformat(trig).astimezone(timezone(timedelta(hours=1))).date().isoformat()
         now = datetime.now(timezone.utc).isoformat()
         note = (body.note.strip() or f"Auto-checked · level {body.level:g}")[:300]
         with _db(request) as conn:
             sid = conn.execute(
                 "INSERT INTO quick_bt (pair, date, side, range_type, valid, results_json, first, note, tp_r, created_at, "
                 "updated_at, auto, reviewed, level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)",
-                (body.pair.upper(), body.date or start.date().isoformat(), body.side, body.range_type, int(body.valid),
+                (body.pair.upper(), res.get("trigger_date") or body.date or start.date().isoformat(), body.side, body.range_type, int(body.valid),
                  json.dumps(results), first, note, body.tp_r, now, now, body.level)).lastrowid
             for conf, n, png in pics:
                 conn.execute("INSERT INTO quick_bt_images (setup_id, conf, n, png, created_at) VALUES (?, ?, ?, ?, ?)",
