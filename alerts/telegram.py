@@ -93,13 +93,13 @@ async def send_alert(bot_token: str, chat_id: str, text: str, reply_markup=None,
             await asyncio.sleep(2.0 * errors)
 
 
-async def send_message_id(bot_token: str, chat_id: str, text: str, reply_markup=None) -> int | None:
+async def send_message_id(bot_token: str, chat_id: str, text: str, reply_markup=None, parse_mode: str | None = None) -> int | None:
     """Send one message (paced like the rest) and return its message id, so it can be removed later."""
     delay = _reserve_slot()
     if delay > 0:
         await asyncio.sleep(delay)
     try:
-        msg = await Bot(token=bot_token).send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
+        msg = await Bot(token=bot_token).send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
         return msg.message_id
     except TelegramError as e:
         logger.warning("Telegram send to %s failed: %s", chat_id, e)

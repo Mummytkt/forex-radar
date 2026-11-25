@@ -95,13 +95,14 @@ def _news_markup(on: bool) -> InlineKeyboardMarkup:
                                                        callback_data="nw:0" if on else "nw:1")], [_CLOSE]])
 
 
-async def _reply(conn, token: str, chat_id: str, text: str, markup=None) -> None:
+async def _reply(conn, token: str, chat_id: str, text: str, markup=None, html: bool = False) -> None:
     """Send a menu reply in place of the last one, so only one is ever in the chat."""
     key = f"menu_msg:{chat_id}"
     old = conn.execute("SELECT value FROM user_config WHERE key = ?", (key,)).fetchone()
     if old and old[0].isdigit():
         await delete_message(token, chat_id, int(old[0]))
-    mid = await send_message_id(token, chat_id, text, reply_markup=markup or InlineKeyboardMarkup([[_CLOSE]]))
+    mid = await send_message_id(token, chat_id, text, reply_markup=markup or InlineKeyboardMarkup([[_CLOSE]]),
+                                parse_mode="HTML" if html else None)   # html: texts built with <b>/<i>/<code> (2026-11-25)
     if mid:
         conn.execute("INSERT OR REPLACE INTO user_config (key, value, updated_at) VALUES (?, ?, datetime('now'))",
                      (key, str(mid)))
@@ -160,7 +161,7 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
                      _page_markup(base, "📈 Open Bias Pointer", "/hub"))
     elif cmd == "results":
         from alerts.forward_report import report_text
-        await _reply(conn, token, chat_id, report_text(conn, user["id"]))
+        await _reply(conn, token, chat_id, report_text(conn, user["id"]), html=True)
     elif cmd == "risk":
         from alerts.forward_report import RISK_HELP, set_risk, get_risk, ensure_risk_table
         args = text.split()[1:]
@@ -181,7 +182,7 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
             else:
                 cur = get_risk(conn, user["id"])
                 now_txt = f"\n\nNow: ${cur[0]:,.0f} at {cur[1]:g}%." if cur else ""
-                await _reply(conn, token, chat_id, RISK_HELP + now_txt)
+                await _reply(conn, token, chat_id, RISK_HELP + now_txt, html=True)
     elif cmd == "news":
         from api.alert_prefs import get_alert_prefs
         on = get_alert_prefs(conn, user["id"], user["role"]).get("news", True)

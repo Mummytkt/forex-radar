@@ -1201,7 +1201,7 @@ check("an unlinked Telegram gets 'not linked'", c.post("/api/auth/telegram", jso
 _said = []
 _gone = []
 _mid = [100]
-async def _sa(token, chat, text, reply_markup=None): _said.append((chat, text, reply_markup)); _mid[0] += 1; return _mid[0]
+async def _sa(token, chat, text, reply_markup=None, parse_mode=None): _said.append((chat, text, reply_markup)); _mid[0] += 1; return _mid[0]
 async def _ab2(token, cid, text=""): _said.append(("answer", text, None))
 async def _dm2(token, chat, mid): _gone.append(mid); return True, ""
 _old_bm = (_bm.send_message_id, _bm.answer_button, _bm.delete_message)

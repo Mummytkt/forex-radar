@@ -44,6 +44,8 @@ def results(conn, user_id: int, since: Optional[datetime] = None) -> dict:
     pairs = defaultdict(lambda: {"n": 0, "w": 0, "r": 0.0})
     tot = {"n": 0, "w": 0, "r": 0.0, "open": 0, "cancelled": 0}
     for row in rows:
+        if row["status"] == "duplicate":
+            continue                    # a copy of another trade (two levels heard one confirmation): never counted
         r = _r(row)
         if r is None:
             if row["status"] == "cancelled":
@@ -59,15 +61,18 @@ def results(conn, user_id: int, since: Optional[datetime] = None) -> dict:
     return {"by": dict(by), "pairs": dict(pairs), "tot": tot}
 
 
-def _line(name: str, d: dict) -> str:
+def _line(name: str, d: dict, risk: Optional[float] = None) -> str:
     pct = d["w"] / d["n"] * 100 if d["n"] else 0
-    return f"• <b>{name}</b>: {d['n']} trade{'s' if d['n'] != 1 else ''} · {d['w']} won · {pct:.0f}% · {d['r']:+.1f}R"
+    money = f" ({'+' if d['r'] >= 0 else '−'}${abs(d['r']) * risk:,.0f})" if risk else ""     # in money too (2026-11-25)
+    return f"• <b>{name}</b>: {d['n']} trade{'s' if d['n'] != 1 else ''} · {d['w']} won · {pct:.0f}% · {d['r']:+.1f}R{money}"
 
 
 def report_text(conn, user_id: int, title: str = "📊 <b>Your live results</b>", week: bool = True) -> str:
     now = datetime.now(timezone.utc)
     parts = [title, "<i>From the trades the Bias Pointer followed for you. TP = +your R, SL = −1R; breakeven isn't "
                     "applied (the follow alerts you, it doesn't move your stop).</i>"]
+    risk = risk_usd(conn, user_id)
+    parts[1] = parts[1][:-4] + f" $ at your ${risk:g} per trade.</i>"
     blocks = [("This week", now - timedelta(days=7))] if week else []
     blocks.append(("All time", None))
     for label, since in blocks:
@@ -77,10 +82,10 @@ def report_text(conn, user_id: int, title: str = "📊 <b>Your live results</b>"
         if not t["n"]:
             parts.append("No closed trades yet." + (f" {t['open']} still running." if t["open"] else ""))
             continue
-        parts.append(_line("Total", t))
-        parts += [_line(k, v) for k, v in sorted(res["by"].items(), key=lambda kv: -kv[1]["r"])]
+        parts.append(_line("Total", t, risk))
+        parts += [_line(k, v, risk) for k, v in sorted(res["by"].items(), key=lambda kv: -kv[1]["r"])]
         if label == "All time" and len(res["pairs"]) > 1:
-            parts += ["", "<b>By pair</b>"] + [_line(k, v) for k, v in sorted(res["pairs"].items(), key=lambda kv: -kv[1]["r"])]
+            parts += ["", "<b>By pair</b>"] + [_line(k, v, risk) for k, v in sorted(res["pairs"].items(), key=lambda kv: -kv[1]["r"])]
         extra = []
         if t["open"]:
             extra.append(f"{t['open']} still running")
@@ -105,7 +110,7 @@ async def run_weekly_report(db_path: str, config) -> bool:
         text = report_text(conn, r[0], "📊 <b>Weekly forward test</b>")
     finally:
         conn.close()
-    return await send_alert(config.telegram_bot_token, str(r[1]), text)
+    return await send_alert(config.telegram_bot_token, str(r[1]), text, parse_mode="HTML")
 
 
 # ── Position size ─────────────────────────────────────────────────────────────
