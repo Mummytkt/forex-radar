@@ -274,6 +274,12 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
     setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
+  // folding a section must not move the page (2026-11-25): no scroll anchoring while she is on this page
+  useEffect(() => {
+    const el = document.documentElement, was = el.style.overflowAnchor
+    el.style.overflowAnchor = 'none'
+    return () => { el.style.overflowAnchor = was }
+  }, [])
   useEffect(() => {
     if (openId == null) return
     const s = allSetups.find(x => x.id === openId)
@@ -345,7 +351,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <TopBar title="Quick Backtest" />
-      <main style={{ flex: 1, width: '100%', padding: '20px 24px', maxWidth: 1100 }}>
+      <main style={{ flex: 1, width: '100%', padding: '20px 24px', maxWidth: 1100, overflowAnchor: 'none' }}>
         {tabs}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '4px 0 14px' }}>
           {JOURNALS.map(([j, name, holds]) => {
@@ -573,7 +579,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
               {!showAll && setups.length > 40 && (
                 <button onClick={() => setShowAll(true)} style={{ ...pill(false), justifySelf: 'start' }}>Show all {setups.length}</button>
               )}
-              <CloseBar label="Close setups" onClose={() => { toggleSetups(); document.getElementById('qbt-setups')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }} />
+              <CloseBar label="Close setups" onClose={() => { toggleSetups(); toHeading(document.getElementById('qbt-setups')) }} />
             </div>
           )}
         </div>
@@ -771,6 +777,13 @@ function useFold(id: string, start = false): [boolean, (v: boolean) => void] {
   const set = (v: boolean) => { setOpen(v); try { localStorage.setItem(`mbp_qbt_fold_${id}`, v ? '1' : '0') } catch { /* private mode */ } }
   return [open, set]
 }
+const toHeading = (el: Element | null) => {
+  if (!el) return
+  requestAnimationFrame(() => {
+    const top = el.getBoundingClientRect().top
+    if (top < 90 || top > window.innerHeight - 60) window.scrollBy({ top: top - 90, behavior: 'smooth' })
+  })
+}
 function CloseBar({ onClose, label = 'Close' }: { onClose: () => void; label?: string }) {
   return (
     <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', marginTop: 10,
@@ -785,7 +798,7 @@ function Fold({ id, title, summary, children, force, start = false, plain }: { i
   const [open, setOpen] = useFold(id, start)
   const ref = useRef<HTMLDivElement>(null)
   const shown = open || !!force
-  const close = () => { setOpen(false); ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }
+  const close = (fromBottom = false) => { setOpen(false); if (fromBottom) toHeading(ref.current) }
   return (
     <div ref={ref} style={plain ? { marginBottom: 12 } : { ...card, marginBottom: 18 }}>
       <button onClick={() => (shown ? close() : setOpen(true))} aria-expanded={shown}
@@ -796,7 +809,7 @@ function Fold({ id, title, summary, children, force, start = false, plain }: { i
         {summary && <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{summary}</span>}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{shown ? 'Hide' : 'Show'}</span>
       </button>
-      {shown && <>{children}<CloseBar onClose={close} /></>}
+      {shown && <>{children}<CloseBar onClose={() => close(true)} /></>}
     </div>
   )
 }
@@ -838,7 +851,7 @@ function JournalBook({ title, journal, setups, onEdit, onReviewed, onChanged }: 
   const [openM, setOpenM] = useState<Set<string>>(new Set())
   const [openD, setOpenD] = useState<Set<string>>(new Set())
   const [bookOpen, setBookOpen] = useFold('book', true)
-  const back = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const back = (id: string) => toHeading(document.getElementById(id))
   useEffect(() => { if (months.length) setOpenM(new Set([months[0][0]])) }, [title, months.length])   // newest month open
   const flip = (set: Set<string>, k: string) => { const n = new Set(set); if (n.has(k)) n.delete(k); else n.add(k); return n }
   const rTotal = (list: Setup[]) => list.reduce((t, s) => t + (s.first && s.results[s.first] ? rOf(s.results[s.first], s.tp_r) : 0), 0)
