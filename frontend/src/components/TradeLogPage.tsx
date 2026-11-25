@@ -499,8 +499,10 @@ function ResultPicker({ entry, onResultChange }: { entry: Entry; onResultChange:
 }
 
 // ── Trade row ─────────────────────────────────────────────────────────────────
-function TradeRow({ entry, onView, onEdit, onDelete, onResultChange }: {
+function TradeRow({ entry, onView, onEdit, onDelete, onResultChange, picked, onPick }: {
   entry: Entry
+  picked?: boolean
+  onPick?: (id: number) => void
   onView: (e: Entry) => void
   onEdit: (e: Entry) => void
   onDelete: (id: number) => void
@@ -514,6 +516,7 @@ function TradeRow({ entry, onView, onEdit, onDelete, onResultChange }: {
       onMouseEnter={e => (e.currentTarget.style.background = 'var(--card-hover)')}
       onMouseLeave={e => (e.currentTarget.style.background = 'var(--card)')}
     >
+      {onPick && <input type="checkbox" checked={!!picked} onChange={() => onPick(entry.id)} aria-label="Tick this trade" style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0 }} />}
       <div style={{ width: 70, flexShrink: 0 }}>
         <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{entry.trade_date.slice(5).replace('-', '/')}</p>
         <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{entry.trade_date.slice(0, 4)}</p>
@@ -568,9 +571,76 @@ function TradeRow({ entry, onView, onEdit, onDelete, onResultChange }: {
   )
 }
 
+// ── The diary as a book (2026-11-25): months → the days she traded → that day's pages ─────────────────
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+function moneyTotal(list: Entry[]): number | null {
+  const vals = list.map(resultMoney).filter((v): v is number => v != null)
+  return vals.length ? vals.reduce((a, b) => a + b, 0) : null
+}
+function MoneyTag({ v }: { v: number | null }) {
+  if (v == null) return null
+  const col = v > 0 ? 'var(--bullish)' : v < 0 ? 'var(--bearish)' : 'var(--text-secondary)'
+  return <b style={{ color: col }}>{v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(Math.abs(v) % 1 ? 2 : 0)}</b>
+}
+function DiaryBook({ entries, picked, onPick, onEdit, onDelete }: { entries: Entry[]; picked: Set<number>; onPick: (id: number) => void
+  onEdit: (e: Entry) => void; onDelete: (id: number) => void }) {
+  const months = useMemo(() => {
+    const m = new Map<string, Map<string, Entry[]>>()
+    for (const e of [...entries].sort((a, b) => b.trade_date.localeCompare(a.trade_date) || (a.entry_time || '').localeCompare(b.entry_time || '') || a.id - b.id)) {
+      const mk = e.trade_date.slice(0, 7)
+      if (!m.has(mk)) m.set(mk, new Map())
+      const days = m.get(mk)!
+      days.set(e.trade_date, [...(days.get(e.trade_date) || []), e])
+    }
+    return [...m.entries()]
+  }, [entries])
+  const sum: React.CSSProperties = { cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }
+  return (
+    <div className="fairy-diary dp-purple" style={{ display: 'grid', gap: 10, padding: 14, background: 'var(--card)' }}>
+      {months.map(([mk, days], mi) => {
+        const all = [...days.values()].flat()
+        return (
+          <details key={mk} open={mi === 0} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', background: 'var(--surface)' }}>
+            <summary style={sum}>
+              <ChevronDown size={15} className="mr-chev" color="var(--text-muted)" />
+              <span className="diary-script" style={{ fontSize: 24, color: 'var(--accent-hover)' }}>{MONTH_NAMES[+mk.slice(5, 7) - 1]} {mk.slice(0, 4)}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{all.length} trade{all.length === 1 ? '' : 's'} · {days.size} day{days.size === 1 ? '' : 's'}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 13 }}><MoneyTag v={moneyTotal(all)} /></span>
+            </summary>
+            <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+              {[...days.entries()].map(([day, list]) => {
+                const d = new Date(day + 'T12:00:00Z')
+                return (
+                  <details key={day} style={{ border: '1px dashed var(--border)', borderRadius: 10, padding: '8px 12px' }}>
+                    <summary style={sum}>
+                      <ChevronDown size={14} className="mr-chev" color="var(--text-muted)" />
+                      <b style={{ color: 'var(--text-primary)', fontSize: 14 }}>{DAY_NAMES[d.getUTCDay()]} {d.getUTCDate()} {MONTH_NAMES[d.getUTCMonth()].slice(0, 3)}</b>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {list.length} trade{list.length === 1 ? '' : 's'} · {[...new Set(list.map(e => e.instrument))].join(', ')}
+                      </span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12.5 }}><MoneyTag v={moneyTotal(list)} /></span>
+                    </summary>
+                    <div style={{ display: 'grid', gap: 4, marginTop: 6 }}>
+                      {list.map(e => <JournalPage key={e.id} entry={e} picked={picked.has(e.id)} onPick={() => onPick(e.id)}
+                        onEdit={() => onEdit(e)} onDelete={() => onDelete(e.id)} />)}
+                    </div>
+                  </details>
+                )
+              })}
+            </div>
+          </details>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── A trade read as a page of her diary (2026-11-25) ─────────────────────────
 const AUTO_NOTE = /^Auto-logged from the Bias Pointer/
-function JournalPage({ entry, onEdit, onDelete }: { entry: Entry; onEdit: () => void; onDelete: () => void }) {
+const px = (v: number) => String(Number(v.toFixed(5)))      // 26584.149999999994 -> 26584.15
+function JournalPage({ entry, onEdit, onDelete, picked, onPick }: { entry: Entry; onEdit: () => void; onDelete: () => void
+  picked?: boolean; onPick?: () => void }) {
   const { user } = useAuth()
   const note = entry.notes && !AUTO_NOTE.test(entry.notes) ? entry.notes.trim() : ''
   const label = getSetupLabel(entry.setup_type, entry.setup_type_notes) || 'my setup'
@@ -584,9 +654,14 @@ function JournalPage({ entry, onEdit, onDelete }: { entry: Entry; onEdit: () => 
   })
   const money = resultMoney(entry)
   const plan: string[] = []
-  if (entry.entry_price != null) plan.push(`I got in at ${entry.entry_price}${entry.entry_time ? ` at ${entry.entry_time}` : ''}`)
-  if (entry.stop_loss != null) plan.push(`my stop sat at ${entry.stop_loss}`)
-  if (entry.take_profit != null) plan.push(`I aimed for ${entry.take_profit}`)
+  if (entry.entry_price != null) plan.push(`I got in at ${px(entry.entry_price)}${entry.entry_time ? ` at ${entry.entry_time}` : ''}`)
+  if (entry.stop_loss != null) plan.push(`my stop sat at ${px(entry.stop_loss)}`)
+  if (entry.take_profit != null) plan.push(`I aimed for ${px(entry.take_profit)}`)
+  // the confirmation she took it on (auto-logged trades: "M5 CISD"; else her setup's name)
+  const conf = (entry.setup_type === 'other' && entry.setup_type_notes) ? entry.setup_type_notes : label
+  const confLine = conf ? `My entry confirmation was the ${conf} ${['🎯', '🔎', '📍'][entry.id % 3]}` : ''
+  const exitLine = entry.exit_price != null && entry.result !== 'open'
+    ? `I was out at ${px(entry.exit_price)}${entry.exit_time ? ` at ${entry.exit_time}` : ''}${entry.exit_date && entry.exit_date !== entry.trade_date ? ` on ${entry.exit_date}` : ''}.` : ''
   const planText = plan.length > 1 ? `${plan.slice(0, -1).join(', ')} and ${plan[plan.length - 1]}.` : plan.length ? `${plan[0]}.` : ''
   const risk = entry.amount_risked != null
     ? ` I put $${entry.amount_risked} on the line${entry.amount_aimed != null ? ` to make $${entry.amount_aimed}` : ''}.` : ''
@@ -600,13 +675,18 @@ function JournalPage({ entry, onEdit, onDelete }: { entry: Entry; onEdit: () => 
       <div className={`dp-page dp-${story.mood}`}>
         {story.sparks.map((e, i) => <span key={i} className={`dp-spark dp-spark${i}`} aria-hidden>{e}</span>)}
         <div className="dp-head dp-line" style={line()}>
-          <span className="dp-ribbon">{story.ribbon}</span>
-          <span className="dp-stamp">{entry.instrument} · {label}{entry.session ? ` · ${SESSION_LABELS[entry.session] || entry.session}` : ''} · {entry.trade_date}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {onPick && <input type="checkbox" checked={!!picked} onChange={onPick} aria-label="Tick this trade" style={{ width: 15, height: 15, cursor: 'pointer' }} />}
+            <span className="dp-ribbon">{story.ribbon}</span>
+          </span>
+          <span className="dp-stamp">{entry.instrument} · {conf}{entry.session ? ` · ${SESSION_LABELS[entry.session] || entry.session}` : ''} · {entry.trade_date}</span>
         </div>
         <div className="diary-script dp-greet dp-line" style={line()}>{story.greeting}</div>
         <p className="dp-p dp-line" style={line()}>{story.opening}{story.noNote ? ` ${story.noNote}` : ''}</p>
         {note && <div className="dp-note dp-line" style={line()}>{note}</div>}
+        {confLine && <p className="dp-p dp-line" style={line()}>{confLine}</p>}
         {planText && <p className="dp-p dp-line" style={line()}>{planText}{risk}</p>}
+        {exitLine && <p className="dp-p dp-line" style={line()}>{exitLine}</p>}
         {story.rows.map(r => <p key={r.slot} className="dp-p dp-line" style={line()}>{r.text}</p>)}
         {moneyLine && <p className="dp-p dp-line" style={line()}>{moneyLine}</p>}
         {story.held && <p className="dp-p dp-line" style={line()}>{story.held}</p>}
@@ -1038,6 +1118,19 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
   const [form, setForm] = useState(blank())
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  // tick trades to delete them, or delete the whole journal (owner, 2026-11-25)
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+  const pick = (id: number) => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const deleteMany = async (all: boolean) => {
+    const n = all ? entries.length : picked.size
+    if (!n) return
+    if (!confirm(all ? `Delete EVERY trade in this journal (${n} shown)? This can't be undone.` : `Delete the ${n} ticked trade${n === 1 ? '' : 's'}? This can't be undone.`)) return
+    if (all && prompt('Type DELETE to confirm deleting every trade in this journal') !== 'DELETE') return
+    await fetch(`${API_BASE}/api/journal/delete`, { method: 'POST', headers: hdrs(),
+      body: JSON.stringify(all ? { all: true, confirm: 'DELETE', trade_type: config.tradeType } : { ids: [...picked] }) })
+    setPicked(new Set())
+    load()
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1412,16 +1505,29 @@ export default function TradeLogPage({ config, tabs }: { config: TradeLogConfig;
               </button>
             </div>
           ) : (
-            readMode === 'diary' ? (
-              <div className="fairy-diary dp-purple" style={{ display: 'grid', gap: 4, background: 'var(--card)' }}>
-                {entries.map(e => <JournalPage key={e.id} entry={e} onEdit={() => openEdit(e)} onDelete={() => setConfirmDelete(e.id)} />)}
-              </div>
+            <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 16px', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={picked.size > 0 && picked.size === entries.length}
+                  onChange={e => setPicked(e.target.checked ? new Set(entries.map(x => x.id)) : new Set())} /> Tick all
+              </label>
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                {picked.size > 0 && <button onClick={() => deleteMany(false)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--bearish)', background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                  <Trash2 size={12} /> Delete selected ({picked.size})</button>}
+                <button onClick={() => deleteMany(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--bearish)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  <Trash2 size={12} /> Delete all</button>
+              </span>
+            </div>
+            {readMode === 'diary' ? (
+              <DiaryBook entries={entries} picked={picked} onPick={pick} onEdit={openEdit} onDelete={id => setConfirmDelete(id)} />
             ) :
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as 'auto' }}>
               {entries.map(e => (
-                <TradeRow key={e.id} entry={e} onView={setViewEntry} onEdit={openEdit} onDelete={id => setConfirmDelete(id)} onResultChange={handleResultChange} />
+                <TradeRow key={e.id} entry={e} onView={setViewEntry} onEdit={openEdit} onDelete={id => setConfirmDelete(id)} onResultChange={handleResultChange}
+                  picked={picked.has(e.id)} onPick={pick} />
               ))}
-            </div>
+            </div>}
+            </>
           )}
         </div>
       </main>

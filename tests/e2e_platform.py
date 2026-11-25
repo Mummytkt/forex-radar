@@ -1551,6 +1551,21 @@ check("M15 OCTGD 1 fires a level watching it",
       _db.execute("SELECT triggered_tf FROM entry_pattern_alerts WHERE id = ?", (_m1["id"],)).fetchone()[0] == "M15")
 for _x in (_o2, _o2b, _m1):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
+# Journal: delete ticked trades / the whole journal (owner, 2026-11-25); live and backtest kept apart
+_j = [c.post("/api/journal", headers=H(owner), json={"trade_date": "2026-11-0%d" % i, "instrument": "EURUSD", "direction": "buy",
+      "result": "win", "trade_type": "live"}).json()["id"] for i in (1, 2, 3)]
+_jb = c.post("/api/journal", headers=H(owner), json={"trade_date": "2026-11-04", "instrument": "EURUSD", "direction": "buy",
+      "result": "win", "trade_type": "backtest"}).json()["id"]
+c.post("/api/journal/delete", headers=H(owner), json={"ids": [_j[0]]})
+_live = {e["id"] for e in c.get("/api/journal?trade_type=live", headers=H(owner)).json()}
+check("journal: delete selected removes only the ticked trade", _j[0] not in _live and _j[1] in _live and _j[2] in _live)
+check("journal: delete all needs DELETE typed",
+      c.post("/api/journal/delete", headers=H(owner), json={"all": True, "trade_type": "live"}).status_code == 400)
+c.post("/api/journal/delete", headers=H(owner), json={"all": True, "confirm": "DELETE", "trade_type": "live"})
+check("journal: delete all clears the live journal and keeps the backtest one",
+      c.get("/api/journal?trade_type=live", headers=H(owner)).json() == []
+      and _jb in {e["id"] for e in c.get("/api/journal?trade_type=backtest", headers=H(owner)).json()})
+c.post("/api/journal/delete", headers=H(owner), json={"ids": [_jb]})
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)

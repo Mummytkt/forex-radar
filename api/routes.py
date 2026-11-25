@@ -1099,6 +1099,32 @@ def update_journal_entry(entry_id: int, request: Request, body: JournalEntryUpda
     return _row_to_entry(row)
 
 
+class JournalDeleteMany(BaseModel):
+    ids: list[int] = []
+    all: bool = False
+    confirm: str = ""            # "DELETE" typed, for all
+    trade_type: str = "live"     # all = every trade in THIS journal (live or backtest) only
+
+
+@router.post("/journal/delete")
+def delete_journal_many(request: Request, body: JournalDeleteMany):
+    """Delete the ticked trades, or every one in this journal (owner request 2026-11-25). Only the caller's own."""
+    uid = _user_id(request)
+    if not uid:
+        raise HTTPException(401, "Sign in first")
+    with _db_write(request) as conn:
+        if body.all:
+            if body.confirm != "DELETE":
+                raise HTTPException(400, "Type DELETE to delete every trade in this journal")
+            n = conn.execute("DELETE FROM journal_entries WHERE user_id = ? AND trade_type = ?",
+                             (uid, body.trade_type)).rowcount
+        else:
+            n = 0
+            for i in body.ids[:5000]:
+                n += conn.execute("DELETE FROM journal_entries WHERE id = ? AND user_id = ?", (int(i), uid)).rowcount
+    return {"ok": True, "deleted": n}
+
+
 @router.delete("/journal/{entry_id}")
 def delete_journal_entry(entry_id: int, request: Request):
     uid = _user_id(request)
