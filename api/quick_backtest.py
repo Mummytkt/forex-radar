@@ -28,8 +28,8 @@ router = APIRouter()
 
 # Stored keys: never rename one (labels can change). Order = how they show.
 CONFIRMATIONS = [("pcl", "H1 PCL"), ("eng", "H1 Engulfing"), ("octgd1", "H1 OCTGD 1"), ("octgd2", "H1 OCTGD 2"),
-                 ("cisd", "H1 CISD"), ("octgd15", "M15 OCTGD"), ("octgd215", "M15 OCTGD 2"), ("cisd15", "M15 CISD"),
-                 ("cisd5", "M5 CISD")]
+                 ("octgd3", "H1 OCTGD 3"), ("cisd", "H1 CISD"), ("octgd15", "M15 OCTGD"), ("octgd215", "M15 OCTGD 2"),
+                 ("octgd315", "M15 OCTGD 3"), ("cisd15", "M15 CISD"), ("cisd5", "M5 CISD")]
 OUTCOMES = ("win", "be", "loss")
 RANGES = ("inside", "opposite")
 DEFAULT_TP_R = 3.0

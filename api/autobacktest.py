@@ -35,8 +35,9 @@ WATCH_DAYS = 21      # a setup is followed at most this long after its start
 LOOKBACK_DAYS = 3    # candles before the start, so runs and OCs that began earlier are known
 
 # Quick Backtest keys -> (timeframe minutes, pattern). OCTGD 1 / OCTGD 2 are the owner's own split (not in the script).
-KEYS = {"pcl": (60, "pcl"), "eng": (60, "eng"), "octgd1": (60, "octgd"), "octgd2": (60, "octgd2"), "cisd": (60, "cisd"),
-        "octgd15": (15, "octgd"), "octgd215": (15, "octgd2"), "cisd15": (15, "cisd"), "cisd5": (5, "cisd")}
+KEYS = {"pcl": (60, "pcl"), "eng": (60, "eng"), "octgd1": (60, "octgd"), "octgd2": (60, "octgd2"), "octgd3": (60, "octgd3"),
+        "cisd": (60, "cisd"), "octgd15": (15, "octgd"), "octgd215": (15, "octgd2"), "octgd315": (15, "octgd3"),
+        "cisd15": (15, "cisd"), "cisd5": (5, "cisd")}
 OCWIN, CIWIN = 10, 20   # the script's defaults: OCTGD / CISD candles allowed
 
 
@@ -225,6 +226,36 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float 
     return out
 
 
+def octgd3(cs: list[dict], side: str, level: float, start: datetime, tol: float = 0.0, win: int = OCWIN) -> list[dict]:
+    """OCTGD 3 (owner, 2026-11-25, confirmed with Documents/OCTGD3_Check.png, picture A). A buy: once price has
+    touched the level, the LAST bearish candle after that touch (a newer one replaces it); a bullish candle then
+    closes above that bearish candle's OPEN, within `win` candles = OCTGD 3. Entry = a limit at that open; SL = the
+    lowest wick since the touch. Sells are the mirror. The level's own end (an H4 close beyond it) is run()'s."""
+    buy = side == "buy"
+    hit = lambda k: (k["l"] <= level + tol) if buy else (k["h"] >= level - tol)
+    against = lambda k: (k["c"] < k["o"]) if buy else (k["c"] > k["o"])
+    with_trade = lambda k: (k["c"] > k["o"]) if buy else (k["c"] < k["o"])
+    out, touched, wick, bear = [], None, None, None
+    for i, k in enumerate(cs):
+        if k["ct"] <= start:
+            continue
+        if touched is None:
+            if hit(k):
+                touched, wick = i, (k["l"] if buy else k["h"])
+            continue
+        wick = min(wick, k["l"]) if buy else max(wick, k["h"])
+        if bear is not None and i - bear > win:
+            bear = None
+        if bear is not None and with_trade(k) and ((k["c"] > cs[bear]["o"]) if buy else (k["c"] < cs[bear]["o"])):
+            out.append({"i": i, "ct": k["ct"], "pat": "octgd3", "dir": side, "close": k["c"], "touch": wick,
+                        "level": cs[bear]["o"], "limit": cs[bear]["o"]})
+            bear = None
+            continue
+        if against(k):
+            bear = i                               # the last candle against the trade after the touch
+    return out
+
+
 def play_limit(mins, j0, side, limit, sl, tp_r, be_r, cancel_at):
     """A limit order from minute j0: filled when price comes back to it, cancelled if price reaches the TP first or
     the setup ends (cancel_at) before the fill. Then played like play()."""
@@ -309,6 +340,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
         tf, pat = KEYS[key]
         if pat == "octgd2":
             evs = octgd2(frames[tf], side, level, start, tol)
+        elif pat == "octgd3":
+            evs = octgd3(frames[tf], side, level, start, tol)
         else:
             evs = [e for e in found[tf] if e["pat"] == pat and e["dir"] == side
                    and ((e["touch"] <= level + tol) if buy else (e["touch"] >= level - tol))]
@@ -462,8 +495,9 @@ async def run_prefetch(config) -> None:
 # ── Pictures (owner, 2026-11-23): one chart per trade, saved with the setup ───────────────────────────────
 TF_NAME = {60: "H1", 15: "M15", 5: "M5"}
 OUT_TXT = {"win": "TP hit", "loss": "SL hit", "be": "breakeven", "open": "still open"}
-LABELS = {"pcl": "H1 PCL", "eng": "H1 Engulfing", "octgd1": "H1 OCTGD 1", "octgd2": "H1 OCTGD 2", "cisd": "H1 CISD",
-          "octgd15": "M15 OCTGD", "octgd215": "M15 OCTGD 2", "cisd15": "M15 CISD", "cisd5": "M5 CISD"}
+LABELS = {"pcl": "H1 PCL", "eng": "H1 Engulfing", "octgd1": "H1 OCTGD 1", "octgd2": "H1 OCTGD 2", "octgd3": "H1 OCTGD 3",
+          "cisd": "H1 CISD", "octgd15": "M15 OCTGD", "octgd215": "M15 OCTGD 2", "octgd315": "M15 OCTGD 3",
+          "cisd15": "M15 CISD", "cisd5": "M5 CISD"}
 
 
 def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, tp_r: float, be_r: float) -> list[tuple]:

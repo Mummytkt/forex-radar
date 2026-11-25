@@ -31,9 +31,9 @@ interface Draft {
   results: Record<string, Res>; first: string | null; note: string
 }
 
-const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD 1'], ['octgd2', 'H1 OCTGD 2'], ['cisd', 'H1 CISD'], ['octgd15', 'M15 OCTGD'], ['octgd215', 'M15 OCTGD 2'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
+const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD 1'], ['octgd2', 'H1 OCTGD 2'], ['octgd3', 'H1 OCTGD 3'], ['cisd', 'H1 CISD'], ['octgd15', 'M15 OCTGD'], ['octgd215', 'M15 OCTGD 2'], ['octgd315', 'M15 OCTGD 3'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
 const LABEL = Object.fromEntries(CONFS)
-const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OC1', octgd2: 'OC2', cisd: 'H1 CISD', octgd15: 'M15 OCTGD', octgd215: 'M15 OCTGD 2', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
+const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OC1', octgd2: 'OC2', cisd: 'H1 CISD', octgd15: 'M15 OCTGD', octgd215: 'M15 OCTGD 2', octgd3: 'OC3', octgd315: 'M15 OCTGD 3', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
 const OUT: [Outcome, string, string][] = [['win', 'Win', 'var(--bullish)'], ['be', 'BE', '#eab308'], ['loss', 'Loss', 'var(--bearish)']]
 const LAST_KEY = 'mbp_qbt_last'   // remembers the date / pair / range of the last saved setup
 
@@ -596,8 +596,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
 type Journal = 'all' | 'H1' | 'M15' | 'M5'
 const JOURNALS: [Journal, string, string][] = [
   ['all', '📚 All entries', 'every confirmation'],
-  ['H1', '🕐 H1 journal', 'PCL · Engulfing · OCTGD 1 · OCTGD 2 · H1 CISD'],
-  ['M15', '🕒 M15 journal', 'M15 OCTGD · M15 OCTGD 2 · M15 CISD'],
+  ['H1', '🕐 H1 journal', 'PCL · Engulfing · OCTGD 1 · OCTGD 2 · OCTGD 3 · H1 CISD'],
+  ['M15', '🕒 M15 journal', 'M15 OCTGD · M15 OCTGD 2 · M15 OCTGD 3 · M15 CISD'],
   ['M5', '🕔 M5 journal', 'M5 CISD'],
 ]
 // a setup as one journal sees it: only that timeframe's results; ★ first = the earliest of those to enter
@@ -617,8 +617,8 @@ function inJournal(list: Setup[], j: Journal): Setup[] {
 
 // Tick a whole timeframe's confirmations at once (user, 2026-11-24): a small dropdown of H1 / M15 / M5
 const TF_GROUPS: [string, string[]][] = [
-  ['H1', ['pcl', 'eng', 'octgd1', 'octgd2', 'cisd']],
-  ['M15', ['octgd15', 'octgd215', 'cisd15']],
+  ['H1', ['pcl', 'eng', 'octgd1', 'octgd2', 'octgd3', 'cisd']],
+  ['M15', ['octgd15', 'octgd215', 'octgd315', 'cisd15']],
   ['M5', ['cisd5']],
 ]
 function TfPicker({ results, onSet }: { results: Record<string, Res>; onSet: (keys: string[], on: boolean) => void }) {
