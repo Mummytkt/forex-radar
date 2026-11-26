@@ -98,7 +98,8 @@ def report_text(conn, user_id: int, title: str = "📊 <b>Your live results</b>"
         t = res["tot"]
         parts += ["", f"<b>{label}</b>"]
         if not t["n"]:
-            parts.append("No closed trades yet." + (f" {t['open']} still running." if t["open"] else ""))
+            parts.append(("No closed trades since your fresh start yet." if results_from(conn, user_id) else "No closed trades yet.")
+                         + (f" {t['open']} still running." if t["open"] else ""))
             continue
         parts.append(_line("Total", t, risk))
         parts += [_line(k, v, risk) for k, v in sorted(res["by"].items(), key=lambda kv: -kv[1]["r"])]

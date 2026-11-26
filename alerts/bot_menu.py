@@ -167,7 +167,8 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
             await _reply(conn, token, chat_id, "📊 Fresh start: /results now counts only trades from this moment. "
                                                "Nothing was deleted.")
         else:
-            await _reply(conn, token, chat_id, report_text(conn, user["id"]), html=True)
+            # a one-tap fresh start under the report (owner, 2026-11-26)
+            await _reply(conn, token, chat_id, report_text(conn, user["id"]), _results_markup(), html=True)
     elif cmd == "risk":
         from alerts.forward_report import RISK_HELP, set_risk, get_risk, ensure_risk_table
         args = text.split()[1:]
@@ -207,6 +208,40 @@ async def handle_command(conn, config, chat: dict, text: str, message_id: int | 
         _, path, label, blurb = PAGES[cmd]
         await _reply(conn, token, chat_id, blurb, _page_markup(base, label, path))
     return True
+
+
+def _results_markup():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Start a fresh count", callback_data="rs:ask")], [_CLOSE]])
+
+
+async def handle_results_button(conn, config, cq: dict) -> None:
+    """Under /results: 'Start a fresh count' asks once, then counts only trades opened from that moment. Nothing
+    is deleted; the old trades just stop counting (owner, 2026-11-26)."""
+    from datetime import datetime, timezone
+    from alerts.forward_report import report_text, set_results_from
+    token = config.telegram_bot_token
+    msg = cq.get("message") or {}
+    chat_id = (msg.get("chat") or {}).get("id")
+    user = linked_user(conn, chat_id) if chat_id is not None else None
+    if not user:
+        return await answer_button(token, cq.get("id", ""), "Link your account first.")
+    data = cq.get("data")
+    if data == "rs:ask":
+        text = ("🔄 <b>Start a fresh count?</b>\n\nFrom this moment, /results counts only the trades opened after now. "
+                "Nothing is deleted: older trades just stop counting.")
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Yes, start fresh", callback_data="rs:yes"),
+                                        InlineKeyboardButton("Keep counting", callback_data="rs:no")]])
+    else:
+        if data == "rs:yes":
+            set_results_from(conn, user["id"], datetime.now(timezone.utc).isoformat())
+            conn.commit()
+        text, markup = report_text(conn, user["id"]), _results_markup()
+    try:
+        await Bot(token=token).edit_message_text(chat_id=chat_id, message_id=msg.get("message_id"), text=text,
+                                                 reply_markup=markup, parse_mode="HTML")
+    except TelegramError:
+        pass
+    await answer_button(token, cq.get("id", ""), "Fresh count started" if data == "rs:yes" else "")
 
 
 async def handle_news_button(conn, config, cq: dict) -> None:

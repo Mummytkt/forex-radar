@@ -592,6 +592,10 @@ async def telegram_update(request: Request):
             from alerts.bot_menu import handle_news_button
             with _db_write(request) as conn:
                 await handle_news_button(conn, config, cq)
+        elif (cq.get("data") or "").startswith("rs:"):
+            from alerts.bot_menu import handle_results_button
+            with _db_write(request) as conn:
+                await handle_results_button(conn, config, cq)
         else:
             await _handle_chart_button(request, config, cq)
         return {"ok": True}
