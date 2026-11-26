@@ -12,6 +12,7 @@ this job is the primary feed for intrabar / multi-timeframe monitoring.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from config import tagged
@@ -88,7 +89,7 @@ def _live(conn, inst: str) -> Optional[dict]:
     if not sym:
         return None
     import yfinance as yf
-    raw = yf.download(sym, period="2d", interval="1m", progress=False, auto_adjust=True)
+    raw = yf.download(sym, period="2d", interval="1m", progress=False, auto_adjust=True, timeout=15)
     if raw is None or raw.empty:
         return None
     col = raw["Close"]
@@ -154,6 +155,7 @@ def _fetch_prices(instruments: list[str]) -> dict[str, dict]:
             interval="5m",
             progress=False,
             auto_adjust=True,
+            timeout=20,
         )
 
         if raw.empty:
@@ -418,7 +420,13 @@ async def run_price_check(db_path: str, config) -> None:
         logger.debug("Price monitor checking %d instrument(s): %s", len(instruments), instruments)
 
         # Step 2: Fetch prices
-        prices = _fetch_prices(instruments)
+        # Yahoo's download blocks: run it beside the web server, with a time limit. On 2026-11-26 a stuck ^N225
+        # download ran inside the server for 11 minutes and every page loaded empty until a restart.
+        try:
+            prices = await asyncio.wait_for(asyncio.to_thread(_fetch_prices, instruments), timeout=90)
+        except asyncio.TimeoutError:
+            logger.warning("Price monitor: Yahoo download took over 90 s for %s, skipped this round", instruments)
+            return
 
         if not prices:
             logger.debug("Price monitor: no prices returned for %s", instruments)
