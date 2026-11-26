@@ -214,16 +214,11 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float 
         if k["ct"] <= start or not hit(k) or (i and cs[i - 1]["ct"] > start and hit(cs[i - 1])):
             continue                              # not a NEW touch
         touch_no += 1
-        # the first two candles in a row going the trade's way from the touch on (candles against it before them
-        # don't matter: owner 2026-11-25, 2 Jan 2020); the search stops at the next new touch
-        a = None
-        for j in range(i, len(cs) - 1):
-            if j > i and hit(cs[j]) and not hit(cs[j - 1]):
-                break
-            if with_trade(cs[j]) and with_trade(cs[j + 1]):
-                a = j
-                break
-        if a is None:
+        # the FIRST candle going the trade's way from the touch on, and the one right after it, must both go the
+        # trade's way (candles against it before the first don't matter: owner 2026-11-25, 2 Jan 2020); a first
+        # with-trade candle followed by one against = no OCTGD 2 at this touch (owner 2026-11-26, 3 Jan 2020)
+        a = next((j for j in range(i, len(cs)) if with_trade(cs[j])), None)
+        if a is None or a + 1 >= len(cs) or not with_trade(cs[a + 1]):
             continue
         c1, c2 = cs[a], cs[a + 1]
         wick = min(c1["l"], c2["l"]) if buy else max(c1["h"], c2["h"])

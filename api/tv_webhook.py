@@ -1301,8 +1301,8 @@ def _octgd2_touch(o2: Optional[dict], direction: str, level: float, created_at: 
     t = next((j for j in range(i1, -1, -1) if hit(cs[j]) and (j == 0 or not hit(cs[j - 1]))), None)
     if t is None:
         return False                      # no touch of this level in the candles sent
-    if any(with_trade(cs[j]) and with_trade(cs[j + 1]) for j in range(t, i1)):
-        return False                      # an earlier pair after this touch was the OCTGD 2
+    if any(with_trade(cs[j]) for j in range(t, i1)):
+        return False                      # C1 must be the FIRST candle the trade's way after the touch (owner 2026-11-26)
     if first_only:
         since = created_at or ""
         for j in range(t):

@@ -1654,6 +1654,19 @@ check("2 Jan: OCTGD 1 at 16:00 is void (15:00 closed below 13:00's low)", _tp("o
 check("2 Jan: OCTGD 3 at 16:00 is void for the same reason", _tp("octgd3") is None)
 for _x in _lv.values():
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
+# OCTGD 2 = the FIRST with-trade candle after the touch + the next (owner, 2026-11-26, EURUSD sell 3 Jan 2020 at 1.11729):
+# after the touch a red then a green came before red + red, so there is no OCTGD 2
+_s3 = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDNZD", "direction": "bearish", "price": 1.11729,
+             "tolerance_pips": 10, "watches": ["H1:octgd2"], "keep_open": True}).json()
+_j3 = [(1.11525, 1.11674, 1.11525, 1.11633), (1.11634, 1.11798, 1.11624, 1.11719), (1.11720, 1.11740, 1.11679, 1.11721),
+       (1.11721, 1.11732, 1.11659, 1.11666), (1.11665, 1.11681, 1.11612, 1.11673), (1.11673, 1.11680, 1.11600, 1.11620),
+       (1.11620, 1.11650, 1.11580, 1.11590)]
+tv(type="ENTRY_CONFIRMATION", instrument="AUDNZD", direction="bearish", pattern="octgd2", timeframe="60",
+   price=1.11590, swept_level=1.11590, touch_price=1.11680, candles=_cs2(_j3) + "|o2s")
+_db = sqlite3.connect(DB)
+check("3 Jan: no OCTGD 2 when the first red after the touch is followed by a green",
+      _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_s3["id"],)).fetchone()[0] is None)
+c.delete(f"/api/entry-alerts/{_s3['id']}", headers=H(owner))
 passed = sum(ok for _, ok in results)
 for name, ok in results:
     print(("PASS " if ok else "FAIL ") + name)
