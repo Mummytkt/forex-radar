@@ -1620,6 +1620,16 @@ check("OCTGD 3 fires when C1 touched the level, C2 pushed further and a close ca
 _f3 = _db.execute("SELECT entry, sl, status FROM trade_follows WHERE alert_id = ?", (_o3["id"],)).fetchone()
 check("OCTGD 3's limit is the OC line (C1's close) and its SL C2's extreme",
       _f3 is not None and abs(_f3[0] - 0.9006) < 1e-9 and abs(_f3[1] - 0.8990) < 1e-9 and _f3[2] == "pending")
+# price can keep pushing after the touch: the OC is the LAST two candles of the run (owner, 2026-11-26)
+_o3r = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "EURCAD", "direction": "bullish", "price": 0.9000,
+              "tolerance_pips": 10, "watches": ["H1:octgd3"], "keep_open": True}).json()
+_c3r = _cs2([(0.9030, 0.9032, 0.9020, 0.9022), (0.9022, 0.9024, 0.8998, 0.9010), (0.9010, 0.9012, 0.8990, 0.8995),
+             (0.8995, 0.8997, 0.8980, 0.8984), (0.8984, 0.9000, 0.8982, 0.8999)])
+tv(type="ENTRY_CONFIRMATION", instrument="EURCAD", direction="bullish", pattern="octgd", timeframe="60",
+   price=0.8999, swept_level=0.8995, touch_price=0.8980, candles=_c3r)
+check("OCTGD 3 also fires when two or more candles push on after the touch (the run's last two form the OC)",
+      _db.execute("SELECT triggered_pattern FROM entry_pattern_alerts WHERE id = ?", (_o3r["id"],)).fetchone()[0] == "octgd3")
+c.delete(f"/api/entry-alerts/{_o3r['id']}", headers=H(owner))
 check("OCTGD 3 stays quiet on a level C1 didn't touch",
       _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_o3n["id"],)).fetchone()[0] is None)
 for _x in (_o3, _o3n):

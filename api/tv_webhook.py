@@ -1392,16 +1392,21 @@ def _h4_since(conn, instrument: str) -> list[tuple]:
 
 
 def _octgd3_touch(o3: Optional[dict], direction: str, level: float, created_at: Optional[str]) -> Optional[float]:
-    """C1 (the first candle of the OC) must be the candle that touched this level, after the level was set.
+    """The run of opposite candles that ends with the OC (C1, C2) must have touched this level at or before C1,
+    after the level was set (owner, 2026-11-26: two or more candles may push on before the close back through).
     Returns the SL (the pair's wick: C2's high for a sell), else None."""
     if not o3:
         return None
-    c1 = o3["cs"][o3["b"]]
-    bull = direction == "bullish"
-    if (created_at or "") > c1[0]:
-        return None
-    touched = c1[3] <= level if bull else c1[2] >= level
-    return o3["wick"] if touched else None
+    cs, b, bull = o3["cs"], o3["b"], direction == "bullish"
+    against = lambda k: (k[4] < k[1]) if bull else (k[4] > k[1])
+    rs = b
+    while rs - 1 >= 0 and against(cs[rs - 1]):
+        rs -= 1
+    since = created_at or ""
+    for k in cs[rs:b + 1]:
+        if k[0] >= since and (k[3] <= level if bull else k[2] >= level):
+            return o3["wick"]
+    return None
 
 
 _ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "octgd3": "OCTGD 3", "cisd": "CISD",
