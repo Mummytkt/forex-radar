@@ -249,7 +249,7 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
   const [msg, setMsg] = useState('')
   const [rangeF, setRangeF] = useState<'all' | 'inside' | 'opposite'>('all')
   const [yearF, setYearF] = useState('all')
-  const [showAll, setShowAll] = useState(false)
+  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())   // Setups grouped by month, closed until opened (2026-11-26)
   const [reviewOnly, setReviewOnly] = useState(false)
   // the Setups section opens and closes (user, 2026-11-24); her choice is remembered on this browser
   const [setupsOpen, setSetupsOpen] = useState(true)
@@ -559,7 +559,31 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                   </div>
                 </div>
               ))}
-              {!reviewView && (showAll ? setups : setups.slice(0, 40)).map(s => (
+              {!reviewView && Array.from(setups.reduce((m, x) => m.set(x.date.slice(0, 7), [...(m.get(x.date.slice(0, 7)) || []), x]), new Map<string, Setup[]>())).map(([ym, list]) => {
+                const open = openMonths.has(ym)
+                const res = list.flatMap(x => Object.values(x.results))
+                const w = res.filter(r => r.outcome === 'win').length, l = res.filter(r => r.outcome === 'loss').length, be = res.filter(r => r.outcome === 'be').length
+                const allPicked = list.every(x => picked.has(x.id))
+                return (
+                  <div key={ym} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', background: 'var(--bg-elevated, transparent)', flexWrap: 'wrap' }}>
+                      <input type="checkbox" checked={allPicked} aria-label={`Tick every setup in ${monthName(ym)}`} style={{ width: 16, height: 16, cursor: 'pointer' }}
+                        onChange={e => setPicked(prev => { const n = new Set(prev); list.forEach(x => e.target.checked ? n.add(x.id) : n.delete(x.id)); return n })} />
+                      <button onClick={() => setOpenMonths(prev => { const n = new Set(prev); n.has(ym) ? n.delete(ym) : n.add(ym); return n })}
+                        aria-expanded={open} style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', color: 'inherit' }}>
+                        <ChevronDown size={15} color="var(--text-muted)" style={{ transition: 'transform 0.15s', transform: open ? 'none' : 'rotate(-90deg)' }} />
+                        <b style={{ fontSize: 14, color: 'var(--text-primary)' }}>{monthName(ym)}</b>
+                        <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{list.length} setup{list.length === 1 ? '' : 's'}</span>
+                        <span style={{ fontSize: 12.5, marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                          <span style={{ color: 'var(--bullish)', fontWeight: 700 }}>{w}W</span>
+                          <span style={{ color: 'var(--bearish)', fontWeight: 700 }}>{l}L</span>
+                          {be > 0 && <span style={{ color: '#eab308', fontWeight: 700 }}>{be}BE</span>}
+                          <span style={{ color: 'var(--text-muted)' }}>{open ? 'Close' : 'Open'}</span>
+                        </span>
+                      </button>
+                    </div>
+                    {open && <div style={{ display: 'grid', gap: 6, padding: '4px 8px 8px' }}>
+                  {list.map(s => (
                 <div key={s.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '7px 9px',
                   borderRadius: 8, border: '1px solid var(--border)', opacity: s.valid ? 1 : 0.55 }}>
                   <input type="checkbox" checked={picked.has(s.id)} onChange={() => pick(s.id)} aria-label={`Tick the setup of ${fmtDay(s.date)}`} style={{ width: 16, height: 16, cursor: 'pointer' }} />
@@ -589,9 +613,10 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
                   </span>
                 </div>
               ))}
-              {!showAll && setups.length > 40 && (
-                <button onClick={() => setShowAll(true)} style={{ ...pill(false), justifySelf: 'start' }}>Show all {setups.length}</button>
-              )}
+                    </div>}
+                  </div>
+                )
+              })}
               <CloseBar label="Close setups" onClose={() => { toggleSetups(); toHeading(document.getElementById('qbt-setups')) }} />
             </div>
           )}
@@ -603,6 +628,11 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
       </main>
     </div>
   )
+}
+
+function monthName(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 
 // ---- The three journals (user, 2026-11-25): each shows only its timeframe's entries, with its own ★ first
