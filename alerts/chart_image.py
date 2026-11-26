@@ -135,10 +135,11 @@ def render(instrument: str, tf: str, candles: list[tuple], levels: list[dict], m
             placed.append((mx, w, row))
             d.text((mx + 4, y0 + 4 + row * 16), mtxt, font=f_ax, fill=(148, 163, 184))
 
-    # alert marker on the last candle
-    lx = x0 + step * (n - 0.5)
-    d.line([(lx, y0), (lx, y1)], fill=(80, 86, 104), width=1)
-    d.text((lx - 36 if lx > x0 + 60 else lx + 4, y0 - 18), "alert", font=f_ax, fill=MUTED)
+    # alert marker on the last candle (backtest pictures mark "confirmed" themselves and run on past it)
+    if not (meta or {}).get("no_alert_line"):
+        lx = x0 + step * (n - 0.5)
+        d.line([(lx, y0), (lx, y1)], fill=(80, 86, 104), width=1)
+        d.text((lx - 36 if lx > x0 + 60 else lx + 4, y0 - 18), "alert", font=f_ax, fill=MUTED)
 
     # time axis: candle open times in WAT
     ticks = sorted({round(k * (n - 1) / 5) for k in range(6)}) if n > 1 else [0]

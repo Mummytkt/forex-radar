@@ -228,6 +228,21 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float 
     return out
 
 
+def pattern_start(cs: list[dict], e: dict) -> int:
+    """The first candle of a confirmation (owner, 2026-11-26: pictures start at the pattern, no prior candles).
+    OCTGD: C1. OCTGD 2, PCL, Engulfing: the candle before the confirming one. CISD: the first candle of the run
+    whose open is the CISD line."""
+    i = e["i"]
+    if e.get("s") is not None:
+        return max(0, e["s"])
+    if e["pat"] == "cisd" and e.get("limit") is not None:
+        against = (lambda k: k["c"] < k["o"]) if e["dir"] == "buy" else (lambda k: k["c"] > k["o"])
+        for j in range(i - 1, max(-1, i - 1 - CIWIN - 10), -1):
+            if against(cs[j]) and abs(cs[j]["o"] - e["limit"]) < 1e-9:
+                return j
+    return max(0, i - 1)
+
+
 def octgd_tag(cs: list[dict], side: str, level: float, c1: Optional[int], tol: float = 0.0) -> Optional[str]:
     """'at touch' when the OC's own candles (C1, C2) touched the level; 'after push' when the run of opposite candles
     that ends with the OC touched it earlier and the OC formed further on (owner, 2026-11-26)."""
@@ -433,6 +448,7 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
                 free_at = r["exit"]
                 continue                     # never filled: not a take
             trades.append({"time": e["ct"].isoformat(), "entry": round(entry, 5), "sl": round(e["touch"], 5), "tag": e.get("tag"),
+                           "from": frames[KEYS[key][0]][pattern_start(frames[KEYS[key][0]], e)]["t"].isoformat(),
                            "tp": round(r["tp"], 5), "outcome": r["outcome"], "limit": use_limit,
                            "filled": r["filled"].isoformat() if r.get("filled") else None,
                            "exit": r["exit"].isoformat() if r["exit"] else None})
@@ -575,11 +591,15 @@ def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, 
                 continue
             ex = datetime.fromisoformat(t["exit"]) if t.get("exit") else None
             ei = next((i for i, k in enumerate(cs) if ex and k["ct"] > ex), None)
-            a = max(0, fi - 25)
-            b = min(len(cs), max(fi + 30, (ei + 6) if ei is not None else fi + 30), a + 120)
+            # the picture starts AT the pattern (no prior candles) and runs to a few candles after the exit
+            # (owner, 2026-11-26); older saves without "from" keep two candles before the confirmation
+            fr = datetime.fromisoformat(t["from"]) if t.get("from") else None
+            a = next((i for i, k in enumerate(cs) if fr and k["t"] >= fr), max(0, fi - 2))
+            a = min(a, fi)
+            b = min(len(cs), max(fi + 4, (ei + 3) if ei is not None else fi + 20), a + 120)
             candles = [(k["t"].isoformat(), k["o"], k["h"], k["l"], k["c"]) for k in cs[a:b]]
             bucket = lambda d: next((k["t"].isoformat() for k in cs[a:b] if k["t"] <= d < k["ct"]), None)
-            marks = [(cs[fi]["t"].isoformat(), "confirmed")]
+            marks = ([(cs[a]["t"].isoformat(), "pattern")] if a < fi else []) + [(cs[fi]["t"].isoformat(), "confirmed")]
             if t.get("limit") and t.get("filled"):
                 fb = bucket(datetime.fromisoformat(t["filled"]))
                 if fb:
@@ -593,7 +613,8 @@ def trade_pictures(pair: str, side: str, level: float, res: dict, frames: dict, 
             meta = {"tf_title": TF_NAME[tf], "side": f"{side.upper()} · {LABELS.get(key, key)} · take {n} · {t['outcome'].upper()}"
                                                   + (" · after TP" if v.get("after_tp") else ""),
                     "subtitle": f"{'Limit' if t.get('limit') else 'Entry'} {f(t['entry'])}  ·  SL {f(t['sl'])}  ·  TP {f(t['tp'])}",
-                    "fired_at": at.astimezone(timezone(timedelta(hours=1))).strftime("%d %b %Y %H:%M WAT"), "marks": marks}
+                    "fired_at": at.astimezone(timezone(timedelta(hours=1))).strftime("%d %b %Y %H:%M WAT"), "marks": marks,
+                    "no_alert_line": True}
             try:
                 png = render(pair, TF_NAME[tf], candles,
                              trade_levels(level, t["entry"], t["sl"], t["tp"], be, tp_r, be_r,
