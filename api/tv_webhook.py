@@ -1067,12 +1067,10 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     If no user is watching this instrument/direction/price band — silently ignored.
     No bias-state gating: users deliberately choose when and where to watch.
     """
-    # OCTGD 3 (owner, 2026-11-26): the same OC close-through the script sends as OCTGD, where C1 touched the level
-    # and C2 pushed further; so each OCTGD alert is also checked as an OCTGD 3. The script's older OCTGD 3
-    # candidates (a different rule) are ignored.
-    if payload.pattern == "octgd" and payload.kind != "o3":
-        await _handle_entry_confirmation(conn, config, instrument, payload.model_copy(update={"pattern": "octgd3", "kind": "o3"}))
-    elif payload.pattern == "octgd3" and payload.kind != "o3":
+    # OCTGD 1 and OCTGD 3 merged into one OCTGD (owner, 2026-11-26): an OC, then a close back through it. Tag: 'at touch' when the OC's own candles touched the level, 'after push' when the run touched it earlier and the OC formed further on.
+    # OCTGD already covers "after push" (its pair's wick reaches the level, any distance past), so the script's
+    # separate OCTGD 3 candidates are ignored; levels saved watching OCTGD 3 now hear OCTGD.
+    if payload.pattern == "octgd3":
         return
     direction = payload.direction
     pattern = payload.pattern
@@ -1116,6 +1114,8 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
         watch_keys = {f"{tf_label}:pcl", f"{tf_label}:sweep"}
     else:
         watch_keys = {f"{tf_label}:{pattern}"}
+        if pattern == "octgd":
+            watch_keys.add(f"{tf_label}:octgd3")      # levels saved watching the old OCTGD 3
     # how close to the level: the wick that reached it when the script sends it, else the close
     touch = payload.touch_price if payload.touch_price is not None else price
     # OCTGD 2 (owner rule 2026-11-23, live 2026-11-25): judged per level from the alert's candles; its OC = C1's close
@@ -1247,6 +1247,11 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
             swept_level=swept_level,
             kind=payload.kind,
         )
+        if pattern == "octgd":
+            tag = _octgd_tag(payload.candles, direction, alert_price)
+            if tag:
+                alert_text += ("\n\nOC at the touch of your level." if tag == "at touch"
+                               else "\n\nOC formed after a further push past your level.")
         if note:
             alert_text += f"\n\nYour note: {note}"
         if row["follow"]:
@@ -1316,6 +1321,26 @@ def _octgd2_touch(o2: Optional[dict], direction: str, level: float, created_at: 
             if cs[j][0] >= since and hit(cs[j]) and (j == 0 or not hit(cs[j - 1])):
                 return False              # this level was touched before: only its first touch counts
     return True
+
+
+def _octgd_tag(candles: Optional[str], direction: str, level: float, win: int = 10) -> Optional[str]:
+    """'at touch' / 'after push' for an OCTGD alert at this level (owner, 2026-11-26)."""
+    from alerts.chart_image import parse_candles
+    cs = parse_candles(candles)
+    n = len(cs)
+    bull = direction == "bullish"
+    hit = lambda k: k[3] <= level if bull else k[2] >= level
+    against = lambda k: (k[4] < k[1]) if bull else (k[4] > k[1])
+    c2 = next((j for j in range(n - 2, max(0, n - 2 - win), -1) if j >= 1 and against(cs[j]) and against(cs[j - 1])), None)
+    if c2 is None:
+        return None
+    rs = c2 - 1
+    while rs - 1 >= 0 and against(cs[rs - 1]):
+        rs -= 1
+    fh = next((k for k in range(rs, c2 + 1) if hit(cs[k])), None)
+    if fh is None:
+        return None
+    return "at touch" if fh >= c2 - 1 else "after push"
 
 
 def _octgd_voided(candles: Optional[str], pattern: str, direction: str, level: float, created_at: Optional[str],
@@ -1409,7 +1434,7 @@ def _octgd3_touch(o3: Optional[dict], direction: str, level: float, created_at: 
     return None
 
 
-_ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "octgd3": "OCTGD 3", "cisd": "CISD",
+_ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD", "octgd2": "OCTGD 2", "octgd3": "OCTGD", "cisd": "CISD",
                 "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 _ENTRY_LINES = {"pcl": "Swept level", "engulfing_sweep": "Swept level", "octgd": "OC level", "octgd2": "OC level", "octgd3": "Candle's open", "cisd": "CISD line",
                 "engulfing": "Engulfed level", "sweep_break": "Broken level"}

@@ -35,8 +35,9 @@ WATCH_DAYS = 21      # a setup is followed at most this long after its start
 LOOKBACK_DAYS = 3    # candles before the start, so runs and OCs that began earlier are known
 
 # Quick Backtest keys -> (timeframe minutes, pattern). OCTGD 1 / OCTGD 2 are the owner's own split (not in the script).
-KEYS = {"pcl": (60, "pcl"), "eng": (60, "eng"), "octgd1": (60, "octgd"), "octgd2": (60, "octgd2"), "octgd3": (60, "octgd3"),
-        "cisd": (60, "cisd"), "octgd15": (15, "octgd"), "octgd215": (15, "octgd2"), "octgd315": (15, "octgd3"),
+# OCTGD 1 and OCTGD 3 merged into one OCTGD (owner, 2026-11-26): an OC, then a close back through it. Tag: 'at touch' when the OC's own candles touched the level, 'after push' when the run touched it earlier and the OC formed further on.
+KEYS = {"pcl": (60, "pcl"), "eng": (60, "eng"), "octgd1": (60, "octgd"), "octgd2": (60, "octgd2"),
+        "cisd": (60, "cisd"), "octgd15": (15, "octgd"), "octgd215": (15, "octgd2"),
         "cisd15": (15, "cisd"), "cisd5": (5, "cisd")}
 OCWIN, CIWIN = 10, 20   # the script's defaults: OCTGD / CISD candles allowed
 
@@ -227,6 +228,23 @@ def octgd2(cs: list[dict], side: str, level: float, start: datetime, tol: float 
     return out
 
 
+def octgd_tag(cs: list[dict], side: str, level: float, c1: Optional[int], tol: float = 0.0) -> Optional[str]:
+    """'at touch' when the OC's own candles (C1, C2) touched the level; 'after push' when the run of opposite candles
+    that ends with the OC touched it earlier and the OC formed further on (owner, 2026-11-26)."""
+    if c1 is None or c1 + 1 >= len(cs):
+        return None
+    buy = side == "buy"
+    hit = lambda k: (k["l"] <= level + tol) if buy else (k["h"] >= level - tol)
+    against = lambda k: (k["c"] < k["o"]) if buy else (k["c"] > k["o"])
+    rs = c1
+    while rs - 1 >= 0 and against(cs[rs - 1]):
+        rs -= 1
+    fh = next((k for k in range(rs, c1 + 2) if hit(cs[k])), None)
+    if fh is None:
+        return None
+    return "at touch" if fh >= c1 else "after push"
+
+
 def void_points(cs: list[dict], side: str, level: float, start: datetime, tol: float = 0.0) -> list[int]:
     """The candles that void an OCTGD 1 / OCTGD 3 still forming (owner, 2026-11-25, Documents/Jan2_Rule.png). A buy:
     after the touch, the low of the FIRST bullish candle is the line; a candle that CLOSES below it voids whatever
@@ -381,6 +399,8 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
             if tf not in voids:
                 voids[tf] = void_points(frames[tf], side, level, start, tol)
             evs = [e for e in evs if not any(e.get("s", e["i"]) <= v < e["i"] for v in voids[tf])]
+        if pat == "octgd":
+            evs = [dict(e, tag=octgd_tag(frames[tf], side, level, e.get("s"), tol)) for e in evs]
         return [e for e in evs if start < e["ct"] <= until]
 
     def trade(key: str, until: datetime) -> Optional[dict]:
@@ -412,7 +432,7 @@ def run(pair: str, side: str, level: float, start: datetime, cache: str, tp_r: f
             if r["outcome"] == "cancelled":
                 free_at = r["exit"]
                 continue                     # never filled: not a take
-            trades.append({"time": e["ct"].isoformat(), "entry": round(entry, 5), "sl": round(e["touch"], 5),
+            trades.append({"time": e["ct"].isoformat(), "entry": round(entry, 5), "sl": round(e["touch"], 5), "tag": e.get("tag"),
                            "tp": round(r["tp"], 5), "outcome": r["outcome"], "limit": use_limit,
                            "filled": r["filled"].isoformat() if r.get("filled") else None,
                            "exit": r["exit"].isoformat() if r["exit"] else None})
@@ -533,8 +553,8 @@ async def run_prefetch(config) -> None:
 # ── Pictures (owner, 2026-11-23): one chart per trade, saved with the setup ───────────────────────────────
 TF_NAME = {60: "H1", 15: "M15", 5: "M5"}
 OUT_TXT = {"win": "TP hit", "loss": "SL hit", "be": "breakeven", "open": "still open"}
-LABELS = {"pcl": "H1 PCL", "eng": "H1 Engulfing", "octgd1": "H1 OCTGD 1", "octgd2": "H1 OCTGD 2", "octgd3": "H1 OCTGD 3",
-          "cisd": "H1 CISD", "octgd15": "M15 OCTGD", "octgd215": "M15 OCTGD 2", "octgd315": "M15 OCTGD 3",
+LABELS = {"pcl": "H1 PCL", "eng": "H1 Engulfing", "octgd1": "H1 OCTGD", "octgd2": "H1 OCTGD 2",
+          "cisd": "H1 CISD", "octgd15": "M15 OCTGD", "octgd215": "M15 OCTGD 2",
           "cisd15": "M15 CISD", "cisd5": "M5 CISD"}
 
 

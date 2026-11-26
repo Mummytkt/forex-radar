@@ -27,9 +27,10 @@ from api.auth import require_owner
 router = APIRouter()
 
 # Stored keys: never rename one (labels can change). Order = how they show.
-CONFIRMATIONS = [("pcl", "H1 PCL"), ("eng", "H1 Engulfing"), ("octgd1", "H1 OCTGD 1"), ("octgd2", "H1 OCTGD 2"),
-                 ("octgd3", "H1 OCTGD 3"), ("cisd", "H1 CISD"), ("octgd15", "M15 OCTGD"), ("octgd215", "M15 OCTGD 2"),
-                 ("octgd315", "M15 OCTGD 3"), ("cisd15", "M15 CISD"), ("cisd5", "M5 CISD")]
+CONFIRMATIONS = [("pcl", "H1 PCL"), ("eng", "H1 Engulfing"), ("octgd1", "H1 OCTGD"), ("octgd2", "H1 OCTGD 2"),
+                 ("cisd", "H1 CISD"), ("octgd15", "M15 OCTGD"), ("octgd215", "M15 OCTGD 2"),
+                 ("cisd15", "M15 CISD"), ("cisd5", "M5 CISD"),
+                 ("octgd3", "H1 OCTGD (old OCTGD 3)"), ("octgd315", "M15 OCTGD (old OCTGD 3)")]   # old saves only
 OUTCOMES = ("win", "be", "loss")
 RANGES = ("inside", "opposite")
 DEFAULT_TP_R = 3.0
@@ -84,6 +85,7 @@ class Result(BaseModel):
     outcome: str
     takes: int = 1
     exit: Optional[str] = None      # when its last trade ended (auto-check)
+    tag: Optional[str] = None       # OCTGD: "at touch" | "after push" (2026-11-26)
     entered: Optional[str] = None   # when it entered (auto-check), so each timeframe journal finds its ★ first
     after_tp: bool = False     # entered after the ★ first trade's TP: tracked for its own win rate (owner 2026-11-24)
 
@@ -119,6 +121,8 @@ def _clean(b: SetupBody) -> tuple:
             res[k]["entered"] = str(r.entered)[:40]
         if r.exit:
             res[k]["exit"] = str(r.exit)[:40]
+        if r.tag:
+            res[k]["tag"] = str(r.tag)[:20]
     first = b.first if b.first in res else None
     if res and not first:      # one formed: it is the first; several: she must star one
         first = next(iter(res)) if len(res) == 1 else None
@@ -337,7 +341,8 @@ def auto_check(request: Request, body: AutoBody):
         keys = {k for k, _ in CONFIRMATIONS}
         # each result keeps when it triggered and when it ended, so the journal can say how long it held (2026-11-25)
         results = {k: dict({"outcome": v["outcome"], "takes": v["takes"], "entered": v.get("entered"),
-                            "exit": (v.get("trades") or [{}])[-1].get("exit")},
+                            "exit": (v.get("trades") or [{}])[-1].get("exit"),
+                            **({"tag": v["trades"][0]["tag"]} if (v.get("trades") or [{}])[0].get("tag") else {})},
                            **({"after_tp": True} if v.get("after_tp") else {}))
                    for k, v in res["results"].items() if k in keys and v["outcome"] in OUTCOMES}
         first = res["first"] if res["first"] in results else (next(iter(results)) if len(results) == 1 else None)

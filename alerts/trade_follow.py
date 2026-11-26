@@ -195,7 +195,7 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
     return "\n".join(lines)
 
 
-_PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "octgd3": "OCTGD 3", "cisd": "CISD",
+_PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD", "octgd2": "OCTGD 2", "octgd3": "OCTGD", "cisd": "CISD",
               "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 _SAME = {"engulfing_sweep": "pcl", "sweep": "pcl"}
 _LIMIT_AT = {"cisd": "the CISD line", "octgd": "the OC level", "octgd2": "the OC level", "octgd3": "the OC level", "pcl": "the PCL candle's open",

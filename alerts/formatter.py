@@ -949,9 +949,9 @@ def format_story_alert(instrument: str, event: str, direction: Direction, top: D
 _ENTRY_PATTERN_NAMES: dict[str, str] = {
     "pcl":              "PCL",
     "engulfing_sweep":  "PCL",          # a v2 script's Sweep: the same formation as the PCL since 2026-11-10
-    "octgd":            "OCTGD 1",
+    "octgd":            "OCTGD",
     "octgd2":           "OCTGD 2",
-    "octgd3":           "OCTGD 3",
+    "octgd3":           "OCTGD",
     "cisd":             "CISD",
     "sweep_break":      "Sweep and Break",
     "engulfing":        "Engulfing",

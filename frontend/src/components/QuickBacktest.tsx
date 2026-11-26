@@ -20,7 +20,7 @@ function api(path: string, opts: RequestInit = {}) {
 }
 
 type Outcome = 'win' | 'be' | 'loss'
-interface Res { outcome: Outcome | ''; takes: number; after_tp?: boolean; entered?: string; exit?: string }   // '' only in the form: ticked, result not picked yet
+interface Res { outcome: Outcome | ''; takes: number; after_tp?: boolean; entered?: string; exit?: string; tag?: string }   // '' only in the form: ticked, result not picked yet
 interface Setup {
   id: number; pair: string; date: string; side: 'buy' | 'sell'; range_type: 'inside' | 'opposite'; valid: boolean
   results: Record<string, Res>; first: string | null; tp_r: number; note: string
@@ -31,9 +31,9 @@ interface Draft {
   results: Record<string, Res>; first: string | null; note: string
 }
 
-const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD 1'], ['octgd2', 'H1 OCTGD 2'], ['octgd3', 'H1 OCTGD 3'], ['cisd', 'H1 CISD'], ['octgd15', 'M15 OCTGD'], ['octgd215', 'M15 OCTGD 2'], ['octgd315', 'M15 OCTGD 3'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
+const CONFS: [string, string][] = [['pcl', 'H1 PCL'], ['eng', 'H1 Engulfing'], ['octgd1', 'H1 OCTGD'], ['octgd2', 'H1 OCTGD 2'], ['cisd', 'H1 CISD'], ['octgd15', 'M15 OCTGD'], ['octgd215', 'M15 OCTGD 2'], ['cisd15', 'M15 CISD'], ['cisd5', 'M5 CISD']]
 const LABEL = Object.fromEntries(CONFS)
-const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OC1', octgd2: 'OC2', cisd: 'H1 CISD', octgd15: 'M15 OCTGD', octgd215: 'M15 OCTGD 2', octgd3: 'OC3', octgd315: 'M15 OCTGD 3', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
+const SHORT: Record<string, string> = { pcl: 'PCL', eng: 'EG', octgd1: 'OCTGD', octgd2: 'OCTGD 2', octgd3: 'OCTGD (old 3)', octgd315: 'M15 OCTGD (old 3)', cisd: 'H1 CISD', octgd15: 'M15 OCTGD', octgd215: 'M15 OCTGD 2', cisd15: 'M15 CISD', cisd5: 'M5 CISD' }
 const OUT: [Outcome, string, string][] = [['win', 'Win', 'var(--bullish)'], ['be', 'BE', '#eab308'], ['loss', 'Loss', 'var(--bearish)']]
 const LAST_KEY = 'mbp_qbt_last'   // remembers the date / pair / range of the last saved setup
 
@@ -101,7 +101,7 @@ function DateDMY({ value, onChange }: { value: string; onChange: (iso: string) =
 
 // ---- Auto-check (2026-11-23): she gives the POI box and when the watch starts; the server finds every confirmation
 // with the Entry Confirmations script's rules on real minute candles and plays each trade (api/autobacktest.py)
-interface AutoTrade { time: string; entry: number; sl: number; tp: number; outcome: string; exit: string | null; limit?: boolean; filled?: string | null }
+interface AutoTrade { tag?: string | null; time: string; entry: number; sl: number; tp: number; outcome: string; exit: string | null; limit?: boolean; filled?: string | null }
 interface AutoRes { results: Record<string, { outcome: string; takes: number; trades: AutoTrade[]; after_tp?: boolean }>; first: string | null; first_tp_at?: string | null
   poi_failed_at: string | null; watched_until: string; trigger_date?: string; setup_end?: string; end_reason?: string; armed_at?: string | null; note: string }
 
@@ -189,7 +189,7 @@ function AutoCheck({ draft, onSaved, onRead, onReviewed }: { draft: Draft; onSav
           </div>
           {Object.entries(res.results).map(([k, v]) => (
             <div key={k} style={{ marginBottom: 4 }}>
-              <b style={{ color: 'var(--text-primary)' }}>{labelOf(k)}</b>{res.first === k ? ' ★' : ''}{v.after_tp ? ' (after TP)' : ''}:{' '}
+              <b style={{ color: 'var(--text-primary)' }}>{labelOf(k)}</b>{v.trades[0]?.tag ? ` (${v.trades[0].tag})` : ''}{res.first === k ? ' ★' : ''}{v.after_tp ? ' (after TP)' : ''}:{' '}
               {v.trades.map((t, i) => (
                 <span key={i}>{i ? ' → ' : ''}{/* named like TradingView: by the confirmation candle's OPEN time (2026-11-25) */}
                   {(() => { const tf = k.endsWith('5') && k !== 'cisd5' ? 15 : k === 'cisd5' ? 5 : 60
@@ -609,8 +609,8 @@ export default function QuickBacktest({ tabs }: { tabs?: React.ReactNode }) {
 type Journal = 'all' | 'H1' | 'M15' | 'M5'
 const JOURNALS: [Journal, string, string][] = [
   ['all', '📚 All entries', 'every confirmation'],
-  ['H1', '🕐 H1 journal', 'PCL · Engulfing · OCTGD 1 · OCTGD 2 · OCTGD 3 · H1 CISD'],
-  ['M15', '🕒 M15 journal', 'M15 OCTGD · M15 OCTGD 2 · M15 OCTGD 3 · M15 CISD'],
+  ['H1', '🕐 H1 journal', 'PCL · Engulfing · OCTGD · OCTGD 2 · H1 CISD'],
+  ['M15', '🕒 M15 journal', 'M15 OCTGD · M15 OCTGD 2 · M15 CISD'],
   ['M5', '🕔 M5 journal', 'M5 CISD'],
 ]
 // a setup as one journal sees it: only that timeframe's results; ★ first = the earliest of those to enter
@@ -631,8 +631,8 @@ function inJournal(list: Setup[], j: Journal): Setup[] {
 
 // Tick a whole timeframe's confirmations at once (user, 2026-11-24): a small dropdown of H1 / M15 / M5
 const TF_GROUPS: [string, string[]][] = [
-  ['H1', ['pcl', 'eng', 'octgd1', 'octgd2', 'octgd3', 'cisd']],
-  ['M15', ['octgd15', 'octgd215', 'octgd315', 'cisd15']],
+  ['H1', ['pcl', 'eng', 'octgd1', 'octgd2', 'cisd']],
+  ['M15', ['octgd15', 'octgd215', 'cisd15']],
   ['M5', ['cisd5']],
 ]
 function TfPicker({ results, onSet }: { results: Record<string, Res>; onSet: (keys: string[], on: boolean) => void }) {
@@ -716,7 +716,7 @@ function SetupBook({ setup, onClose, onEdit, onReviewed, inline, onDelete }: { s
     id: setup.id, name: user?.name, date: setup.date, pair: setup.pair, direction: setup.side, hasNote: !!note,
     rows: keys.map(k => {
       const r = setup.results[k]
-      return { slot: k, label: `${LABEL[k] || k}${setup.first === k ? ' (my ★ first)' : ''}${r.after_tp ? ' (after the first TP)' : ''}`,
+      return { slot: k, label: `${LABEL[k] || SHORT[k] || k}${r.tag ? ` (${r.tag})` : ''}${setup.first === k ? ' (my ★ first)' : ''}${r.after_tp ? ' (after the first TP)' : ''}`,
         outcome: r.outcome as 'win' | 'loss' | 'be', rr: r.outcome === 'win' ? setup.tp_r : null, takes: r.takes, net: rOf(r, setup.tp_r) }
     }),
   })

@@ -135,7 +135,7 @@ def _h4_db(conn, instrument: str) -> list:
 
 # ── The pictures ─────────────────────────────────────────────────────────────
 
-_PAT = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "octgd3": "OCTGD 3", "cisd": "CISD",
+_PAT = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD", "octgd2": "OCTGD 2", "octgd3": "OCTGD", "cisd": "CISD",
         "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 _EVENT = {"filled": "limit filled", "cancel_tp": "cancel the order", "cancel_h4": "cancel the order",
           "cancel_old": "cancel the order", "open": "trade opened", "be": "breakeven point", "tp": "TP hit", "sl": "SL hit · re-entry watch",
