@@ -253,32 +253,30 @@ def void_points(cs: list[dict], side: str, level: float, start: datetime, tol: f
 
 
 def octgd3(cs: list[dict], side: str, level: float, start: datetime, tol: float = 0.0, win: int = OCWIN) -> list[dict]:
-    """OCTGD 3 (owner, 2026-11-25, confirmed with Documents/OCTGD3_Check.png, picture A). A buy: once price has
-    touched the level, the LAST bearish candle after that touch (a newer one replaces it); a bullish candle then
-    closes above that bearish candle's OPEN, within `win` candles = OCTGD 3. Entry = a limit at that open; SL = the
-    lowest wick since the touch. Sells are the mirror. The level's own end (an H4 close beyond it) is run()'s."""
+    """OCTGD 3 (owner, 2026-11-26, Documents/OCTGD3_A_or_B.png, picture A). A sell: C1 is a bullish candle that
+    TOUCHES the level and closes bullish; C2, the next candle, closes bullish and pushes further up (a higher high).
+    Their OC line = C1's close (= C2's open). Within `win` candles, a bearish candle closing below that line =
+    OCTGD 3. Entry = a limit at the OC line; SL = C2's high (the pair's highest wick). Buys are the mirror. The void
+    rule (a close beyond the first with-trade candle after the touch) is applied by run()."""
     buy = side == "buy"
     hit = lambda k: (k["l"] <= level + tol) if buy else (k["h"] >= level - tol)
     against = lambda k: (k["c"] < k["o"]) if buy else (k["c"] > k["o"])
     with_trade = lambda k: (k["c"] > k["o"]) if buy else (k["c"] < k["o"])
-    out, touched, wick, bear = [], None, None, None
-    for i, k in enumerate(cs):
-        if k["ct"] <= start:
+    out = []
+    for i in range(len(cs) - 2):
+        c1, c2 = cs[i], cs[i + 1]
+        if c1["ct"] <= start or not (against(c1) and hit(c1) and against(c2)):
             continue
-        if touched is None:
-            if hit(k):
-                touched, wick = i, (k["l"] if buy else k["h"])
-            continue
-        wick = min(wick, k["l"]) if buy else max(wick, k["h"])
-        if bear is not None and i - bear > win:
-            bear = None
-        if bear is not None and with_trade(k) and ((k["c"] > cs[bear]["o"]) if buy else (k["c"] < cs[bear]["o"])):
-            out.append({"i": i, "ct": k["ct"], "pat": "octgd3", "dir": side, "close": k["c"], "touch": wick,
-                        "level": cs[bear]["o"], "limit": cs[bear]["o"], "s": bear})
-            bear = None
-            continue
-        if against(k):
-            bear = i                               # the last candle against the trade after the touch
+        if not ((c2["l"] < c1["l"]) if buy else (c2["h"] > c1["h"])):
+            continue                               # C2 must push further than C1
+        line = c1["c"]
+        wick = min(c1["l"], c2["l"]) if buy else max(c1["h"], c2["h"])
+        for j in range(i + 2, min(len(cs), i + 2 + win)):
+            k = cs[j]
+            if with_trade(k) and ((k["c"] > line) if buy else (k["c"] < line)):
+                out.append({"i": j, "ct": k["ct"], "pat": "octgd3", "dir": side, "close": k["c"], "touch": wick,
+                            "level": line, "limit": line, "s": i})
+                break
     return out
 
 

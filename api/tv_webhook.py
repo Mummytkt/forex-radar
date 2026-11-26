@@ -1067,6 +1067,13 @@ async def _handle_entry_confirmation(conn, config, instrument: str, payload: TVW
     If no user is watching this instrument/direction/price band — silently ignored.
     No bias-state gating: users deliberately choose when and where to watch.
     """
+    # OCTGD 3 (owner, 2026-11-26): the same OC close-through the script sends as OCTGD, where C1 touched the level
+    # and C2 pushed further; so each OCTGD alert is also checked as an OCTGD 3. The script's older OCTGD 3
+    # candidates (a different rule) are ignored.
+    if payload.pattern == "octgd" and payload.kind != "o3":
+        await _handle_entry_confirmation(conn, config, instrument, payload.model_copy(update={"pattern": "octgd3", "kind": "o3"}))
+    elif payload.pattern == "octgd3" and payload.kind != "o3":
+        return
     direction = payload.direction
     pattern = payload.pattern
     tf = payload.timeframe or "60"
@@ -1351,8 +1358,9 @@ def _octgd_voided(candles: Optional[str], pattern: str, direction: str, level: f
 
 
 def _octgd3_pair(candles: Optional[str], direction: str, win: int = 10) -> Optional[dict]:
-    """The candles of an OCTGD 3 alert: the last one goes the trade's way and closes beyond the OPEN of the last
-    opposite candle before it (within `win` candles), and nothing between them already did."""
+    """OCTGD 3 (owner, 2026-11-26): the last candle goes the trade's way and closes beyond the OC line of the last
+    two opposite candles (C1, C2) before it, within `win` candles; C2 pushed further than C1. The level check (C1
+    touched it) is per level, in _octgd3_touch."""
     from alerts.chart_image import parse_candles
     cs = parse_candles(candles)
     n = len(cs)
@@ -1363,15 +1371,16 @@ def _octgd3_pair(candles: Optional[str], direction: str, win: int = 10) -> Optio
     if not ((cur[4] > cur[1]) if bull else (cur[4] < cur[1])):
         return None
     against = lambda k: (k[4] < k[1]) if bull else (k[4] > k[1])
-    b = next((j for j in range(n - 2, -1, -1) if against(cs[j])), None)
-    if b is None or (n - 1) - b > win:
+    c2 = next((j for j in range(n - 2, max(0, n - 2 - win), -1) if j >= 1 and against(cs[j]) and against(cs[j - 1])), None)
+    if c2 is None:
         return None
-    o = cs[b][1]
-    if not ((cur[4] > o) if bull else (cur[4] < o)):
+    a, b = cs[c2 - 1], cs[c2]
+    if not ((b[3] < a[3]) if bull else (b[2] > a[2])):
+        return None                       # C2 didn't push further than C1
+    line = a[4]
+    if not ((cur[4] > line) if bull else (cur[4] < line)):
         return None
-    if any(((k[4] > o) if bull else (k[4] < o)) and not against(k) for k in cs[b + 1:n - 1]):
-        return None                       # an earlier candle already closed beyond it: that was the OCTGD 3
-    return {"cs": cs, "b": b, "oc": o, "wick": None}
+    return {"cs": cs, "b": c2 - 1, "oc": line, "wick": min(a[3], b[3]) if bull else max(a[2], b[2])}
 
 
 def _h4_since(conn, instrument: str) -> list[tuple]:
@@ -1383,23 +1392,16 @@ def _h4_since(conn, instrument: str) -> list[tuple]:
 
 
 def _octgd3_touch(o3: Optional[dict], direction: str, level: float, created_at: Optional[str]) -> Optional[float]:
-    """Was the level touched (a wick reaching it) after it was set and before the opposite candle? First in the
-    alert's own candles, else in the stored H4 candles. Returns the wick since that touch (the SL), else None."""
+    """C1 (the first candle of the OC) must be the candle that touched this level, after the level was set.
+    Returns the SL (the pair's wick: C2's high for a sell), else None."""
     if not o3:
         return None
-    cs, b, bull = o3["cs"], o3["b"], direction == "bullish"
-    since = created_at or ""
-    hit_lo = lambda lo, hi: lo <= level if bull else hi >= level
-    ext = (lambda xs: min(xs)) if bull else (lambda xs: max(xs))
-    for j in range(b):
-        if cs[j][0] >= since and hit_lo(cs[j][3], cs[j][2]):
-            return ext([k[3] if bull else k[2] for k in cs[j:]])
-    t_b = cs[b][0]
-    h4 = [r for r in (o3.get("h4") or []) if str(r[0]) >= since and str(r[0]) < t_b]
-    for i, r in enumerate(h4):
-        if hit_lo(r[3], r[2]):
-            return ext([x[3] if bull else x[2] for x in h4[i:]] + [k[3] if bull else k[2] for k in cs])
-    return None
+    c1 = o3["cs"][o3["b"]]
+    bull = direction == "bullish"
+    if (created_at or "") > c1[0]:
+        return None
+    touched = c1[3] <= level if bull else c1[2] >= level
+    return o3["wick"] if touched else None
 
 
 _ENTRY_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "octgd3": "OCTGD 3", "cisd": "CISD",

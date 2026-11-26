@@ -1013,13 +1013,13 @@ def format_entry_alert(
         desc = (f"Price made a new touch of your level and the first two {tf_label} candles there were both {side}: "
                 f"their OC @ {swept_str} is the entry (OCTGD 2).")
     elif pattern == "octgd3":
-        level_label = "Candle's open"
+        level_label = "OC level"
         if bear:
-            desc = (f"Price had touched your level; after it, the last {tf_label} bullish candle opened @ {swept_str} and a "
-                    f"bearish candle has now closed below that open (OCTGD 3).")
+            desc = (f"A {tf_label} bullish candle touched your level and the next one pushed further up; their OC @ "
+                    f"{swept_str}, and a bearish candle has now closed below it (OCTGD 3).")
         else:
-            desc = (f"Price had touched your level; after it, the last {tf_label} bearish candle opened @ {swept_str} and a "
-                    f"bullish candle has now closed above that open (OCTGD 3).")
+            desc = (f"A {tf_label} bearish candle touched your level and the next one pushed further down; their OC @ "
+                    f"{swept_str}, and a bullish candle has now closed above it (OCTGD 3).")
     elif pattern == "cisd":
         level_label = "CISD line"
         if bear:

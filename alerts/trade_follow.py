@@ -198,7 +198,7 @@ def open_follow(conn: sqlite3.Connection, alert: dict, instrument: str, directio
 _PAT_NAMES = {"pcl": "PCL", "engulfing_sweep": "PCL", "sweep": "PCL", "octgd": "OCTGD 1", "octgd2": "OCTGD 2", "octgd3": "OCTGD 3", "cisd": "CISD",
               "engulfing": "Engulfing", "sweep_break": "Sweep and Break"}
 _SAME = {"engulfing_sweep": "pcl", "sweep": "pcl"}
-_LIMIT_AT = {"cisd": "the CISD line", "octgd": "the OC level", "octgd2": "the OC level", "octgd3": "the bearish candle's open", "pcl": "the PCL candle's open",
+_LIMIT_AT = {"cisd": "the CISD line", "octgd": "the OC level", "octgd2": "the OC level", "octgd3": "the OC level", "pcl": "the PCL candle's open",
              "engulfing": "the open of the candle it engulfed", "sweep_break": "the breaker"}
 
 

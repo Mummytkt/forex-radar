@@ -1600,23 +1600,27 @@ check("clearing a whole journal needs DELETE typed",
 c.post("/api/quick-bt/remove-keys", headers=H(owner), json={"all": True, "keys": ["octgd1"], "confirm": "DELETE"})
 check("clearing the H1 journal removes the setup left with nothing",
       _both not in {x["id"] for x in c.get("/api/quick-bt", headers=H(owner)).json()["setups"]})
-# OCTGD 3 live (owner, 2026-11-25): touched before the last opposite candle, then a close beyond that candle's open
+# OCTGD 3 live (owner, 2026-11-26, picture A, mirrored to a buy): C1 touches the level and closes against the trade,
+# C2 pushes further, then a close beyond their OC line. It comes in as the script's OCTGD alert.
 _o3 = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDCAD", "direction": "bullish", "price": 0.9000,
              "tolerance_pips": 10, "watches": ["H1:octgd3"], "keep_open": True, "follow": True, "tp_r": 3, "entry_mode": "limit"}).json()
 _o3n = c.post("/api/entry-alerts", headers=H(owner), json={"instrument": "AUDCAD", "direction": "bullish", "price": 0.8950,
               "tolerance_pips": 10, "watches": ["H1:octgd3"], "keep_open": True}).json()
-# touch at 0.8998, a bullish candle, the bearish candle (open 0.9016), then a bullish close above 0.9016
-_c3 = _cs2([(0.9020, 0.9022, 0.9008, 0.9010), (0.9010, 0.9012, 0.8998, 0.9006), (0.9006, 0.9018, 0.9004, 0.9016),
-            (0.9016, 0.9018, 0.9009, 0.9010), (0.9010, 0.9024, 0.9009, 0.9022)])
+_c3 = _cs2([(0.9030, 0.9032, 0.9020, 0.9022), (0.9022, 0.9024, 0.9010, 0.9012), (0.9012, 0.9014, 0.8998, 0.9006),
+            (0.9006, 0.9008, 0.8990, 0.8994), (0.8994, 0.9012, 0.8992, 0.9010)])
 tv(type="ENTRY_CONFIRMATION", instrument="AUDCAD", direction="bullish", pattern="octgd3", timeframe="60",
-   price=0.9022, swept_level=0.9022, touch_price=0.9009, candles=_c3 + "|o3b")
+   price=0.9010, swept_level=0.9010, touch_price=0.8990, candles=_c3 + "|o3b")
 _db = sqlite3.connect(DB)
-check("OCTGD 3 fires a level touched before the bearish candle",
+check("the script's old OCTGD 3 candidates are ignored",
+      _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_o3["id"],)).fetchone()[0] is None)
+tv(type="ENTRY_CONFIRMATION", instrument="AUDCAD", direction="bullish", pattern="octgd", timeframe="60",
+   price=0.9010, swept_level=0.9006, touch_price=0.8990, candles=_c3)
+check("OCTGD 3 fires when C1 touched the level, C2 pushed further and a close came back through their OC",
       _db.execute("SELECT triggered_pattern FROM entry_pattern_alerts WHERE id = ?", (_o3["id"],)).fetchone()[0] == "octgd3")
 _f3 = _db.execute("SELECT entry, sl, status FROM trade_follows WHERE alert_id = ?", (_o3["id"],)).fetchone()
-check("OCTGD 3's limit is the bearish candle's open and its SL the wick since the touch",
-      _f3 is not None and abs(_f3[0] - 0.9016) < 1e-9 and abs(_f3[1] - 0.8998) < 1e-9 and _f3[2] == "pending")
-check("OCTGD 3 stays quiet on a level never touched",
+check("OCTGD 3's limit is the OC line (C1's close) and its SL C2's extreme",
+      _f3 is not None and abs(_f3[0] - 0.9006) < 1e-9 and abs(_f3[1] - 0.8990) < 1e-9 and _f3[2] == "pending")
+check("OCTGD 3 stays quiet on a level C1 didn't touch",
       _db.execute("SELECT triggered_at FROM entry_pattern_alerts WHERE id = ?", (_o3n["id"],)).fetchone()[0] is None)
 for _x in (_o3, _o3n):
     c.delete(f"/api/entry-alerts/{_x['id']}", headers=H(owner))
