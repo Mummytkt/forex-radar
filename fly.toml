@@ -29,6 +29,10 @@ primary_region = 'ams'
     hard_limit = 250
     soft_limit = 200
 
+# The freeze watchdog (api/watchdog.py) exits the process when the server is stuck; always start it again.
+[[restart]]
+  policy = 'always'
+
 [[vm]]
   memory = '256mb'
   cpu_kind = 'shared'

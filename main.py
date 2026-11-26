@@ -291,6 +291,11 @@ async def main(dry_run: bool = False) -> None:
         asyncio.create_task(setup_bot_menu(config.telegram_bot_token))
     logger.info("Price monitor + billing cycle + daily backup + feed monitor + reminders + news started")
 
+    # If anything ever blocks the server for 2 minutes, restart it (2026-11-26)
+    if not dry_run:
+        from api.watchdog import start as start_watchdog
+        start_watchdog(asyncio.get_running_loop())
+
     server = uvicorn.Server(
         uvicorn.Config(
             fastapi_app, host="0.0.0.0", port=8080,
